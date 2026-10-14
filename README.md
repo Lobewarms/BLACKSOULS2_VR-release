@@ -4,7 +4,7 @@ BLACKSOULS II를 1인칭으로 플레이하는 비공식 팬 모드입니다.
 원작 제작자·배급사와는 관계가 없으며, 원작 게임 파일은 들어 있지 않습니다. 원작 게임이 있어야 합니다.
 
 ## 받기
-- 최신 버전: [BLACKSOULS_VR_2026.10.14-7.zip](BLACKSOULS_VR_2026.10.14-7.zip) (파일을 연 뒤 Download)
+- 최신 버전: [BLACKSOULS_VR_2026.10.14-9.zip](BLACKSOULS_VR_2026.10.14-9.zip) (파일을 연 뒤 Download)
 - 설치·조작법은 zip 안의 README / CONTROLS를 보세요 (한국어·English·日本語·中文).
 
 ## 이용 조건
