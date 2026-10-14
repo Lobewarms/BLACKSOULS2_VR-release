@@ -1,3 +1,5 @@
+[![BLACK SOULS II VR 플레이 영상](https://img.youtube.com/vi/J8WaV70g5cc/maxresdefault.jpg)](https://www.youtube.com/watch?v=J8WaV70g5cc)
+
 # BLACK SOULS II VR (비공식 팬 모드)
 
 BLACKSOULS II를 1인칭으로 플레이하는 비공식 팬 모드입니다.
