@@ -68,3 +68,31 @@ test('menu mouse clicks keep the pointer free and confirm only a hit target', t 
   emit('mouseup', { button: 0 }); G.ui.sceneBusy = () => false;
   emit('mousedown', { button: 0, clientX: 400, clientY: 250 }); assert.equal(locks, 1, 'gameplay still captures the mouse normally');
 });
+
+test('a mouse click completed between frames remains a single press without becoming held', t => {
+  const saved = { ui: G.ui, vr: G.vr }; t.after(() => Object.assign(G, saved));
+  const { input, emit } = browser(t); G.vr = false;
+  G.ui = { pointerBusy: () => true, pointerTarget: true };
+  emit('mousedown', { button: 0 }); emit('mouseup', { button: 0 });
+  assert.equal(input.mouseHeld(0), false); assert.equal(input.confirm(), true, 'fast completed clicks must reach the next UI frame');
+  assert.equal(input.attackPressed(), true, 'all mouse press actions share the buffered edge');
+  input.endFrame();
+  assert.equal(input.confirm(), false); assert.equal(input.attackPressed(), false, 'a completed click cannot repeat in later frames');
+  emit('mousedown', { button: 0 }); assert.equal(input.mousePressed(0), true);
+  input.endFrame();
+  assert.equal(input.mouseHeld(0), true); assert.equal(input.attackPressed(), false, 'holding a button must not generate repeated press edges');
+  emit('mouseup', { button: 0 }); emit('mousedown', { button: 0 });
+  assert.equal(input.attackPressed(), true, 'a release and new press between frames must register even when the previous frame was held');
+});
+
+test('blur and pointer unlock discard completed clicks before they reach another scene', t => {
+  const { input, dom, emit } = browser(t);
+  emit('mousedown', { button: 0 }); emit('mouseup', { button: 0 }); emit('blur');
+  assert.equal(input.mousePressed(0), false, 'blur cancels queued clicks');
+  document.pointerLockElement = dom; emit('pointerlockchange');
+  emit('mousedown', { button: 0 }); emit('mouseup', { button: 0 });
+  document.pointerLockElement = null; emit('pointerlockchange');
+  assert.equal(input.mousePressed(0), false, 'unlock cancels queued clicks');
+  emit('mousedown', { button: 0 }); emit('mouseup', { button: 0 });
+  assert.equal(input.mousePressed(0), true, 'fresh clicks work normally after the flush');
+});

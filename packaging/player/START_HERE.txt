@@ -4,7 +4,8 @@ START PLAYING
 1. Open BLACK SOULS II VR from the Start menu (or run BlacksoulsVR.exe).
 2. The app looks for your game automatically. Choose a copy if several are found.
    If none is found, click Browse and choose your original game folder, containing Game.exe.
-3. Click Launch. Keep the launcher open while playing.
+3. Choose Play on PC or Play in VR, then click the large Launch button.
+   Keep the launcher open while playing.
 4. On PC, click inside the game window to capture your mouse.
 
 PC CONTROLS

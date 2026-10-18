@@ -23,6 +23,9 @@ export function fmtDate(ms) { try { return new Date(ms).toLocaleString(LOCALES[c
 
 // [Korean, English, Japanese, Chinese (simplified)]
 const ENTRIES = [
+  ['플레이어', 'Player', 'プレイヤー', '玩家'],
+  ['스태미나', 'Stamina', 'スタミナ', '耐力'],
+  ['전체 효과: 메뉴 → 캐릭터 → 상태', 'All effects: Menu → Character → Status', '全効果: メニュー → キャラクター → ステータス', '全部效果：菜单 → 角色 → 状态'],
   // Navigation map. Destination titles come from the installed game's translation.
   ['지도', 'Map', 'マップ', '地图'],
   ['캐릭터', 'Character', 'キャラクター', '角色'],
@@ -33,6 +36,12 @@ const ENTRIES = [
   ['다음', 'Next', '次へ', '下一页'],
   ['타이틀로 돌아갈까요?', 'Return to title?', 'タイトルに戻りますか？', '返回标题画面？'],
   ['↑↓ / 스틱 · Enter / A: 선택 · Esc / B: 뒤로', '↑↓ / stick · Enter / A: Select · Esc / B: Back', '↑↓ / スティック・Enter / A: 決定・Esc / B: 戻る', '↑↓ / 摇杆 · Enter / A：选择 · Esc / B：返回'],
+  ['클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로', 'Click / ↑↓: Select · Enter: Confirm · Esc: Back', 'クリック / ↑↓: 選択・Enter: 決定・Esc: 戻る', '点击 / ↑↓：选择 · Enter：确定 · Esc：返回'],
+  ['스틱: 선택 · A / 트리거: 결정 · B: 뒤로', 'Stick: Select · A / trigger: Confirm · B: Back', 'スティック: 選択・A / トリガー: 決定・B: 戻る', '摇杆：选择 · A / 扳机：确定 · B：返回'],
+  ['N: 지도 · Tab: 메뉴', 'N: Map · Tab: Menu', 'N: マップ・Tab: メニュー', 'N：地图 · Tab：菜单'],
+  ['Y: 메뉴 → 지도', 'Y: Menu → Map', 'Y: メニュー → マップ', 'Y：菜单 → 地图'],
+  ['닫기: N / Esc', 'Close: N / Esc', '閉じる: N / Esc', '关闭：N / Esc'],
+  ['닫기: B / Y', 'Close: B / Y', '閉じる: B / Y', '关闭：B / Y'],
   ['원작 지도 · 금색 출구', 'Game map · gold exits', '原作の地図・金色は出口', '原作地图 · 金色为出口'],
   ['미니맵', 'Minimap', 'ミニマップ', '小地图'],
   ['출구', 'Exit', '出口', '出口'],

@@ -10,6 +10,9 @@ WHAT'S NEW
 - Navigate with a live minimap and a full area map: press N or open Menu > Map.
 - Maps use the game's tile artwork and show your facing direction and named exits.
 - Main menu fits one screen, with Character, Save / Load and Settings groups.
+- PC menus and HUD stay readable on screen; VR keeps its wrist HUD and spatial menus.
+- The launcher has a borderless game-style window, PC / VR choices and new storybook artwork.
+- HUD resources have clear labels, matching bars and grouped status icons.
 - Click menus and Back on PC, or use the controller pointer in VR.
 - Menus use the game's window skin; status effects use the game's own icons.
 - Fixed update checks failing after the first successful check.

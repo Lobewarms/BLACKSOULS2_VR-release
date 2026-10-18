@@ -23,8 +23,30 @@ export async function archivedIconCanvas() {
   } catch { return null; }
 }
 
+// A loose sheet can have transparent holes inside its valid bounds. Sample each
+// immutable loaded canvas/cell once; existing artwork always keeps priority.
+const iconAlpha = new WeakMap();
+function cellHasPixels(sheet, index) {
+  let cells = iconAlpha.get(sheet);
+  if (!cells) { cells = new Map(); iconAlpha.set(sheet, cells); }
+  if (cells.has(index)) return cells.get(index);
+  let occupied = null;
+  try {
+    const pixels = sheet.getContext?.('2d', { willReadFrequently: true })
+      ?.getImageData?.((index % 16) * 24, Math.floor(index / 16) * 24, 24, 24)?.data;
+    if (pixels?.length === 24 * 24 * 4) {
+      occupied = false;
+      for (let i = 3; i < pixels.length; i += 4) if (pixels[i] > 0) { occupied = true; break; }
+    }
+  } catch { /* Keep the primary when pixels cannot be inspected. */ }
+  cells.set(index, occupied);
+  return occupied;
+}
+
 export function sheetForIcon(primary, fallback, index = 0) {
   const fits = sheet => sheet && Number.isInteger(index) && index >= 0 &&
     (index % 16 + 1) * 24 <= sheet.width && (Math.floor(index / 16) + 1) * 24 <= sheet.height;
-  return fits(primary) ? primary : fits(fallback) ? fallback : null;
+  if (!fits(primary)) return fits(fallback) ? fallback : null;
+  if (!fits(fallback)) return primary;
+  return cellHasPixels(primary, index) === false && cellHasPixels(fallback, index) === true ? fallback : primary;
 }

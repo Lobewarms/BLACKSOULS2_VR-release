@@ -58,6 +58,25 @@ test('an explicit mouse click selects an initially unselected dialogue row witho
   assert.equal(ui.choice.index, 1); assert.deepEqual(selected, [1]);
 });
 
+test('a complete down/up click between UI frames activates the hovered row exactly once', t => {
+  const { ui, document } = environment(t), listeners = new Map(), selected = [];
+  const listen = (type, fn) => { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'addEventListener');
+  Object.defineProperty(globalThis, 'addEventListener', { configurable: true, value: listen });
+  t.after(() => { if (previous) Object.defineProperty(globalThis, 'addEventListener', previous); else delete globalThis.addEventListener; });
+  document.addEventListener = listen;
+  const input = G.input = new Input({}, { addEventListener: listen });
+  const emit = (type, values) => { for (const fn of listeners.get(type) || []) fn(values); };
+  ui.menuOpen = true;
+  ui.list.open('Menu', [{ text: 'Resume' }, { text: 'Map' }], { onSelect: index => selected.push(index) });
+  hit(ui.list.panel, 100, 100 + ui.list.rowH * 1.5);
+  emit('mousedown', { button: 0, clientX: 100, clientY: 196 }); emit('mouseup', { button: 0 });
+  assert.equal(input.mouseHeld(0), false, 'the click has already completed before the game reads input');
+  ui.list.update({}); assert.deepEqual(selected, [1], 'the hovered Map row must open on the next frame');
+  input.endFrame(); ui.pointerTarget = false; ui.list.update({});
+  assert.deepEqual(selected, [1], 'the completed click must not activate the row again');
+});
+
 test('mouse clicks respect disabled menu rows and the visible Back button', t => {
   const { ui, input } = environment(t); let selected = 0, cancelled = 0;
   ui.menuOpen = true;

@@ -157,12 +157,12 @@ export class NavigationMap {
       }
       if (!this.groups.length) { ctx.fillStyle = '#b9b8bb'; ctx.fillText(tr('표시할 출구가 없습니다'), 28, 788); }
       ctx.fillStyle = '#d3d0c7'; ctx.font = `26px ${this.font}`;
-      ctx.fillText(tr('닫기: N / Esc / B'), 28, 968);
+      ctx.fillText(tr(G.vr ? '닫기: B / Y' : '닫기: N / Esc'), 28, 968);
       if (pages > 1) { ctx.fillText('‹ ' + tr('이전'), 660, 968); ctx.fillText(tr('다음') + ' ›', 840, 968); }
       if (pages > 1) ctx.fillText(tr('출구 {n}/{total} · ↑↓ / 스틱', { n: this.page + 1, total: pages }), 28, 1000);
     } else {
       ctx.fillText('▲ ' + tr('내 위치') + '   ● ' + tr('출구'), 16, 394);
-      ctx.fillStyle = '#b9b8bb'; ctx.font = `20px ${this.font}`; ctx.fillText(tr('N / 메뉴 → 지도'), 16, 423);
+      ctx.fillStyle = '#b9b8bb'; ctx.font = `20px ${this.font}`; ctx.fillText(tr(G.vr ? 'Y: 메뉴 → 지도' : 'N: 지도 · Tab: 메뉴'), 16, 423);
     }
     panel.commit();
   }

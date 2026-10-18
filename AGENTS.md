@@ -619,3 +619,84 @@ are suppressed. The app does not infer that every failure means the user is offl
 Native regressions use a local HTTP server and sequential requests to reproduce
 the consumed-header failure. Restoring the original behavior makes the second
 check fail. Three consecutive live GitHub checks also passed after the fix.
+
+
+## Separate desktop and VR presentation (0.2.11)
+
+PC panels reuse their original game canvases, with a screen-aligned camera anchor
+and sizes measured in CSS pixels. Fit the visible panel group inside the viewport,
+including message/choice offsets and perspective depth, independent of camera
+pitch, yaw, roll, FOV, zoom and resolution. Keep the HUD around 320 px at bottom
+left and minimap around 220 px at top right; actual painted HUD height determines
+the bottom margin. Menus hide the desktop HUD; VR retains the original head-facing
+menu anchor and wrist HUD. Reset root scale and panel parenting on session changes.
+Control hints are specific to keyboard/mouse or VR controllers in all four languages.
+Regression checks project actual Three.js panel corners to screen pixels and
+exercise resize, title, dialogue, transient panels and PC/VR transitions.
+
+The source-built launcher now presents PC/VR choices before play, while advanced
+RTP/browser/port/Steam integration and the diagnostic log are disclosures. Preserve
+the original engine's controls and event bindings when reparenting them. Selecting
+PC must clear both configuration AutoVr and hidden command-line VR/Steam overrides.
+The verified engine binary is not changed. Branding is embedded in the source
+launcher and Windows installer, including all native icon sizes and shortcut icons.
+
+## Generated launcher branding
+
+User explicitly requested generated app branding matching the game's atmosphere.
+This is an exception for launcher branding to the original-asset preference; do
+not replace the game's own status icons, window skin or tile art with generated art.
+Used the built-in image_gen tool, not the CLI. Project assets are
+apps/launcher/Assets/app-icon.png, apps/launcher/Assets/app-icon.ico and
+apps/launcher/Assets/launcher-banner.png. The ICO is a format conversion of the
+selected PNG into 16, 24, 32, 48, 64, 128 and 256 px frames, with no artistic editing.
+These are original community branding assets, not extracted game files or an
+original-author logo. Tests verify the embedded managed resources, native icon
+frames, installer shortcut target/icon and uninstall cleanup.
+
+Final icon prompt:
+"Use case: logo-brand. Create one original Windows application icon for a community BLACK SOULS II VR launcher. Square image, dark gothic fairy-tale RPG mood, reminiscent of an old illustrated storybook. A single bold ivory-white rabbit-eared silhouette emerging from an antique keyhole, framed by a restrained dark-silver thorn ring; tiny muted crimson glow behind it. Rich charcoal and black background filling the square, warm bone white foreground, one deep blood-red accent. Hand-painted pixel-art-inspired edges and restrained engraved shading; strong simple silhouette must remain readable at 32 by 32 pixels. Centered symbol with generous safe margins. Flat front view, no perspective or mockup. No words, no letters, no title text, no VR headset, no neon, no busy background, no gore, no watermark. Original fan-project emblem, not a reproduction of a game logo. Deliver polished square raster icon artwork."
+
+Final banner prompt (selected icon used only as a style/motif reference):
+"Use case: stylized-concept. Asset type: wide launcher banner, approximately 3.6:1 aspect ratio. The supplied image is a STYLE AND MOTIF REFERENCE ONLY, not a target to overwrite. Create a new original Gothic dark-fairy-tale storybook header to match that ivory rabbit-eared keyhole emblem. Deep nearly black charcoal paper background, restrained aged silver thorn engraving, desaturated crimson accent. Reserve the left 65 percent as very dark clean negative space so the app can draw a readable live title and short subtitle there; put a smaller ivory rabbit-eared keyhole emblem with a restrained thorn halo in the right third. Maintain graphic clarity and quiet edges, delicate engraving texture and subtle vignette. No words, no lettering, no buttons or interface baked in, no watermark, no gore, no neon. This is the final banner artwork to be embedded in a Windows game launcher, not an application mockup. Wide composition with low vertical height."
+
+
+## Empty icon cells and quick mouse presses (0.2.11)
+
+Read-only inspection of the installed game confirmed primary IconSet.png is
+384x936 with completely transparent cells 529 (Deadly Poison), 530 (Virulent
+Poison) and 561 (Oiled). The matching game's archive has artwork at those indices.
+Bounds alone were therefore insufficient. sheetForIcon now falls back for an
+entirely transparent primary cell only when the archive cell has visible alpha.
+Any visible primary pixel wins; failed/unavailable pixel reads keep the primary.
+Cache alpha results per canvas/icon, including failures, to avoid repeated pixel
+reads. Keep matching-game archive validation unchanged. Synthetic RGBA tests
+cover real cell coordinates, occupied/empty cells, errors and cache read counts.
+The private browser preview verified all three displayed Poison icons after this
+fix, as well as PC mouse opening of the map and simulated VR wrist placement.
+
+Mouse down/up can both arrive before the next animation frame. Buffer button
+press edges until endFrame so rapid completed clicks reach menus once, without
+changing held button state. Clear queued edges on blur and pointer unlock. A
+real Input/ListPanel regression reproduces this sequence and verifies one action.
+The title menu also counts as an active pointer UI even without menuOpen; clicking
+Continue/New Game must not request pointer lock. Gameplay clicks still capture it.
+
+
+## Borderless launcher and HUD clarity (0.2.11)
+
+The user explicitly requested borderless game-launcher chrome. Retain accessible
+close, minimize, maximize/restore, dragging, edge resize, keyboard close and
+working-area bounds rather than removing window management. Custom Close must
+use the original form's cleanup path. Advanced/settings controls remain native
+and preserve their original events. Keep all visible instructions and disclosures
+localized. A standard native language selector is preferable to unreadable styling;
+FlatStyle.Flat omitted its selected text in offscreen native renders.
+
+HUD resource labels/values belong with their corresponding gauges, with currency
+and the game's optional SEN variable on a separate row. Group original status
+icons and names together, preserve all status pages, and invalidate cached painting
+when player name or level changes. Use the game's Window palette for resource
+colors (HP20/21, MP22/23, stamina28/29) and retain real numeric values. Desktop
+bottom anchoring follows actual painted height; the VR minimap must clear the
+resized HUD geometry. Avoid new decorative status artwork or overlapping labels.

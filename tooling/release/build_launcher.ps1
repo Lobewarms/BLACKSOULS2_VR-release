@@ -5,14 +5,24 @@ $source = Join-Path $repoRoot 'apps/launcher'
 $output = Join-Path $source 'dist'
 New-Item -ItemType Directory -Force -Path $output | Out-Null
 $references = @('/r:System.Windows.Forms.dll', '/r:System.Drawing.dll', '/r:System.Web.Extensions.dll', '/r:System.Core.dll')
+$icon = Join-Path $source 'Assets/app-icon.ico'
+$banner = Join-Path $source 'Assets/launcher-banner.png'
+foreach ($asset in @($icon, $banner)) {
+    if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) { throw "Launcher artwork missing: $asset" }
+}
+$branding = @("/win32icon:$icon", "/resource:$icon,BlacksoulsCommunity.AppIcon.ico", "/resource:$banner,BlacksoulsCommunity.LauncherBanner.png")
 $sources = @(Get-ChildItem -LiteralPath $source -Filter '*.cs' | ForEach-Object FullName)
-& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:winexe "/out:$output/BlacksoulsVR.exe" $references $sources
+& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:winexe "/out:$output/BlacksoulsVR.exe" $references $branding $sources
 if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed' }
-& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:exe /main:DiscoveryTests "/out:$output/DiscoveryTests.exe" $references $sources (Join-Path $source 'tests/DiscoveryTests.cs') (Join-Path $source 'tests/AssetCacheTests.cs')
+& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:exe /main:BrandingTests "/out:$output/BrandingTests.exe" $references $branding (Join-Path $source 'tests/BrandingTests.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Branding test build failed' }
+& (Join-Path $output 'BrandingTests.exe') (Join-Path $output 'BlacksoulsVR.exe') $icon $banner
+if ($LASTEXITCODE -ne 0) { throw 'Launcher branding tests failed' }
+& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:exe /main:DiscoveryTests "/out:$output/DiscoveryTests.exe" $references $branding $sources (Join-Path $source 'tests/DiscoveryTests.cs') (Join-Path $source 'tests/AssetCacheTests.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Discovery test build failed' }
 & (Join-Path $output 'DiscoveryTests.exe')
 if ($LASTEXITCODE -ne 0) { throw 'Discovery tests failed' }
-& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:exe /main:UpdateTests "/out:$output/UpdateTests.exe" $references $sources (Join-Path $source 'tests/UpdateTests.cs')
+& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:exe /main:UpdateTests "/out:$output/UpdateTests.exe" $references $branding $sources (Join-Path $source 'tests/UpdateTests.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Update test build failed' }
 # Run hosting tests in a fresh temporary installation, away from player settings.
 $testDirectory = Join-Path ([IO.Path]::GetTempPath()) ('blacksouls-update-test-' + [guid]::NewGuid())

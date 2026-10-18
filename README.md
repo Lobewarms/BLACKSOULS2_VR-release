@@ -14,7 +14,7 @@ A desktop shortcut is optional during setup.
 ## Play on your PC
 
 1. Open the app. It looks for BLACK SOULS II automatically and fills in the game folder. If it finds several copies, choose one. If it finds none, click **Browse** and choose the folder containing `Game.exe`.
-2. Click **Launch** and keep the launcher open while playing.
+2. Select **Play on PC**, then click **Launch on PC**. Keep the launcher open while playing.
 3. Click inside the game window to use the mouse.
 
 | Action | Control |
@@ -31,7 +31,7 @@ A desktop shortcut is optional during setup.
 
 1. Connect your headset to your Windows PC using Quest Link, Air Link or Virtual Desktop.
 2. Start that VR connection before opening the game.
-3. In the launcher, choose your game folder and click **Launch**.
+3. In the launcher, choose your game folder, select **Play in VR** and click **Launch in VR**.
 4. Click **ENTER VR** at the bottom of the game window and put on your headset.
 
 Quest requires the PC to run the game; this download does not install on the headset.
@@ -46,6 +46,7 @@ It remembers your selected folder after you launch the game.
 - **VR NOT SUPPORTED?** Start Quest Link or SteamVR first, close the game window, then click **Launch** again.
 - **Missing tiles or emotes?** Installing the optional RPG Maker VX Ace RTP may help.
 - **Navigation:** The minimap shows your position, facing direction and exits using the game's artwork. Press **N** or choose **Menu → Map** for the full area map. In VR, look above your left controller. Use **Back** or **B** to return. The minimap can be hidden in **Menu → Settings → Combat / display settings**.
+- **PC and VR layouts:** PC has larger menus and a fixed screen HUD. VR keeps menus in front of you and the HUD above your left controller. Switching modes changes both the layout and the control hints.
 - **Menus:** Use the mouse on PC, or arrows / the controller stick and **Enter / A**. **Character** contains Status, Skills and Equipment; **Save / Load** contains your save slots. **Esc / B** or the visible **Back** control returns to the previous menu.
 - **Status effects:** Your HUD shows active effects below HP and MP (above the left controller in VR). Extra effects cycle into view; open **Menu → Character → Status** for the complete list. Nearby enemies show their name, health and effects overhead.
 - **Where are my saves?** Mod saves are in the `saves` folder beside the launcher. Your original game and original saves are not changed. Setup keeps mod saves during upgrades and uninstall.

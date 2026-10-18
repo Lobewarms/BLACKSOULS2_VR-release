@@ -1,9 +1,11 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -93,6 +95,111 @@ internal static class UpdateTests
         try { action(); }
         catch (ReleaseCheckException error) { Check(error.Failure == expected, name); return error; }
         throw new Exception(name);
+    }
+
+    private static T Named<T>(Form form, string name) where T : Control
+    {
+        return Descendants(form).OfType<T>().Single(c => c.Name == name);
+    }
+
+    private static void Click(Button button)
+    {
+        // Exercise the real attached handlers without showing the engine form or
+        // starting its Shown/Steam integration in this isolated installation.
+        typeof(Button).GetMethod("OnClick", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(button, new object[] { EventArgs.Empty });
+    }
+
+    private static void Layout(Control parent)
+    {
+        parent.PerformLayout();
+        foreach (Control child in parent.Controls) Layout(child);
+    }
+
+    private static void PresentationChecks(Form form)
+    {
+        var pc = Named<Button>(form, "playPcMode");
+        var vr = Named<Button>(form, "playVrMode");
+        var launch = Named<Button>(form, "launchGameButton");
+        var autoVr = (CheckBox)EngineHost.Field(form, "autoVrBox");
+        var options = EngineHost.Field(form, "opt");
+        Check(form.FormBorderStyle == FormBorderStyle.None && Named<Button>(form, "closeWindow").TabStop && !String.IsNullOrWhiteSpace(Named<Button>(form, "closeWindow").AccessibleName), "Launcher uses borderless chrome with accessible window actions");
+        Check(Object.ReferenceEquals(launch, EngineHost.Field(form, "launchBtn")) && Object.ReferenceEquals(Named<Button>(form, "openSavesButton"), EngineHost.Field(form, "savesBtn")), "Redesign reuses the original engine launch and saves controls");
+        Check(form.AcceptButton == launch && pc.TabStop && vr.TabStop && !String.IsNullOrWhiteSpace(pc.AccessibleName), "Primary launch and mode choices support keyboard and accessible names");
+        options.GetType().GetField("Vr").SetValue(options, true);
+        options.GetType().GetField("Launch").SetValue(options, true);
+        Click(pc);
+        Check(!autoVr.Checked && !(bool)options.GetType().GetField("Vr").GetValue(options) && !(bool)options.GetType().GetField("Launch").GetValue(options) && !((CheckBox)EngineHost.Field(form, "steamRtBox")).Checked, "Choosing PC clears checkbox and hidden CLI headset overrides");
+        Check(launch.Text == "PCで起動", "Primary action describes the selected PC mode in Japanese");
+        Click(vr);
+        Check(autoVr.Checked && (bool)options.GetType().GetField("Vr").GetValue(options) && launch.Text == "VRで起動", "Choosing VR reaches the engine's actual automatic-VR setting");
+        var languages = (ComboBox)EngineHost.Field(form, "langBox");
+        languages.SelectedIndex = 1;
+        Check(launch.Text == "Launch in VR" && pc.Text.Contains("Play on PC"), "Mode cards and primary action follow language changes");
+        Check(new[] { languages, (ComboBox)EngineHost.Field(form, "browserBox") }.All(box => box.DrawMode == DrawMode.Normal && box.FlatStyle == FlatStyle.Standard && box.ForeColor.GetBrightness() < 0.25 && box.BackColor.GetBrightness() > 0.75) && !String.IsNullOrWhiteSpace(languages.Text), "Language and browser selections retain native high-contrast text rendering");
+        languages.SelectedIndex = 0;
+        Check(launch.Text == "VR로 실행" && !String.IsNullOrWhiteSpace(pc.AccessibleName), "Korean mode controls and accessible names are translated");
+        languages.SelectedIndex = 3;
+        Check(launch.Text == "启动VR模式" && languages.AccessibleName == "语言", "Chinese mode controls and language selector are translated");
+        languages.SelectedIndex = 1;
+        var content = Named<TableLayoutPanel>(form, "launcherContent");
+        var details = Named<Panel>(form, "launcherDetails");
+        var advanced = Named<TableLayoutPanel>(form, "launcherAdvanced");
+        var advancedToggle = Named<Button>(form, "toggleAdvanced");
+        var detailsToggle = Named<Button>(form, "toggleDetails");
+        Layout(form);
+        Check(content.GetRowHeights()[content.GetRow(details)] == 0 && content.GetRowHeights()[content.GetRow(advanced)] == 0, "Details and advanced settings start collapsed");
+        Click(advancedToggle); Layout(form);
+        Check(content.GetRowHeights()[content.GetRow(advanced)] > 100, "Advanced options reveal the original RTP browser port and Steam controls");
+        Check(Object.ReferenceEquals(((Control)EngineHost.Field(form, "rtpBox")).Parent, advanced) && Object.ReferenceEquals(((Control)EngineHost.Field(form, "steamBtn")).Parent, advanced), "Advanced settings retain the original engine event-bound controls");
+        Click(advancedToggle); Click(detailsToggle); Layout(form);
+        Check(content.GetRowHeights()[content.GetRow(details)] >= 156 && ((TextBox)EngineHost.Field(form, "logBox")).Parent == details, "Details reveal the original read-only launcher log");
+        Click(detailsToggle);
+        ((TextBox)EngineHost.Field(form, "logBox")).AppendText(Environment.NewLine + "[13:00:19] Test update service response" + Environment.NewLine);
+        Check(Named<Label>(form, "launcherSessionStatus").Text == "Test update service response", "New launcher messages remain visible when details are collapsed");
+        foreach (Size size in new[] { new Size(900, 650), new Size(1060, 760), new Size(1280, 800) })
+        {
+            form.ClientSize = size; Layout(form);
+            var main = Named<TableLayoutPanel>(form, "launcherMain");
+            var primary = Named<TableLayoutPanel>(form, "launcherPrimary");
+            var sidebar = Named<TableLayoutPanel>(form, "launcherSidebar");
+            var title = Named<Label>(form, "launcherTitle");
+            var edition = Named<Label>(form, "launcherEdition");
+            Check(primary.Right <= sidebar.Left && sidebar.Right <= main.ClientSize.Width && pc.Right <= vr.Left &&
+                !title.Bounds.IntersectsWith(edition.Bounds) && launch.Width > 300 && Named<Button>(form, "forkUpdateButton").Width > 150 &&
+                Named<Label>(form, "launcherWindowCaption").Right <= Named<FlowLayoutPanel>(form, "launcherWindowActions").Left &&
+                Named<Label>(form, "launcherWindowCaption").Bottom <= Named<TableLayoutPanel>(form, "launcherTitleBar").ClientSize.Height,
+                "Launcher layout keeps primary controls separate at " + size.Width + "x" + size.Height);
+        }
+        form.ClientSize = new Size(1060, 760);
+        Rectangle normal = form.Bounds;
+        Click(Named<Button>(form, "maximizeWindow"));
+        Check(form.WindowState == FormWindowState.Maximized && Named<Button>(form, "maximizeWindow").AccessibleName == "Restore window" &&
+            LauncherWindowChrome.MaximizeWorkArea(new Rectangle(-1920, 0, 1920, 1080), new Rectangle(-1920, 0, 1920, 1040)) == new Rectangle(0, 0, 1920, 1040), "Custom maximize uses the monitor work area and exposes Restore");
+        Click(Named<Button>(form, "maximizeWindow"));
+        Check(form.WindowState == FormWindowState.Normal && form.Bounds.Size == normal.Size, "Custom Restore returns to the original window size");
+        Click(Named<Button>(form, "minimizeWindow"));
+        Check(form.WindowState == FormWindowState.Minimized, "Custom minimize reaches the real form state");
+        form.WindowState = FormWindowState.Normal;
+        bool closing = false;
+        FormClosingEventHandler cancelClose = delegate(object sender, FormClosingEventArgs e) { closing = true; e.Cancel = true; };
+        form.FormClosing += cancelClose;
+        Click(Named<Button>(form, "closeWindow"));
+        Check(closing && !form.IsDisposed, "Custom Close follows the engine form's existing close and cleanup lifecycle");
+        form.FormClosing -= cancelClose;
+        var edges = new[] {
+            new { Point = new Point(1, 1), Expected = 13 }, new { Point = new Point(500, 1), Expected = 12 },
+            new { Point = new Point(999, 1), Expected = 14 }, new { Point = new Point(1, 350), Expected = 10 },
+            new { Point = new Point(999, 350), Expected = 11 }, new { Point = new Point(1, 699), Expected = 16 },
+            new { Point = new Point(500, 699), Expected = 15 }, new { Point = new Point(999, 699), Expected = 17 },
+            new { Point = new Point(500, 350), Expected = 1 }
+        };
+        Check(edges.All(edge => LauncherWindowChrome.ResizeHitTest(edge.Point, new Size(1000, 700), 8) == edge.Expected), "Borderless hit testing supports all eight resize directions and leaves center controls interactive");
+        form.Scale(new SizeF(1.5f, 1.5f)); Layout(form);
+        Check(launch.Height >= 80 && pc.Width > 350 && Named<TableLayoutPanel>(form, "launcherSidebar").Right <= Named<TableLayoutPanel>(form, "launcherMain").ClientSize.Width,
+            "Launcher controls retain their separation and usable sizes at simulated 150 percent scaling");
+        LauncherWindowChrome.FitToWorkArea(form, new Rectangle(0, 0, 1200, 700));
+        Check(form.Width <= 1200 && form.Height <= 700 && form.MinimumSize.Width <= 1200 && form.MinimumSize.Height <= 700 && Named<Panel>(form, "launcherViewport").AutoScroll,
+            "Scaled launcher fits a laptop work area while retaining scrolling access to every setting");
     }
 
     private static void HttpChecks(ReleaseIdentity identity, ReleaseUpdate update, string digest, string directory)
@@ -203,6 +310,7 @@ internal static class UpdateTests
                 Check((string)engine.GetType("BlacksoulsVR.AppPaths").GetField("AppDir").GetValue(null) == Path.Combine(directory.TrimEnd(Path.DirectorySeparatorChar), "app"), "Hosted engine uses the actual install's app folder");
                 var options = EngineHost.Field(form, "opt");
                 Check(options.GetType().GetField("Screenshot").GetValue(options) == null, "Normal launch is restored after suppressing legacy checker");
+                PresentationChecks(form);
             }
             Console.WriteLine("Passed " + checks + " update and engine hosting checks.");
             return 0;

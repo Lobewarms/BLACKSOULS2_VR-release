@@ -10,6 +10,9 @@
 #ifndef RepositoryURL
   #error RepositoryURL must be supplied by the release build
 #endif
+#ifndef AppIconFile
+  #error AppIconFile must point to the community application icon
+#endif
 
 [Setup]
 AppId={{691EADBE-DDB2-4460-AD58-B32AD0B36620}
@@ -30,6 +33,7 @@ OutputBaseFilename=BLACKSOULS_VR_Setup_{#AppVersion}
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile={#AppIconFile}
 UninstallDisplayIcon={app}\BlacksoulsVR.exe
 CloseApplications=yes
 RestartApplications=no
@@ -50,11 +54,11 @@ Type: files; Name: "{app}\FORK_README.md"
 Type: files; Name: "{app}\FORK_VERSION.txt"
 
 [Icons]
-Name: "{group}\BLACK SOULS II VR"; Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"
+Name: "{group}\BLACK SOULS II VR"; Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"; IconFilename: "{app}\BlacksoulsVR.exe"; IconIndex: 0
 Name: "{group}\Controls"; Filename: "{app}\CONTROLS_en.txt"
 Name: "{group}\How to play"; Filename: "{app}\START_HERE.txt"
-Name: "{group}\Uninstall BLACK SOULS II VR"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\BLACK SOULS II VR"; Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{group}\Uninstall BLACK SOULS II VR"; Filename: "{uninstallexe}"; IconFilename: "{app}\BlacksoulsVR.exe"; IconIndex: 0
+Name: "{autodesktop}\BLACK SOULS II VR"; Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"; Tasks: desktopicon; IconFilename: "{app}\BlacksoulsVR.exe"; IconIndex: 0
 
 [Run]
 Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"; Description: "Open BLACK SOULS II VR"; Flags: nowait postinstall skipifsilent

@@ -37,7 +37,8 @@ namespace BlacksoulsCommunity
                 throw new InvalidOperationException("This engine's update integration is incompatible. Please reinstall the app.");
             }
             screenshot.SetValue(options, requestedScreenshot);
-            new UpdateController(form, identity, directory, checkOnShow);
+            var updates = new UpdateController(form, identity, directory, checkOnShow);
+            LauncherPresentation.Apply(form, updates.UpdateButton, identity);
             return form;
         }
 
@@ -53,12 +54,14 @@ namespace BlacksoulsCommunity
             private bool busy;
             private string language;
             private string lastCheckMessage;
+            internal Button UpdateButton { get { return button; } }
 
             public UpdateController(Form form, ReleaseIdentity identity, string directory, bool checkOnShow)
             {
                 this.form = form; this.identity = identity; this.directory = directory;
                 log = (TextBox)Field(form, "logBox");
                 var old = (Button)Field(form, "updateBtn");
+                button.Name = "forkUpdateButton";
                 button.AutoSize = true;
                 button.MinimumSize = old.MinimumSize;
                 button.Padding = old.Padding;

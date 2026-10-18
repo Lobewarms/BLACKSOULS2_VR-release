@@ -12,6 +12,7 @@ export class Input {
     this.keys = new Set();
     this.keysPrev = new Set();
     this.mouse = { dx: 0, dy: 0, buttons: 0, prevButtons: 0, wheel: 0 };
+    this.mousePresses = 0;                         // clicks completed between rendered frames still count once
     this.pointer = { x: 0, y: 0, seen: false };
     this.pointerLocked = false;
     this.lockFresh = 0;                              // movements right after the lock still to be checked
@@ -38,8 +39,11 @@ export class Input {
     });
     dom.addEventListener('mousedown', e => {
       this.trackPointer(e);
-      this.mouse.buttons |= 1 << e.button;
-      if (!this.pointerLocked && !G.vr && !G.ui?.sceneBusy() && !G.ui?.messageBusy()) this.lockPointer();
+      const button = 1 << e.button;
+      if (!(this.mouse.buttons & button)) this.mousePresses |= button;
+      this.mouse.buttons |= button;
+      const busy = G.ui?.pointerBusy?.() ?? (G.ui?.sceneBusy?.() || G.ui?.messageBusy?.());
+      if (!this.pointerLocked && !G.vr && !busy) this.lockPointer();
     });
     addEventListener('mouseup', e => { this.mouse.buttons &= ~(1 << e.button); });
     dom.addEventListener('contextmenu', e => e.preventDefault());
@@ -55,6 +59,7 @@ export class Input {
 
   releaseMouse() {
     this.mouse.buttons = 0; this.mouse.prevButtons = 0;
+    this.mousePresses = 0;
     this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0;
     this.lockFresh = 0; this.lastMoves = []; this.dropNext = true;
   }
@@ -150,13 +155,14 @@ export class Input {
   endFrame() {
     this.keysPrev = new Set(this.keys);
     this.mouse.prevButtons = this.mouse.buttons;
+    this.mousePresses = 0;
     this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0;
   }
 
   key(code) { return this.keys.has(code); }
   keyPressed(code) { return this.keys.has(code) && !this.keysPrev.has(code); }
   mouseHeld(b) { return (this.mouse.buttons & (1 << b)) !== 0; }
-  mousePressed(b) { return this.mouseHeld(b) && !(this.mouse.prevButtons & (1 << b)); }
+  mousePressed(b) { return !!(this.mousePresses & (1 << b)) || this.mouseHeld(b) && !(this.mouse.prevButtons & (1 << b)); }
   xrHeld(hand, i) { return !!this.btn[hand][i]; }
   xrPressed(hand, i) { return !!this.btn[hand][i] && !this.btnPrev[hand][i]; }
   xrReleased(hand, i) { return !this.btn[hand][i] && !!this.btnPrev[hand][i]; }

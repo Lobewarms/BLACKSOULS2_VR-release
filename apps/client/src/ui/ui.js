@@ -13,6 +13,7 @@ import { cleanName, NAME_LEN } from '../network/coopnet.js';
 import { battlerEffects, effectsKey, fitLabel } from './battler-status.js';
 import { NavigationMap } from './navigation-map.js';
 import { setWindowSkin, drawGameWindow, drawGameCursor } from './window-skin.js';
+import { desktopViewport, placeDesktopRoot, anchorDesktopPanel } from './desktop-layout.js';
 
 export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
@@ -295,7 +296,7 @@ class ListPanel {
       ctx.fillText(stripEscapes(desc).slice(0, 60), 36, canvas.height - 30);
     }
     ctx.font = `21px ${FONT}`; ctx.fillStyle = 'rgba(230,225,210,0.85)';
-    ctx.fillText(tr('↑↓ / 스틱 · Enter / A: 선택 · Esc / B: 뒤로'), 36, 84);
+    ctx.fillText(tr(G.vr ? '스틱: 선택 · A / 트리거: 결정 · B: 뒤로' : '클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로'), 36, 84);
     this.panel.commit();
   }
   update(raycaster) {
@@ -662,7 +663,8 @@ export class UI {
     this.root.add(this.bannerPanel.mesh);
     this.toastPanel = new Panel(900, 300, 0.75);
     this.root.add(this.toastPanel.mesh);
-    this.hud = new Panel(512, 356, 0.24);
+    this.hud = new Panel(512, 512, 0.24);
+    this.hudPaintHeight = 262;
     this.hud.mesh.renderOrder = 900;
     this.navigation = new NavigationMap(Panel, this.root, camera, this.hud.mesh, FONT);
     this.raycaster = new THREE.Raycaster();
@@ -686,6 +688,19 @@ export class UI {
   // ---------------------------------------------------------------- placement
   // keep UI in front of the user; re-centre when they look away
   placeRoot(force = false) {
+    if (!G.vr) {
+      const viewport = desktopViewport(G.input, G.three?.renderer);
+      placeDesktopRoot(this.root, this.camera, viewport);
+      const hudWidth = Math.max(1, Math.min(320, viewport.width - 40, (viewport.height - 40) * 512 / this.hudPaintHeight));
+      if (!this.hudFollow) anchorDesktopPanel(this.hud, this.camera, viewport,
+        { width: hudWidth, x: 'left', y: 'bottom', paintedHeight: this.hudPaintHeight });
+      if (this.navigation.mini.mesh.parent === this.camera) {
+        const miniWidth = Math.max(1, Math.min(220, viewport.width - 48, (viewport.height - 48) * 384 / 440));
+        anchorDesktopPanel(this.navigation.mini, this.camera, viewport, { width: miniWidth, x: 'right', y: 'top' });
+      }
+      return;
+    }
+    this.root.scale.setScalar(1);
     const head = new THREE.Vector3();
     this.camera.getWorldPosition(head);
     const q = new THREE.Quaternion();
@@ -710,11 +725,11 @@ export class UI {
       // VR: small panel floating just above the left controller, turned toward the eyes
       this.scene.add(this.hud.mesh);
       this.hud.mesh.scale.setScalar(1);
+      this.navigation.mini.mesh.position.y = this.hud.heightM / 2 + this.navigation.mini.heightM / 2 + 0.02;
     } else {
       this.camera.add(this.hud.mesh);
-      this.hud.mesh.position.set(-0.36, -0.27, -0.6);
       this.hud.mesh.rotation.set(0, 0, 0);
-      this.hud.mesh.scale.setScalar(1.25);
+      this.placeRoot();
     }
     this.hud.mesh.visible = true;
   }
@@ -722,6 +737,9 @@ export class UI {
   // ---------------------------------------------------------------- messages
   messageBusy() { return !!this.msg || !!this.banner?.blocking || !!G.arena?.busy; }
   sceneBusy() { return !!this.sceneOpen || this.menuOpen; }
+  pointerBusy() {
+    return this.sceneBusy() || this.messageBusy() || this.list.visible || this.grid.visible || this.keyboard.visible || this.choice.visible;
+  }
 
   showMessage(msg) {
     const banner = bannerOf(msg);
@@ -1535,64 +1553,77 @@ export class UI {
   // ---------------------------------------------------------------- HUD
   drawHud() {
     const leader = G.state?.party.leader();
-    this.hud.mesh.visible = !!leader;
+    this.hudPresent = !!leader;
+    this.hud.mesh.visible = !!leader && (G.vr || !this.sceneBusy() && !this.messageBusy() && !this.remote?.shown && !this.prompt?.shown && !G.combat?.playerDead);
     if (!leader) return;
     const mv = G.scripts?.menuVar, sen = mv && (!mv.switchId || G.state.sw(mv.switchId)) ? G.state.v(mv.variable) : null;
     const effects = battlerEffects(leader);
-    const page = Math.floor((G.time || 0) / 4) % Math.max(1, Math.ceil(effects.length / 4));
-    const key = `${leader.hp}/${leader.mhp}/${leader.mp}/${leader.mmp}/${G.state.party.gold}/${G.combat?.stamina?.toFixed?.(2)}/${sen}/${effectsKey(effects)}/${page}/${iconAssetRevision()}`;
+    const pages = Math.max(1, Math.ceil(effects.length / 4));
+    const page = Math.floor((G.time || 0) / 4) % pages;
+    const shown = effects.slice(page * 4, page * 4 + 4), more = effects.length - shown.length;
+    const stamina = G.combat?.stamina;
+    const currencyY = stamina === undefined ? 182 : 234, baseHeight = currencyY + 28;
+    const effectsTop = baseHeight + 32;
+    this.hudPaintHeight = shown.length ? effectsTop + shown.length * 36 + (more ? 74 : 8) : baseHeight;
+    const key = JSON.stringify([leader.name, leader.level, leader.hp, leader.mhp, leader.mp, leader.mmp,
+      G.state.party.gold, stamina?.toFixed?.(2), sen, mv, $data.system.currency_unit, effectsKey(effects), page, iconAssetRevision()]);
     if (key === this.lastHud) return;
     this.lastHud = key;
     const p = this.hud;
     const { ctx, canvas } = p;
     p.clear();
-    const shown = effects.slice(page * 4, page * 4 + 4), more = effects.length - shown.length;
-    const height = 188 + (shown.length + (more ? 1 : 0)) * 32;
+    const height = this.hudPaintHeight;
     windowBg(ctx, 2, 2, canvas.width - 4, height - 4, 0.82);
-    ctx.font = `28px ${FONT}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
-    shown.forEach((effect, i) => {
-      const y = 188 + i * 32;
-      drawIcon(ctx, effect.icon, 24, y, 28);
-      ctx.fillStyle = '#fff';
-      ctx.fillText(fitLabel(ctx, stripEscapes(effect.name), canvas.width - 86), 62, y + 14);
-    });
-    if (more) {
-      ctx.fillStyle = '#e8d8a8';
-      ctx.fillText(tr('외 {n}개 효과', { n: more }), 26, 188 + shown.length * 32 + 14);
-    }
-    const r = Math.max(0, leader.hp / Math.max(1, leader.mhp));
-    ctx.fillStyle = 'rgba(60,10,10,0.9)'; ctx.fillRect(22, 20, canvas.width - 44, 28);
-    ctx.fillStyle = r > 0.3 ? '#b8222a' : '#ff3030'; ctx.fillRect(22, 20, (canvas.width - 44) * r, 28);
-    const mr = leader.mmp > 0 ? THREE.MathUtils.clamp(leader.mp / leader.mmp, 0, 1) : 0;
-    ctx.fillStyle = 'rgba(10,20,60,0.9)'; ctx.fillRect(22, 54, canvas.width - 44, 18);
-    ctx.fillStyle = '#2f6bd8'; ctx.fillRect(22, 54, (canvas.width - 44) * mr, 18);
-    if (G.combat?.stamina !== undefined) {
-      ctx.fillStyle = 'rgba(10,40,10,0.9)'; ctx.fillRect(22, 78, canvas.width - 44, 10);
-      ctx.fillStyle = '#4caf50'; ctx.fillRect(22, 78, (canvas.width - 44) * G.combat.stamina, 10);
-    }
-    ctx.font = `30px ${FONT}`; ctx.fillStyle = '#eee'; ctx.textBaseline = 'middle';
-    // (seven-figure HP - an original save past the old limits - and a long purse share the line: the HP gives way)
-    const goldText = `${G.state.party.gold.toLocaleString()} ${$data.system.currency_unit}`, hpText = `HP ${leader.hp} / ${leader.mhp}`;
-    const room = canvas.width - 50 - ctx.measureText(goldText).width - 16;
-    const hpW = ctx.measureText(hpText).width;
-    if (hpW > room) ctx.font = `${Math.max(16, Math.floor(30 * room / hpW))}px ${FONT}`;
-    ctx.fillText(hpText, 26, 120);
-    ctx.font = `30px ${FONT}`;
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#e8d8a8';
-    ctx.fillText(goldText, canvas.width - 24, 120);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#9cc8ff';
-    ctx.fillText(`MP ${leader.mp} / ${leader.mmp}`, 26, 160);
-    // the SEN, as the original's menu shows it (its title in the system colour)
-    if (sen !== null) {
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#f0f0f0';
-      const value = `${sen}${mv.suffix}`;
-      ctx.fillText(value, canvas.width - 24, 160);
-      ctx.fillStyle = textColor(16);
-      ctx.fillText(`${mv.label} `, canvas.width - 24 - ctx.measureText(value).width, 160);
-      ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    const write = (text, x, y, room, size = 28, align = 'left', color = textColor(0)) => {
+      ctx.font = `${size}px ${FONT}`;
+      const width = ctx.measureText(text).width;
+      if (width > room) ctx.font = `${Math.max(16, Math.floor(size * room / width))}px ${FONT}`;
+      ctx.fillStyle = color; ctx.textAlign = align; ctx.fillText(text, x, y);
+    };
+    const number = value => (Number.isFinite(Number(value)) ? Number(value) : 0).toLocaleString();
+    const level = leader.level == null ? '' : `${$data.system.terms?.basic?.[1] || 'Lv'} ${number(leader.level)}`;
+    ctx.font = `26px ${FONT}`;
+    const levelRoom = level ? Math.min(160, ctx.measureText(level).width + 16) : 0;
+    ctx.font = `32px ${FONT}`;
+    write(fitLabel(ctx, stripEscapes(leader.name || tr('플레이어')), canvas.width - 56 - levelRoom), 24, 30,
+      canvas.width - 56 - levelRoom, 32);
+    if (level) write(level, canvas.width - 24, 30, levelRoom, 26, 'right', textColor(16));
+    const resource = (label, value, maximum, y, colors, percentage = false) => {
+      const ratio = Number.isFinite(value) && maximum > 0 ? THREE.MathUtils.clamp(value / maximum, 0, 1) : 0;
+      write(label, 24, y, 130, 28, 'left', textColor(colors[1]));
+      ctx.font = `28px ${FONT}`;
+      const labelRoom = Math.min(150, ctx.measureText(label).width + 20);
+      write(percentage ? `${Math.round(ratio * 100)}%` : `${number(value)} / ${number(maximum)}`,
+        canvas.width - 24, y, canvas.width - 48 - labelRoom, 30, 'right');
+      const by = y + 20, bw = canvas.width - 48;
+      ctx.fillStyle = textColor(19); ctx.fillRect(24, by, bw, 12);
+      const gradient = ctx.createLinearGradient(24, by, canvas.width - 24, by);
+      gradient.addColorStop(0, textColor(colors[0])); gradient.addColorStop(1, textColor(colors[1]));
+      ctx.fillStyle = gradient; ctx.fillRect(24, by, bw * ratio, 12);
+    };
+    resource($data.system.terms?.basic?.[3] || 'HP', leader.hp, leader.mhp, 70, [20, 21]);
+    resource($data.system.terms?.basic?.[5] || 'MP', leader.mp, leader.mmp, 122, [22, 23]);
+    if (stamina !== undefined) resource(tr('스태미나'), stamina, 1, 174, [28, 29], true);
+    // Currency and SEN have their own row; neither shares a label with a resource gauge.
+    const goldText = `${number(G.state.party.gold)} ${stripEscapes($data.system.currency_unit || '')}`.trim();
+    const goldRoom = sen === null ? canvas.width - 48 : 292;
+    write(goldText, 24, currencyY, goldRoom, 26, 'left', textColor(16));
+    if (sen !== null) write(`${mv.label} ${sen}${mv.suffix || ''}`, canvas.width - 24, currencyY, canvas.width - 72 - goldRoom, 25, 'right');
+    if (shown.length) {
+      write(tr('상태 효과'), 24, baseHeight + 14, 330, 24, 'left', textColor(16));
+      write(`${page + 1}/${pages}`, canvas.width - 24, baseHeight + 14, 90, 24, 'right');
+      shown.forEach((effect, i) => {
+        const y = effectsTop + i * 36;
+        drawIcon(ctx, effect.icon, 24, y, 30);
+        ctx.font = `27px ${FONT}`;
+        write(fitLabel(ctx, stripEscapes(effect.name), canvas.width - 92), 66, y + 15, canvas.width - 92, 27);
+      });
+      if (more) {
+        const y = effectsTop + shown.length * 36;
+        write(tr('외 {n}개 효과', { n: more }), 24, y + 14, canvas.width - 48, 22, 'left', textColor(16));
+        write(tr('전체 효과: 메뉴 → 캐릭터 → 상태'), 24, y + 42, canvas.width - 48, 22);
+      }
     }
     p.commit();
   }
@@ -2505,8 +2536,9 @@ export class UI {
     }
     this.drawHud();
     this.updateHudFollow();
-    this.navigation.update(dt, !!this.hud.mesh.visible && !G.combat?.playerDead && !this.msg && !this.banner?.blocking,
+    this.navigation.update(dt, this.hudPresent && !G.combat?.playerDead && !this.msg && !this.banner?.blocking,
       !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
+    if (!G.vr) this.placeRoot();
     this.updatePointerLine();
   }
   updateHudFollow() {

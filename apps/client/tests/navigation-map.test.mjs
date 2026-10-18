@@ -98,7 +98,7 @@ test('real map canvases update position and facing, cache terrain and discard st
   G.map.grid.data[0] = 2; data[0] = 2;
   ui.update(0.1);
   assert.equal(nav.mini.mesh.visible, true); assert.equal(nav.full.mesh.visible, false);
-  assert.ok(text(nav.mini).some(s => s.includes('N / Menu')));
+  assert.ok(text(nav.mini).some(s => s.includes('N: Map')));
   assert.equal(nav.base.record.fills[0].color, '#292b33'); assert.equal(nav.base.record.fills[1].color, '#777668');
   assert.equal(nav.base.record.fills[6].color, '#080b12'); assert.equal(nav.base.record.fills[7].color, '#b59352');
   assert.equal(nav.mini.canvas.record.rotations.at(-1), Math.PI / 2);
