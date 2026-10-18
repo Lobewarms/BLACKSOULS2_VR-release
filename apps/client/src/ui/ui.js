@@ -5,6 +5,7 @@ import { G } from '../core/globals.js';
 import { tr } from './i18n.js';
 import { $data, mapName } from '../data/data.js';
 import { loadCanvas } from '../data/assets.js';
+import { archivedIconCanvas, sheetForIcon } from '../data/iconfallback.js';
 import { itemData, spiritActorId, BAG_MAX } from '../game/state.js';
 import { quickSlots, quickSlotOf, assignQuickSlot, entryStatus } from './quickslots.js';
 import { cleanName, NAME_LEN } from '../network/coopnet.js';
@@ -93,10 +94,12 @@ export function bannerOf(msg) {
   return { text: plain, color: cm ? textColor(+cm[1]) : '#ddd' };
 }
 
-let iconSet = null, windowSkin = null, palette = DEFAULT_COLORS.slice();
+let iconSet = null, archiveIcons = null, iconRevision = 0, windowSkin = null, palette = DEFAULT_COLORS.slice();
 export async function loadUiAssets() {
-  iconSet = await loadCanvas('Graphics/System', 'IconSet');
-  windowSkin = await loadCanvas('Graphics/System', 'Window');
+  [iconSet, archiveIcons, windowSkin] = await Promise.all([
+    loadCanvas('Graphics/System', 'IconSet'), archivedIconCanvas(), loadCanvas('Graphics/System', 'Window'),
+  ]);
+  iconRevision++;
   if (windowSkin) {
     const ctx = windowSkin.getContext('2d', { willReadFrequently: true });
     palette = [];
@@ -107,11 +110,13 @@ export async function loadUiAssets() {
   }
 }
 export function textColor(n) { return palette[n] || '#fff'; }
-export function getIconSet() { return iconSet; }
+export function getIconSet(index = 0) { return sheetForIcon(iconSet, archiveIcons, index); }
+export function iconAssetRevision() { return iconRevision; }
 export function drawIcon(ctx, index, x, y, size = 24) {
-  if (!iconSet || index <= 0) return;
+  const sheet = getIconSet(index);
+  if (!sheet || index <= 0) return;
   ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(iconSet, (index % 16) * 24, Math.floor(index / 16) * 24, 24, 24, x, y, size, size);
+  ctx.drawImage(sheet, (index % 16) * 24, Math.floor(index / 16) * 24, 24, 24, x, y, size, size);
 }
 
 // Layout converted text into drawable ops; s = canvas pixels per RM pixel, base = the game's font size

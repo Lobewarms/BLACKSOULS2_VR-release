@@ -6,7 +6,7 @@ You need your own copy of the original BLACK SOULS II game.
 
 ## Download
 
-**[Download for Windows](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases/download/v0.2.4/BLACKSOULS_VR_Setup_0.2.4.exe)**
+**[Download for Windows](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases/download/v0.2.5/BLACKSOULS_VR_Setup_0.2.5.exe)**
 
 Run the installer, then open **BLACK SOULS II VR** from the Start menu.
 A desktop shortcut is optional during setup.

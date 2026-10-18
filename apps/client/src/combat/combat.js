@@ -16,11 +16,12 @@ import { evalFormula } from '../game/rubyexpr.js';
 import { Interpreter } from '../game/interpreter.js';
 import { commonEventList } from '../entities/character.js';
 import { resolveCircle, lineOfSight, nextStep, clearEdgeCache } from '../world/collision.js';
-import { FONT, drawIcon, stripEscapes } from '../ui/ui.js';
+import { FONT, drawIcon, stripEscapes, iconAssetRevision } from '../ui/ui.js';
 import { QuickRing, quickSlots, entryData } from '../ui/quickslots.js';
 import { FloorMarker, MARK } from './telegraph.js';
 import { buildIconModel, getAdjust, setAdjust, resetAdjust, defaultAdjust } from './weapons.js';
 import { WeaponFx, ELEMENT_FX } from './weaponfx.js';
+import { desktopRest, desktopSwing } from './desktop-weapon.js';
 import { openFights } from '../world/maphints.js';
 import { personalPage } from '../network/coopworld.js';
 import { SHIELD_SOUND } from '../ui/audio.js';
@@ -1377,9 +1378,10 @@ export class CombatSystem {
     if (this.gripAdjust) return;                     // the items are being moved by hand
     const { weapon: ws, offhand: os } = this.heldSpecs();
     const wtype = ws?.wtype || WTYPE.SWORD;
-    const key = `${ws?.key || '-'}|${os?.key || '-'}|${G.vr}`;
+    const key = `${ws?.key || '-'}|${os?.key || '-'}|${G.vr}|${iconAssetRevision()}`;
     if (key === this.equipKey) return;
     this.equipKey = key;
+    this.swing = null; this.deskCharge = null;
     this.wtype = wtype;
     if (this.weapon) this.weapon.parent?.remove(this.weapon);
     if (this.shield) this.shield.parent?.remove(this.shield);
@@ -1409,6 +1411,7 @@ export class CombatSystem {
       const wInner = wrapDesktop(wModel, -Math.PI / 2) || makeWeaponMesh(wtype);
       this.weapon.add(wInner);
       this.weapon.userData.length = (wModel || wInner).userData.length;
+      this.weapon.userData.visualLength = this.weapon.userData.length * (wModel && !vr ? 0.6 : 1);
       this.weapon.userData.ranged = !!this.shotKind;
     } else {
       // bare hands: nothing to draw (VR shows the hand), the fist is what hits
@@ -1424,8 +1427,7 @@ export class CombatSystem {
       if (this.shotKind === 'gun') this.addLaser(this.weapon);
     } else {
       G.three.camera.add(this.weapon);
-      this.weapon.position.set(0.28, -0.3, -0.45);
-      this.weapon.rotation.set(0.35, 0.15, 0);
+      desktopRest(this.weapon, 'right', !!this.shotKind);
     }
     this.shield = null;
     this.offGun = null;
@@ -1437,13 +1439,14 @@ export class CombatSystem {
         const gunModel = sModel || makeWeaponMesh(WTYPE.GUN);
         this.shield.add(wrapDesktop(sModel, Math.PI / 2) || gunModel);
         this.shield.userData.length = gunModel.userData.length || 0.3;
+        this.shield.userData.visualLength = this.shield.userData.length * (sModel && !vr ? 0.6 : 1);
         this.offGun = this.shield;
         if (G.vr && ctrl.left) {
           ctrl.left.grip.add(this.shield); this.shield.position.set(0, 0, 0.03);
           if (!handPose(this.shield, os)) this.shield.userData.alignRay = 'left';
           this.addLaser(this.shield);
         }
-        else { G.three.camera.add(this.shield); this.shield.position.set(-0.28, -0.3, -0.45); this.shield.rotation.set(0.35, -0.15, 0); }
+        else { G.three.camera.add(this.shield); desktopRest(this.shield, 'left', true); }
       } else {
         this.shield.add(sModel || makeShieldMesh(os.large));
         if (G.vr && ctrl.left) {
@@ -1487,7 +1490,7 @@ export class CombatSystem {
     this.disarmed = on;
     // what the hands were doing with them ends (a weapon art is paid only when it lands: nothing is lost)
     this.hasPrev = false; this.charge = null; this.deskCharge = null; this.breakArm = null;
-    if (this.swing) { this.swing = null; this.weapon?.rotation.set(0.35, 0.15, 0); }
+    if (this.swing) { this.swing = null; if (!G.vr) desktopRest(this.weapon, 'right', !!this.shotKind); }
     if (on) this.skillArm = null;
     if (this.breakGlow) this.breakGlow.visible = false;
     this.showArms();
@@ -6514,7 +6517,7 @@ export class CombatSystem {
         const s = this.swing;
         s.t += dt;
         const k = Math.min(1, s.t / 0.32);
-        this.weapon.rotation.set(0.35 - Math.sin(k * Math.PI) * 1.3, 0.15 + (k - 0.5) * 1.8, -Math.sin(k * Math.PI) * 0.6);
+        desktopSwing(this.weapon, k);
         if (k > 0.25 && k < 0.7) {
           const head = G.player.headWorld(new THREE.Vector3());
           const f = G.player.forwardVec();
@@ -6549,7 +6552,7 @@ export class CombatSystem {
             return d < reach && to.normalize().dot(f) > 0.5;
           }, { power: this.stamina > 0.1 ? 1 : 0.5, charge: s.charge || 0 });
         }
-        if (k >= 1) { this.swing = null; this.weapon.rotation.set(0.35, 0.15, 0); }
+        if (k >= 1) { this.swing = null; desktopRest(this.weapon, 'right', ranged); }
       }
     }
   }
@@ -6912,7 +6915,7 @@ export class CombatSystem {
     let from = null, dir;
     if (gun) {
       gun.updateWorldMatrix(true, true);
-      from = new THREE.Vector3(0, 0, -(gun.userData.length || 0.3)).applyMatrix4(gun.matrixWorld);
+      from = new THREE.Vector3(0, 0, -(gun.userData.visualLength || gun.userData.length || 0.3)).applyMatrix4(gun.matrixWorld);
     }
     // the shot leaves along where the left controller points, however the gun model is turned in the hand
     const ray = this.aimRay('left');
@@ -7299,7 +7302,7 @@ export class CombatSystem {
   // where what the right hand holds shoots from: its tip
   muzzle() {
     this.weapon.updateWorldMatrix(true, false);
-    return new THREE.Vector3(0, 0, -this.weapon.userData.length).applyMatrix4(this.weapon.matrixWorld);
+    return new THREE.Vector3(0, 0, -(this.weapon.userData.visualLength || this.weapon.userData.length)).applyMatrix4(this.weapon.matrixWorld);
   }
   // a bow's arrow: a shaft, its head ahead (-Z: the way it flies - align) and its feathers behind (made once, shared)
   arrowMesh() {

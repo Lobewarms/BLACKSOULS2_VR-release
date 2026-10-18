@@ -26,6 +26,8 @@ internal static class DiscoveryTests
 
     public static int Main(string[] args)
     {
+        if (args.Length == 3 && args[0] == "--prepare-assets")
+            return GameAssetCache.Prepare(args[1], args[2]) ? 0 : 1;
         if (args.Length > 0 && args[0] == "--echo")
         {
             Console.OutputEncoding = new System.Text.UTF8Encoding(false);
@@ -79,6 +81,7 @@ internal static class DiscoveryTests
             process.WaitForExit();
             string[] roundTrip = new JavaScriptSerializer().Deserialize<string[]>(output);
             Check(values.SequenceEqual(roundTrip), "Round-trip Windows command-line quoting");
+            AssetCacheTests.Run(root, Check);
             Console.WriteLine("Passed " + assertions + " discovery and command-line checks.");
             return 0;
         }

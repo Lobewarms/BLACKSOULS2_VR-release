@@ -50,6 +50,10 @@ namespace BlacksoulsCommunity
             {
                 var args = new List<string>(Arguments ?? new string[0]);
                 if (game != null) { args.Add("--game"); args.Add(game); }
+                string assetGame = game;
+                for (int i = 0; i + 1 < args.Count; i++)
+                    if (String.Equals(args[i], "--game", StringComparison.OrdinalIgnoreCase)) assetGame = args[i + 1];
+                if (!String.IsNullOrEmpty(assetGame)) GameAssetCache.Prepare(assetGame, AppDirectory);
                 Process.Start(new ProcessStartInfo {
                     FileName = Path.Combine(AppDirectory, "BlacksoulsVR.Engine.exe"),
                     WorkingDirectory = AppDirectory,

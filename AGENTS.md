@@ -307,3 +307,37 @@ positions, revival back to an upright graphic, unchanged collision properties,
 first-row focus, no opening-frame answer and disabled-answer behavior. These tests
 failed against the prior runtime and pass after the fixes. No original game images
 or headset rendering are involved, so manual in-game visual verification remains.
+
+## Desktop swing and archived pistol icons (0.2.5)
+
+Desktop melee formerly rotated the hand in place and dipped the blade below the
+screen. desktop-weapon.js now provides camera-space wind-up, sweep, follow-through
+and recovery, with exact matching endpoints. The duration and active hit window
+remain unchanged. Equipment/mode changes cancel the prior desktop animation.
+Ranged weapons keep an aiming pose. visualLength separates scaled desktop barrel
+positions from the unchanged gameplay weapon length.
+
+The user's Hunter-class pistol issue was verified in their installed game: loose
+Graphics/System/IconSet.png is 384x936 (624 icons), while Silver Pistol armor 65
+requests icon 706. Game.rgss3a contains the complete 384x1300 sheet. The upstream
+engine prioritizes loose files, so iconPixels returned null and a generic model
+was used. Do not patch the original game or distribute its art.
+
+GameAssetCache.cs extracts only the archived IconSet entry, with bounded entry
+sizes and validated offsets, when its complete rows exceed the loose sheet's.
+The cache is written atomically under the installed mod's app/local-assets directory.
+Its metadata binds it to the selected game. The browser compares /api/ping.game
+before using it; complete low-numbered loose icons retain priority. The inventory
+and held models both select the appropriate sheet per icon. Asset revision changes
+invalidate equipment built before icons were ready. The original engine binary
+remains unchanged. Close/reopen the launcher after updating; direct launches of
+the engine bypass first-time cache preparation.
+
+Automated tests use synthetic RGSS3A archives/PNGs, verify source files stay intact,
+validate cache invalidation, overflow/truncation handling, matching-game guards,
+icon-based held pistol meshes and inventory art, correct desktop muzzle length,
+and a blade path crossing the screen with an exact return to rest. A private
+read-only verification against the user's actual archive confirmed identical
+recovered pixels. Private inspection files stay outside this repository under
+workspace .tools or the system temp directory, and never enter release packages.
+No game/headset playtest or new 3D model assets are claimed.

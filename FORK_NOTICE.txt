@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.4
+BLACK SOULS II VR - community version 0.2.5
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,10 +7,13 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Corpse graphics now lie flat instead of standing upright, including bodies that
-  block movement or take part in a scene.
-- Dialogue options start with the first option highlighted. Opening the options
-  does not automatically confirm an answer, and disabled answers remain disabled.
+- Desktop swords now wind up, slash across the view and return to a raised stance.
+- Fixed missing pistol artwork when a smaller icon sheet hides the game's full one.
+  The app recovers missing icons from your own game without changing its files.
+- Desktop shots now start at the visible barrel instead of beyond it.
+
+Close the previous launcher before installing. Open BLACK SOULS II VR from the
+Start menu after updating so it can prepare the missing artwork automatically.
 
 This is a modified version by dimasma0305 of the original mod by Lobewarms.
 Original: https://github.com/Lobewarms/BLACKSOULS2_VR-release

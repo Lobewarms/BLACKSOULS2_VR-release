@@ -109,7 +109,7 @@ export function resetAdjust(key) {
 }
 
 function iconPixels(index) {
-  const set = getIconSet();
+  const set = getIconSet(index);
   if (!set || !(index > 0)) return null;
   const ctx = set.getContext('2d', { willReadFrequently: true });
   const sx = (index % 16) * ICON, sy = Math.floor(index / 16) * ICON;
@@ -222,6 +222,8 @@ export function buildIconModel(iconIndex, { kind = 'weapon', wtype = 4, hand = '
   }
   inner.rotation.z = rot;
   const outer = new THREE.Group();
+  outer.userData.iconIndex = iconIndex;
+  outer.userData.source = 'icon';
   if (kind === 'shield') {
     const size = Math.max(maxY - minY, maxX - minX, 1) + 1;
     const p = (span || (large ? 0.62 : 0.45)) * adj.scale / size;
