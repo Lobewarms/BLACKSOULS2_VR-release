@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: 786bdba1df20d78dddc5163e5ca4fcb08f3bb4b1 (committed source)
+# Fork: 0e28fe69adf5e1e9201241d4d164db226a73413e (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -261,7 +261,7 @@
      this.bar.renderOrder = 1400;
      this.bar.visible = false;
      this.group.add(this.bar);
-@@ -545,25 +550,50 @@
+@@ -545,25 +550,56 @@
    }
    drawBar() {
      if (!this.barCanvas) return;
@@ -269,7 +269,9 @@
 +    const gmax = this.sys?.groggyMax ? this.sys.groggyMax(this) : 0;
 +    const grog = gmax ? Math.max(0, Math.min(1, (this.grog ?? gmax) / gmax)) : 0;
 +    const page = Math.floor((G.time || 0) / 3) % Math.max(1, Math.ceil(effects.length / 4));
-+    const name = stripEscapes(this.b.name).trim() || tr('적 {id}', { id: this.b.enemyId });
++    // Some original enemies deliberately have no name. Keep their HP/effects
++    // visible without exposing database IDs or inventing an artwork-based name.
++    const name = stripEscapes(this.b.name).trim();
 +    const key = `${name}/${this.b.hp}/${this.b.mhp}/${this.state}/${gmax}/${Math.round(grog * 488)}/${effectsKey(effects)}/${page}/${iconAssetRevision()}`;
 +    if (key === this.lastBar) return;
 +    this.lastBar = key;
@@ -277,9 +279,13 @@
 -    ctx.clearRect(0, 0, 128, 22);
 -    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, 128, 16);
 +    ctx.clearRect(0, 0, 512, 184);
-+    ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, 0, 512, effects.length ? 184 : 88);
-+    ctx.font = `bold 42px ${FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-+    ctx.fillText(fitLabel(ctx, name, 488), 256, 25);
++    const top = name ? 0 : 40;
++    ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, top, 512, (effects.length ? 184 : 88) - top);
++    ctx.textBaseline = 'middle';
++    if (name) {
++      ctx.font = `bold 42px ${FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
++      ctx.fillText(fitLabel(ctx, name, 488), 256, 25);
++    }
 +    ctx.fillStyle = '#301010'; ctx.fillRect(10, 50, 492, 20);
      ctx.fillStyle = this.state === 'stagger' ? '#ffd040' : '#c02424';
 -    ctx.fillRect(2, 2, 124 * Math.max(0, this.b.hp / this.b.mhp), 12);
@@ -319,7 +325,7 @@
      this.cueRing?.geometry.dispose(); this.cueRing?.material.dispose();
      for (const gh of this.ghosts || []) gh.g.material.dispose();
      this.balloon?.dispose();
-@@ -653,6 +683,7 @@
+@@ -653,6 +689,7 @@
    // ---- lifecycle -------------------------------------------------------------
    // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
    reset({ keepState = false, carry = false } = {}) {
@@ -327,7 +333,7 @@
      // (carry - a map change: an event's run that is past its fight, in its win or lose branch, goes on on the new map as
      // the original's map interpreter would - 혼돈 던전 / 시공 던전's defeat, CE269, takes the party out and then lets the
      // menu and saving back; dropped with the old map, saving stayed shut until 고왕의 뼛가루. One still in its fight
-@@ -1184,6 +1215,7 @@
+@@ -1184,6 +1221,7 @@
      if (result === 0 && m.played) G.audio?.playMe(G.state.system.battleEndMe || $data.system.battle_end_me);
    }
    onBattleEnd(battle) {
@@ -335,7 +341,7 @@
      G.player.floatDown?.();                         // (blown up by the wind when it ended: let down gently)
      if (battle.result === 0 && battle.private) G.coop?.hallucinationBeaten?.(battle.hallKey);
      if (battle.result === 0) {
-@@ -1205,7 +1237,7 @@
+@@ -1205,7 +1243,7 @@
          }
        }
        if (gold && party.partyAbility(4)) gold *= 2;
@@ -344,7 +350,7 @@
        if (exp) for (const a of party.members()) a.changeExp(a.currentExp + Math.floor(exp * a.exr));
        G.state.system.winCount++;
        if (battle.event) this.defeated.set(battle.event, G.time);
-@@ -1377,9 +1409,10 @@
+@@ -1377,9 +1415,10 @@
      if (this.gripAdjust) return;                     // the items are being moved by hand
      const { weapon: ws, offhand: os } = this.heldSpecs();
      const wtype = ws?.wtype || WTYPE.SWORD;
@@ -356,7 +362,7 @@
      this.wtype = wtype;
      if (this.weapon) this.weapon.parent?.remove(this.weapon);
      if (this.shield) this.shield.parent?.remove(this.shield);
-@@ -1398,17 +1431,14 @@
+@@ -1398,17 +1437,14 @@
        obj.position.fromArray(g.p); obj.quaternion.fromArray(g.q);
        return true;
      };
@@ -377,7 +383,7 @@
        this.weapon.userData.ranged = !!this.shotKind;
      } else {
        // bare hands: nothing to draw (VR shows the hand), the fist is what hits
-@@ -1424,8 +1454,7 @@
+@@ -1424,8 +1460,7 @@
        if (this.shotKind === 'gun') this.addLaser(this.weapon);
      } else {
        G.three.camera.add(this.weapon);
@@ -387,7 +393,7 @@
      }
      this.shield = null;
      this.offGun = null;
-@@ -1435,17 +1464,19 @@
+@@ -1435,17 +1470,19 @@
        if (os.gun) {
          // pistol in the left hand: held like a weapon (cannot guard with it)
          const gunModel = sModel || makeWeaponMesh(WTYPE.GUN);
@@ -410,7 +416,7 @@
          if (G.vr && ctrl.left) {
            // the holder's +Z (shield front) turns to -X = the back of the left hand
            ctrl.left.grip.add(this.shield);
-@@ -1454,8 +1485,7 @@
+@@ -1454,8 +1491,7 @@
            handPose(this.shield, os);
          } else {
            G.three.camera.add(this.shield);
@@ -420,7 +426,7 @@
          }
        }
      }
-@@ -1467,17 +1497,23 @@
+@@ -1467,17 +1503,23 @@
    // (PC: a shield only comes into view while the guard is up - updateDeskShield; held low all the time it hid the
    // status window and part of the view)
    showArms() {
@@ -449,7 +455,7 @@
    }
    // 무장해제 (VR: right stick click, PC: H): the weapon and shield go away with the sound of gear coming off,
    // the bare hands show, and nothing the hands do hits - no swing, Break, shot or weapon art, so no one is cut
-@@ -1487,7 +1523,7 @@
+@@ -1487,7 +1529,7 @@
      this.disarmed = on;
      // what the hands were doing with them ends (a weapon art is paid only when it lands: nothing is lost)
      this.hasPrev = false; this.charge = null; this.deskCharge = null; this.breakArm = null;
@@ -458,7 +464,7 @@
      if (on) this.skillArm = null;
      if (this.breakGlow) this.breakGlow.visible = false;
      this.showArms();
-@@ -2184,7 +2220,7 @@
+@@ -2184,7 +2226,7 @@
      if (!this.weapon || !this.weapon.visible || !this.weapon.parent) return null;
      const base = new THREE.Vector3(), tip = new THREE.Vector3();
      if (!this.weaponSegment(base, tip)) return null;
@@ -467,7 +473,7 @@
      return { base, tip };
    }
    // A state an event gives the party during a fight (Change State, 313 - a boss's rules: 그랑・기뇰's 악랄영역 that
-@@ -2470,7 +2506,7 @@
+@@ -2470,7 +2512,7 @@
        const hpShort = actor.mp >= actor.skillMpCost(obj) && actor.tp >= (obj.tp_cost || 0);
        G.ui.toast(hpShort ? tr('{name}: HP가 부족합니다', { name }) : tr('{name}: MP가 부족합니다', { name }), obj.icon_index); this.cancelReady(); return;
      }
@@ -476,7 +482,7 @@
      const aim = r.aim || this.readyAim();
      const from = new THREE.Vector3(); r.fx.getWorldPosition(from);
      // throwing knives stay in the hand - one throw per pull, no waiting - until they run out or X puts them away
-@@ -2659,14 +2695,15 @@
+@@ -2659,14 +2701,15 @@
    }
    // an item / skill landing on an enemy: damage formula, drain, added / removed states.
    // mult scales the damage (swing power, back stab, critical); 0 damage stays 0 like the original
@@ -494,7 +500,7 @@
      // slipped in a stance that answers it (리포스트, script 191): nothing lands
      const slip = this.slipsWithAnswer(e.b, obj, actor);
      if (slip) { this.enemySlips(e, slip, obj, sourcePos, by); return -1; }
-@@ -2677,21 +2714,25 @@
+@@ -2677,21 +2720,25 @@
      }
      const type = obj.damage?.type || 0;
      let dmg = 0;
@@ -527,7 +533,7 @@
      }
      for (const ef of obj.effects || []) {
        if (ef.code === 11) {                              // HP by a share of max HP (negative: a cut), by its recovery rate
-@@ -2702,21 +2743,19 @@
+@@ -2702,21 +2749,19 @@
            this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), String(-v), '#ffb0b0');
          } else if (v > 0) { e.b.hp = Math.min(e.b.mhp, e.b.hp + v); e.drawBar(); }
        } else if (ef.code === 21 && ef.data_id === 0) {   // "normal attack" states: the attacker's own (poison blades...)
@@ -553,7 +559,7 @@
        } else if (ef.code === 22) {
          e.b.removeState(ef.data_id);
          if (e.stateTimers) delete e.stateTimers[ef.data_id];
-@@ -2736,6 +2775,22 @@
+@@ -2736,6 +2781,22 @@
    }
    // script 220: an item / skill that lands whatever the target evades - <絶対命中> on it, or its user's features
    certainHit(user, obj) { return /<絶対命中>/.test(obj?.note || '') || !!user?.certainty?.(0, obj?.hit_type ?? 1); }
@@ -576,7 +582,7 @@
    missOn(e, obj) {
      const p = e.worldPos(new THREE.Vector3());
      G.audio?.playSystemSe(obj?.hit_type === 2 ? 19 : 18);
-@@ -2754,15 +2809,17 @@
+@@ -2754,15 +2815,17 @@
      this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), { color: 0xc8f0ff, size: e.h * 0.9, life: 0.35, grow: 1.5 });
      if (!actor || this.playerDead) return;
      const t = obj.damage?.type || 0;
@@ -598,7 +604,7 @@
      }
      this.applyBuffEffects(actor, obj, TURN_SECONDS);
      if (actor.hp <= 0) this.playerFalls(e.battle);
-@@ -2775,14 +2832,16 @@
+@@ -2775,14 +2838,16 @@
      if (!e?.alive) return;
      const p = e.worldPos(new THREE.Vector3());
      const t = skill.damage?.type || 0;
@@ -619,7 +625,7 @@
      }
      this.applyBuffEffects(e.b, skill, ENEMY_TURN);
      this.checkEnemyDeath(e);
-@@ -2895,9 +2954,9 @@
+@@ -2895,9 +2960,9 @@
    tickEnemyStates(e, dt) {
      if (e.alive) e.b.tickBuffs(dt);
      const timers = e.stateTimers;
@@ -631,7 +637,7 @@
        timers[k] -= dt;
        if (timers[k] <= 0) {
          delete timers[k]; e.b.removeState(+k); removed = true;
-@@ -2905,12 +2964,17 @@
+@@ -2905,12 +2970,17 @@
        }
      }
      if (removed) this.checkEnemyDeath(e);
@@ -651,7 +657,7 @@
        const v = Math.max(1, Math.floor(e.b.mhp * -hrg));
        e.b.hp = Math.max(0, e.b.hp - v);
        if (e.bar) e.bar.visible = true; e.drawBar();
-@@ -3008,6 +3072,21 @@
+@@ -3008,6 +3078,21 @@
    }
  
    // ---- damage --------------------------------------------------------------------------
@@ -673,7 +679,7 @@
    computeDamage(attacker, target, skill, mult = 1) {
      if (!skill?.damage || skill.damage.type === 0) return 0;
      let v = evalFormula(skill.damage.formula, attacker.solo ? attacker.solo() : attacker, target);
-@@ -3018,13 +3097,28 @@
+@@ -3018,13 +3103,28 @@
        const els = attacker.atkElements();
        if (els.length) v *= Math.max(...els.map(e => target.elementRate(e)));
      }
@@ -704,7 +710,7 @@
    }
    // 攻撃ID変更 (script 203): equipment / states can swap the normal attack (skill 1) for their own skill;
    // with several, the highest <攻撃ID優先度変更:n> on the skill wins, then the highest id
-@@ -3047,8 +3141,16 @@
+@@ -3047,8 +3147,16 @@
    }
    // hits per blow: the skill's repeats (+ attack-count features) times its random-target count
    attackHits(skill, actor) {
@@ -723,7 +729,7 @@
    }
    // a weapon blow (VR swing, desktop click, arrow / bullet): the attack skill's formula, element, hits,
    // drain and states (Raiden's axes hit by the wielder's HP, the youtou drains, daggers hit twice...)
-@@ -3072,7 +3174,7 @@
+@@ -3072,7 +3180,7 @@
      if (melee && !art) { const r = this.rushMult(); if (r < 1) { mult *= r; weak = true; } }
      if (e.state === 'idle' || (e.alertTime > 0 && e.state === 'chase' && !e.battle)) mult *= 2;     // (a backstab)
      if (e.state === 'guard' && !this.ignoresGuard(actor, skill)) mult *= 0.3;
@@ -732,7 +738,7 @@
      if (crit) mult *= 2;
      const p = e.worldPos(new THREE.Vector3());
      const hits = one ? 1 : this.attackHits(skill, actor);
-@@ -3175,6 +3277,43 @@
+@@ -3175,6 +3283,43 @@
      for (const o of e.b.featureObjects()) { const m = /<\s*反撃スキル\s*(\d+)\s*>/.exec(o?.note || ''); if (m) id = Math.max(id, +m[1]); }
      this.startCounter(e, $data.skills[id] || $data.skills[1]);
    }
@@ -776,7 +782,7 @@
    // a counter (反撃) or an answer to a slipped blow (回避時スキル): a quick blow at the player, 0.35 s to see it
    // coming; not a turn of the enemy's own (as in the original, it comes inside the player's action)
    startCounter(e, s) {
-@@ -3251,8 +3390,7 @@
+@@ -3251,8 +3396,7 @@
    groggyHit(e, actor, obj, mult, blow) {
      const max = this.groggyMax(e);
      if (!max || !actor || !e.alive || e.state === 'stagger' || e.grogDown || this.inDuel(e)) return;     // (her duel: no groggy)
@@ -786,7 +792,7 @@
      const used = blow?.grog?.get(e) || 0;
      g = Math.min(g, GROGGY.cap * max - used);
      if (!(g > 0)) return;
-@@ -3359,20 +3497,34 @@
+@@ -3359,20 +3503,34 @@
        G.input.haptic('left', 0.2, 30); G.input.haptic('right', 0.2, 30);
        return;
      }
@@ -829,7 +835,7 @@
      dmg = Math.round(dmg * G.settings.difficulty);
      // a share of the HP / MP the skill takes away besides (HP / MP recovery with a minus - 조커 -100%, 하얀 충격
      // -99%, 황산 -25%, 톱니바퀴 MP -8%: VX Ace's item_effect_recover_hp, by the target's recovery rate); no guard
-@@ -3409,27 +3561,40 @@
+@@ -3409,27 +3567,40 @@
        G.audio?.playSystemSe(14);
        this.reportStruck(e, 0);
      }
@@ -881,7 +887,7 @@
    }
    // (a co-op guest struck by the host's enemy: how it went - 0 it landed, 1 guarded, 2 a perfect guard - is shown on
    // this player as the host sees it)
-@@ -3791,6 +3956,7 @@
+@@ -3791,6 +3962,7 @@
      this.rangedCooldown = Math.max(0, this.rangedCooldown - dt);
      this.updateGuard();
      this.updateDeskShield(dt);
@@ -889,7 +895,7 @@
      // drinking takes a moment (quick slot potions)
      if (this.healing) {
        this.healing.t -= dt;
-@@ -3997,6 +4163,7 @@
+@@ -3997,6 +4169,7 @@
        const wp = e.worldPos(tmpA);
        e.group.position.copy(wp);
        e.group.position.y += e.hover || 0;
@@ -897,7 +903,7 @@
        e.mesh.rotation.y = Math.atan2(head.x - wp.x, head.z - wp.z);
        e.mesh.rotation.z = 0; e.mesh.position.x = 0; e.mesh.position.z = 0;
        // (one hanging high over the player - the stage machine in the flies - leans its face down toward them)
-@@ -6130,7 +6297,8 @@
+@@ -6130,7 +6303,8 @@
          // a shot is stopped only where it actually meets the shield (one that goes through a guard passes it)
          let shielded = false;
          if (this.shield && this.hasShield && (G.vr || this.shield.visible) && (!p.pierce || (this.guardUp && !this.disarmed && G.time - (this.guardRaisedAt ?? -99) <= PERFECT_GUARD))) {
@@ -907,7 +913,7 @@
            if (pos.distanceTo(tmpA) < 0.32) shielded = true;
          }
          // (the shots of a fan hit no more times than their skill does)
-@@ -6289,6 +6457,7 @@
+@@ -6289,6 +6463,7 @@
        e.outOfFight = !!(n.flags & 128);
        e.noTarget = !!(n.flags & 4) || (!!(n.flags & 64) && !G.coop?.rules?.guestStartsBoss) || e.outOfFight;
        e.boss = !!(n.flags & 32);
@@ -915,7 +921,7 @@
        // (a boss made stronger for its co-op fight - coop.js scaleBosses: its HP, MP and groggy gauge as big as there)
        if ((e.b.coopK || 1) !== n.k) { e.b.coopK = n.k; e.grogId = null; }
        const fresh = G.time - (e.netReported ?? -9) < 0.6;
-@@ -6310,6 +6479,9 @@
+@@ -6310,6 +6485,9 @@
          // (a plain shot winding up turns after its target there: its line here too)
          if (n.aim !== null && e.state === 'windup' && e.plan?.shot && !e.move && e.plan.ox !== undefined) this.aimShot(e, n.aim);
          e.b.hp = fresh ? Math.min(e.b.hp, n.hp) : n.hp;
@@ -925,7 +931,7 @@
          if (!fresh) e.b.states = n.states.slice();
          const gmax = this.groggyMax(e);
          if (gmax && !fresh) e.grog = gmax * n.grog / 100;
-@@ -6320,9 +6492,9 @@
+@@ -6320,9 +6498,9 @@
      }
      for (const [id, e] of this.puppets) if ((e.src || null) === src && !seen.has(id)) { e.remove(); this.puppets.delete(id); }
    }
@@ -937,7 +943,7 @@
    // big attack that ends one }]
    puppetReports() {
      const out = [];
-@@ -6336,8 +6508,9 @@
+@@ -6336,8 +6514,9 @@
        const add = now.states.filter(id => !b.states.includes(id) && !skip(id));
        const rm = b.states.filter(id => !now.states.includes(id) && !skip(id));
        const d = Math.round(b.hp - now.hp), g = Math.round(Math.max(0, b.grog - now.grog));
@@ -949,7 +955,7 @@
          e.netReported = G.time;
        }
        e.netBase = now;
-@@ -6347,6 +6520,7 @@
+@@ -6347,6 +6526,7 @@
    // (host) a guest's blow on one of this world's enemies: taken as if it had struck here - its numbers in the friend's
    // colour, the fight started if it was roaming, a Break, the groggy gauge, states, the fall
    applyGuestHit(r, from = null) {
@@ -957,7 +963,7 @@
      const e = this.netEnemies().find(x => x.netId === r.id) || this.hallEnemyFor(r.id, from);
      if (!e || !e.alive || e.hidden) return false;
      // (a boss fight that guest did not join, or watches fallen)
-@@ -6368,6 +6542,12 @@
+@@ -6368,6 +6548,12 @@
          G.audio?.playSe(G.seAt('Slash1', 70, 100), new THREE.Vector3(p.x, p.y + e.h * 0.5, p.z));
          this.damageRemovesStates(e);
        }
@@ -970,7 +976,7 @@
      }
      for (const id of r.add) if ($data.states[id] && !e.b.stateResist(id)) this.addEnemyState(e, id, true);
      for (const id of r.rm) { e.b.removeState(id); if (e.stateTimers) delete e.stateTimers[id]; }
-@@ -6504,7 +6684,7 @@
+@@ -6504,7 +6690,7 @@
          const charge = THREE.MathUtils.clamp((G.time - this.deskCharge - 0.15) / 1.0, 0, 1);
          this.deskCharge = null;
          if (!this.swing && this.stamina > 0.05) {
@@ -979,7 +985,7 @@
            this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.12)); this.staminaDelay = 0.7;
            G.audio?.playSe(G.seAt('Wind7', 60, charge >= 0.35 ? 100 : 140));
          }
-@@ -6512,10 +6692,12 @@
+@@ -6512,10 +6698,12 @@
        if (G.input.breakPressed()) this.pressBreak();
        if (this.swing) {
          const s = this.swing;
@@ -995,7 +1001,7 @@
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
            const reach = this.weaponLength() + 0.9;
-@@ -6533,7 +6715,7 @@
+@@ -6533,7 +6721,7 @@
              }
            }
          }
@@ -1004,7 +1010,7 @@
            s.npcDone = true;
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
-@@ -6549,7 +6731,7 @@
+@@ -6549,7 +6737,7 @@
              return d < reach && to.normalize().dot(f) > 0.5;
            }, { power: this.stamina > 0.1 ? 1 : 0.5, charge: s.charge || 0 });
          }
@@ -1013,7 +1019,7 @@
        }
      }
    }
-@@ -6737,9 +6919,8 @@
+@@ -6737,9 +6925,8 @@
    // Script 191 回避時発動スキル: <全回避時スキル:n[,p]> (or 物理- / 魔法- / 必中-, by the attack's hit type) on a battler's
    // states, equipment or self - an attack it slips, it answers with skill n (p % of the time): 흰 유니콘 유니스's
    // 리포스트 (a stance of evasion +100% for two of its actions, every slipped blow answered by a lunge, 판트), and the
@@ -1025,7 +1031,7 @@
    evadeAnswers(b, hitType) {
      const out = [];
      for (const o of b?.featureObjects?.() || []) {
-@@ -6757,7 +6938,6 @@
+@@ -6757,7 +6944,6 @@
      const ht = skill?.hit_type ?? 1;
      if (!b || ht === 0 || this.certainHit(user, skill)) return null;
      const answers = this.evadeAnswers(b, ht);
@@ -1033,7 +1039,7 @@
      return Math.random() < (ht === 1 ? b.eva : b.mev) ? answers : null;
    }
    // (the stance shows while it lasts)
-@@ -6912,7 +7092,7 @@
+@@ -6912,7 +7098,7 @@
      let from = null, dir;
      if (gun) {
        gun.updateWorldMatrix(true, true);
@@ -1042,7 +1048,7 @@
      }
      // the shot leaves along where the left controller points, however the gun model is turned in the hand
      const ray = this.aimRay('left');
-@@ -7246,11 +7426,12 @@
+@@ -7246,11 +7432,12 @@
    // instead (gunShotSkill - 거룩한 총검)
    fireRanged() {
      const kind = this.shotKind, actor = G.state.party.leader();
@@ -1058,7 +1064,7 @@
      const brk = this.breakArmed();                 // (fired with Break held: the first shot carries the Break)
      this.fireShot(kind, n > 1, brk);
      for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot(kind, true, null));
-@@ -7279,7 +7460,9 @@
+@@ -7279,7 +7466,9 @@
      this.actorPays(actor, s);
      this.skillCD[s.id] = G.time + this.coolSeconds(s);
      const n = THREE.MathUtils.clamp((s.repeats || 1) * ({ 4: 2, 5: 3, 6: 4 }[s.scope] || 1), 1, 8);
@@ -1069,7 +1075,7 @@
      const volley = { shown: false };
      this.fireShot('gun', true, null, { skill: s, volley });
      for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot('gun', true, null, { skill: s, volley }));
-@@ -7299,7 +7482,7 @@
+@@ -7299,7 +7488,7 @@
    // where what the right hand holds shoots from: its tip
    muzzle() {
      this.weapon.updateWorldMatrix(true, false);
@@ -1462,7 +1468,7 @@
    ['지금은 저장할 수 없습니다', "You can't save right now", '今はセーブできません', '现在无法保存'],
    ['슬롯 {n}', 'Slot {n}', 'スロット {n}', '存档位 {n}'],
    ['(비어 있음)', '(empty)', '(空き)', '(空)'],
-@@ -259,11 +292,24 @@
+@@ -259,11 +292,23 @@
    ['스틱 좌우: 자릿수 · 상하: 값 · A/트리거: 결정', 'Stick left/right: digit · up/down: value · A / trigger: OK', 'スティック左右: 桁 · 上下: 値 · A/トリガー: 決定', '摇杆左右：位数 · 上下：数值 · A/扳机：确定'],
    ['←→ 자릿수 · ↑↓ 값 · Home 최대 · End 0 · Enter 결정', '←→ digit · ↑↓ value · Home max · End 0 · Enter OK', '←→ 桁 · ↑↓ 値 · Home 最大 · End 0 · Enter 決定', '←→ 位数 · ↑↓ 数值 · Home 最大 · End 0 · Enter 确定'],
    ['{name} 획득', 'Got {name}', '{name} を入手', '获得 {name}'],
@@ -1482,12 +1488,11 @@
    ['장비', 'Equipment', '装備', '装备'],
    ['상태 보기', 'Status', 'ステータス', '状态'],
 +  ['상태 효과', 'Status effects', '状態効果', '状态效果'],
-+  ['적 {id}', 'Enemy {id}', '敵 {id}', '敌人 {id}'],
 +  ['외 {n}개 효과', '+{n} more effects · Status menu', 'ほか{n}個 (ステータス)', '另有 {n} 个效果 (状态菜单)'],
    ['무기·방패 모양 조정', 'Adjust weapon / shield', '武器・盾の持ち方調整', '调整武器 / 盾牌'],
    ['VR 세이브', 'VR save', 'VRセーブ', 'VR 存档'],
    ['VR 로드', 'VR load', 'VRロード', 'VR 读档'],
-@@ -296,7 +342,7 @@
+@@ -296,7 +341,7 @@
    ['몸|equip', 'Body', '体', '身体'],
    ['장신구|equip', 'Accessory', '装飾品', '饰品'],
    ['장비  ({name})', 'Equipment  ({name})', '装備  ({name})', '装备  ({name})'],

@@ -1567,3 +1567,8 @@ and8 packaging tests. Private rendered QA placed the real installed enemy157
 in an isolated test scene at75% HP with original Sleep/Poison icons. Its title
 is absent while both gauges/effects remain visible. The saved PNG was opened
 and inspected; it is not a claim that this creature normally spawns in that room.
+
+The public literal source diff is refreshed to runtime commit0e28fe6 (0.2.26):
+48 original modules,20 unchanged after import moves,28 modified,35 new,0 missing;
+2448 added/620 removed lines in modified originals after import normalization.
+Existing six comparison images remain explicitly labelled0.2.25.
