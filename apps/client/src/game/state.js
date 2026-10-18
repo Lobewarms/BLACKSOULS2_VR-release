@@ -500,19 +500,57 @@ export class GameActor extends BattlerBase {
     while (this.equips.length < n) this.equips.push({ kind: 'armor', id: 0 });
   }
   isEquipped(kind, id) { return this.equips.some(e => e.kind === kind && e.id === id); }
-  changeEquipById(slot, id) {
-    if (!this.equips[slot]) this.equips[slot] = { kind: slot === 0 ? 'weapon' : 'armor', id: 0 };
-    const cur = this.equips[slot];
-    if (!cur.id) cur.kind = slot === 0 ? 'weapon' : 'armor';
-    if (cur.id) G.state.party.gainItem(cur.kind, cur.id, 1);
-    if (id && G.state.party.itemCount(cur.kind, id) > 0) G.state.party.gainItem(cur.kind, id, -1);
-    cur.id = id;
-    this.clampHpMp();
+  equipSlotType(slot) {
+    if (!Number.isInteger(slot) || slot < 0 || slot >= equipSlotCount(this.id)) return undefined;
+    return slot === 1 && this.featuresSet(55).includes(1) ? 0 : Math.min(slot, 4);
   }
-  change_equip_by_id(slot, id) { this.changeEquipById(slot, id); }
+  equipChangeOk(slot) {
+    const type = this.equipSlotType(slot);
+    return type !== undefined && !this.featuresSet(53).includes(type) && !this.featuresSet(54).includes(type);
+  }
+  canEquipItem(kind, item) {
+    if (!item) return false;
+    const type = kind === 'weapon' ? 0 : item.etype_id;
+    if (this.featuresSet(54).includes(type)) return false;
+    return kind === 'weapon' ? this.featuresSet(51).includes(item.wtype_id)
+      : kind === 'armor' && this.featuresSet(52).includes(item.atype_id);
+  }
+  releaseUnequippableItems(returnToParty = true) {
+    // Original VXAce_SP1 repeats because removing later gear can change the
+    // permissions of an earlier slot. Each changed pass removes an item.
+    let changed;
+    do {
+      changed = false;
+      for (let slot = 0; slot < this.equips.length; slot++) {
+        const e = this.equips[slot];
+        if (!e?.id) continue;
+        const item = itemData(e.kind, e.id), type = e.kind === 'weapon' ? 0 : item?.etype_id;
+        if (this.canEquipItem(e.kind, item) && type === this.equipSlotType(slot)) continue;
+        this.equips[slot] = { kind: this.equipSlotType(slot) === 0 ? 'weapon' : 'armor', id: 0 };
+        if (returnToParty) G.state.party.gainItem(e.kind, e.id, 1);
+        changed = true;
+      }
+    } while (changed);
+  }
+  changeEquipById(slot, id) {
+    const type = this.equipSlotType(slot), kind = type === 0 ? 'weapon' : 'armor';
+    if (type === undefined || !Number.isInteger(id) || id < 0) return false;
+    const item = itemData(kind, id), party = G.state.party;
+    // Event commands may clear fixed slots, but still trade a real party-owned item.
+    if (id && (!item || (kind === 'armor' && item.etype_id !== type) || party.itemCount(kind, id) < 1)) return false;
+    const cur = this.equips[slot];
+    if (cur?.id) party.gainItem(cur.kind, cur.id, 1);
+    if (id) party.gainItem(kind, id, -1);
+    this.equips[slot] = { kind, id };
+    this.releaseUnequippableItems();
+    this.clampHpMp();
+    return true;
+  }
+  change_equip_by_id(slot, id) { return this.changeEquipById(slot, id); }
   forceChangeEquip(slot, kind, id) {
     if (!this.equips[slot]) this.equips[slot] = { kind, id: 0 };
     this.equips[slot] = { kind, id };
+    this.releaseUnequippableItems(false);
     this.clampHpMp();
   }
   changeExp(exp) {
@@ -588,11 +626,20 @@ export class GameParty {
       const over = (c.get(id) || 0) + n - BAG_MAX;
       if (over > 0) { this.kept[kind].set(id, Math.min(this.keptCount(kind, id) + over, this.keepLimit(kind, id))); n -= over; }
     }
-    const v = Math.max(0, Math.min(BAG_MAX, (c.get(id) || 0) + n));
+    const total = (c.get(id) || 0) + n;
+    const v = Math.max(0, Math.min(BAG_MAX, total));
     if (v) c.set(id, v); else c.delete(id);
-    if (includeEquip && n < 0 && (c.get(id) || 0) === 0) {
-      for (const a of this.members()) for (const e of a.equips) if (e.kind === kind && e.id === id) { e.id = 0; return; }
+    if (includeEquip && total < 0) {
+      let remaining = -total;
+      for (const a of this.members()) {
+        let removed = false;
+        for (const e of a.equips) {
+          if (remaining > 0 && e.kind === kind && e.id === id) { e.id = 0; remaining--; removed = true; }
+        }
+        if (removed) a.clampHpMp();
+      }
     }
+    G.map?.requestRefresh?.();
   }
   gain_item(item, n) { const k = kindOf(item); if (k) this.gainItem(k, item.id, n); }
   // ---- 창고: the storage (script アイテム預かり所 - the library bear's 창고). It takes up to keepLimit of each thing
@@ -760,6 +807,10 @@ export class GameState {
   // Import a parsed RPG Maker VX Ace save (contents hash from Save##.rvdata2)
   importRmSave(contents, label) {
     const get = k => hashGet(contents, k);
+    // The real-time player and companion paths both use six seconds per original turn.
+    const turnSeconds = 6;
+    const remainingCount = value => Number.isSafeInteger(value) && value >= 0
+      ? Math.min(value, Math.floor(Number.MAX_SAFE_INTEGER / turnSeconds)) : undefined;
     const sw = get('switches'); const vars = get('variables');
     this.switches = (sw?.data || []).map(v => !!v);
     this.variables = (vars?.data || []).map(v => (['number', 'string', 'boolean'].includes(typeof v) ? v : 0));
@@ -804,6 +855,19 @@ export class GameState {
         a.padEquips();
       }
       a.states = Array.isArray(ra.states) ? ra.states.filter(x => typeof x === 'number') : [];
+      for (const [source, target] of [['state_steps', 'stateSteps'], ['state_turns', 'stateTurns']]) {
+        for (const sid of a.states) {
+          const count = remainingCount(hashGet(ra[source], sid) ?? ra[source]?.[sid]);
+          if (count !== undefined) a[target][sid] = count;
+        }
+      }
+      if (Array.isArray(ra.buffs)) {
+        a.buffs = Array.from({ length: 8 }, (_, i) => Number.isInteger(ra.buffs[i]) ? Math.max(-2, Math.min(2, ra.buffs[i])) : 0);
+        a.buffTime = a.buffs.map((level, i) => {
+          const turns = remainingCount(ra.buff_turns?.[i]);
+          return level && turns !== undefined ? turns * turnSeconds : 0;
+        });
+      }
       // 서약: the spirits sworn to it (an emptied slot is 0) / a spirit's lock
       if (Array.isArray(ra.partners)) a.partners = ra.partners.filter(x => typeof x === 'number' && x > 0);
       if (typeof ra.max_spirits === 'number') a.maxSpirits = Math.max(1, ra.max_spirits);
@@ -811,6 +875,11 @@ export class GameState {
       a.hp = ra.hp ?? a.mhp; a.mp = ra.mp ?? a.mmp; a.tp = ra.tp || 0;
       this.actorMap.set(id, a);
     });
+    const leader = this.actorMap.get(this.party.actors[0]);
+    for (const sid of leader?.states || []) {
+      if ($data.states[sid]?.auto_removal_timing && leader.stateTurns[sid] !== undefined)
+        (this.system.stateTimers ||= {})[sid] = leader.stateTurns[sid] * turnSeconds;
+    }
     const sys = get('system');
     if (sys) {
       Object.assign(this.system, {

@@ -2266,23 +2266,27 @@ export class UI {
   }
 
   // ---- equipment ----
-  slotEtype(slot) { return slot === 0 ? 0 : Math.min(slot, 4); }
+  slotEtype(slot) { return G.state.party.leader()?.equipSlotType?.(slot) ?? (slot === 0 ? 0 : Math.min(slot, 4)); }
   slotName(slot) {
     const terms = $data.system.terms.etypes || [tr('무기|equip'), tr('방패|equip'), tr('머리|equip'), tr('몸|equip'), tr('장신구|equip')];
     return terms[this.slotEtype(slot)] || tr('슬롯 {n}', { n: slot + 1 });
   }
   canEquip(actor, kind, d, slot) {
     if (!d) return false;
-    const et = this.slotEtype(slot);
-    if (kind === 'weapon') return et === 0 && actor.featuresSet(51).includes(d.wtype_id);
-    return et !== 0 && d.etype_id === et && actor.featuresSet(52).includes(d.atype_id);
+    const et = actor.equipSlotType(slot);
+    return actor.equipChangeOk(slot) && actor.canEquipItem(kind, d)
+      && (kind === 'weapon' ? et === 0 : et !== 0 && d.etype_id === et);
   }
   paramDelta(actor, slot, kind, id, max = 8) {
     const before = [0, 1, 2, 3, 4, 5, 6, 7].map(i => actor.param(i));
-    const saved = actor.equips[slot];
-    actor.equips[slot] = { kind, id };
-    const after = [0, 1, 2, 3, 4, 5, 6, 7].map(i => actor.param(i));
-    actor.equips[slot] = saved;
+    const saved = actor.equips;
+    let after;
+    try {
+      actor.equips = actor.equips.map(e => ({ ...e }));
+      actor.equips[slot] = { kind, id };
+      actor.releaseUnequippableItems(false);
+      after = [0, 1, 2, 3, 4, 5, 6, 7].map(i => actor.param(i));
+    } finally { actor.equips = saved; }
     const P = $data.system.terms.params;
     const parts = [0, 2, 3, 4, 5, 6, 7].filter(i => after[i] !== before[i])
       .map(i => `${P[i]} ${after[i] > before[i] ? '+' : '−'}${Math.abs(after[i] - before[i])}`);
@@ -2294,7 +2298,8 @@ export class UI {
     this.grid.close();
     const slots = a.equips.map((e, slot) => {
       const d = itemData(e.kind, e.id);
-      return { text: `${this.slotName(slot)}: ${d ? d.name : '—'}`, icon: d?.icon_index, slot, desc: d?.description || '' };
+      return { text: `${this.slotName(slot)}: ${d ? d.name : '—'}`, icon: d?.icon_index, slot,
+        enabled: a.equipChangeOk?.(slot) ?? true, desc: d?.description || '' };
     });
     this.list.open(tr('장비  ({name})', { name: a.name || '' }), slots, {
       index,
@@ -2306,7 +2311,8 @@ export class UI {
   // pointed at - what it changes, then what it is
   showEquipChoices(slot) {
     const a = G.state.party.leader();
-    const kind = slot === 0 ? 'weapon' : 'armor';
+    if (!a?.equipChangeOk(slot)) { G.audio?.playSystemSe(3); return; }
+    const kind = a.equipSlotType(slot) === 0 ? 'weapon' : 'armor';
     const party = G.state.party;
     const cands = [{ text: tr('(장비 해제)'), id: 0, desc: this.paramDelta(a, slot, kind, 0) }];
     for (const [id, n] of party.container(kind)) {
@@ -2319,7 +2325,10 @@ export class UI {
     this.grid.open(tr('{slot} 변경', { slot: this.slotName(slot) }), [{ label: this.slotName(slot), items: cands }], {
       tab: 0,
       onSelect: (it) => {
-        a.changeEquipById(slot, it.id);
+        if (!a.equipChangeOk(slot) || (it.id && !this.canEquip(a, kind, itemData(kind, it.id), slot))
+          || !a.changeEquipById(slot, it.id)) {
+          G.audio?.playSystemSe(3); this.showEquipSlots(slot); return;
+        }
         G.combat.equipKey = null;
         G.audio?.playSystemSe(4);
         this.showEquipSlots(slot);

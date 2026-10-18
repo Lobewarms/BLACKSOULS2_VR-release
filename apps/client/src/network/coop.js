@@ -33,6 +33,7 @@ import { NEW_MOVES } from '../combat/bossmoves.js';
 import { exitOf } from '../game/interpreter.js';
 import { tr } from '../ui/i18n.js';
 import { packEnemyBuffs, readEnemyBuffs } from './enemy-status.js';
+import { packEnemyMp, readEnemyMp } from './enemy-resources.js';
 import { NO_H_SWITCH, refOf, indexMap, isRef, sayAt, pictureAt, soundAt, animationAt, musicOk, guard } from './coopguard.js';
 
 const PROTO = 11;
@@ -943,7 +944,7 @@ export class Coop {
     if (!this.ready()) return;
     const m = G.map.mapId, list = [], fights = [];
     const syms = new Map([...G.combat.symbols.values()].filter(s => s.enemy).map(s => [s.enemy, s]));
-    const enemies = G.combat.netEnemies(), buffs = packEnemyBuffs(enemies);
+    const enemies = G.combat.netEnemies(), buffs = packEnemyBuffs(enemies), mp = packEnemyMp(enemies);
     for (const e of enemies) {
       list.push(this.enemyEntry(e, e.battle ? null : syms.get(e)));
       fights.push(e.battle?.coopIn ? e.battle : null);
@@ -955,7 +956,7 @@ export class Coop {
       const key = JSON.stringify(mine);
       if (key === p.enKey && !mine.length) continue;          // (nothing there, as last told)
       p.enKey = key;
-      this.send({ t: 'en', m, e: mine, buffs }, p.id);
+      this.send({ t: 'en', m, e: mine, buffs, mp }, p.id);
     }
   }
   enemyEntry(e, sym = null) {
@@ -1141,8 +1142,8 @@ export class Coop {
     p.hits.push(t);
     const ids = a => isList(a, 16) && a.every(id => isInt(id, 2, 9999) && $data.states?.[id]);
     if (!isInt(m.id, 1, Number.MAX_SAFE_INTEGER) || !isInt(m.d, -1e7, 1e7) || !ids(m.add) || !ids(m.rm) || !isNum(m.g, 1e7) || m.g < 0
-      || ![0, 7, 8].includes(m.brk) || typeof m.big !== 'boolean') return;
-    G.combat.applyGuestHit({ id: m.id, d: m.d, add: m.add, rm: m.rm, g: m.g, brk: m.brk, big: m.big }, from);
+      || ![0, 7, 8].includes(m.brk) || typeof m.big !== 'boolean' || m.md !== undefined && !isInt(m.md, -1e7, 1e7)) return;
+    G.combat.applyGuestHit({ id: m.id, d: m.d, add: m.add, rm: m.rm, g: m.g, brk: m.brk, big: m.big, md: m.md ?? 0 }, from);
   }
   // (host) a guest asks to begin a boss fight here (askBossStart): only by the server's rules, for an event of this map
   // that does begin one, at the guest's side (where this world sees the guest too), and while this world is free for
@@ -2036,6 +2037,7 @@ export class Coop {
         continue;
       }
       e.statusBuffs = readEnemyBuffs(m.buffs, e.id);
+      e.mp = readEnemyMp(m.mp, e.id);
       list.push(e);
     }
     G.combat.applyPuppets(list);
@@ -2596,7 +2598,7 @@ export class Coop {
       const k = JSON.stringify(list);
       if (k === p.henKey && !list.length) continue;
       p.henKey = k;
-      this.send({ t: 'hen', m, e: list, buffs: packEnemyBuffs(enemies) }, p.id);
+      this.send({ t: 'hen', m, e: list, buffs: packEnemyBuffs(enemies), mp: packEnemyMp(enemies) }, p.id);
     }
   }
   onHallEnemies(m, from) {
@@ -2610,6 +2612,7 @@ export class Coop {
       if (!seen.has(key) || !this.followHall(key, from, age)) continue;
       e.hallKey = key;
       e.statusBuffs = readEnemyBuffs(m.buffs, e.id);
+      e.mp = readEnemyMp(m.mp, e.id);
       list.push(e);
     }
     G.combat.applyPuppets(list, from);

@@ -26,6 +26,7 @@ export class Interpreter {
     this.killMode = false;
     this.mapId = 0; this.eventId = 0; this.list = null; this.index = 0;
     this.waitCount = 0; this.waitMode = ''; this.child = null; this.branch = {};
+    this.saveRequest = null;
     this.indent = 0; this.params = null; this.choiceGroup = null; this.battle = null;
     this.battleBgmBefore = undefined;
     this.undo = null;
@@ -91,6 +92,7 @@ export class Interpreter {
         this.balloonGuard = 0;
         break;
       case 'scene': if (G.ui.sceneBusy()) return true; break;
+      case 'save': if (this.saveRequest?.pending || G.ui.sceneBusy()) return true; break;
       default: break;
     }
     this.waitMode = '';
@@ -830,7 +832,18 @@ export class Interpreter {
     this.waitMode = 'scene';
     return true;
   }
-  c352() { G.ui.openSaveMenu?.(); return true; }
+  c352() {
+    if ((this.root || this).troop) return true;
+    const request = this.saveRequest = { pending: true };
+    this.waitMode = 'save';
+    try {
+      Promise.resolve(G.openSaveMenu({ event: true })).then(
+        () => { request.pending = false; },
+        error => { console.warn('Event save menu failed', error); request.pending = false; },
+      );
+    } catch (error) { request.pending = false; throw error; }
+    return true;
+  }
   // Game Over: the game ends there and goes to the title (main.js G.gameOver) - its run stops here. A co-op guest falls by the
   // server's rules instead
   c353() {

@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.18
+BLACK SOULS II VR - community version 0.2.19
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,14 +7,18 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Conversations stay visually stable between dialogue pages and choices.
-- The desktop HUD, minimap and held weapons no longer flash back into view
-  between messages from the same event.
-- The background dimming and mouse control stay consistent through dialogue.
-- Normal gameplay presentation returns when the conversation ends or a battle
-  starts. Scripted pauses and dialogue choices keep their original behavior.
+- MP attacks and Drain Mana affect MP correctly; life and mana drains restore
+  only the amount available from their target. These changes also sync in co-op.
+- Enemy attacks can apply their original weapon effects, including poison,
+  bleeding and stun.
+- Getting or losing a key or quest item refreshes item-dependent map events.
+- Boss-room skulls and other events can open the Save screen correctly.
+- Equipment trades require an owned item, equipment restrictions work, and
+  events remove the correct number of bag and equipped copies.
+- Importing an original-game save preserves remaining buffs, timed effects
+  and walking-based status counters.
 
-The weapon stun and gameplay-effect fixes from previous updates are included.
+The dialogue, weapon stun and gameplay fixes from previous updates are included.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

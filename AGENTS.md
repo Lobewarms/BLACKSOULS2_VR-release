@@ -1029,3 +1029,59 @@ frames with no logic tick. Assert real panel/HUD/minimap/backdrop/equipment and
 pointer state, original wait/choice effects, no opening-frame input reuse, and
 normal gameplay restoration. Use synthetic data and do not claim a physical
 headset or original-save playtest from these checks.
+
+## Original-game fidelity audit (0.2.19)
+
+Read-only checks covered 410 installed maps, common events, troop pages and the
+active original Ruby scripts. The script/formula inventory contained 4,344 calls,
+773 distinct snippets and 104 unsupported SteamUserStatsLite achievement calls.
+Every non-Steam snippet compiled in the adapter; compilation alone does not prove
+story compatibility. Steam achievements remain unsupported in the browser port.
+Keep all inspected original data, scripts and numeric reproductions outside Git
+and release packages. Shipped regressions use synthetic fixtures.
+
+Resource routing follows original Game_ActionResult/execute_damage: types 1/5
+take HP and 2/6 take MP; MP damage is capped by available MP. Drains return only
+the resource actually available, capped by the caster's maximum, and do not use
+recovery multipliers or recovery nullification. HP damage may still display
+overkill. Independent percentage effects are separate from formula criticals
+and drains. Use the same routing for player, enemy and reflected attacks.
+Normal enemy attack state effect 21/data 0 expands attacker attack-state traits,
+combines each state's rate and uses existing susceptibility/LUK/ignore rules.
+Keep the existing nonfatal hostile-state scaling and guard behavior as real-time
+adaptations. Verified original examples included Brain Sapper's MP Attack, Skull
+Shroom's Drain Mana, Star Spirit's Drain Life, Rotting Dog and Great Serpent.
+
+Co-op keeps existing 15/17-field enemy tuples. Optional top-level mp metadata
+and signed md hit changes carry resource loss/gain through existing peer/map
+authority and rate checks. Validate integer bounds, preserve zero and accept
+legacy messages without metadata. Fresh puppet snapshots must not rewind either
+a local MP loss or gain before its report reaches the host.
+
+Inventory gain/loss requests a map refresh, as original Game_Party.gain_item did;
+26 original item-conditioned event pages include key gates and Train Ticket.
+Include-equipped losses consume the bag first, then exactly the remaining
+shortage across party equipment. Equipment trades check ownership and slot type
+before moving anything. Player choices obey fixed/sealed slots and equip types;
+event changes can still clear fixed slots. Release newly invalid gear only after
+an actual equipment change, returning it to the bag unless force-changing.
+Active VXAce_SP1 repeats releases until stable; removing later gear can invalidate
+an earlier slot's permissions. Every productive pass removes at least one item.
+Previews simulate those releases without inventory changes. Loading existing
+gear is not a migration. Original Hunter's Attire seals the head slot.
+
+Original-save import keeps valid state_steps/state_turns and buffs/buff_turns.
+Convert remaining buff and leader timed-state turns at the existing six-second
+player/companion rate; persistent states receive no invented expiry. Retain
+legacy defaults when fields are absent and native-save serialization of clocks.
+
+Interpreter command 352 called a nonexistent UI method. It now opens the actual
+global save flow and waits through slot loading, overwrite confirmation, write,
+retry or cancel. Event Save closes back to the event; ordinary menu Save retains
+its return to the main menu. Stale map responses must not reopen departed panels.
+Common event 294's adjacent boss-skull choice blocks merge into one three-option
+menu under the original choice extension, so saving must not select a transfer.
+
+These checks verify specific rules, not a complete story or headset playthrough.
+Original turn order and the port's real-time action scheduler remain different.
+The previously reported stationary skeleton still needs live identification.

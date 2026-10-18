@@ -2712,21 +2712,25 @@ export class CombatSystem {
     }
     const type = obj.damage?.type || 0;
     let dmg = 0;
-    if (type === 1 || type === 5) {
-      dmg = this.computeDamage(actor, e.b, obj, mult * (e.state === 'stagger' ? 1.5 : 1));
-      e.b.hp = Math.max(0, e.b.hp - dmg);
+    if ([1, 2, 5, 6].includes(type)) {
+      const value = this.computeDamage(actor, e.b, obj, mult * (e.state === 'stagger' ? 1.5 : 1));
+      const result = this.applyResourceDamage(actor, e.b, obj, value);
+      dmg = result.hpDamage || result.mpDamage;
       e.flash = 0.18; if (e.bar) e.bar.visible = true; e.drawBar();
-      this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.75, p.z), String(dmg), dmg <= 0 ? '#9a9a9a' : weak ? '#ff3a3a' : color || (crit ? '#ffd040' : '#ffffff'));
-      const heal = (type === 5 ? dmg : 0) + this.convertDrain(actor, obj, dmg);
+      const mp = type === 2 || type === 6;
+      this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.75, p.z), mp ? `MP -${dmg}` : String(dmg), dmg <= 0 ? '#9a9a9a' : mp ? '#80b0ff' : weak ? '#ff3a3a' : color || (crit ? '#ffd040' : '#ffffff'));
+      const converted = result.hpDamage > 0 ? this.convertDrain(actor, obj, result.hpDamage) : 0;
+      if (converted > 0 && actor) actor.hp = Math.min(actor.mhp, actor.hp + converted);
+      const heal = result.hpDrain + converted;
       if (heal > 0 && actor) {
-        actor.hp = Math.min(actor.mhp, actor.hp + heal);
         if (by) this.allies.healActor(by, heal); else this.popupAtPlayer(`+${heal}`, '#60ff80');
       }
+      if (result.mpDrain > 0 && !by) this.popupAtPlayer(`MP +${result.mpDrain}`, '#80b0ff');
       if (sourcePos && knock) {
         const away = Math.atan2(p.z - sourcePos.z, p.x - sourcePos.x);
         e.knock.x += Math.cos(away) * knock; e.knock.y += Math.sin(away) * knock;
       }
-      if (dmg > 0) this.damageRemovesStates(e);
+      if (result.hpDamage > 0) this.damageRemovesStates(e);
     }
     for (const ef of obj.effects || []) {
       if (ef.code === 11) {                              // HP by a share of max HP (negative: a cut), by its recovery rate
@@ -2803,12 +2807,12 @@ export class CombatSystem {
     this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), { color: 0xc8f0ff, size: e.h * 0.9, life: 0.35, grow: 1.5 });
     if (!actor || this.playerDead) return;
     const t = obj.damage?.type || 0;
-    const dmg = t === 1 || t === 5 ? this.computeDamage(actor, actor, obj) : 0;
+    const result = this.applyResourceDamage(actor, actor, obj, [1, 2, 5, 6].includes(t) ? this.computeDamage(actor, actor, obj) : 0);
+    const dmg = result.hpDamage || result.mpDamage;
     if (dmg > 0) {
-      actor.hp = Math.max(0, actor.hp - dmg);
       G.screen.hurtFlash(1);
       G.input.haptic('left', 0.8, 90); G.input.haptic('right', 0.8, 90);
-      this.popupAtPlayer(`-${dmg}`, '#ffb0b0');
+      this.popupAtPlayer(`${result.mpDamage ? 'MP ' : ''}-${dmg}`, result.mpDamage ? '#80b0ff' : '#ffb0b0');
     }
     for (const ef of obj.effects || []) {
       if (ef.code === 21 && ef.data_id === 1) {
@@ -2826,11 +2830,11 @@ export class CombatSystem {
     if (!e?.alive) return;
     const p = e.worldPos(new THREE.Vector3());
     const t = skill.damage?.type || 0;
-    const dmg = t === 1 || t === 5 ? this.computeDamage(e.b, e.b, skill) : 0;
+    const result = this.applyResourceDamage(e.b, e.b, skill, [1, 2, 5, 6].includes(t) ? this.computeDamage(e.b, e.b, skill) : 0);
+    const dmg = result.hpDamage || result.mpDamage;
     if (dmg > 0) {
-      e.b.hp = Math.max(0, e.b.hp - dmg);
       e.flash = 0.18; if (e.bar) e.bar.visible = true; e.drawBar();
-      this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.75, p.z), String(dmg), '#c8f0ff');
+      this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.75, p.z), result.mpDamage ? `MP -${dmg}` : String(dmg), '#c8f0ff');
     }
     for (const ef of skill.effects || []) {
       if (ef.code === 21 && ef.data_id === 1) {
@@ -3066,6 +3070,21 @@ export class CombatSystem {
   }
 
   // ---- damage --------------------------------------------------------------------------
+  // VX Game_ActionResult / execute_damage: MP damage is capped by available MP;
+  // a drain returns only what that resource could actually lose. Formula HP
+  // damage can still display its overkill value. Drains bypass recovery rules.
+  applyResourceDamage(user, target, skill, value) {
+    const type = skill?.damage?.type || 0, amount = Math.max(0, Math.round(Number(value) || 0));
+    const hpDamage = type === 1 || type === 5 ? amount : 0;
+    const mpDamage = type === 2 || type === 6 ? Math.min(Math.max(0, target.mp), amount) : 0;
+    const hpDrain = type === 5 ? Math.min(Math.max(0, target.hp), hpDamage) : 0;
+    const mpDrain = type === 6 ? mpDamage : 0;
+    if (hpDamage > 0) target.hp = Math.max(0, target.hp - hpDamage);
+    if (mpDamage > 0) target.mp = Math.max(0, target.mp - mpDamage);
+    if (user && hpDrain > 0) user.hp = Math.min(user.mhp, user.hp + hpDrain);
+    if (user && mpDrain > 0) user.mp = Math.min(user.mmp, user.mp + mpDrain);
+    return { hpDamage, mpDamage, hpDrain, mpDrain };
+  }
   computeDamage(attacker, target, skill, mult = 1) {
     if (!skill?.damage || skill.damage.type === 0) return 0;
     let v = evalFormula(skill.damage.formula, attacker.solo ? attacker.solo() : attacker, target);
@@ -3541,26 +3560,34 @@ export class CombatSystem {
       this.reportStruck(e, 0);
     }
     if (perfect) { this.queuePlayerCounter(e, counter); return; } // (nothing got through)
-    dmg += share;
+    const result = this.applyResourceDamage(e?.b || actor, actor, skill, dmg);
+    if ((result.hpDrain > 0 || result.mpDrain > 0) && e) e.drawBar();
+    const hpDamage = result.hpDamage + share;
+    if (share > 0) actor.hp = Math.max(0, actor.hp - share);
     if (mpShare > 0) actor.mp = Math.max(0, actor.mp - Math.floor(mpShare * G.settings.difficulty));
-    if (dmg > 0) {
+    if (hpDamage > 0) {
       if (blocked) G.screen.hurtFlash(0.3);            // some of it still got through the guard
-      if (e && this.skillLook(skill) === 'drain') this.drainStream(e, head, skill);
-      actor.hp = Math.max(0, actor.hp - dmg);
       this.damageRemovesActorStates(actor);
     }
+    if (e && (result.hpDrain > 0 || result.mpDrain > 0) && this.skillLook(skill) === 'drain') this.drainStream(e, head, skill);
     // the rest of it lands with no damage too (a sleep spell, a curse - the states only came with damage before)
     for (const ef of skill?.effects || []) {
-      if (ef.code !== 21 || ef.data_id <= 0 || actor.stateResist(ef.data_id)) continue;
-      if (ef.data_id === 1) {
-        if (Math.random() < this.stateEffectChance(e?.b, actor, skill, 1, ef.value1)) actor.addState(1);
-        continue;
-      }
-      // (blown up by the wind: always, as in the original, and up into the sky it goes - bossmoves.js liftInfo)
-      const lift = !delayed && this.liftInfo().states.has(ef.data_id);
-      if (lift || Math.random() < this.stateEffectChance(e?.b, actor, skill, ef.data_id, ef.value1 * 0.6)) {
-        actor.addState(ef.data_id); this.timeActorState(ef.data_id);
-        if (lift) this.liftPlayer(e);
+      if (ef.code !== 21 || ef.data_id < 0) continue;
+      const normal = ef.data_id === 0, ids = normal ? e?.b.atkStates() || [] : [ef.data_id];
+      for (const id of ids) {
+        if (id <= 0 || actor.stateResist(id)) continue;
+        const base = ef.value1 * (normal ? e.b.atkStatesRate(id) : 1);
+        if (id === 1) {
+          if (Math.random() < this.stateEffectChance(e?.b, actor, skill, id, base)) actor.addState(1);
+          continue;
+        }
+        // Explicit wind effects always lift; normal attack traits retain their
+        // own chance. Both still use the original state's physical behavior.
+        const lift = !delayed && this.liftInfo().states.has(id);
+        if (!normal && lift || Math.random() < this.stateEffectChance(e?.b, actor, skill, id, base * 0.6)) {
+          actor.addState(id); this.timeActorState(id);
+          if (lift) this.liftPlayer(e);
+        }
       }
     }
     this.applyBuffEffects(actor, skill, TURN_SECONDS, 0.6);
@@ -6450,6 +6477,9 @@ export class CombatSystem {
         // (a plain shot winding up turns after its target there: its line here too)
         if (n.aim !== null && e.state === 'windup' && e.plan?.shot && !e.move && e.plan.ox !== undefined) this.aimShot(e, n.aim);
         e.b.hp = fresh ? Math.min(e.b.hp, n.hp) : n.hp;
+        // MP can be taken or gained by a guest's drain. Do not rewind either
+        // local change while its report is still travelling to the host.
+        if (Number.isInteger(n.mp) && n.mp >= 0 && n.mp <= 1e8 && !fresh) e.b.mp = Math.min(e.b.mmp, n.mp);
         if (!fresh) e.b.states = n.states.slice();
         const gmax = this.groggyMax(e);
         if (gmax && !fresh) e.grog = gmax * n.grog / 100;
@@ -6460,9 +6490,9 @@ export class CombatSystem {
     }
     for (const [id, e] of this.puppets) if ((e.src || null) === src && !seen.has(id)) { e.remove(); this.puppets.delete(id); }
   }
-  puppetSnap(e) { return { hp: e.b.hp, states: [...e.b.states], grog: e.grog || 0, state: e.state }; }
+  puppetSnap(e) { return { hp: e.b.hp, mp: e.b.mp, states: [...e.b.states], grog: e.grog || 0, state: e.state }; }
   // (guest) what this guest's own blows, shots and spells did to the host's enemies since the last look - every frame:
-  // nothing else changes a puppet. [{ id, d: HP taken, add / rm: states, g: groggy taken, brk: a Break (7 / 8), big: the
+  // nothing else changes a puppet. [{ id, d: HP taken, md?: MP taken (negative: gained), add / rm: states, g: groggy taken, brk: a Break (7 / 8), big: the
   // big attack that ends one }]
   puppetReports() {
     const out = [];
@@ -6476,8 +6506,9 @@ export class CombatSystem {
       const add = now.states.filter(id => !b.states.includes(id) && !skip(id));
       const rm = b.states.filter(id => !now.states.includes(id) && !skip(id));
       const d = Math.round(b.hp - now.hp), g = Math.round(Math.max(0, b.grog - now.grog));
-      if (d || add.length || rm.length || g > 0 || brk || big) {
-        out.push({ id: e.netId, src: e.src || null, d, add, rm, g, brk, big });
+      const delta = Math.round(b.mp - now.mp), md = Number.isFinite(delta) ? THREE.MathUtils.clamp(delta, -1e7, 1e7) : 0;
+      if (d || md || add.length || rm.length || g > 0 || brk || big) {
+        out.push({ id: e.netId, src: e.src || null, d, ...(md ? { md } : {}), add, rm, g, brk, big });
         e.netReported = G.time;
       }
       e.netBase = now;
@@ -6487,6 +6518,7 @@ export class CombatSystem {
   // (host) a guest's blow on one of this world's enemies: taken as if it had struck here - its numbers in the friend's
   // colour, the fight started if it was roaming, a Break, the groggy gauge, states, the fall
   applyGuestHit(r, from = null) {
+    if (r.md !== undefined && (!Number.isInteger(r.md) || Math.abs(r.md) > 1e7)) return false;
     const e = this.netEnemies().find(x => x.netId === r.id) || this.hallEnemyFor(r.id, from);
     if (!e || !e.alive || e.hidden) return false;
     // (a boss fight that guest did not join, or watches fallen)
@@ -6508,6 +6540,12 @@ export class CombatSystem {
         G.audio?.playSe(G.seAt('Slash1', 70, 100), new THREE.Vector3(p.x, p.y + e.h * 0.5, p.z));
         this.damageRemovesStates(e);
       }
+    }
+    if (r.md) {
+      const before = e.b.mp;
+      e.b.mp = Math.max(0, Math.min(e.b.mmp, e.b.mp - r.md));
+      const taken = before - e.b.mp;
+      if (taken) this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.75, p.z), `MP ${taken > 0 ? '-' : '+'}${Math.abs(taken)}`, '#80b0ff');
     }
     for (const id of r.add) if ($data.states[id] && !e.b.stateResist(id)) this.addEnemyState(e, id, true);
     for (const id of r.rm) { e.b.removeState(id); if (e.stateTimers) delete e.stateTimers[id]; }

@@ -10,6 +10,7 @@ import { billboardUniforms, T } from '../world/mapmesh.js';
 import { GameState } from '../game/state.js';
 import { readSaveSlots, readSaveState, writeSaveFile } from '../game/savefiles.js';
 import { prepareSaveLocations, saveLocation } from '../game/savepresentation.js';
+import { showManualSaveMenu } from '../game/manual-save-menu.js';
 import { GameMap } from '../world/gamemap.js';
 import { Player } from '../entities/player.js';
 import { Input } from './input.js';
@@ -429,7 +430,6 @@ async function saveVr(slot = 1, silent = false, kind = 'vr') {
 G.saveVr = () => saveVr(1);
 G.saveWorld = (slot = 0, silent = true) => saveVr(slot, silent, 'world');
 // saving by hand: 16 slots like the original's Save01-16 (slot 0 is the autosave); a used slot asks first
-const SAVE_SLOTS = 16;
 let lastSaveSlot = 1;
 // when a slot was saved, in the chosen language's format (older saves only kept the text of the day)
 function metaDate(meta) { return meta?.time ? fmtDate(meta.time) : meta?.date || ''; }
@@ -438,46 +438,11 @@ function slotDesc(meta) {
   const unit = $data.system.currency_unit || '';
   return [meta.level != null ? `Lv ${meta.level}` : '', meta.hp != null ? `HP ${meta.hp}` : '', meta.gold != null ? `${meta.gold} ${unit}` : ''].filter(Boolean).join(' · ');
 }
-async function showVrSaveMenu() {
-  // (the developer's world: its own saves - in the opening alone, none yet)
-  const kind = G.coop.role === 'world' ? 'world' : 'vr';
-  if (G.state?.system.saveDisabled || G.coop.phantom || (kind === 'world' && !G.coop.world)) { G.ui.toast(tr('지금은 저장할 수 없습니다')); G.ui.reopenMain('save'); return; }
-  let saves;
-  try { saves = await listVrSaves(kind, true); }
-  catch {
-    G.ui.toast(tr('저장 목록을 읽지 못했습니다. 다시 시도해 주세요'));
-    G.ui.reopenMain('save');
-    return;
-  }
-  const have = new Map(saves.map(s => [s.slot, s.meta]));
-  const items = [];
-  for (let n = 1; n <= SAVE_SLOTS; n++) {
-    const m = have.get(n);
-    items.push(m ? { text: `${tr('슬롯 {n}', { n })}  ${saveLocation(m)}`, right: metaDate(m), desc: slotDesc(m), slot: n, used: true, map: saveLocation(m) }
-      : { text: `${tr('슬롯 {n}', { n })}  ${tr('(비어 있음)')}`, slot: n, used: false });
-  }
-  const save = async n => {
-    lastSaveSlot = n;
-    G.ui.closeMenu();
-    await saveVr(n, false, kind);
-  };
-  G.ui.menuOpen = true;
-  G.ui.list.open(kind === 'world' ? tr('개발자 서버 세이브 — 저장할 슬롯') : tr('세이브 — 저장할 슬롯'), items, {
-    onSelect: (i, it) => {
-      if (!it.used) { save(it.slot); return; }
-      G.ui.list.open(tr('슬롯 {n}에 덮어쓸까요?', { n: it.slot }), [
-        { text: tr('덮어쓰기'), id: 'yes', desc: `${it.map}  ${it.right}` },
-        { text: tr('취소'), id: 'no' },
-      ], {
-        onSelect: (j, c) => { if (c.id === 'yes') save(it.slot); else showVrSaveMenu(); },
-        onCancel: () => showVrSaveMenu(),
-      });
-    },
-    onCancel: () => G.ui.reopenMain('save'),
-    index: lastSaveSlot - 1,
-  });
+function showVrSaveMenu({ event = false } = {}) {
+  return showManualSaveMenu({ event, listSaves: listVrSaves, saveSlot: saveVr,
+    selectedSlot: () => lastSaveSlot, rememberSlot: n => { lastSaveSlot = n; }, metaDate, slotDesc });
 }
-G.openSaveMenu = () => showVrSaveMenu();
+G.openSaveMenu = options => showVrSaveMenu(options);
 G.onBonfire = () => {
   // (the developer's world: the opening alone is over at its first bonfire - into the world from here, coop.js)
   if (G.coop.role === 'world' && G.coop.wphase === 'prologue') { G.coop.prologueDone(); return; }
