@@ -30,7 +30,7 @@ export class Input {
     addEventListener('keydown', e => {
       if (e.repeat || e.target instanceof HTMLInputElement) return;     // (typing a name: ui.js keyboard)
       this.keys.add(e.code);
-      if (['Tab', 'Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
+      if (['Tab', 'Space', 'ArrowUp', 'ArrowDown'].includes(e.code) || e.code === 'F1' && G.ui?.menuOpen) e.preventDefault();
     });
     addEventListener('keyup', e => this.keys.delete(e.code));
     addEventListener('blur', () => {

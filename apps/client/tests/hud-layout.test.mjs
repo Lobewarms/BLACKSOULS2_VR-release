@@ -36,7 +36,7 @@ function environment(t) {
   $data.system = { currency_unit: 'Souls', terms: { basic: ['Level', 'Lv', 'Health', 'HP', 'Magic', 'MP'] } };
   $data.states = Array.from({ length: 10 }, (_, id) => ({ id, name: `Effect ${id}`, priority: 100 - id, icon_index: 0 }));
   G.state = { party: { leader: () => actor, gold: 4200 }, sw: () => true, v: () => 80 };
-  G.scripts = { menuVar: { label: 'SEN', suffix: '%', variable: 1 } }; G.vr = false; G.combat = { stamina: 0.4 };
+  G.scripts = { menuVar: { label: 'SEN', suffix: '%', variable: 1 } }; G.vr = true; G.combat = { stamina: 0.4 };
   G.input = { controllers: {}, dom: { getBoundingClientRect: () => ({ width: 1280, height: 720 }) } };
   G.arena = null; G.time = 0;
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 100);
@@ -47,7 +47,7 @@ function environment(t) {
 const labels = ui => ui.hud.canvas.record.texts;
 const gauges = ui => ui.hud.canvas.record.fills.filter(r => typeof r.color === 'object');
 
-test('HUD resources have directly associated values and original game-palette gauges, with separate currency and SEN', t => {
+test('VR HUD resources retain associated values and original game-palette gauges, with separate currency and SEN', t => {
   const { ui } = environment(t); ui.drawHud();
   const texts = labels(ui), bars = gauges(ui);
   assert.ok(texts.some(r => r.text === 'Grimm')); assert.ok(texts.some(r => r.text === 'Lv 12'));
@@ -98,7 +98,7 @@ test('all effect pages remain named, counted and accessible while empty effects 
   for (const time of [0, 4]) {
     G.time = time; ui.drawHud(); labels(ui).forEach(r => seen.add(r.text));
     assert.ok(labels(ui).some(r => r.text === `${time / 4 + 1}/2`));
-    assert.ok(labels(ui).some(r => r.text === 'All effects: Menu → Character → Status'));
+    assert.ok(labels(ui).some(r => r.text === 'All effects: Menu → Status'));
     assert.ok(ui.hudPaintHeight <= ui.hud.canvas.height);
     assert.ok(labels(ui).every(r => r.y >= 0 && r.y < ui.hudPaintHeight));
   }
@@ -109,7 +109,7 @@ test('all effect pages remain named, counted and accessible while empty effects 
 });
 
 test('larger VR HUD leaves a physical gap below the wrist minimap and PC anchors its painted bottom', t => {
-  const { ui } = environment(t); ui.drawHud(); ui.placeRoot();
+  const { ui } = environment(t); G.vr = false; ui.drawHud(); ui.placeRoot();
   ui.hud.mesh.updateWorldMatrix(true, false);
   const y = ui.hud.heightM / 2 - ui.hud.heightM * ui.hudPaintHeight / ui.hud.canvas.height;
   const p = ui.hud.mesh.localToWorld(new THREE.Vector3(0, y, 0)).project(ui.camera);
@@ -123,7 +123,7 @@ test('larger VR HUD leaves a physical gap below the wrist minimap and PC anchors
 test('new HUD text is translated in every supported language', () => {
   const url = new URL('../src/ui/i18n.js', import.meta.url).href;
   for (const [lang, stamina] of [['ko', '스태미나'], ['en', 'Stamina'], ['ja', 'スタミナ'], ['zh', '耐力']]) {
-    const code = `globalThis.location={search:'?lang=${lang}'};const {tr}=await import(${JSON.stringify(url)});console.log(JSON.stringify([tr('스태미나'),tr('플레이어'),tr('전체 효과: 메뉴 → 캐릭터 → 상태')]));`;
+    const code = `globalThis.location={search:'?lang=${lang}'};const {tr}=await import(${JSON.stringify(url)});console.log(JSON.stringify([tr('스태미나'),tr('플레이어'),tr('전체 효과: 메뉴 → 상태')]));`;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     const strings = JSON.parse(result.stdout); assert.equal(strings[0], stamina); assert.ok(strings.every(text => text.length));

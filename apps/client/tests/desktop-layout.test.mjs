@@ -62,15 +62,24 @@ function inViewport(box, viewport, marginX = 31, marginY = 39) {
 }
 function near(actual, expected, message = '') { assert.ok(Math.abs(actual - expected) < 0.1, `${message}: ${actual} != ${expected}`); }
 
-test('PC main menu stays readable and centred at desktop resolutions instead of using a wrist-scale panel', t => {
+test('PC original command and party panels remain ordered, readable and centred at desktop resolutions', t => {
   const { ui, viewport, resize } = environment(t);
   ui.openMenu();
+  assert.equal(ui.list.panel.widthM, 0.32); assert.equal(ui.menuOverview.widthM, 0.96);
+  assert.deepEqual(ui.list.panel.mesh.position.toArray(), [-0.484, 0, 0]);
+  assert.deepEqual(ui.menuOverview.mesh.position.toArray(), [0.164, 0, 0]);
   for (const [w, h] of [[1280, 720], [1920, 1080], [2560, 1440]]) {
     resize(w, h); ui.update(0.01);
-    const box = project(ui.list.panel, ui.camera, viewport);
-    inViewport(box, viewport); near(box.width, 882);
-    assert.ok(36 * box.width / ui.list.panel.canvas.width > 30, 'menu row text should exceed 30 CSS pixels');
-    near((box.minX + box.maxX) / 2, w / 2); near((box.minY + box.maxY) / 2, h / 2);
+    const commands = project(ui.list.panel, ui.camera, viewport), party = project(ui.menuOverview, ui.camera, viewport);
+    assert.deepEqual(ui.list.items.map(item => item.id), ['items', 'skills', 'equip', 'status', 'oath', 'save', 'title']);
+    assert.equal(ui.list.classic, true);
+    assert.equal(ui.list.panel.canvas.width, 320); assert.equal(ui.list.panel.canvas.height, 960);
+    assert.equal(ui.menuOverview.canvas.width, 960); assert.equal(ui.menuOverview.canvas.height, 960);
+    inViewport(commands, viewport); inViewport(party, viewport);
+    assert.ok(commands.maxX < party.minX, 'the original command column stays separate from the party overview');
+    near(party.width, commands.width * 3); near(party.minY, commands.minY); near(party.maxY, commands.maxY);
+    assert.ok(36 * commands.width / ui.list.panel.canvas.width > 22, 'classic command text should exceed 22 CSS pixels at 720p and larger');
+    near((commands.minX + party.maxX) / 2, w / 2); near((commands.minY + commands.maxY) / 2, h / 2);
     assert.equal(ui.hud.mesh.visible, false, 'desktop menus take the screen without an overlapping HUD');
   }
 });
@@ -78,12 +87,15 @@ test('PC main menu stays readable and centred at desktop resolutions instead of 
 test('desktop panels follow full camera pitch, yaw, roll, FOV and zoom without changing their CSS size', t => {
   const { ui, viewport } = environment(t);
   ui.openMenu(); ui.update(0.01);
-  const original = project(ui.list.panel, ui.camera, viewport);
+  const original = project(ui.list.panel, ui.camera, viewport), originalParty = project(ui.menuOverview, ui.camera, viewport);
   ui.rig.position.set(14, 2, -7); ui.rig.rotation.y = 0.7; ui.camera.rotation.set(-0.85, 0.4, 0.25, 'YXZ');
   for (const [fov, zoom] of [[45, 1], [110, 1], [80, 1.7]]) {
     ui.camera.fov = fov; ui.camera.zoom = zoom; ui.camera.updateProjectionMatrix(); ui.update(0.01);
     const box = project(ui.list.panel, ui.camera, viewport); inViewport(box, viewport);
     near(box.width, original.width); near(box.height, original.height);
+    const party = project(ui.menuOverview, ui.camera, viewport); inViewport(party, viewport);
+    near(party.width, originalParty.width); near(party.height, originalParty.height);
+    assert.ok(box.maxX < party.minX);
     assert.ok(ui.root.quaternion.angleTo(ui.camera.getWorldQuaternion(new THREE.Quaternion())) < 1e-7);
   }
 });
@@ -91,7 +103,8 @@ test('desktop panels follow full camera pitch, yaw, roll, FOV and zoom without c
 test('inventory, title menu and full map fit narrow windows immediately after resize', t => {
   const { ui, viewport, resize } = environment(t);
   for (const [w, h] of [[800, 600], [480, 800], [900, 500]]) {
-    resize(w, h); ui.openMenu(); ui.update(0.01); inViewport(project(ui.list.panel, ui.camera, viewport), viewport);
+    resize(w, h); ui.openMenu(); ui.update(0.01);
+    inViewport(project(ui.list.panel, ui.camera, viewport), viewport); inViewport(project(ui.menuOverview, ui.camera, viewport), viewport);
     ui.list.close(); ui.grid.open('Inventory', [{ label: 'Items', items: [{ text: 'Potion' }] }]);
     ui.update(0.01); inViewport(project(ui.grid.panel, ui.camera, viewport), viewport);
     ui.showMap(); ui.update(0.01);
@@ -184,7 +197,10 @@ test('standalone PC banners and toasts fit without requiring a player or game st
     assert.equal(ui.hud.mesh.visible, false);
     ui.banner = null; ui.drawBanner();
     ui.toast('Controller disconnected'); ui.update(0.01);
-    inViewport(project(ui.toastPanel, ui.camera, viewport), viewport);
+    const notice = project(ui.toastPanel, ui.camera, viewport);
+    inViewport(notice, viewport, 19, 23);
+    assert.equal(ui.toastPanel.mesh.parent, ui.camera, 'nonblocking notices do not participate in menu centering');
+    near(notice.minX, 20); near(notice.minY, 24);
     ui.toasts = []; ui.drawToasts();
   }
 });

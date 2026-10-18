@@ -14,6 +14,9 @@ import { battlerEffects, effectsKey, fitLabel } from './battler-status.js';
 import { NavigationMap } from './navigation-map.js';
 import { setWindowSkin, drawGameWindow, drawGameCursor } from './window-skin.js';
 import { desktopViewport, placeDesktopRoot, anchorDesktopPanel } from './desktop-layout.js';
+import { paintDesktopHud } from './desktop-hud.js';
+import { RewardFeed } from './reward-feed.js';
+import { paintClassicMenu } from './classic-menu.js';
 
 export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
@@ -41,6 +44,13 @@ class Panel {
     this.mesh.visible = false;
   }
   commit() { this.tex.needsUpdate = true; }
+  resize(width, height, widthM = this.widthM) {
+    if (this.canvas.width === width && this.canvas.height === height && this.widthM === widthM) return;
+    this.canvas.width = width; this.canvas.height = height;
+    this.widthM = widthM; this.heightM = widthM * height / width;
+    this.mesh.geometry.dispose(); this.mesh.geometry = new THREE.PlaneGeometry(this.widthM, this.heightM);
+    this.commit();
+  }
   clear() { this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
   // uv hit from a ray (VR pointer)
   hit(raycaster) {
@@ -55,13 +65,13 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
-function windowBg(ctx, x, y, w, h, alpha = 0.82) {
-  if (drawGameWindow(ctx, x, y, w, h, alpha)) return;
+function windowBg(ctx, x, y, w, h, alpha = 0.82, frameAlpha = 1) {
+  if (drawGameWindow(ctx, x, y, w, h, alpha, frameAlpha)) return;
   const g = ctx.createLinearGradient(0, y, 0, y + h);
   g.addColorStop(0, `rgba(18,16,22,${alpha})`); g.addColorStop(1, `rgba(6,5,8,${alpha})`);
   roundRect(ctx, x, y, w, h, 14);
   ctx.fillStyle = g; ctx.fill();
-  ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(190,170,130,0.55)'; ctx.stroke();
+  ctx.lineWidth = 3; ctx.strokeStyle = `rgba(190,170,130,${0.55 * frameAlpha})`; ctx.stroke();
 }
 
 // ------------------------------------------------------------------ text
@@ -243,15 +253,21 @@ class MenuScrollbar {
 
 // ------------------------------------------------------------------ list panel
 class ListPanel {
-  constructor(widthPx = 900, rows = 8, widthM = 0.9) {
+  constructor(widthPx = 900, rows = 8, widthM = 0.9, { adaptive = false } = {}) {
     this.rows = rows;
     this.rowH = 64;
+    this.base = { widthPx, rows, widthM }; this.adaptive = adaptive; this.rowTop = 100;
     this.panel = new Panel(widthPx, 110 + rows * this.rowH + 56, widthM);
     this.items = []; this.index = 0; this.top = 0; this.title = '';
     this.scrollbar = new MenuScrollbar(this.panel);
   }
-  open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '' } = {}) {
+  open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '', layout = null } = {}) {
     this.title = title; this.items = items; this.onSelect = onSelect; this.onCancel = onCancel; this.onAdjust = onAdjust;
+    this.classic = !!layout?.classic;
+    if (!this.adaptive) {
+      this.rows = layout?.rows || this.base.rows; this.rowTop = this.classic ? 24 : 100;
+      this.panel.resize(layout?.width || this.base.widthPx, layout?.height || 110 + this.rows * this.rowH + 56, layout?.widthM || this.base.widthM);
+    }
     // Explicit index -1 leaves a list unselected; normal dialogue starts at its first row.
     this.index = index < 0 ? -1 : Math.min(index, Math.max(0, items.length - 1)); this.top = 0; this.footer = footer;
     this.hover = -2;          // the row under the laser right now does not count as a move
@@ -288,13 +304,24 @@ class ListPanel {
     ctx.fillText(a, 36, 32); ctx.fillText(b, 36, 72);
   }
   draw() {
+    if (this.adaptive) {
+      const { widthPx, rows, widthM } = this.base;
+      this.rows = G.vr ? rows : Math.min(rows, Math.max(1, this.items.length));
+      this.rowTop = G.vr || this.title ? 100 : 24;
+      this.panel.ctx.font = `36px ${FONT}`;
+      const textWidth = Math.max(...this.items.map(it => this.panel.ctx.measureText(stripEscapes(it.text)).width + (it.right ? this.panel.ctx.measureText(it.right).width + 32 : 0)), 0);
+      const fittedWidth = G.vr || this.title || this.footer ? widthPx : Math.min(widthPx, Math.max(380, Math.ceil(textWidth + 116)));
+      this.panel.resize(fittedWidth, this.rowTop + this.rows * this.rowH + (G.vr ? 66 : 48), widthM * fittedWidth / widthPx);
+    }
     const { ctx, canvas } = this.panel;
     this.panel.clear();
-    windowBg(ctx, 4, 4, canvas.width - 8, canvas.height - 8, 0.9);
+    if ((this.adaptive || this.classic) && !G.vr) { ctx.fillStyle = 'rgba(5,6,9,0.12)'; ctx.fillRect(4, 4, canvas.width - 8, canvas.height - 8); }
+    windowBg(ctx, 4, 4, canvas.width - 8, canvas.height - 8, G.vr ? 0.9 : 0.25, G.vr ? 1 : 0.65);
+    if ((this.adaptive || this.classic) && !G.vr) { ctx.fillStyle = 'rgba(5,6,9,0.08)'; ctx.fillRect(20, 20, canvas.width - 40, canvas.height - 40); }
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#e8d8a8';
-    const backButton = !!this.onCancel && !!G.ui?.menuOpen;
-    this.drawTitle(ctx, canvas.width - (backButton ? 240 : 72));
+    const backButton = !!this.onCancel && !!G.ui?.menuOpen && !this.classic;
+    if (this.title && !this.classic) this.drawTitle(ctx, canvas.width - (backButton ? 240 : 72));
     if (backButton) {
       drawGameCursor(ctx, canvas.width - 174, 24, 146, 52);
       ctx.font = `28px ${FONT}`; ctx.textAlign = 'center';
@@ -308,7 +335,7 @@ class ListPanel {
       const i = this.top + r;
       const it = this.items[i];
       if (!it) break;
-      const y = 100 + r * this.rowH;
+      const y = this.rowTop + r * this.rowH;
       if (i === this.index) {
         if (!drawGameCursor(ctx, 20, y, canvas.width - 40 - gutter, this.rowH - 6)) {
           roundRect(ctx, 20, y, canvas.width - 40 - gutter, this.rowH - 6, 8);
@@ -316,6 +343,10 @@ class ListPanel {
         }
       }
       let x = 40;
+      if (this.adaptive && !G.vr) {
+        ctx.font = `22px ${FONT}`; ctx.fillStyle = textColor(16);
+        ctx.fillText(String(i + 1).padStart(2, '0'), 32, y + this.rowH / 2 - 2); x = 84;
+      }
       if (it.icon) { drawIcon(ctx, it.icon, x, y + 6, 48); x += 60; }
       ctx.font = `36px ${FONT}`;
       ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : '#f0f0f0';
@@ -338,7 +369,7 @@ class ListPanel {
       }
       ctx.fillText(name, x, y + this.rowH / 2 - 2);
     }
-    this.scrollbar.draw(100, this.rows * this.rowH - 6, this.top, this.rows, this.items.length);
+    this.scrollbar.draw(this.rowTop, this.rows * this.rowH - 6, this.top, this.rows, this.items.length);
     if (this.items.length > this.rows && this.index >= 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = `28px ${FONT}`;
@@ -356,7 +387,12 @@ class ListPanel {
       ctx.fillText(stripEscapes(desc).slice(0, 60), 36, canvas.height - 30);
     }
     ctx.font = `21px ${FONT}`; ctx.fillStyle = 'rgba(230,225,210,0.85)';
-    ctx.fillText(tr(G.vr ? '스틱: 선택 · A / 트리거: 결정 · B: 뒤로' : '클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로'), 36, 84);
+    if (this.classic) {
+      ctx.font = `20px ${FONT}`; ctx.fillText(fitLabel(ctx, tr(G.vr ? 'A: 결정 · B: 뒤로' : 'Enter: 결정 · Esc: 뒤로'), canvas.width - 48), 24, this.rowTop + this.rows * this.rowH + 24);
+    } else if (this.adaptive && !G.vr && !this.footer) {
+      ctx.font = `20px ${FONT}`;
+      ctx.fillText(fitLabel(ctx, tr('Enter: 결정 · Esc: 뒤로'), canvas.width - 64), 32, canvas.height - 24);
+    } else ctx.fillText(tr(G.vr ? '스틱: 선택 · A / 트리거: 결정 · B: 뒤로' : '클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로'), 36, 84);
     this.panel.commit();
   }
   update(raycaster) {
@@ -378,8 +414,8 @@ class ListPanel {
       let hover = -1;
       if (uv) {
         const py = (1 - uv.y) * this.panel.canvas.height;
-        const back = this.onCancel && G.ui?.menuOpen && uv.x * this.panel.canvas.width >= this.panel.canvas.width - 180 && py >= 16 && py <= 80;
-        const r = Math.floor((py - 100) / this.rowH);
+        const back = !this.classic && this.onCancel && G.ui?.menuOpen && uv.x * this.panel.canvas.width >= this.panel.canvas.width - 180 && py >= 16 && py <= 80;
+        const r = Math.floor((py - this.rowTop) / this.rowH);
         const i = this.top + r;
         if (!scroll.over && r >= 0 && r < this.rows && this.items[i]) hover = i;
         G.ui.pointerTarget = !G.vr && scroll.over || hover >= 0 || !!back;
@@ -732,14 +768,20 @@ export class UI {
     this.scene = scene; this.camera = camera; this.rig = rig;
     this.root = new THREE.Group();          // world-space anchor in front of the user
     scene.add(this.root);
+    this.backdrop = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.MeshBasicMaterial({
+      color: 0x000000, transparent: true, opacity: 0.55, depthTest: false, depthWrite: false, toneMapped: false,
+    }));
+    this.backdrop.renderOrder = 3000; this.backdrop.visible = false; this.camera.add(this.backdrop);
     this.msgPanel = new Panel(1088, 300, 1.25);
     this.root.add(this.msgPanel.mesh);
     this.namePanel = new Panel(512, 72, 0.59);
     this.root.add(this.namePanel.mesh);
-    this.choice = new ListPanel(760, 6, 0.74);
+    this.choice = new ListPanel(760, 6, 0.74, { adaptive: true });
     this.root.add(this.choice.panel.mesh);
     this.list = new ListPanel(980, 8, 0.98);
     this.root.add(this.list.panel.mesh);
+    this.menuOverview = new Panel(960, 960, 0.96);
+    this.root.add(this.menuOverview.mesh);
     this.grid = new GridPanel(1260, 3, 6, 1.2);
     this.root.add(this.grid.panel.mesh);
     this.keyboard = new KeyboardPanel();
@@ -747,11 +789,17 @@ export class UI {
     this.bannerPanel = new Panel(1600, 260, 2.2);
     this.root.add(this.bannerPanel.mesh);
     this.toastPanel = new Panel(900, 300, 0.75);
-    this.root.add(this.toastPanel.mesh);
+    this.camera.add(this.toastPanel.mesh);
     this.hud = new Panel(512, 512, 0.24);
     this.hudPaintHeight = 262;
     this.hud.mesh.renderOrder = 900;
-    this.navigation = new NavigationMap(Panel, this.root, camera, this.hud.mesh, FONT);
+    this.statusPanel = new Panel(512, 128, 0.24);
+    this.hud.mesh.add(this.statusPanel.mesh);
+    this.statusPanel.mesh.position.set(0, this.hud.heightM / 2 + this.statusPanel.heightM / 2 + 0.006, 0.001);
+    this.rewards = new RewardFeed({ Panel, camera, hud: this.hud.mesh, font: FONT, drawWindow: drawGameWindow,
+      drawIcon, fitLabel, assetRevision: iconAssetRevision, cleanName: stripEscapes,
+      moreLabel: n => tr('추가 획득 {n}건', { n }) });
+    this.navigation = new NavigationMap(Panel, this.root, camera, this.hud.mesh, FONT, { textColor });
     this.raycaster = new THREE.Raycaster();
     this.pointerLine = null;
     this.msg = null;
@@ -775,7 +823,9 @@ export class UI {
   placeRoot(force = false) {
     if (!G.vr) {
       const viewport = desktopViewport(G.input, G.three?.renderer);
-      placeDesktopRoot(this.root, this.camera, viewport);
+      const message = this.msg || (this.remote?.shown ? this.remote : null);
+      const vertical = message ? ['top', 'center', 'bottom'][message.position ?? 2] : 'center';
+      placeDesktopRoot(this.root, this.camera, viewport, { vertical });
       const hudWidth = Math.max(1, Math.min(320, viewport.width - 40, (viewport.height - 40) * 512 / this.hudPaintHeight));
       if (!this.hudFollow) anchorDesktopPanel(this.hud, this.camera, viewport,
         { width: hudWidth, x: 'left', y: 'bottom', paintedHeight: this.hudPaintHeight });
@@ -783,6 +833,9 @@ export class UI {
         const miniWidth = Math.max(1, Math.min(220, viewport.width - 48, (viewport.height - 48) * 384 / 440));
         anchorDesktopPanel(this.navigation.mini, this.camera, viewport, { width: miniWidth, x: 'right', y: 'top' });
       }
+      if (this.toastPanel.mesh.parent !== this.camera) this.camera.add(this.toastPanel.mesh);
+      const toastWidth = Math.max(1, Math.min(360, viewport.width - 40));
+      anchorDesktopPanel(this.toastPanel, this.camera, viewport, { width: toastWidth, x: 'left', y: 'top' });
       return;
     }
     this.root.scale.setScalar(1);
@@ -804,6 +857,9 @@ export class UI {
 
   attachHud(target) {
     this.navigation.attach(!!target);
+    this.rewards.attach(!!target);
+    if (target) { this.root.add(this.toastPanel.mesh); this.toastPanel.mesh.scale.setScalar(1); this.toastPanel.mesh.position.set(0, -0.62, 0.02); }
+    else this.camera.add(this.toastPanel.mesh);
     if (this.hud.mesh.parent) this.hud.mesh.parent.remove(this.hud.mesh);
     this.hudFollow = target || null;
     if (target) {
@@ -817,6 +873,9 @@ export class UI {
       this.placeRoot();
     }
     this.hud.mesh.visible = true;
+    this.statusPanel.mesh.visible = !target && this.desktopStatusVisible;
+    if (this.choice.visible) this.choice.draw();
+    if (this.msg) this.drawMessage();
   }
 
   // ---------------------------------------------------------------- messages
@@ -871,7 +930,11 @@ export class UI {
     const p = this.msgPanel;
     const { ctx, canvas } = p;
     p.clear();
-    if (msg.background !== 2) windowBg(ctx, 4, 4, canvas.width - 8, canvas.height - 8, msg.background === 1 ? 0.55 : 0.85);
+    if (msg.background !== 2) {
+      if (!G.vr) { ctx.fillStyle = 'rgba(5,6,9,0.1)'; ctx.fillRect(4, 4, canvas.width - 8, canvas.height - 8); }
+      windowBg(ctx, 4, 4, canvas.width - 8, canvas.height - 8, G.vr ? msg.background === 1 ? 0.55 : 0.85 : 0.28, G.vr ? 1 : 0.65);
+      if (!G.vr) { ctx.fillStyle = 'rgba(5,6,9,0.08)'; ctx.fillRect(20, 20, canvas.width - 40, canvas.height - 40); }
+    }
     if (msg.faceCanvas) {
       const fi = msg.faceIndex || 0, L = this.messageLayout();
       ctx.imageSmoothingEnabled = true;
@@ -886,11 +949,14 @@ export class UI {
     p.commit();
     // name tab
     const np = this.namePanel;
+    np.ctx.font = `36px ${FONT}`;
+    const nameWidth = G.vr ? 512 : Math.min(512, Math.max(160, Math.ceil(np.ctx.measureText(msg.name || '').width + 56)));
+    np.resize(nameWidth, 72, 0.59 * nameWidth / 512);
     np.clear();
     if (msg.name) {
-      windowBg(np.ctx, 4, 4, np.canvas.width - 8, np.canvas.height - 8, 0.9);
+      windowBg(np.ctx, 4, 4, np.canvas.width - 8, np.canvas.height - 8, G.vr ? 0.9 : 0.28, G.vr ? 1 : 0.65);
       np.ctx.font = `36px ${FONT}`; np.ctx.fillStyle = '#e8d8a8'; np.ctx.textBaseline = 'middle';
-      np.ctx.fillText(msg.name, 28, 38);
+      np.ctx.fillText(fitLabel(np.ctx, msg.name, np.canvas.width - 56), 28, 38);
       np.commit();
       np.mesh.visible = this.msgPanel.mesh.visible;
     } else np.mesh.visible = false;
@@ -1114,7 +1180,7 @@ export class UI {
     if (ray) {
       const uv = this.choice.panel.hit(ray);
       if (uv) {
-        const r = Math.floor(((1 - uv.y) * this.choice.panel.canvas.height - 100) / this.choice.rowH);
+        const r = Math.floor(((1 - uv.y) * this.choice.panel.canvas.height - this.choice.rowTop) / this.choice.rowH);
         this.pointerTarget = r >= 0 && r < this.choice.items.length;
         if (r >= 0 && r < this.choice.items.length) {
           if (r !== this.choice.index) { this.choice.index = r; changed = true; }
@@ -1580,9 +1646,9 @@ export class UI {
   notifyGain(kind, id, n) {
     const d = itemData(kind, id);
     if (!d) return;
-    this.toast(tr('{name} 획득', { name: d.name + (n > 1 ? ' ×' + n : '') }), d.icon_index);
-    G.audio?.playSystemSe(22);
+    if (this.rewards.gain(kind, id, n, d)) G.audio?.playSystemSe(22);
   }
+  notifyGold(n) { this.rewards.gold(n, { name: $data.system.currency_unit || tr('소울'), icon_index: 0 }); }
   // SEN went up or down (BLACKSOULS II's SEN reminder, from its own script): its strip and its sound
   notifySen(delta) {
     const sen = G.scripts?.sen;
@@ -1621,7 +1687,7 @@ export class UI {
       ctx.globalAlpha = a;
       const y = 10 + i * 72;
       if (t.sen) { this.drawSenStrip(ctx, p.canvas.width, y, t); ctx.globalAlpha = 1; return; }
-      windowBg(ctx, 4, y, p.canvas.width - 8, 64, 0.7);
+      windowBg(ctx, 4, y, p.canvas.width - 8, 64, G.vr ? 0.7 : 0.24, G.vr ? 1 : 0.4);
       let x = 24;
       if (t.icon) { drawIcon(ctx, t.icon, x, y + 8, 48); x += 60; }
       ctx.font = `34px ${FONT}`; ctx.fillStyle = t.color; ctx.textBaseline = 'middle';
@@ -1632,7 +1698,7 @@ export class UI {
     });
     p.commit();
     p.mesh.visible = this.toasts.length > 0;
-    p.mesh.position.set(0, -0.62, 0.02);
+    if (G.vr) p.mesh.position.set(0, -0.62, 0.02);
   }
 
   // ---------------------------------------------------------------- HUD
@@ -1641,6 +1707,8 @@ export class UI {
     this.hudPresent = !!leader;
     this.hud.mesh.visible = !!leader && (G.vr || !this.sceneBusy() && !this.messageBusy() && !this.remote?.shown && !this.prompt?.shown && !G.combat?.playerDead);
     if (!leader) return;
+    if (!G.vr) { this.drawDesktopHud(leader); return; }
+    this.statusPanel.mesh.visible = false;
     const mv = G.scripts?.menuVar, sen = mv && (!mv.switchId || G.state.sw(mv.switchId)) ? G.state.v(mv.variable) : null;
     const effects = battlerEffects(leader);
     const pages = Math.max(1, Math.ceil(effects.length / 4));
@@ -1650,7 +1718,7 @@ export class UI {
     const currencyY = stamina === undefined ? 182 : 234, baseHeight = currencyY + 28;
     const effectsTop = baseHeight + 32;
     this.hudPaintHeight = shown.length ? effectsTop + shown.length * 36 + (more ? 74 : 8) : baseHeight;
-    const key = JSON.stringify([leader.name, leader.level, leader.hp, leader.mhp, leader.mp, leader.mmp,
+    const key = JSON.stringify(['vr', leader.name, leader.level, leader.hp, leader.mhp, leader.mp, leader.mmp,
       G.state.party.gold, stamina?.toFixed?.(2), sen, mv, $data.system.currency_unit, effectsKey(effects), page, iconAssetRevision()]);
     if (key === this.lastHud) return;
     this.lastHud = key;
@@ -1707,10 +1775,34 @@ export class UI {
       if (more) {
         const y = effectsTop + shown.length * 36;
         write(tr('외 {n}개 효과', { n: more }), 24, y + 14, canvas.width - 48, 22, 'left', textColor(16));
-        write(tr('전체 효과: 메뉴 → 캐릭터 → 상태'), 24, y + 42, canvas.width - 48, 22);
+        write(tr('전체 효과: 메뉴 → 상태'), 24, y + 42, canvas.width - 48, 22);
       }
     }
     p.commit();
+  }
+  drawDesktopHud(leader) {
+    const faceKey = leader.faceName || '';
+    if (this.desktopFaceKey !== faceKey) {
+      this.desktopFaceKey = faceKey; this.desktopFace = null;
+      if (faceKey) loadCanvas('Graphics/Faces', faceKey).then(image => {
+        if (this.desktopFaceKey !== faceKey) return;
+        this.desktopFace = image; this.lastHud = '';
+      });
+    }
+    const menuVar = G.scripts?.menuVar;
+    const sen = menuVar && (!menuVar.switchId || G.state.sw(menuVar.switchId)) ? G.state.v(menuVar.variable) : null;
+    const effects = battlerEffects(leader), stamina = G.combat?.stamina;
+    const key = JSON.stringify(['pc', leader.name, leader.level, leader.hp, leader.mhp, leader.mp, leader.mmp,
+      G.state.party.gold, stamina?.toFixed?.(2), sen, menuVar, $data.system.currency_unit, effectsKey(effects), iconAssetRevision(),
+      faceKey, leader.faceIndex, !!this.desktopFace]);
+    if (key === this.lastHud) return;
+    this.lastHud = key;
+    const result = paintDesktopHud({ hud: this.hud, status: this.statusPanel, leader, stamina, sen, menuVar, faceCanvas: this.desktopFace,
+      currency: { amount: G.state.party.gold, unit: $data.system.currency_unit }, effects,
+      helpers: { windowBg, drawIcon, textColor, fitLabel, stripEscapes, tr, FONT } });
+    this.hudPaintHeight = result.height;
+    this.desktopStatusVisible = result.statusVisible;
+    this.statusPanel.mesh.visible = result.statusVisible;
   }
 
   // ---------------------------------------------------------------- pointer
@@ -1745,6 +1837,7 @@ export class UI {
   }
   closeMenu() {
     this.navigation.close();
+    this.menuOverview.mesh.visible = false;
     if (this.sceneOpen === 'map') this.sceneOpen = null;
     this.menuOpen = false;
     this.list.close();
@@ -1752,56 +1845,91 @@ export class UI {
     this.consumedConfirm = true;
   }
   showMainMenu() {
+    this.menuSection = 'main';
     const items = [
-      { text: tr('계속하기'), id: 'resume' },
-      { text: tr('지도'), id: 'map', right: G.vr ? '' : 'N' },
       { text: tr('아이템'), id: 'items' },
-      { text: tr('캐릭터'), id: 'character' },
-      { text: tr('저장 / 불러오기'), id: 'saves' },
-      { text: tr('협력'), id: 'coop' },
-      { text: tr('설정'), id: 'settings' },
-      { text: tr('타이틀로'), id: 'title' },
+      { text: tr('스킬'), id: 'skills' },
+      { text: tr('장비'), id: 'equip' },
+      { text: tr('상태 보기'), id: 'status' },
+      { text: tr('서약'), id: 'oath', enabled: !!G.state.party.spirits?.length },
+      { text: tr('저장'), id: 'save', enabled: !G.state.system.saveDisabled && !G.map?.interpreter?.running() && !G.coop?.phantom },
+      { text: tr('게임 종료'), id: 'title' },
     ];
     this.grid.close();
     // the SEN at its foot, as the original's menu shows it (its own script: the variable and its title)
-    const mv = G.scripts?.menuVar;
-    const footer = mv && (!mv.switchId || G.state.sw(mv.switchId))
-      ? [[`${mv.label}  `, textColor(16)], [`${G.state.v(mv.variable)}${mv.suffix}`, '#f0f0f0']] : '';
     this.list.open(tr('메뉴'), items, {
       onSelect: (i, it) => this.onMenu(it.id),
       onCancel: () => this.closeMenu(),
       index: this.menuIndex || 0,
-      footer,
+      layout: { classic: true, rows: 7, width: 320, height: 960, widthM: 0.32 },
     });
-    this.list.panel.mesh.position.set(0, 0, 0);
+    this.list.panel.mesh.position.set(-0.484, 0, 0);
+    this.menuOverview.mesh.position.set(0.164, 0, 0);
+    this.menuOverview.mesh.visible = true;
+    this.lastMainOverview = '';
+    this.paintMainOverview();
+  }
+  paintMainOverview() {
+    const leader = G.state?.party.leader();
+    if (!leader) return;
+    const mv = G.scripts?.menuVar;
+    const sen = mv && (!mv.switchId || G.state.sw(mv.switchId)) ? G.state.v(mv.variable) : null;
+    const faceKey = leader.faceName || '';
+    if (faceKey && this.menuFaceKey !== faceKey) {
+      this.menuFaceKey = faceKey; this.menuFace = null;
+      loadCanvas('Graphics/Faces', faceKey).then(image => {
+        if (this.menuFaceKey !== faceKey) return;
+        this.menuFace = image;
+        if (this.menuOverview.mesh.visible) this.paintMainOverview();
+      });
+    }
+    const key = JSON.stringify([leader.name, leader.level, leader.hp, leader.mhp, leader.mp, leader.mmp, leader.classId,
+      leader.equips, effectsKey(battlerEffects(leader)), G.state.party.gold, sen, mv, faceKey, leader.faceIndex, !!this.menuFace,
+      this.list.index, this.list.top, iconAssetRevision(), G.vr]);
+    if (key === this.lastMainOverview) return;
+    this.lastMainOverview = key;
+    paintClassicMenu({ overview: this.menuOverview, commandPanel: this.list.panel, leader,
+      gold: G.state.party.gold, sen, menuVar: mv, currencyUnit: $data.system.currency_unit,
+      effects: battlerEffects(leader), faceCanvas: faceKey ? this.menuFace : null,
+      helpers: { windowBg, drawIcon, drawGameCursor, textColor, fitLabel, stripEscapes, tr, FONT, vr: G.vr,
+        className: actor => $data.classes?.[actor.classId]?.name || '', levelLabel: $data.system.terms?.basic?.[1] || 'Lv' } });
+  }
+  updateClassicTools() {
+    const ray = this.pointerRay(), hit = ray && this.menuOverview.hit(ray);
+    let over = false;
+    if (hit) {
+      const x = hit.x * 960, y = (1 - hit.y) * 960;
+      over = x >= 640 && x <= 920 && y >= 860 && y <= 920;
+    }
+    if (over) this.pointerTarget = true;
+    if (G.input.keyPressed?.('F1') || over && G.input.confirm()) {
+      G.audio?.playSystemSe(1); this.showToolsMenu(); return true;
+    }
+    return false;
   }
   reopenMain(id) {
-    if (['status', 'skills', 'equip', 'oath', 'adjust'].includes(id)) { this.showCharacterMenu(id); return; }
     if (['turn', 'speed', 'diff', 'options', 'spectator'].includes(id)) { this.showSettingsMenu(id); return; }
-    if (['save', 'load'].includes(id)) { this.showSaveLoadMenu(id); return; }
-    const order = ['resume', 'map', 'items', 'character', 'saves', 'coop', 'settings', 'title'];
-    this.menuIndex = Math.max(0, order.indexOf(id)); this.showMainMenu();
+    if (['map', 'load', 'coop', 'adjust', 'settings'].includes(id)) { this.showToolsMenu(id); return; }
+    const order = ['items', 'skills', 'equip', 'status', 'oath', 'save', 'title', 'tools'];
+    this.menuIndex = id === 'tools' ? this.mainReturnIndex || 0 : Math.max(0, order.indexOf(id)); this.showMainMenu();
   }
   menuGroup(title, items, selected, parent) {
-    this.grid.close(); this.menuIndex = ['resume', 'map', 'items', 'character', 'saves', 'coop', 'settings', 'title'].indexOf(parent);
+    this.menuSection = parent; this.menuOverview.mesh.visible = false;
+    this.list.panel.mesh.position.set(0, 0, 0);
+    this.grid.close(); this.menuIndex = parent === 'tools' ? this.mainReturnIndex || 0 : ['items', 'skills', 'equip', 'status', 'oath', 'save', 'title'].indexOf(parent);
     this.list.open(tr('메뉴') + ' › ' + title, [...items, { text: '‹ ' + tr('뒤로'), id: 'back-main' }], {
       index: Math.max(0, items.findIndex(item => item.id === selected)),
       onSelect: (_i, item) => item.id === 'back-main' ? this.reopenMain(parent) : this.onMenu(item.id),
       onCancel: () => this.reopenMain(parent),
     });
   }
-  showCharacterMenu(selected = 'status') {
-    this.menuGroup(tr('캐릭터'), [
-      { text: tr('상태 보기'), id: 'status' }, { text: tr('스킬'), id: 'skills' },
-      { text: tr('장비'), id: 'equip' }, { text: tr('서약'), id: 'oath', enabled: G.state.party.spirits.length > 0 },
-      { text: tr('무기·방패 모양 조정'), id: 'adjust' },
-    ], selected, 'character');
-  }
-  showSaveLoadMenu(selected = 'save') {
-    this.menuGroup(tr('저장 / 불러오기'), [
-      { text: tr('VR 세이브'), id: 'save', enabled: !G.state.system.saveDisabled && !G.map?.interpreter?.running() && !G.coop?.phantom },
-      { text: tr('VR 로드'), id: 'load' },
-    ], selected, 'saves');
+  showToolsMenu(selected = 'map') {
+    if (this.list.classic) this.mainReturnIndex = this.list.index;
+    this.menuGroup(tr('모드 도구'), [
+      { text: tr('지도'), id: 'map', right: G.vr ? '' : 'N' },
+      { text: tr('불러오기'), id: 'load' }, { text: tr('협력'), id: 'coop' },
+      { text: tr('설정'), id: 'settings' }, { text: tr('무기·방패 모양 조정'), id: 'adjust' },
+    ], selected, 'tools');
   }
   showSettingsMenu(selected = 'options') {
     const s = G.settings;
@@ -1814,11 +1942,13 @@ export class UI {
     ], selected, 'settings');
   }
   onMenu(id) {
+    this.menuOverview.mesh.visible = false;
+    this.menuSection = id;
+    this.list.panel.mesh.position.set(0, 0, 0);
     const s = G.settings;
     switch (id) {
       case 'resume': this.closeMenu(); break;
-      case 'character': this.showCharacterMenu(); break;
-      case 'saves': this.showSaveLoadMenu(); break;
+      case 'tools': this.showToolsMenu(); break;
       case 'settings': this.showSettingsMenu(); break;
       case 'items': this.showItems(); break;
       case 'skills': this.showSkills(); break;
@@ -1827,8 +1957,8 @@ export class UI {
       case 'status': this.showStatus(); break;
       case 'map': this.showMap(); break;
       case 'adjust': this.adjTarget = 'weapon'; this.showAdjust(); break;
-      case 'save': G.openSaveMenu?.(); break;
-      case 'load': G.openLoadMenu?.(); break;
+      case 'save': this.list.close(); G.openSaveMenu?.(); break;
+      case 'load': this.list.close(); G.openLoadMenu?.(); break;
       case 'coop': this.showCoopMenu(); break;
       case 'turn':
         if (s.snapTurn && s.snapAngle === 30) s.snapAngle = 45;
@@ -2605,7 +2735,9 @@ export class UI {
       if (this.navigation.open) this.updateMap();
       else if (this.keyboard.visible) this.keyboard.update(this.pointerRay());
       else if (this.grid.visible) this.grid.update(this.pointerRay());
-      else if (this.list.visible) this.list.update(this.pointerRay());
+      else if (this.list.visible) {
+        if (!this.list.classic || !this.updateClassicTools()) this.list.update(this.pointerRay());
+      }
       this.consumedConfirm = true;
     } else if ((G.input.menu() || G.input.mapPressed?.()) && G.map && (!G.map.interpreter.running() || G.map.interpreter.waitMode === 'battle') && !G.combat?.playerDead && !this.messageBusy()) {
       // (an event holding the map for its fight - 그랑・기뇰's play: the menu opens as in any fight, as walking goes on)
@@ -2620,10 +2752,23 @@ export class UI {
       if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
     }
     this.drawHud();
+    this.backdrop.visible = !G.vr && !!(this.sceneBusy() || this.msg || this.remote?.shown || this.prompt?.shown);
+    if (this.backdrop.visible) {
+      const height = 1.1 * Math.tan(THREE.MathUtils.degToRad(this.camera.getEffectiveFOV()) / 2);
+      this.backdrop.scale.set(height * this.camera.aspect, height, 1); this.backdrop.position.set(0, 0, -1.1);
+      this.backdrop.material.opacity = this.sceneBusy() ? 0.16 : 0.08;
+    }
+    this.menuOverview.mesh.visible = !!this.menuOpen && this.menuSection === 'main' && this.list.visible && this.list.classic;
+    if (this.menuOverview.mesh.visible) this.paintMainOverview();
     this.updateHudFollow();
     this.navigation.update(dt, this.hudPresent && !G.combat?.playerDead && !this.msg && !this.banner?.blocking,
       !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
     if (!G.vr) this.placeRoot();
+    const rewardPaused = this.sceneBusy() || this.messageBusy() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
+    if (!this.hudPresent && this.rewardsHadPlayer) this.rewards.clear();
+    this.rewardsHadPlayer = this.hudPresent;
+    this.rewards.update(dt, { paused: rewardPaused, visible: this.hudPresent && !this.banner,
+      vr: G.vr, viewport: desktopViewport(G.input, G.three?.renderer) });
     this.updatePointerLine();
   }
   updateHudFollow() {

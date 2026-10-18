@@ -10,7 +10,7 @@ function slices(ctx, sx, sy, size, border, x, y, w, h, centre = true) {
     if (widths[col] > 0 && heights[row] > 0) ctx.drawImage(skin, sx + source[col], sy + source[row], lengths[col], lengths[row], targetX[col], targetY[row], widths[col], heights[row]);
   }
 }
-export function drawGameWindow(ctx, x, y, w, h, alpha = 0.9) {
+export function drawGameWindow(ctx, x, y, w, h, alpha = 0.9, frameAlpha = 1) {
   if (!skin) return false;
   ctx.save(); ctx.imageSmoothingEnabled = false; ctx.globalAlpha = alpha;
   ctx.drawImage(skin, 1, 1, 62, 62, x + 2, y + 2, w - 4, h - 4);
@@ -18,7 +18,7 @@ export function drawGameWindow(ctx, x, y, w, h, alpha = 0.9) {
     const cw = Math.min(64, w - 2 - px), ch = Math.min(64, h - 2 - py);
     ctx.drawImage(skin, 0, 64, cw, ch, x + px, y + py, cw, ch);
   }
-  ctx.globalAlpha = 1; slices(ctx, 64, 0, 64, 16, x, y, w, h, false); ctx.restore(); return true;
+  ctx.globalAlpha = frameAlpha; slices(ctx, 64, 0, 64, 16, x, y, w, h, false); ctx.restore(); return true;
 }
 export function drawGameCursor(ctx, x, y, w, h) {
   if (!skin) return false;

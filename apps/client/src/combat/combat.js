@@ -21,7 +21,7 @@ import { QuickRing, quickSlots, entryData } from '../ui/quickslots.js';
 import { FloorMarker, MARK } from './telegraph.js';
 import { buildIconModel, getAdjust, setAdjust, resetAdjust, defaultAdjust } from './weapons.js';
 import { WeaponFx, ELEMENT_FX } from './weaponfx.js';
-import { desktopRest, desktopSwing } from './desktop-weapon.js';
+import { desktopRest, desktopSwing, desktopModel, desktopShield, desktopShieldGuardPoint, desktopEquipmentHidden } from './desktop-weapon.js';
 import { battlerEffects, effectsKey, fitLabel } from '../ui/battler-status.js';
 import { openFights } from '../world/maphints.js';
 import { personalPage } from '../network/coopworld.js';
@@ -1234,7 +1234,7 @@ export class CombatSystem {
         }
       }
       if (gold && party.partyAbility(4)) gold *= 2;
-      if (gold) { party.gainGold(gold); G.ui.toast(`+${gold.toLocaleString()} ${$data.system.currency_unit}`, 0, '#e8d8a8'); }
+      if (gold) { party.gainGold(gold); G.ui.notifyGold?.(gold); }
       if (exp) for (const a of party.members()) a.changeExp(a.currentExp + Math.floor(exp * a.exr));
       G.state.system.winCount++;
       if (battle.event) this.defeated.set(battle.event, G.time);
@@ -1428,18 +1428,14 @@ export class CombatSystem {
       obj.position.fromArray(g.p); obj.quaternion.fromArray(g.q);
       return true;
     };
-    const wrapDesktop = (m, roll) => {
-      // on the flat screen the camera looks down at the hands: turn the flat side up so it is visible
-      if (vr || !m) return m;
-      const g = new THREE.Group(); g.add(m); g.rotation.z = roll; g.scale.setScalar(0.6); return g;
-    };
+    const wrapDesktop = (m, roll, shield = false) => vr ? m : desktopModel(m, { roll, shield });
     const wModel = model(ws);
     this.weapon = new THREE.Group();
     if (ws) {
-      const wInner = wrapDesktop(wModel, -Math.PI / 2) || makeWeaponMesh(wtype);
+      const wInner = wrapDesktop(wModel || makeWeaponMesh(wtype), -Math.PI / 2);
       this.weapon.add(wInner);
       this.weapon.userData.length = (wModel || wInner).userData.length;
-      this.weapon.userData.visualLength = this.weapon.userData.length * (wModel && !vr ? 0.6 : 1);
+      this.weapon.userData.visualLength = this.weapon.userData.length * (wInner.userData.desktopScale || 1);
       this.weapon.userData.ranged = !!this.shotKind;
     } else {
       // bare hands: nothing to draw (VR shows the hand), the fist is what hits
@@ -1455,7 +1451,7 @@ export class CombatSystem {
       if (this.shotKind === 'gun') this.addLaser(this.weapon);
     } else {
       G.three.camera.add(this.weapon);
-      desktopRest(this.weapon, 'right', !!this.shotKind);
+      desktopRest(this.weapon, 'right', !!this.shotKind, G.three.camera);
     }
     this.shield = null;
     this.offGun = null;
@@ -1465,18 +1461,19 @@ export class CombatSystem {
       if (os.gun) {
         // pistol in the left hand: held like a weapon (cannot guard with it)
         const gunModel = sModel || makeWeaponMesh(WTYPE.GUN);
-        this.shield.add(wrapDesktop(sModel, Math.PI / 2) || gunModel);
+        const gunVisual = wrapDesktop(gunModel, Math.PI / 2);
+        this.shield.add(gunVisual);
         this.shield.userData.length = gunModel.userData.length || 0.3;
-        this.shield.userData.visualLength = this.shield.userData.length * (sModel && !vr ? 0.6 : 1);
+        this.shield.userData.visualLength = this.shield.userData.length * (gunVisual.userData.desktopScale || 1);
         this.offGun = this.shield;
         if (G.vr && ctrl.left) {
           ctrl.left.grip.add(this.shield); this.shield.position.set(0, 0, 0.03);
           if (!handPose(this.shield, os)) this.shield.userData.alignRay = 'left';
           this.addLaser(this.shield);
         }
-        else { G.three.camera.add(this.shield); desktopRest(this.shield, 'left', true); }
+        else { G.three.camera.add(this.shield); desktopRest(this.shield, 'left', true, G.three.camera); }
       } else {
-        this.shield.add(sModel || makeShieldMesh(os.large));
+        this.shield.add(wrapDesktop(sModel || makeShieldMesh(os.large), 0, true));
         if (G.vr && ctrl.left) {
           // the holder's +Z (shield front) turns to -X = the back of the left hand
           ctrl.left.grip.add(this.shield);
@@ -1485,8 +1482,7 @@ export class CombatSystem {
           handPose(this.shield, os);
         } else {
           G.three.camera.add(this.shield);
-          this.shield.position.set(-0.32, -0.32, -0.5);
-          this.shield.rotation.set(0, Math.PI + 0.3, 0);
+          desktopShield(this.shield, 0, G.three.camera);
         }
       }
     }
@@ -1498,17 +1494,23 @@ export class CombatSystem {
   // (PC: a shield only comes into view while the guard is up - updateDeskShield; held low all the time it hid the
   // status window and part of the view)
   showArms() {
-    if (this.weapon) this.weapon.visible = !this.disarmed && !this.ready && !(this.held && this.held.how !== 'rub');
+    const hidden = !G.vr && desktopEquipmentHidden(G.ui, G.map?.transferring);
+    if (this.weapon) this.weapon.visible = !hidden && !this.disarmed && !this.ready && !(this.held && this.held.how !== 'rub');
     this.shieldOut = !!this.shield && !this.disarmed && !(this.held && this.held.how === 'rub');
-    if (this.shield) this.shield.visible = this.shieldOut && (G.vr || !this.hasShield || (this.deskShieldT || 0) > 0.01);
+    if (this.shield) this.shield.visible = !hidden && this.shieldOut && (G.vr || !this.hasShield || (this.deskShieldT || 0) > 0.01);
+  }
+  updateDesktopEquipment() {
+    if (G.vr) return;
+    if (!this.swing) desktopRest(this.weapon, 'right', !!this.shotKind, G.three.camera);
+    if (this.offGun) desktopRest(this.offGun, 'left', true, G.three.camera);
+    this.showArms();
   }
   // PC: the shield comes up from below into its place while the guard is up, and goes down out of view again
   updateDeskShield(dt) {
     if (G.vr || !this.shield || !this.hasShield) return;
     const t = this.deskShieldT = THREE.MathUtils.clamp((this.deskShieldT || 0) + (this.guardUp && this.shieldOut ? dt : -dt) / 0.12, 0, 1);
-    const k = t * t * (3 - 2 * t);
-    this.shield.position.set(-0.32, -0.32 - (1 - k) * 0.4, -0.5);
-    this.shield.visible = this.shieldOut && t > 0.01;
+    desktopShield(this.shield, t, G.three.camera);
+    this.shield.visible = this.shieldOut && t > 0.01 && !desktopEquipmentHidden(G.ui, G.map?.transferring);
   }
   // 무장해제 (VR: right stick click, PC: H): the weapon and shield go away with the sound of gear coming off,
   // the bare hands show, and nothing the hands do hits - no swing, Break, shot or weapon art, so no one is cut
@@ -1518,7 +1520,7 @@ export class CombatSystem {
     this.disarmed = on;
     // what the hands were doing with them ends (a weapon art is paid only when it lands: nothing is lost)
     this.hasPrev = false; this.charge = null; this.deskCharge = null; this.breakArm = null;
-    if (this.swing) { this.swing = null; if (!G.vr) desktopRest(this.weapon, 'right', !!this.shotKind); }
+    if (this.swing) { this.swing = null; if (!G.vr) desktopRest(this.weapon, 'right', !!this.shotKind, G.three.camera); }
     if (on) this.skillArm = null;
     if (this.breakGlow) this.breakGlow.visible = false;
     this.showArms();
@@ -2215,7 +2217,7 @@ export class CombatSystem {
     if (!this.weapon || !this.weapon.visible || !this.weapon.parent) return null;
     const base = new THREE.Vector3(), tip = new THREE.Vector3();
     if (!this.weaponSegment(base, tip)) return null;
-    if (!G.vr && !this.weapon.userData.unarmed) tip.lerp(base, 0.4);   // (the flat-screen model is drawn at 0.6)
+    if (!G.vr && !this.weapon.userData.unarmed) tip.set(0, 0, -(this.weapon.userData.visualLength || this.weapon.userData.length)).applyMatrix4(this.weapon.matrixWorld);
     return { base, tip };
   }
   // A state an event gives the party during a fight (Change State, 313 - a boss's rules: 그랑・기뇰's 악랄영역 that
@@ -3822,6 +3824,7 @@ export class CombatSystem {
     this.rangedCooldown = Math.max(0, this.rangedCooldown - dt);
     this.updateGuard();
     this.updateDeskShield(dt);
+    this.updateDesktopEquipment();
     // drinking takes a moment (quick slot potions)
     if (this.healing) {
       this.healing.t -= dt;
@@ -6162,7 +6165,8 @@ export class CombatSystem {
         // a shot is stopped only where it actually meets the shield (one that goes through a guard passes it)
         let shielded = false;
         if (this.shield && this.hasShield && (G.vr || this.shield.visible) && (!p.pierce || (this.guardUp && !this.disarmed && G.time - (this.guardRaisedAt ?? -99) <= PERFECT_GUARD))) {
-          this.shield.getWorldPosition(tmpA);
+          if (G.vr) this.shield.getWorldPosition(tmpA);
+          else desktopShieldGuardPoint(tmpA, G.three.camera, this.deskShieldT || 0);
           if (pos.distanceTo(tmpA) < 0.32) shielded = true;
         }
         // (the shots of a fan hit no more times than their skill does)
@@ -6547,7 +6551,7 @@ export class CombatSystem {
         const s = this.swing;
         s.t += dt;
         const k = Math.min(1, s.t / 0.32);
-        desktopSwing(this.weapon, k);
+        desktopSwing(this.weapon, k, G.three.camera);
         if (k > 0.25 && k < 0.7) {
           const head = G.player.headWorld(new THREE.Vector3());
           const f = G.player.forwardVec();
@@ -6582,7 +6586,7 @@ export class CombatSystem {
             return d < reach && to.normalize().dot(f) > 0.5;
           }, { power: this.stamina > 0.1 ? 1 : 0.5, charge: s.charge || 0 });
         }
-        if (k >= 1) { this.swing = null; desktopRest(this.weapon, 'right', ranged); }
+        if (k >= 1) { this.swing = null; desktopRest(this.weapon, 'right', ranged, G.three.camera); }
       }
     }
   }

@@ -36,18 +36,19 @@ function map(w = 40, h = 30, mapId = 901) {
     walkable: (x, y) => grid.anyPassable(x, y), interpreter: { running: () => false } };
 }
 function environment(t) {
-  const saved = { ...G }, system = $data.system, document = Object.getOwnPropertyDescriptor(globalThis, 'document');
-  t.after(() => { Object.assign(G, saved); $data.system = system;
+  const saved = { ...G }, system = $data.system, classes = $data.classes, document = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  t.after(() => { for (const key of Object.keys(G)) if (!(key in saved)) delete G[key]; Object.assign(G, saved); $data.system = system; $data.classes = classes;
     if (document) Object.defineProperty(globalThis, 'document', document); else delete globalThis.document; });
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: canvas } });
-  const leader = { hp: 100, mhp: 100, mp: 20, mmp: 20, states: [], buffs: [] };
+  const leader = { name: 'Grimm', level: 1, classId: 1, hp: 100, mhp: 100, mp: 20, mmp: 20, states: [], buffs: [], equips: [], partners: [], param: () => 10 };
   G.settings = { ...G.settings }; G.map = map(); G.vr = false; G.combat = null; G.theater = null; G.audio = null;
   G.scripts = {}; G.state = { system: {}, party: { leader: () => leader, gold: 0, spirits: [] } };
   G.player = { forward2D: () => ({ x: 1, z: 0 }) };
   G.view = { mapId: 901, analysis: { exits: [{ x: 5, y: 3, mapId: 902, label: 'Translated Garden' }], pits: new Set([6]), doors: new Set([7]) } };
   G.input = Object.assign(Object.create(Input.prototype), { keys: new Set(), keysPrev: new Set(), controllers: {},
     axes: { left: [0, 0], right: [0, 0] }, btn: { left: [], right: [] }, btnPrev: { left: [], right: [] } });
-  $data.system = { currency_unit: 'souls' };
+  $data.system = { currency_unit: 'souls', terms: { params: ['HP', 'MP', 'Attack', 'Defense', 'Magic', 'Resistance', 'Agility', 'Luck'] } };
+  $data.classes = [null, { name: 'Hunter' }];
   const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.1, 100); camera.position.y = 1.6;
   const ui = new UI(new THREE.Scene(), camera, new THREE.Group()); ui.attachHud(null);
   G.ui = ui;
@@ -102,9 +103,11 @@ test('real map canvases update position and facing, cache terrain and discard st
   assert.equal(nav.base.record.fills[0].color, '#292b33'); assert.equal(nav.base.record.fills[1].color, '#777668');
   assert.equal(nav.base.record.fills[6].color, '#080b12'); assert.equal(nav.base.record.fills[7].color, '#b59352');
   assert.equal(nav.mini.canvas.record.rotations.at(-1), Math.PI / 2);
-  const before = nav.mini.canvas.record.translations.at(-1), rasters = nav.base.record.fills.length, clears = nav.mini.canvas.record.clears;
+  const before = nav.mini.canvas.record.translations.at(-1), imageX = nav.mini.canvas.record.images.find(([source]) => source === nav.base)[1];
+  const rasters = nav.base.record.fills.length, clears = nav.mini.canvas.record.clears;
   G.map.playerChar.fx += 1; ui.update(0.01); assert.equal(nav.mini.canvas.record.clears, clears);
-  ui.update(0.1); assert.ok(nav.mini.canvas.record.translations.at(-1).x > before.x);
+  ui.update(0.1); assert.equal(nav.mini.canvas.record.translations.at(-1).x, before.x, 'the circular PC map keeps the player centred');
+  assert.ok(nav.mini.canvas.record.images.find(([source]) => source === nav.base)[1] < imageX, 'terrain scrolls beneath the player as their actual map position changes');
   assert.equal(nav.base.record.fills.length, rasters, 'movement must not rebuild the terrain raster');
   assert.deepEqual(Array.from(G.map.grid.data), data, 'drawing must never change game tiles');
   G.view.analysis = { ...G.view.analysis, exits: [{ x: 5, y: 3, mapId: 903, label: 'New Exit' }] };
@@ -117,7 +120,7 @@ test('real map canvases update position and facing, cache terrain and discard st
   nav.hide(); assert.equal(nav.full.mesh.visible, false);
 });
 
-test('N toggles the real map through gameplay frames and Menu → Map returns to its menu row', t => {
+test('N toggles the real map through gameplay frames and Mod tools → Map returns to its tools row', t => {
   const ui = environment(t), input = G.input;
   input.keys.add('KeyN'); ui.update(0.1);
   assert.equal(ui.navigation.full.mesh.visible, true); assert.equal(ui.navigation.mini.mesh.visible, false);
@@ -125,11 +128,16 @@ test('N toggles the real map through gameplay frames and Menu → Map returns to
   input.keysPrev = new Set(input.keys); ui.update(0.1); assert.equal(ui.navigation.open, true, 'holding N cannot repeatedly toggle');
   input.keysPrev.clear(); ui.update(0.1); assert.equal(ui.navigation.open, false); assert.equal(ui.menuOpen, false);
   input.keys.clear(); input.keys.add('Tab'); ui.update(0.1);
-  const row = ui.list.items.findIndex(item => item.id === 'map'); assert.ok(row > 0);
+  assert.equal(ui.list.classic, true);
+  assert.equal(ui.list.items.some(item => item.id === 'map'), false, 'the original command menu has no extra map command');
+  input.keys.clear(); input.keys.add('F1'); ui.update(0.1);
+  assert.equal(ui.list.classic, false); assert.ok(ui.list.title.includes('Mod tools'));
+  const row = ui.list.items.findIndex(item => item.id === 'map'); assert.ok(row >= 0);
   ui.list.onSelect(row, ui.list.items[row]); input.keys.clear(); ui.update(0.1);
   assert.equal(ui.navigation.full.mesh.visible, true); assert.equal(ui.list.visible, false);
   input.keys.add('Escape'); ui.update(0.1);
   assert.equal(ui.navigation.full.mesh.visible, false); assert.equal(ui.list.visible, true); assert.equal(ui.list.items[ui.list.index].id, 'map');
+  assert.ok(ui.list.title.includes('Mod tools'));
   ui.closeMenu(); G.map.interpreter.running = () => true; input.keys.clear(); input.keys.add('KeyN'); ui.update(0.1);
   assert.equal(ui.navigation.open, false, 'story events retain their input lock');
 });
@@ -140,8 +148,11 @@ test('VR wrist map keeps its HUD anchor, opens from menu and closes with the con
   assert.equal(ui.navigation.mini.mesh.parent, ui.hud.mesh); assert.ok(ui.navigation.mini.mesh.position.y > 0);
   assert.equal(ui.navigation.mini.mesh.material.depthTest, false);
   G.input.btn.left[5] = true; ui.update(0.1); assert.equal(ui.menuOpen, true);
-  ui.onMenu('map'); G.input.btn.left[5] = false; ui.update(0.1); assert.equal(ui.navigation.full.mesh.visible, true);
+  ui.showToolsMenu(); G.input.btn.left[5] = false; G.input.btn.right[4] = true;
+  ui.update(0.1); assert.equal(ui.navigation.full.mesh.visible, true);
+  G.input.btn.right[4] = false;
   G.input.btn.right[5] = true; ui.update(0.1); assert.equal(ui.navigation.open, false); assert.equal(ui.list.visible, true);
+  assert.ok(ui.list.title.includes('Mod tools')); assert.equal(ui.list.items[ui.list.index].id, 'map');
   ui.attachHud(null); assert.equal(ui.navigation.mini.mesh.parent, ui.camera);
   ui.closeMenu(); G.combat = { playerDead: true }; ui.update(0.1); assert.equal(ui.navigation.mini.mesh.visible, false);
 });
@@ -185,24 +196,61 @@ test('navigation reuses the actual game tile drawer and bounds its cached artwor
   ui.update(0.1); assert.equal(ui.navigation.art, null, 'missing images retain the readable grid fallback');
 });
 
-test('main menu fits one screen and grouped menus keep Back and disabled saves working', t => {
+test('classic menu keeps its seven direct commands, disabled actions and separate Mod tools parent paths', t => {
   const ui = environment(t); ui.openMenu();
-  assert.ok(ui.list.items.length <= ui.list.rows);
-  for (const id of ['map', 'items', 'character', 'saves', 'coop', 'settings']) assert.ok(ui.list.items.some(item => item.id === id));
-  ui.onMenu('character'); assert.ok(ui.list.title.includes('Character'));
-  for (const id of ['status', 'skills', 'equip', 'oath', 'adjust']) assert.ok(ui.list.items.some(item => item.id === id));
+  const core = ['items', 'skills', 'equip', 'status', 'oath', 'save', 'title'];
+  assert.deepEqual(ui.list.items.map(item => item.id), core);
+  assert.equal(ui.list.rows, 7); assert.equal(ui.list.top, 0); assert.equal(ui.list.classic, true);
   assert.equal(ui.list.items.find(item => item.id === 'oath').enabled, false);
-  ui.list.onCancel(); assert.equal(ui.list.items[ui.list.index].id, 'character');
-  G.state.system.saveDisabled = true; ui.onMenu('saves'); assert.equal(ui.list.items.find(item => item.id === 'save').enabled, false);
-  ui.reopenMain('load'); assert.equal(ui.list.items[ui.list.index].id, 'load');
-  ui.list.onCancel(); ui.onMenu('settings');
+  const actions = [];
+  for (const [method, id] of [['showItems', 'items'], ['showSkills', 'skills'], ['showEquipSlots', 'equip'], ['showStatus', 'status'], ['showOath', 'oath']])
+    t.mock.method(ui, method, () => actions.push(id));
+  G.openSaveMenu = () => actions.push('save');
+  G.input.keys.add('Enter'); ui.list.index = 4; ui.list.update(null);
+  assert.equal(actions.length, 0, 'disabled Oath cannot be activated from keyboard');
+  G.input.keys.clear(); G.state.party.spirits.push(1);
+  for (const id of core.slice(0, -1)) {
+    ui.showMainMenu();
+    const row = ui.list.items.findIndex(item => item.id === id);
+    ui.list.onSelect(row, ui.list.items[row]);
+    assert.equal(actions.at(-1), id, `${id} opens its real destination directly instead of a grouped submenu`);
+    ui.reopenMain(id); assert.equal(ui.list.items[ui.list.index].id, id);
+    assert.deepEqual(ui.list.items.map(item => item.id), core);
+  }
+  G.state.system.saveDisabled = true; ui.showMainMenu();
+  assert.equal(ui.list.items.find(item => item.id === 'save').enabled, false);
+  const before = actions.length;
+  G.input.keys.add('Enter'); ui.list.index = 5; ui.list.update(null);
+  assert.equal(actions.length, before, 'disabled Save must not call the save screen');
+  G.input.keys.clear();
+  ui.reopenMain('status'); ui.showToolsMenu();
+  assert.deepEqual(ui.list.items.map(item => item.id), ['map', 'load', 'coop', 'settings', 'adjust', 'back-main']);
+  ui.list.onCancel();
+  assert.deepEqual(ui.list.items.map(item => item.id), core);
+  assert.equal(ui.list.items[ui.list.index].id, 'status', 'leaving Mod tools preserves the previous core selection');
+  for (const id of ['map', 'load', 'coop', 'adjust', 'settings']) {
+    ui.reopenMain(id); assert.ok(ui.list.title.includes('Mod tools'));
+    assert.equal(ui.list.items[ui.list.index].id, id);
+  }
+  ui.onMenu('settings');
   for (const id of ['options', 'turn', 'speed', 'diff', 'spectator']) assert.ok(ui.list.items.some(item => item.id === id));
-  ui.onMenu('turn'); assert.equal(ui.list.items[ui.list.index].id, 'turn');
-  ui.list.onCancel(); assert.equal(ui.list.items[ui.list.index].id, 'settings');
   let saved = 0; G.saveSettings = () => saved++;
+  ui.onMenu('turn'); assert.equal(ui.list.items[ui.list.index].id, 'turn');
+  ui.list.onCancel(); assert.ok(ui.list.title.includes('Mod tools')); assert.equal(ui.list.items[ui.list.index].id, 'settings');
+  saved = 0;
   ui.showOptionsMenu(); const toggle = ui.list.items.findIndex(item => item.id === 'minimap');
   ui.list.onSelect(toggle, ui.list.items[toggle]); assert.equal(G.settings.minimap, false); assert.equal(saved, 1);
   ui.onMenu('title'); assert.equal(ui.list.index, 0, 'returning to title starts on Cancel');
+});
+
+test('asynchronous save opening cannot re-show the overview or dispatch a second request from stale commands', t => {
+  const ui = environment(t); let requests = 0;
+  G.openSaveMenu = () => { requests++; return new Promise(() => {}); };
+  ui.openMenu(); ui.onMenu('save');
+  G.input.keys.add('Enter'); ui.update(0.1); ui.update(0.1);
+  assert.equal(requests, 1); assert.equal(ui.list.visible, false); assert.equal(ui.menuOverview.mesh.visible, false);
+  ui.reopenMain('save'); assert.equal(ui.list.items[ui.list.index].id, 'save');
+  assert.equal(ui.menuOverview.mesh.visible, true);
 });
 
 test('desktop pointer clicks the hovered menu row on its first frame and the visible Back button', t => {
@@ -210,15 +258,24 @@ test('desktop pointer clicks the hovered menu row on its first frame and the vis
   Object.assign(input, { pointer: { seen: true, x: 0, y: 0 }, pointerLocked: false,
     mouse: { buttons: 1, prevButtons: 0 }, dom: { getBoundingClientRect: () => ({ left: 0, top: 0, right: 1200, bottom: 800, width: 1200, height: 800 }) } });
   ui.camera.aspect = 1.5; ui.camera.updateProjectionMatrix(); ui.openMenu(); ui.placeRoot(true);
-  const pointAt = (px, py) => {
-    const panel = ui.list.panel, mesh = panel.mesh;
+  const pointAt = (px, py, panel = ui.list.panel) => {
+    const mesh = panel.mesh;
     ui.root.updateMatrixWorld(true);
     const p = mesh.localToWorld(new THREE.Vector3((px / panel.canvas.width - 0.5) * panel.widthM, (0.5 - py / panel.canvas.height) * panel.heightM, 0)).project(ui.camera);
     input.pointer.x = (p.x + 1) * 600; input.pointer.y = (1 - p.y) * 400;
   };
-  pointAt(200, 100 + 3 * 64 + 25); ui.update(0.1);
-  assert.ok(ui.list.title.includes('Character'), 'first click opens the pointed row rather than the old keyboard selection');
-  pointAt(ui.list.panel.canvas.width - 80, 48); ui.update(0.1);
-  assert.equal(ui.list.items[ui.list.index].id, 'character', 'clicking Back restores the parent selection');
-  pointAt(100, 84); ui.update(0.1); assert.equal(ui.list.items[ui.list.index].id, 'character', 'clicking a noninteractive header cannot activate the selected row');
+  const click = () => {
+    input.mouse.buttons = 0; input.endFrame();
+    input.mouse.buttons = 1; input.mousePresses = 1; ui.update(0.1); input.endFrame();
+  };
+  pointAt(200, ui.list.rowTop + 3 * ui.list.rowH + 25); click();
+  assert.equal(ui.list.title, 'Status', 'first click opens Status directly instead of the old keyboard selection or a Character group');
+  assert.equal(ui.list.classic, false); assert.equal(ui.menuOverview.mesh.visible, false);
+  pointAt(ui.list.panel.canvas.width - 80, 48); click();
+  assert.equal(ui.list.classic, true); assert.equal(ui.list.items[ui.list.index].id, 'status', 'clicking Back restores the original command and its selection');
+  pointAt(100, 12); click();
+  assert.equal(ui.list.items[ui.list.index].id, 'status', 'clicking the noninteractive top border cannot activate the selected command');
+  pointAt(780, 890, ui.menuOverview); click();
+  assert.ok(ui.list.title.includes('Mod tools'), 'the separate overview button opens Mod tools through real pointer input');
+  assert.equal(ui.list.items[ui.list.index].id, 'map');
 });

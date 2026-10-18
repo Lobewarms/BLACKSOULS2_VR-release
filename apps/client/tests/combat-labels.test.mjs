@@ -56,7 +56,7 @@ test('player HUD shows named effects without artwork, refreshes changes and list
   actor.addState(2); actor.addState(3); actor.addBuff(2, 1); actor.addDebuff(3, 1);
   const ui = new UI(new THREE.Scene(), new THREE.PerspectiveCamera(), new THREE.Group());
   ui.drawHud();
-  const text = () => ui.hud.canvas.record.texts.map(entry => entry.text);
+  const text = () => ui.statusPanel.canvas.record.texts.map(entry => entry.text);
   assert.ok(text().includes('Poison')); assert.ok(text().includes('Curse'), 'iconless effects must remain visible');
   assert.ok(text().includes('Attack ↑')); assert.ok(text().includes('Defense ↓'));
   assert.equal(ui.hud.mesh.material.depthTest, false, 'world geometry cannot hide the wrist HUD');
@@ -65,19 +65,22 @@ test('player HUD shows named effects without artwork, refreshes changes and list
   const controller = new THREE.Group(); controller.position.set(0.1, 1.2, -0.4);
   ui.attachHud(controller); ui.updateHudFollow();
   assert.equal(ui.hud.mesh.parent, ui.scene); assert.ok(ui.hud.mesh.position.y > controller.position.y);
-  assert.ok(ui.hud.canvas.record.texts.every(entry => entry.y < ui.hud.canvas.height));
-  let clears = ui.hud.canvas.record.clears;
-  ui.drawHud(); assert.equal(ui.hud.canvas.record.clears, clears, 'unchanged HUD should reuse its texture');
+  assert.ok(ui.statusPanel.canvas.record.texts.every(entry => entry.y < ui.statusPanel.canvas.height));
+  let clears = ui.statusPanel.canvas.record.clears;
+  ui.drawHud(); assert.equal(ui.statusPanel.canvas.record.clears, clears, 'unchanged status strip should reuse its texture');
   await initAssets(); await loadUiAssets();
-  ui.drawHud(); assert.equal(ui.hud.canvas.record.clears, clears + 1, 'late icon assets must invalidate the cached HUD');
+  ui.drawHud(); assert.equal(ui.statusPanel.canvas.record.clears, clears + 1, 'late icon assets must invalidate the cached status strip');
   actor.removeState(2); actor.tickBuffs(2); ui.drawHud();
   assert.ok(!text().includes('Poison') && !text().includes('Attack ↑') && !text().includes('Defense ↓'));
   assert.ok(text().includes('Curse'));
   for (let id = 4; id <= 9; id++) actor.addState(id);
-  ui.drawHud(); assert.ok(text().some(value => value.includes('more effects')));
-  const seen = new Set();
-  for (G.time = 0; G.time < 8; G.time += 4) { ui.drawHud(); text().forEach(name => seen.add(name)); }
-  assert.ok(battlerEffects(actor).every(effect => seen.has(effect.name)), 'overflow effects cycle into the HUD');
+  ui.drawHud(); assert.ok(text().some(value => value.startsWith('+3 ·')));
+  const stable = text(), effects = battlerEffects(actor);
+  for (const effect of effects.slice(0, 4)) assert.ok(stable.includes(effect.name), 'the highest-priority effects must stay visible');
+  for (const effect of effects.slice(4)) assert.ok(!stable.includes(effect.name), 'lower-priority overflow belongs in the full Status list');
+  clears = ui.statusPanel.canvas.record.clears;
+  for (G.time = 0; G.time < 12; G.time += 4) { ui.drawHud(); assert.deepEqual(text(), stable); }
+  assert.equal(ui.statusPanel.canvas.record.clears, clears, 'PC effects must remain stable instead of repainting time-based pages');
   let items;
   ui.list.open = (_title, rows) => { items = rows; };
   ui.showStatus();
@@ -194,23 +197,23 @@ test('replacing effects sharing an icon and walking expiry never leave stale pla
   const ui = new UI(new THREE.Scene(), new THREE.PerspectiveCamera(), new THREE.Group());
   actor.addState(2); ui.drawHud();
   actor.removeState(2); actor.addState(3); ui.drawHud();
-  let texts = ui.hud.canvas.record.texts.map(entry => entry.text);
+  let texts = ui.statusPanel.canvas.record.texts.map(entry => entry.text);
   assert.ok(texts.includes('Curse') && !texts.includes('Poison'), 'same-icon state replacement must redraw the name');
   assert.equal(actor.hp, 100);
   actor.walkStep(); ui.drawHud();
-  texts = ui.hud.canvas.record.texts.map(entry => entry.text);
+  texts = ui.statusPanel.canvas.record.texts.map(entry => entry.text);
   assert.ok(!texts.includes('Curse'), 'a naturally expired state must leave the HUD');
   assert.equal(actor.hp, 100);
 });
 
-test('late archived status icons actually reach both HUD canvases without changing HP', async t => {
+test('late archived status icons reach the PC status strip and enemy canvas without changing HP', async t => {
   const actor = environment(t); await initAssets(); await loadUiAssets();
   const { spawn } = await combatWorld(t), enemy = await spawn();
   actor.addState(2); enemy.b.addState(2);
   const ui = new UI(new THREE.Scene(), new THREE.PerspectiveCamera(), new THREE.Group());
   const head = new THREE.Vector3(0, 1.6, 3);
   ui.drawHud(); enemy.updateNameplate(head);
-  assert.equal(ui.hud.canvas.record.icons.length, 0); assert.equal(enemy.barCanvas.record.icons.length, 0);
+  assert.equal(ui.statusPanel.canvas.record.icons.length, 0); assert.equal(enemy.barCanvas.record.icons.length, 0);
   const image = Object.getOwnPropertyDescriptor(globalThis, 'Image');
   t.after(() => { if (image) Object.defineProperty(globalThis, 'Image', image); else delete globalThis.Image; });
   Object.defineProperty(globalThis, 'Image', { configurable: true, value: class {
@@ -226,7 +229,7 @@ test('late archived status icons actually reach both HUD canvases without changi
   const sheet = getIconSet(702);
   assert.equal(sheet.height, 1300);
   const drawn = record => record.icons.some(([source, x, y]) => source === sheet && x === 14 * 24 && y === 43 * 24);
-  assert.ok(drawn(ui.hud.canvas.record), 'player HUD must redraw archived status icons after assets arrive');
+  assert.ok(drawn(ui.statusPanel.canvas.record), 'player status strip must redraw archived status icons after assets arrive');
   assert.ok(drawn(enemy.barCanvas.record), 'enemy nameplate must redraw archived status icons after assets arrive');
   assert.equal(actor.hp, 100); assert.equal(enemy.b.hp, 100);
 });

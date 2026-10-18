@@ -16,11 +16,11 @@ export function mapPosition(map) {
 }
 
 // Map coordinates use tile centres; raster coordinates use tile edges.
-export function mapProjection(map, rect, full = false) {
+export function mapProjection(map, rect, full = false, centered = false) {
   const p = mapPosition(map), { w, h } = map.grid;
   const cols = full ? w : Math.min(21, w), rows = full ? h : Math.min(21, h);
   const scale = Math.min(rect.w / cols, rect.h / rows);
-  const origin = (v, size, span, loop) => full ? 0 : loop ? v + 0.5 - span / 2 : Math.max(0, Math.min(size - span, v + 0.5 - span / 2));
+  const origin = (v, size, span, loop) => full ? 0 : loop || centered ? v + 0.5 - span / 2 : Math.max(0, Math.min(size - span, v + 0.5 - span / 2));
   const x = origin(p.x, w, cols, map.loopX), y = origin(p.y, h, rows, map.loopY);
   const left = rect.x + (rect.w - cols * scale) / 2, top = rect.y + (rect.h - rows * scale) / 2;
   return { x, y, cols, rows, scale, left, top, width: cols * scale, height: rows * scale,
@@ -45,8 +45,9 @@ export function exitGroups(map, analysis) {
 }
 
 export class NavigationMap {
-  constructor(Panel, root, camera, hud, font) {
+  constructor(Panel, root, camera, hud, font, { textColor = () => '#ffffff' } = {}) {
     this.font = font; this.camera = camera; this.hud = hud;
+    this.textColor = textColor;
     this.mini = new Panel(384, 440, 0.22);
     this.full = new Panel(1024, 1024, 1.15);
     root.add(this.full.mesh);
@@ -108,6 +109,7 @@ export class NavigationMap {
     if (this.full.mesh.visible) this.draw(this.full, map, true);
   }
   draw(panel, map, full) {
+    if (!full && !G.vr) { this.drawDesktopMini(panel, map); return; }
     const { ctx, canvas } = panel, W = canvas.width, H = canvas.height;
     panel.clear();
     if (!drawGameWindow(ctx, 2, 2, W - 4, H - 4, 0.95)) {
@@ -165,5 +167,51 @@ export class NavigationMap {
       ctx.fillStyle = '#b9b8bb'; ctx.font = `20px ${this.font}`; ctx.fillText(tr(G.vr ? 'Y: 메뉴 → 지도' : 'N: 지도 · Tab: 메뉴'), 16, 423);
     }
     panel.commit();
+  }
+  drawDesktopMini(panel, map) {
+    const { ctx, canvas } = panel;
+    panel.clear();
+    const diameter = Math.min(360, canvas.width - 24, canvas.height - 68), radius = diameter / 2;
+    const centre = { x: canvas.width / 2, y: radius + 12 };
+    const rect = { x: centre.x - radius, y: centre.y - radius, w: diameter, h: diameter };
+    const view = mapProjection(map, rect, false, true), { w, h } = map.grid;
+    ctx.save(); ctx.beginPath(); ctx.arc(centre.x, centre.y, radius, 0, Math.PI * 2); ctx.clip();
+    ctx.imageSmoothingEnabled = false; ctx.globalAlpha = 0.6;
+    // Use one terrain layer so an opaque underlay cannot defeat translucency.
+    for (const dx of map.loopX ? [-w, 0, w] : [0]) for (const dy of map.loopY ? [-h, 0, h] : [0]) {
+      ctx.drawImage(this.art || this.base, view.left + (dx - view.x) * view.scale,
+        view.top + (dy - view.y) * view.scale, w * view.scale, h * view.scale);
+    }
+    ctx.globalAlpha = 1; ctx.shadowColor = 'rgba(0,0,0,0.9)'; ctx.shadowBlur = 3;
+    for (const group of this.groups) {
+      const marked = [];
+      for (const cell of group.cells) {
+        const point = view.point(cell.x, cell.y);
+        if (marked.some(old => Math.hypot(old.x - point.x, old.y - point.y) < 22)) continue;
+        marked.push(point);
+        ctx.beginPath(); ctx.arc(point.x, point.y, 8, 0, Math.PI * 2);
+        ctx.fillStyle = '#f5c45a'; ctx.fill();
+        ctx.fillStyle = '#151820'; ctx.font = `bold 14px ${this.font}`; ctx.textAlign = 'center';
+        ctx.fillText(String(group.number), point.x, point.y + 1);
+      }
+    }
+    const player = mapPosition(map), point = view.point(player.x, player.y), forward = G.player?.forward2D?.();
+    const angle = forward ? Math.atan2(forward.x, -forward.z)
+      : ({ 8: 0, 6: Math.PI / 2, 2: Math.PI, 4: -Math.PI / 2 }[map.playerChar.direction] || 0);
+    ctx.translate(point.x, point.y); ctx.rotate(angle);
+    ctx.beginPath(); ctx.moveTo(0, -13); ctx.lineTo(9, 10); ctx.lineTo(0, 6); ctx.lineTo(-9, 10); ctx.closePath();
+    ctx.fillStyle = '#84eeff'; ctx.strokeStyle = '#07161f'; ctx.lineWidth = 3; ctx.fill(); ctx.stroke(); ctx.restore();
+
+    ctx.save(); ctx.beginPath(); ctx.arc(centre.x, centre.y, radius, 0, Math.PI * 2);
+    ctx.strokeStyle = this.textColor(0); ctx.globalAlpha = 0.42; ctx.lineWidth = 2; ctx.stroke();
+    ctx.globalAlpha = 1; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.shadowColor = '#000000'; ctx.shadowBlur = 4; ctx.shadowOffsetY = 1;
+    ctx.font = `bold 22px ${this.font}`; ctx.fillStyle = '#d2f2f6';
+    ctx.fillText('N', centre.x, rect.y + 20);
+    ctx.font = `22px ${this.font}`; ctx.fillStyle = this.textColor(0);
+    ctx.fillText(fitLabel(ctx, destinationName(map.mapId), diameter - 20), centre.x, rect.y + diameter + 24);
+    ctx.font = `18px ${this.font}`; ctx.fillStyle = this.textColor(8);
+    ctx.fillText(fitLabel(ctx, tr('N: 지도 · Tab: 메뉴'), diameter - 20), centre.x, canvas.height - 17);
+    ctx.restore(); panel.commit();
   }
 }

@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.11
+BLACK SOULS II VR - community version 0.2.12
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,16 +7,17 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Navigate with a live minimap and a full area map: press N or open Menu > Map.
-- Maps use the game's tile artwork and show your facing direction and named exits.
-- Main menu fits one screen, with Character, Save / Load and Settings groups.
-- PC menus and HUD stay readable on screen; VR keeps its wrist HUD and spatial menus.
-- The launcher has a borderless game-style window, PC / VR choices and new storybook artwork.
-- Custom scrollbars match the launcher and game menus, with mouse wheel and dragging support.
-- HUD resources have clear labels, matching bars and grouped status icons.
-- Click menus and Back on PC, or use the controller pointer in VR.
-- Menus use the game's window skin; status effects use the game's own icons.
-- Fixed update checks failing after the first successful check.
+- The original menu layout returns: Items, Skills, Equipment, Status, Covenants,
+  Save and Game End on the left; character information on the right.
+- Mod tools has its own button. Press F1 while the menu is open for Map, Load,
+  Co-op and Settings; press N during play for the full area map.
+- The compact PC HUD uses original battle portrait artwork, gauges and status icons.
+- HUD panels are translucent, and the PC minimap is circular and semi-transparent.
+- Resource gauges stay fixed as effects change; priority effects remain visible.
+- Item and soul pickups appear quietly at the lower right and repeated items combine.
+- Dialogue choices fit their contents and stay above the bottom dialogue window.
+- PC weapons rest lower at the side and hide during menus and dialogue.
+- Save labels work for PC and VR, with shared saves retained during upgrades.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

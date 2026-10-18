@@ -23,7 +23,7 @@ export function visiblePanelBounds(root) {
   return bounds;
 }
 
-export function placeDesktopRoot(root, camera, viewport) {
+export function placeDesktopRoot(root, camera, viewport, { vertical = 'center' } = {}) {
   const bounds = visiblePanelBounds(root), pixels = pixelScale(camera, viewport);
   const size = bounds.isEmpty() ? new THREE.Vector3(1, 1, 0) : bounds.getSize(new THREE.Vector3());
   const centre = bounds.isEmpty() ? new THREE.Vector3() : bounds.getCenter(new THREE.Vector3());
@@ -37,7 +37,14 @@ export function placeDesktopRoot(root, camera, viewport) {
   const q = camera.getWorldQuaternion(new THREE.Quaternion()), head = camera.getWorldPosition(new THREE.Vector3());
   root.scale.setScalar(scale);
   root.quaternion.copy(q);
-  root.position.set(-centre.x * scale, -centre.y * scale, -1).applyQuaternion(q).add(head);
+  let anchorY = -centre.y * scale;
+  if (!bounds.isEmpty() && vertical !== 'center') {
+    const edge = vertical === 'bottom' ? (marginY - viewport.height / 2) * pixels.y : (viewport.height / 2 - marginY) * pixels.y;
+    const localY = vertical === 'bottom' ? bounds.min.y : bounds.max.y;
+    const offsets = [bounds.min.z, bounds.max.z].map(z => edge * (1 - scale * z) - localY * scale);
+    anchorY = vertical === 'bottom' ? Math.max(...offsets) : Math.min(...offsets);
+  }
+  root.position.set(-centre.x * scale, anchorY, -1).applyQuaternion(q).add(head);
   root.updateMatrixWorld(true);
 }
 

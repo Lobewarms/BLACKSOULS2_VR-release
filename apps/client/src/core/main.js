@@ -389,7 +389,7 @@ async function saveVr(slot = 1, silent = false, kind = 'vr') {
   };
   try {
     await writeSaveFile(slot, data, kind);
-    if (!silent) G.ui.toast(kind === 'world' ? tr('개발자 서버 세이브 {n}번에 저장했습니다', { n: slot }) : tr('VR 세이브 {n}번에 저장했습니다', { n: slot }));
+    if (!silent) G.ui.toast(kind === 'world' ? tr('개발자 서버 세이브 {n}번에 저장했습니다', { n: slot }) : tr('세이브 {n}번에 저장했습니다', { n: slot }));
     return true;
   } catch {
     if (!silent) G.ui.toast(tr('저장 실패'));
@@ -432,7 +432,7 @@ async function showVrSaveMenu() {
     await saveVr(n, false, kind);
   };
   G.ui.menuOpen = true;
-  G.ui.list.open(kind === 'world' ? tr('개발자 서버 세이브 — 저장할 슬롯') : tr('VR 세이브 — 저장할 슬롯'), items, {
+  G.ui.list.open(kind === 'world' ? tr('개발자 서버 세이브 — 저장할 슬롯') : tr('세이브 — 저장할 슬롯'), items, {
     onSelect: (i, it) => {
       if (!it.used) { save(it.slot); return; }
       G.ui.list.open(tr('슬롯 {n}에 덮어쓸까요?', { n: it.slot }), [
@@ -604,7 +604,7 @@ async function showTitle() {
   const items = [];
   if (auto) items.push({ text: tr('이어하기 (VR 오토세이브)'), id: 'continue', desc: `${saveLocation(auto.meta)}  ${metaDate(auto.meta)}` });
   items.push({ text: tr('원작 세이브 불러오기'), id: 'rm', desc: tr('원작의 Save01~16 진행 상황으로 VR에서 시작') });
-  items.push({ text: tr('VR 세이브 불러오기'), id: 'vr', enabled: vrSlots.some(s => s.slot > 0) });
+  items.push({ text: tr('모드 세이브 불러오기'), id: 'vr', enabled: vrSlots.some(s => s.slot > 0) });
   // (a developer-server save played on here, in the game itself - saved as its own saves from then on)
   const worldSlots = await listVrSaves('world');
   if (worldSlots.length) items.push({ text: tr('개발자 서버 세이브 불러오기'), id: 'world', desc: tr('개발자 서버의 진행을 본편으로 가져옵니다') });
@@ -641,7 +641,7 @@ async function showRmSaveMenu() {
 async function showVrLoadMenu(back, kind = 'vr') {
   const slots = (await listVrSaves(kind)).sort((a, b) => a.slot - b.slot);
   G.ui.menuOpen = G.ui.menuOpen || mode === 'game';
-  G.ui.list.open(kind === 'world' ? tr('개발자 서버 세이브 불러오기') : tr('VR 세이브 불러오기'), slots.map(s => ({ text: `${s.slot === 0 ? tr('오토') : tr('슬롯 {n}', { n: s.slot })}  ${saveLocation(s.meta)}`, right: metaDate(s.meta), desc: slotDesc(s.meta), slot: s.slot })), {
+  G.ui.list.open(kind === 'world' ? tr('개발자 서버 세이브 불러오기') : tr('모드 세이브 불러오기'), slots.map(s => ({ text: `${s.slot === 0 ? tr('오토') : tr('슬롯 {n}', { n: s.slot })}  ${saveLocation(s.meta)}`, right: metaDate(s.meta), desc: slotDesc(s.meta), slot: s.slot })), {
     onSelect: async (i, it) => {
       const state = await loadVrSave(it.slot, kind);
       if (state) { G.ui.closeMenu(); startGame(state); }

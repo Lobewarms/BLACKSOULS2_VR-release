@@ -724,3 +724,69 @@ A private browser preview with
 the installed game's original skin/icons confirmed wheel and drag behavior and
 clear counts/text in long lists and inventories. Do not ship preview fixtures or
 the original game artwork used during this check.
+
+## Desktop player presentation (0.2.12)
+
+The user explicitly rejected the Character and Save/Load group layers added in
+0.2.11. The active design follows the installed original Scripts.rvdata2:
+Window_MenuCommand adds item, skill, equip, status; the active Covenants script
+adds partner; then save and game_end. Formation is commented out. Keep those seven
+commands directly accessible in that exact order, commands/economy at the left
+and party information at the right. Mod tools has a separate right-side button
+and F1 shortcut, with Map, Load, Co-op, Settings and pose tools. Returning from a
+core scene restores that row; Settings returns to Mod tools. Original Z/Enter and
+X/Esc support stays intact. Do not add categories around familiar game commands.
+
+Classic menu canvases are 320x960 and 960x960, matching the original 160/480 column
+split at twice the logical resolution. They share the original Window skin and
+actor face cells, with SEN and currency at the lower left. Do not invent party
+members or borrow unrelated portraits. Hide old commands before asynchronous
+save/load requests and only show the overview for the actual main menu.
+
+The original active battle face script crops x=0,y=38,w=96,h=24 from each actor's
+96px face cell. Use the runtime actor's faceName and faceIndex for the PC header.
+Window_Base's actual HP palette is 18->10, MP is 9->1, and gauge background is 19.
+Actor_bg1/2/3 belong to the original map HUD; gauge_bg belongs to enemy HP, so do
+not describe those as battle HUD artwork. These findings were verified against
+the installed game's live script/archive data; copied research assets remain
+outside Git and the distributed package.
+
+The desktop resource card has a fixed 256px painted height inside its 512px
+canvas. A separate 512x128 effect strip keeps the first four priority effects
+stable and directs overflow to Menu > Status. Do not time-cycle PC debuffs or
+move resource gauges when effects change. VR retains its previous wrist drawing.
+Translucent backgrounds preserve scene visibility; keep original icons, resource
+values and outlined text legible. Window has two alpha-composited background
+layers; count both when testing opacity. The PC mini-map is a 360px circle with
+terrain at alpha0.6, transparent surroundings, opaque player/exit markers, and a
+thin original-palette rim. Full maps and the VR mini-map retain their prior layout.
+
+Pickup notifications use a separate RewardFeed camera anchor, never the central
+menu-fitting root. Merge repeated identical gains, admit bursts calmly, bound the
+queue, pause hidden timers, and keep the painted feed below the central view at
+the lower right. Hidden narrow windows wait rather than overlap the HUD. Normal
+nonblocking PC notices also use a separate corner anchor. Preserve actual item
+and soul awards, source icons, co-op gifts and scripted event gains.
+
+PC choices resize to their contents, with hit targets following the actual row
+origin; blank titles do not reserve an empty header. Dialogue groups anchor along
+the screen edge specified by the original message position; speaker tabs fit the
+name. Preserve transparent/dim scripted backgrounds, disabled choices, number
+input, mouse/keyboard edges, scrolling and VR dimensions.
+
+PC equipment is a bounded visual wrapper around the original model, held low at
+the sides. Do not shorten combat reach or move the shield interception point.
+Hide PC held equipment during dialogue, shops, menus and transfers. VR controller
+transforms, grip adjustments and model proportions retain their original behavior.
+Regression checks project all weapon types/shields at several FOV/aspect ratios,
+exercise real combat frame visibility and swing endpoints, and verify those
+gameplay/VR invariants. UI checks cover original menu order, direct paths, exact
+game asset cells, alpha composition, compact choice hit targets, asynchronous
+save transitions and real loot rewards reaching the peripheral feed.
+
+Private browser QA rendered Map101 with original tiles, Window, icons and faces,
+checking exploration, the classic menu, dialogue, low weapons, translucent circular
+map and merged lower-right pickups. Review images are ignored under dist/previews.
+The temporary fixture and export middleware are outside distributed sources and
+must be removed from the client before building. The private data server uses an
+isolated temporary save directory; it must not modify the player's installed saves.

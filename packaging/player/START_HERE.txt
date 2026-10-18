@@ -14,7 +14,9 @@ Left click: attack     Right click: guard     Space: dodge
 E / Enter: interact    Tab: menu               Esc: cancel
 N: full area map. Click menu entries and Back, or use arrows and Enter.
 Scroll long menus with the mouse wheel or drag their scrollbar.
-Menu > Character: status, skills and equipment. Menu > Save / Load: saves.
+Menu commands follow the original game: Items, Skills, Equipment, Status,
+Covenants, Save and Game End. Mod tools (F1 in the menu): Map, Load, Co-op, Settings.
+PC HUD and circular minimap are translucent; pickups appear at the lower right.
 See CONTROLS_en.txt for all controls.
 
 META QUEST 3 / PC VR

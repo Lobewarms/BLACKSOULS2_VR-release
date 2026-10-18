@@ -73,7 +73,7 @@ test('missing game artwork keeps readable menus and status labels through the fa
   actor.addState(2);
   const ui = createUI(t);
   ui.drawHud(); ui.showStatus();
-  assert.ok(ui.hud.canvas.record.texts.includes('Poison'));
+  assert.ok(ui.statusPanel.canvas.record.texts.includes('Poison'));
   assert.ok(ui.list.panel.canvas.record.texts.includes('Poison'));
   assert.equal(ui.list.panel.canvas.record.images.length, 0, 'missing art must not turn into fabricated icons');
   assert.ok(ui.list.panel.canvas.record.gradients > 0 && ui.list.panel.canvas.record.fills > 1,
@@ -131,7 +131,7 @@ test('player, enemy and Status menu use the exact game icon cells while menus us
   const drawnIcon = (record, id) => record.images.some(([source, x, y, w, h]) =>
     source === sheet && x === id % 16 * 24 && y === Math.floor(id / 16) * 24 && w === 24 && h === 24);
   for (const id of [702, 66]) {
-    assert.ok(drawnIcon(ui.hud.canvas.record, id), `player must show game icon ${id}`);
+    assert.ok(drawnIcon(ui.statusPanel.canvas.record, id), `player must show game icon ${id}`);
     assert.ok(drawnIcon(enemy.barCanvas.record, id), `enemy must show game icon ${id}`);
   }
   ui.menuOpen = true; ui.showStatus();
