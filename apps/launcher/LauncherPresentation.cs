@@ -92,7 +92,7 @@ namespace BlacksoulsCommunity
             title.ForeColor = Ink; title.Bounds = new Rectangle(18, 16, 610, 44);
             title.Anchor = AnchorStyles.Left | AnchorStyles.Top;
             var subtitle = Label();
-            subtitle.Name = "launcherEdition"; subtitle.Text = "VR  /  COMMUNITY EDITION     v" + identity.Version; subtitle.Dock = DockStyle.None;
+            subtitle.Name = "launcherEdition"; subtitle.Text = "VR     v" + identity.Version; subtitle.Dock = DockStyle.None;
             subtitle.Font = new Font("Segoe UI", 9, FontStyle.Bold); subtitle.ForeColor = Gold;
             subtitle.Bounds = new Rectangle(21, 67, 600, 24);
             header.Controls.Add(title); header.Controls.Add(subtitle);

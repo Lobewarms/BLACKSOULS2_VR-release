@@ -49,7 +49,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           python tooling/release/package_release.py \
-            --verify "dist/BLACKSOULS_VR_fork_${RELEASE_TAG#v}.zip" --version "${RELEASE_TAG#v}"
+            --verify "dist/BLACKSOULS_VR_${RELEASE_TAG#v}.zip" --version "${RELEASE_TAG#v}"
       - name: Publish GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -65,5 +65,5 @@ jobs:
             release_flags=(--prerelease --latest=false)
           fi
           gh release create "$RELEASE_TAG" dist/*.exe dist/*.zip dist/*.sha256 dist/*.whl "${release_flags[@]}" \
-            --verify-tag --title "BLACK SOULS II VR community fork $RELEASE_TAG" \
-            --notes-file FORK_NOTICE.txt
+            --verify-tag --title "BLACK SOULS II VR $RELEASE_TAG" \
+            --notes-file RELEASE_NOTES.txt

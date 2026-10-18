@@ -73,7 +73,7 @@ def collect(root=ROOT):
     launcher = PREFIX + 'BlacksoulsVR.Engine.exe'
     if sha256(payload[launcher]) != upstream['launcher_sha256']:
         raise ValueError('Launcher differs from the documented upstream binary')
-    for filename, target in [('LICENSE', 'LICENSE'), ('FORK_NOTICE.txt', 'FORK_NOTICE.txt'),
+    for filename, target in [('LICENSE', 'LICENSE'), ('RELEASE_NOTES.txt', 'RELEASE_NOTES.txt'),
                              ('vendor/launcher/upstream.json', 'upstream.json'),
                              ('AGENTS.md', 'AGENTS.md')]:
         payload[PREFIX + target] = (root / filename).read_bytes()
@@ -170,7 +170,7 @@ def main():
         print(f'Verified {args.verify}: {manifest["version"]}, {len(manifest["files"])} files')
     else:
         version = args.version or json.loads((ROOT / 'package.json').read_text(encoding='utf-8'))['version']
-        print(build(version, args.output or ROOT / 'dist' / f'BLACKSOULS_VR_fork_{version}.zip'))
+        print(build(version, args.output or ROOT / 'dist' / f'BLACKSOULS_VR_{version}.zip'))
 
 
 if __name__ == '__main__':

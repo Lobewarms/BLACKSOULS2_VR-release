@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.26
+BLACK SOULS II VR - 0.2.26
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -23,9 +23,7 @@ are included.
 Close the game and previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.
 
-This is a modified version by dimasma0305 of the original mod by Lobewarms.
-Original: https://github.com/Lobewarms/BLACKSOULS2_VR-release
-Community updates: https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases
+VR mod by Lobewarms.
 
 You need your own copy of BLACK SOULS II; no original game files are included.
 Free distribution only, under the original LICENSE. Third-party license notices

@@ -4,13 +4,11 @@ Unofficial fan mod for playing BLACKSOULS II in first person on your Windows PC
 or with a PC VR headset. Not affiliated with the original developer or publisher.
 No game files included - you need the original game.
 
-This is a **modified community version** by dimasma0305, based on
-[the original mod by Lobewarms](https://github.com/Lobewarms/BLACKSOULS2_VR-release).
 Meta Quest 3 connects through Quest Link, Air Link or Virtual Desktop.
 
 ## Download
 
-**[Download for Windows](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases/latest)**
+**[Download for Windows](../../releases/latest)**
 
 Prefer a ZIP? Download the **portable ZIP** from the same release page.
 Setup and controls are in the README / CONTROLS files inside the ZIP
@@ -24,10 +22,9 @@ A desktop shortcut is optional during setup.
 [![Watch the original BLACK SOULS II VR gameplay video](https://img.youtube.com/vi/J8WaV70g5cc/maxresdefault.jpg)](https://www.youtube.com/watch?v=J8WaV70g5cc)
 
 [Watch on YouTube](https://www.youtube.com/watch?v=J8WaV70g5cc).
-This video is from the original mod's page; it does not demonstrate every
-change in this community version.
+This video shows an earlier version; the current interface and features may differ.
 
-## Community version highlights
+## Features
 
 - A Windows installer, automatic game-folder discovery and updates from this project's releases.
 - Separate PC and VR layouts, clearer translucent HUD panels and a circular area minimap.
@@ -35,9 +32,6 @@ change in this community version.
 - Gameplay fixes for equipment effects, consumables, pickups and dialogue.
 - Corrections to terrain, floating scenery, area skies and environmental colours.
 - Earned Steam achievement support when playing a compatible Steam copy.
-
-See the [actual upstream-versus-community screenshots](docs/screenshots/README.md)
-and [runtime source diff](docs/screenshots/upstream-runtime.diff).
 
 ## Play on your PC
 
@@ -86,17 +80,15 @@ It remembers your selected folder after you launch the game.
 - **Stats and speed:** Equipment changes combat stats, damage, resistances and on-hit effects. AGI affects formulas that use it; walking speed is controlled separately by Run like Dodo. Extra-action bonuses shorten desktop and ranged attack recovery. VR melee follows your physical swing.
 - **Weapon stun:** Successful stun effects interrupt enemy attacks and briefly prevent actions. The enemy's effects show the original Stun icon. Listed chances are adjusted by enemy resistance and luck; immune enemies cannot be stunned.
 - **Where are my saves?** Mod saves are in the `saves` folder beside the launcher. Your original game and original saves are not changed. Setup keeps mod saves during upgrades and uninstall.
-- **Updates:** Download new versions from [this project's releases](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases). Click **Check for updates** in the launcher. If an update is available, click **Download update**, then open setup when prompted. Your saves are kept.
+- **Updates:** Download new versions from [this project's releases](../../releases). Click **Check for updates** in the launcher. If an update is available, click **Download update**, then open setup when prompted. Your saves are kept.
 
-A [portable ZIP](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases) is also available:
+A [portable ZIP](../../releases) is also available:
 extract it outside your game folder and run `BLACKSOULS_VR/BlacksoulsVR.exe`.
-For more help, see the [full setup guide](docs/upstream/README_en.txt) or [report a problem](https://github.com/dimasma0305/BLACKSOULS2_VR-release/issues).
+For more help, see the [full setup guide](docs/upstream/README_en.txt) or [report a problem](../../issues).
 
 ## Credits
 
-This is a modified community version by dimasma0305 of the original
-[BLACK SOULS II VR mod by Lobewarms](https://github.com/Lobewarms/BLACKSOULS2_VR-release).
-Free distribution only, under the original [license](LICENSE). No original game files are included.
+VR mod by [Lobewarms](https://github.com/Lobewarms/BLACKSOULS2_VR-release).
 
 ## Terms
 
@@ -105,8 +97,7 @@ Free distribution only, under the original [license](LICENSE). No original game 
   original game's own streaming rules, follow its developer's guidelines.
 - Modified versions may be shared for free if they credit
   [the original mod's page](https://github.com/Lobewarms/BLACKSOULS2_VR-release)
-  and clearly state that they are modified, not the original. Please also
-  credit this community page when sharing a version based on this fork.
+  and clearly state that they are modified, not the original.
 - To share the original, share
   [its page's link](https://github.com/Lobewarms/BLACKSOULS2_VR-release)
   rather than the file.

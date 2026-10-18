@@ -8,7 +8,9 @@ troubleshooting. Do not put repository structure, libraries, build commands or
 CI/CD explanations into player screens or guides. Keep developer documentation
 in this AGENTS.md; include it in the installed application for developer access,
 without displaying it during setup or linking it from the player menu.
-Retain required original-author credits, modification notice and license files.
+Retain the original-author credits and license files. Player-facing branding
+uses BLACK SOULS II VR; contribution provenance belongs in developer notes and
+the pull request, rather than repeated community-edition banners.
 
 ## Project background
 
@@ -100,7 +102,7 @@ manual checks.
 Install Inno Setup 6 on Windows, then after `npm run package`:
 
 ```powershell
-./tooling/release/build_installer.ps1 -Archive dist/BLACKSOULS_VR_fork_0.2.2.zip -Version 0.2.2
+./tooling/release/build_installer.ps1 -Archive dist/BLACKSOULS_VR_0.2.2.zip -Version 0.2.2
 ```
 
 The installer bundles the verified portable distribution and creates Start menu
@@ -1612,3 +1614,20 @@ regressions reproduced6 failures before the fix; scope regressions also caught
 reset-before-first-picture and completed-but-retained battle owners. Validation
 uses original numeric control-flow inspection plus neutral fixtures, not a full
 scene or physical-headset playthrough.
+
+## Main-project presentation
+
+At the user's request, the contribution drops self-referential community/fork
+notices from README, launcher, installer and player guides. The visible product
+name is BLACK SOULS II VR. The original Lobewarms credit, LICENSE, ownership
+requirements and free-distribution rules remain. Historical comparison captions
+and developer provenance remain accurate; do not relabel old screenshots as new
+renders or remove the original license's rules for distributing modified copies.
+
+Player release notes are RELEASE_NOTES.txt and portable outputs are
+BLACKSOULS_VR_<version>.zip. Packaging, CI, release publishing and installer
+upgrade cleanup must agree on those names. Retain the installer AppId and save
+paths so existing installations upgrade correctly; remove only the obsolete
+FORK_NOTICE.txt in addition to the two earlier superseded documents. Repository
+identity for live updates still comes from the build repository, and README
+release/issue links are relative so the same sources work in the main repository.

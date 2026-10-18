@@ -55,6 +55,6 @@ Earlier progress counts when the original game checks its achievement condition
 again; loading an old save does not automatically unlock every past milestone.
 
 CREDITS
-Modified community version by dimasma0305. Original VR mod by Lobewarms:
+VR mod by Lobewarms:
 https://github.com/Lobewarms/BLACKSOULS2_VR-release
-Free distribution only. See LICENSE and FORK_NOTICE.txt. No original game files included.
+Free distribution only. See LICENSE and RELEASE_NOTES.txt. No original game files included.

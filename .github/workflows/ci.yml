@@ -87,7 +87,7 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          ./tooling/release/build_installer.ps1 -Archive "dist/BLACKSOULS_VR_fork_$version.zip" -Version $version
+          ./tooling/release/build_installer.ps1 -Archive "dist/BLACKSOULS_VR_$version.zip" -Version $version
       - name: Test setup, upgrade, uninstall and save retention
         if: runner.os == 'Windows'
         shell: pwsh
