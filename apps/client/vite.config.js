@@ -19,7 +19,7 @@ export default defineConfig({
   base: './',
   server: {
     host: '127.0.0.1',
-    proxy: backend ? Object.fromEntries(['/api', '/game', '/rtp'].map(path => [path, backend])) : undefined,
+    proxy: backend ? Object.fromEntries(['/api', '/game', '/rtp', '/local-assets'].map(path => [path, { target: backend, changeOrigin: true }])) : undefined,
   },
   plugins: [{
     name: 'runtime-models-and-licenses',

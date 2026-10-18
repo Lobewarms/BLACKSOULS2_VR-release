@@ -553,3 +553,69 @@ distance/hidden/death rules, disposal and co-op send/receive compatibility. A lo
 browser preview checked the real UI canvases/3D nameplates for desktop and a
 simulated controller anchor using synthetic art. This is not a headset playtest.
 Temporary preview HTML and game assets must never enter the packaged app.
+
+
+## Navigation, menu usability and game artwork (0.2.11)
+
+User requirement: reuse the installed game's original assets whenever suitable,
+including status icons, tiles, fonts and window skin, before inventing replacement
+art. Never commit or distribute those original assets. Keep readable fallbacks
+when an asset is absent and simple navigation marks where no game asset exists.
+
+NavigationMap renders a north-up local map and current-area overview from MapGrid,
+the current map-view analysis and its already-loaded TileDrawer. The artwork raster
+is capped at 2048 pixels per side and built once per grid/analysis/drawer identity;
+the live position and head facing refresh at 10 Hz without rebuilding terrain.
+Non-loop windows clamp; looping windows wrap continuous tile-centre coordinates
+and draw adjacent copies. Exit cells share numbered destination legends; all
+legend entries remain reachable with arrows/stick or pointer buttons. Destination
+labels use translated display_name, never map editor names. Transfers discard
+old analysis; no tile, save, event or combat state is mutated by drawing. This is
+an area overview, not a route planner or guarantee of passage through event doors.
+
+PC N and Menu > Map open the overview. VR uses the menu and a left-controller
+minimap anchor above the existing HP panel. The minimap hides behind menus,
+messages, transfers, death and title; its display option persists with settings.
+Full-map Back works with cancel, N/menu, mouse or VR pointer. Main menu is one
+page with Character, Save / Load and Settings groups; returning restores the
+parent selection. Return to title has an in-app confirmation starting on Cancel.
+
+Window.png uses the VX Ace 128x128 background/frame/cursor layout. Eight frame
+slices exclude the central scroll-arrow artwork; cursor rendering includes its
+centre. All window art comes from loadUiAssets, and missing art keeps the existing
+fallback. Format coordinates were checked against the primary mkxp WindowVX
+implementation (https://github.com/Ancurio/mkxp/blob/master/src/windowvx.cpp).
+Status icons use the database icon_index (buff icons retain VX Ace indices),
+prefer the installed game's primary sheet and only use matching-game archived
+cells for icons beyond a short loose sheet. No substitute status artwork is made.
+
+Mouse selection uses the real canvas/camera ray and accepts only interactive
+hits. Opening blocking panels releases PC pointer lock; menu clicks must not
+capture it. Explicit clicks select hovered entries even when initially unselected.
+Tab switches refresh the item source before selection. Keep quantity Max/Zero
+and on-screen keyboard clicks distinct from their confirm actions.
+
+Regression tests exercise real gameplay-frame and co-op receive wiring for enemy
+labels and state/buff expiry, late icons, primary icon-cell identity, original
+window frame/cursor regions, map positions/loop seams/transfers/cache limits,
+legend pages, PC/VR menu controls and pointer interactions. A private browser
+preview used the installed game's artwork and map read-only, plus a simulated
+wrist anchor. This is not a headset playtest. Remove temporary preview HTML and
+all private art before building packages. The dev proxy changes Host to the chosen
+backend so the original launcher's localhost Host checks accept asset requests.
+
+## Repeated update checks (0.2.11)
+
+The .NET Framework WebClient removed its default User-Agent from the shared
+Headers collection after creating the first request. The first GitHub check
+succeeded, but subsequent checks returned HTTP 403 explicitly requiring a
+User-Agent. Set HttpWebRequest.UserAgent and Accept for every request, including
+release metadata, checksums and installer downloads. Preserve the verified
+repository/version identity and download checks. UI errors distinguish rate
+limits, server responses, missing releases, timeouts, TLS and connection failures;
+server-directed retry timing is respected and identical consecutive log entries
+are suppressed. The app does not infer that every failure means the user is offline.
+
+Native regressions use a local HTTP server and sequential requests to reproduce
+the consumed-header failure. Restoring the original behavior makes the second
+check fail. Three consecutive live GitHub checks also passed after the fix.

@@ -23,6 +23,26 @@ export function fmtDate(ms) { try { return new Date(ms).toLocaleString(LOCALES[c
 
 // [Korean, English, Japanese, Chinese (simplified)]
 const ENTRIES = [
+  // Navigation map. Destination titles come from the installed game's translation.
+  ['지도', 'Map', 'マップ', '地图'],
+  ['캐릭터', 'Character', 'キャラクター', '角色'],
+  ['저장 / 불러오기', 'Save / Load', 'セーブ / ロード', '保存 / 读取'],
+  ['설정', 'Settings', '設定', '设置'],
+  ['뒤로', 'Back', '戻る', '返回'],
+  ['이전', 'Previous', '前へ', '上一页'],
+  ['다음', 'Next', '次へ', '下一页'],
+  ['타이틀로 돌아갈까요?', 'Return to title?', 'タイトルに戻りますか？', '返回标题画面？'],
+  ['↑↓ / 스틱 · Enter / A: 선택 · Esc / B: 뒤로', '↑↓ / stick · Enter / A: Select · Esc / B: Back', '↑↓ / スティック・Enter / A: 決定・Esc / B: 戻る', '↑↓ / 摇杆 · Enter / A：选择 · Esc / B：返回'],
+  ['원작 지도 · 금색 출구', 'Game map · gold exits', '原作の地図・金色は出口', '原作地图 · 金色为出口'],
+  ['미니맵', 'Minimap', 'ミニマップ', '小地图'],
+  ['출구', 'Exit', '出口', '出口'],
+  ['지도 범례', 'Map key', '凡例', '图例'],
+  ['내 위치', 'You', '現在地', '当前位置'],
+  ['바닥 · 어두운 벽', 'Floor · dark walls', '床・暗い部分は壁', '地面 · 深色为墙壁'],
+  ['표시할 출구가 없습니다', 'No marked exits', '表示できる出口はありません', '无标记出口'],
+  ['N / 메뉴 → 지도', 'N / Menu → Map', 'N / メニュー → マップ', 'N / 菜单 → 地图'],
+  ['닫기: N / Esc / B', 'Close: N / Esc / B', '閉じる: N / Esc / B', '关闭：N / Esc / B'],
+  ['출구 {n}/{total} · ↑↓ / 스틱', 'Exits {n}/{total} · ↑↓ / stick', '出口 {n}/{total}・↑↓ / スティック', '出口 {n}/{total} · ↑↓ / 摇杆'],
   // loading / title / saves (main.js)
   ['로딩 중...', 'Loading...', '読み込み中...', '加载中...'],
   ['맵 로딩: {map}', 'Loading map: {map}', 'マップ読み込み中: {map}', '正在加载地图: {map}'],

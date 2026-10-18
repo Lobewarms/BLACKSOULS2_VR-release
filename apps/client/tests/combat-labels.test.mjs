@@ -8,7 +8,7 @@ globalThis.location = { search: '?lang=en' };
 globalThis.addEventListener ||= () => {};
 const { $data } = await import('../src/data/data.js');
 const { BattlerBase } = await import('../src/game/state.js');
-const { UI, loadUiAssets } = await import('../src/ui/ui.js');
+const { UI, loadUiAssets, getIconSet } = await import('../src/ui/ui.js');
 const { battlerEffects } = await import('../src/ui/battler-status.js');
 const { initAssets } = await import('../src/data/assets.js');
 
@@ -21,13 +21,14 @@ function canvas() {
     measureText: text => ({ width: Array.from(String(text)).length * 12 }),
     createLinearGradient: () => ({ addColorStop() {} }),
     createRadialGradient: () => ({ addColorStop() {} }),
+    getImageData: (_x, _y, w, h) => ({ data: new Uint8ClampedArray(w * h * 4).fill(255) }),
   }, { get: (object, key) => key in object ? object[key] : () => {} });
   return { width: 0, height: 0, getContext: () => ctx, record };
 }
 
 function environment(t) {
   const saved = { state: G.state, combat: G.combat, scripts: G.scripts, time: G.time,
-    theater: G.theater, map: G.map, vr: G.vr };
+    theater: G.theater, map: G.map, vr: G.vr, player: G.player, floorAt: G.floorAt, coop: G.coop };
   const data = { states: $data.states, system: $data.system, enemies: $data.enemies, classes: $data.classes };
   const document = Object.getOwnPropertyDescriptor(globalThis, 'document');
   t.after(() => {
@@ -147,4 +148,110 @@ test('co-op status metadata carries buffs without changing legacy enemy tuples',
   assert.deepEqual(readEnemyBuffs({}, 10), Array(8).fill(0), 'expired buffs clear on the next snapshot');
   for (const bad of [[1], Array(8).fill(3), Array(8).fill('1')]) assert.equal(readEnemyBuffs({ 10: bad }, 10), null);
   assert.deepEqual(packEnemyBuffs([{ ...enemy, b: { buffs: Array(8).fill(0) } }]), {});
+});
+
+async function combatWorld(t) {
+  const { ActionEnemy, CombatSystem } = await import('../src/combat/combat.js');
+  const glow = new THREE.Texture();
+  const system = Object.assign(Object.create(CombatSystem.prototype), {
+    root: new THREE.Group(), enemies: [], symbols: new Map(), puppets: new Map(), passing: new Set(), puppetBattle: {},
+    allies: { walls: () => [] }, glowTexture: () => glow, groggyMax: () => 100, skyHidden: () => false,
+    updateBreakCue() {}, updateMounts() {}, slipStance: () => false,
+  });
+  G.map = { mapId: 1, playerChar: { fx: 20, fy: 20 }, nearX: x => x, nearY: y => y };
+  G.player = { headWorld: target => target.set(0, 1.6, 3), dodging: false };
+  G.floorAt = () => 0; G.coop = null;
+  t.after(() => {
+    for (const enemy of new Set([...system.enemies, ...system.puppets.values()])) enemy.remove();
+    glow.dispose();
+  });
+  return { system, async spawn() {
+    const enemy = new ActionEnemy(system, null, 1, 0, 0, { dormant: true });
+    system.enemies.push(enemy); await enemy.ready; return enemy;
+  } };
+}
+
+test('gameplay frames refresh enemy names and effects without requiring a hit', async t => {
+  environment(t); await initAssets();
+  const { system, spawn } = await combatWorld(t), enemy = await spawn();
+  system.updateEnemies(0.01, true);
+  assert.equal(enemy.bar.visible, true, 'the gameplay frame must reveal an undamaged enemy nameplate');
+  enemy.b.addState(2);
+  system.updateEnemies(0.01, true);
+  assert.ok(enemy.barCanvas.record.texts.some(entry => entry.text === 'Poison'), 'the gameplay frame must redraw changed effects');
+  enemy.b.removeState(2); $data.enemies[1].name = 'Changed form';
+  system.updateEnemies(0.01, true);
+  const texts = enemy.barCanvas.record.texts.map(entry => entry.text);
+  assert.ok(texts.includes('Changed form') && !texts.includes('Poison'));
+  enemy.hideUntil = 2; system.updateEnemies(0.01, true); assert.equal(enemy.bar.visible, false);
+  G.time = 3; system.updateEnemies(0.01, true); assert.equal(enemy.bar.visible, true);
+});
+
+test('replacing effects sharing an icon and walking expiry never leave stale player labels', t => {
+  const actor = environment(t);
+  $data.states[3].icon_index = $data.states[2].icon_index;
+  Object.assign($data.states[3], { remove_by_walking: true, steps_to_remove: 1 });
+  const ui = new UI(new THREE.Scene(), new THREE.PerspectiveCamera(), new THREE.Group());
+  actor.addState(2); ui.drawHud();
+  actor.removeState(2); actor.addState(3); ui.drawHud();
+  let texts = ui.hud.canvas.record.texts.map(entry => entry.text);
+  assert.ok(texts.includes('Curse') && !texts.includes('Poison'), 'same-icon state replacement must redraw the name');
+  assert.equal(actor.hp, 100);
+  actor.walkStep(); ui.drawHud();
+  texts = ui.hud.canvas.record.texts.map(entry => entry.text);
+  assert.ok(!texts.includes('Curse'), 'a naturally expired state must leave the HUD');
+  assert.equal(actor.hp, 100);
+});
+
+test('late archived status icons actually reach both HUD canvases without changing HP', async t => {
+  const actor = environment(t); await initAssets(); await loadUiAssets();
+  const { spawn } = await combatWorld(t), enemy = await spawn();
+  actor.addState(2); enemy.b.addState(2);
+  const ui = new UI(new THREE.Scene(), new THREE.PerspectiveCamera(), new THREE.Group());
+  const head = new THREE.Vector3(0, 1.6, 3);
+  ui.drawHud(); enemy.updateNameplate(head);
+  assert.equal(ui.hud.canvas.record.icons.length, 0); assert.equal(enemy.barCanvas.record.icons.length, 0);
+  const image = Object.getOwnPropertyDescriptor(globalThis, 'Image');
+  t.after(() => { if (image) Object.defineProperty(globalThis, 'Image', image); else delete globalThis.Image; });
+  Object.defineProperty(globalThis, 'Image', { configurable: true, value: class {
+    set src(url) { this.width = 384; this.height = url.includes('local-assets') ? 1300 : 936; queueMicrotask(() => this.onload()); }
+  } });
+  t.mock.method(globalThis, 'fetch', async url => {
+    if (url === '/api/manifest') return Response.json({ files: ['Graphics/System/IconSet.png'] });
+    if (url.includes('icons.json')) return Response.json({ game: 'C:\\Game', iconSet: '/local-assets/IconSet.png?revision=' + 'a'.repeat(64) });
+    return Response.json({ game: 'c:/game/' });
+  });
+  await initAssets(); await loadUiAssets();
+  ui.drawHud(); enemy.updateNameplate(head);
+  const sheet = getIconSet(702);
+  assert.equal(sheet.height, 1300);
+  const drawn = record => record.icons.some(([source, x, y]) => source === sheet && x === 14 * 24 && y === 43 * 24);
+  assert.ok(drawn(ui.hud.canvas.record), 'player HUD must redraw archived status icons after assets arrive');
+  assert.ok(drawn(enemy.barCanvas.record), 'enemy nameplate must redraw archived status icons after assets arrive');
+  assert.equal(actor.hp, 100); assert.equal(enemy.b.hp, 100);
+});
+
+test('co-op snapshots reach real puppet nameplates and clear expired effects without HP changes', async t => {
+  environment(t); await initAssets();
+  const { Coop } = await import('../src/network/coop.js');
+  const host = await combatWorld(t), enemy = await host.spawn(), guest = await combatWorld(t);
+  enemy.b.addState(2); enemy.b.addBuff(3, 10);
+  const sender = Object.create(Coop.prototype), receiver = Object.create(Coop.prototype);
+  let packet;
+  Object.assign(sender, { ready: () => true, guests: () => [{ id: 'guest', pose: { m: 1 } }], send: message => { packet = message; } });
+  receiver.ready = () => true;
+  G.combat = host.system; sender.sendEnemies();
+  G.combat = guest.system; receiver.onEnemies(packet);
+  const puppet = guest.system.puppets.get(enemy.netId); await puppet.ready;
+  guest.system.updateEnemies(0.01, true);
+  let texts = puppet.barCanvas.record.texts.map(entry => entry.text);
+  assert.ok(texts.includes('Poison'));
+  assert.ok(texts.includes('Defense ↑'), 'authoritative buff must reach the actual puppet nameplate');
+  assert.equal(puppet.b.buffs[3], 0, 'display metadata must not change combat stats');
+  enemy.b.removeState(2); enemy.b.removeBuff(3);
+  G.combat = host.system; sender.sendEnemies();
+  G.combat = guest.system; receiver.onEnemies(packet); guest.system.updateEnemies(0.01, true);
+  texts = puppet.barCanvas.record.texts.map(entry => entry.text);
+  assert.ok(!texts.includes('Poison') && !texts.includes('Defense ↑'));
+  assert.equal(puppet.b.hp, 100);
 });

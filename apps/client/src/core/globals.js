@@ -10,6 +10,7 @@ export const G = {
   input: null,     // Input
   three: null,     // { renderer, scene, camera, rig }
   settings: {
+    minimap: true,
     snapTurn: true, snapAngle: 30, smoothTurnSpeed: 120, moveSpeed: 3.2, runMultiplier: 1.7,
     vignette: true, difficulty: 1.0, showDamage: true, eyeHeight: 1.6, handedness: 'right',
     spectator: true,       // show the headset view on the PC monitor for people watching

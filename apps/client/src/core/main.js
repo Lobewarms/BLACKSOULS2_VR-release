@@ -551,6 +551,7 @@ async function gameOverArt() {
 G.gameOver = async () => {
   if (mode !== 'game') return;
   mode = 'gameover';
+  G.ui.navigation.hide();
   gameOverReady = false;
   G.ui.closeMenu?.(); G.ui.list.close();
   if (G.map) { G.map.interpreter.clear(); G.map.reservedCommon = []; }
@@ -570,7 +571,7 @@ G.gameOver = async () => {
   await waitFrames(30);
   gameOverReady = mode === 'gameover';
 };
-G.openLoadMenu = () => showVrLoadMenu(() => G.ui.showMainMenu());
+G.openLoadMenu = () => showVrLoadMenu(() => G.ui.reopenMain('load'));
 
 let titlePanel = null;
 async function showTitleArt(on) {
@@ -592,6 +593,7 @@ async function showTitleArt(on) {
 
 async function showTitle() {
   mode = 'title';
+  G.ui.navigation.close(); G.ui.navigation.hide();
   rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0);
   G.player.yaw = 0; G.player.pitch = 0;
   G.screen.setBrightness(255);

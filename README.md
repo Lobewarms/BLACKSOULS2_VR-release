@@ -25,6 +25,7 @@ A desktop shortcut is optional during setup.
 | Interact | E or Enter |
 | Dodge | Space |
 | Menu / cancel | Tab / Esc |
+| Area map | N |
 
 ## Play on Meta Quest 3
 
@@ -44,7 +45,9 @@ It remembers your selected folder after you launch the game.
 - **What do I need?** Windows 10/11, an up-to-date Chrome or Edge, and your original game.
 - **VR NOT SUPPORTED?** Start Quest Link or SteamVR first, close the game window, then click **Launch** again.
 - **Missing tiles or emotes?** Installing the optional RPG Maker VX Ace RTP may help.
-- **Status effects:** Your HUD shows active effects below HP and MP (above the left controller in VR). Extra effects cycle into view; open **Menu → Status** for the complete list. Nearby enemies show their name, health and effects overhead.
+- **Navigation:** The minimap shows your position, facing direction and exits using the game's artwork. Press **N** or choose **Menu → Map** for the full area map. In VR, look above your left controller. Use **Back** or **B** to return. The minimap can be hidden in **Menu → Settings → Combat / display settings**.
+- **Menus:** Use the mouse on PC, or arrows / the controller stick and **Enter / A**. **Character** contains Status, Skills and Equipment; **Save / Load** contains your save slots. **Esc / B** or the visible **Back** control returns to the previous menu.
+- **Status effects:** Your HUD shows active effects below HP and MP (above the left controller in VR). Extra effects cycle into view; open **Menu → Character → Status** for the complete list. Nearby enemies show their name, health and effects overhead.
 - **Where are my saves?** Mod saves are in the `saves` folder beside the launcher. Your original game and original saves are not changed. Setup keeps mod saves during upgrades and uninstall.
 - **Updates:** Download new versions from [this project's releases](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases). Click **Check for updates** in the launcher. If an update is available, click **Download update**, then open setup when prompted. Your saves are kept.
 

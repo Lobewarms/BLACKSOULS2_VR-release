@@ -11,6 +11,8 @@ import { itemData, spiritActorId, BAG_MAX } from '../game/state.js';
 import { quickSlots, quickSlotOf, assignQuickSlot, entryStatus } from './quickslots.js';
 import { cleanName, NAME_LEN } from '../network/coopnet.js';
 import { battlerEffects, effectsKey, fitLabel } from './battler-status.js';
+import { NavigationMap } from './navigation-map.js';
+import { setWindowSkin, drawGameWindow, drawGameCursor } from './window-skin.js';
 
 export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
@@ -53,6 +55,7 @@ function roundRect(ctx, x, y, w, h, r) {
   ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
 }
 function windowBg(ctx, x, y, w, h, alpha = 0.82) {
+  if (drawGameWindow(ctx, x, y, w, h, alpha)) return;
   const g = ctx.createLinearGradient(0, y, 0, y + h);
   g.addColorStop(0, `rgba(18,16,22,${alpha})`); g.addColorStop(1, `rgba(6,5,8,${alpha})`);
   roundRect(ctx, x, y, w, h, 14);
@@ -102,6 +105,7 @@ export async function loadUiAssets() {
     loadCanvas('Graphics/System', 'IconSet'), archivedIconCanvas(), loadCanvas('Graphics/System', 'Window'),
   ]);
   iconRevision++;
+  setWindowSkin(windowSkin);
   if (windowSkin) {
     const ctx = windowSkin.getContext('2d', { willReadFrequently: true });
     palette = [];
@@ -231,7 +235,13 @@ class ListPanel {
     windowBg(ctx, 4, 4, canvas.width - 8, canvas.height - 8, 0.9);
     ctx.textBaseline = 'middle';
     ctx.fillStyle = '#e8d8a8';
-    this.drawTitle(ctx, canvas.width - 72);
+    const backButton = !!this.onCancel && !!G.ui?.menuOpen;
+    this.drawTitle(ctx, canvas.width - (backButton ? 240 : 72));
+    if (backButton) {
+      drawGameCursor(ctx, canvas.width - 174, 24, 146, 52);
+      ctx.font = `28px ${FONT}`; ctx.textAlign = 'center';
+      ctx.fillText('‹ ' + tr('뒤로'), canvas.width - 100, 50); ctx.textAlign = 'left';
+    }
     if (this.index >= 0 && this.index < this.top) this.top = this.index;
     if (this.index >= this.top + this.rows) this.top = this.index - this.rows + 1;
     for (let r = 0; r < this.rows; r++) {
@@ -240,8 +250,10 @@ class ListPanel {
       if (!it) break;
       const y = 100 + r * this.rowH;
       if (i === this.index) {
-        roundRect(ctx, 20, y, canvas.width - 40, this.rowH - 6, 8);
-        ctx.fillStyle = 'rgba(200,170,110,0.28)'; ctx.fill();
+        if (!drawGameCursor(ctx, 20, y, canvas.width - 40, this.rowH - 6)) {
+          roundRect(ctx, 20, y, canvas.width - 40, this.rowH - 6, 8);
+          ctx.fillStyle = 'rgba(200,170,110,0.28)'; ctx.fill();
+        }
       }
       let x = 40;
       if (it.icon) { drawIcon(ctx, it.icon, x, y + 6, 48); x += 60; }
@@ -269,7 +281,7 @@ class ListPanel {
     if (this.items.length > this.rows && this.index >= 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = `28px ${FONT}`;
-      ctx.fillText(`${this.index + 1}/${this.items.length}`, canvas.width - 140, 52);
+      ctx.fillText(`${this.index + 1}/${this.items.length}`, canvas.width - (backButton ? 280 : 140), 52);
     }
     const desc = this.items[this.index]?.desc || this.footer;
     if (Array.isArray(desc)) {
@@ -282,6 +294,8 @@ class ListPanel {
       ctx.fillStyle = 'rgba(230,220,200,0.85)';
       ctx.fillText(stripEscapes(desc).slice(0, 60), 36, canvas.height - 30);
     }
+    ctx.font = `21px ${FONT}`; ctx.fillStyle = 'rgba(230,225,210,0.85)';
+    ctx.fillText(tr('↑↓ / 스틱 · Enter / A: 선택 · Esc / B: 뒤로'), 36, 84);
     this.panel.commit();
   }
   update(raycaster) {
@@ -297,17 +311,19 @@ class ListPanel {
       let hover = -1;
       if (uv) {
         const py = (1 - uv.y) * this.panel.canvas.height;
+        const back = this.onCancel && G.ui?.menuOpen && uv.x * this.panel.canvas.width >= this.panel.canvas.width - 180 && py >= 16 && py <= 80;
         const r = Math.floor((py - 100) / this.rowH);
         const i = this.top + r;
         if (r >= 0 && r < this.rows && this.items[i]) hover = i;
-        G.ui.pointerTarget = true;
+        G.ui.pointerTarget = hover >= 0 || !!back;
+        if (back && input.confirm()) { G.audio?.playSystemSe(2); this.onCancel(); return true; }
       }
       if (this.hover === -2) this.hover = hover;      // just opened: remember, don't jump
       else if (hover !== this.hover) {
         this.hover = hover;
         if (hover >= 0 && hover !== this.index) { this.index = hover; changed = true; }
       }
-      if (this.index >= 0 && hover >= 0 && hover !== this.index && G.input.xrPressed('right', 0)) { this.index = hover; changed = true; }
+      if (hover >= 0 && hover !== this.index && (G.vr ? input.xrPressed('right', 0) : input.mousePressed?.(0))) { this.index = hover; changed = true; }
     }
     if (changed) { this.draw(); G.audio?.playSystemSe(0); }
     if (input.confirm()) {
@@ -317,7 +333,7 @@ class ListPanel {
       else G.audio?.playSystemSe(3);
       return true;
     }
-    if (input.cancel()) { G.audio?.playSystemSe(2); this.onCancel?.(); return true; }
+    if (input.cancel() || G.ui?.menuOpen && input.menu()) { G.audio?.playSystemSe(2); this.onCancel?.(); return true; }
     return false;
   }
 }
@@ -381,8 +397,10 @@ class GridPanel {
       if (!it) continue;
       const x = 30 + c * cw, y = this.gridTop + r * this.cellH;
       if (i === this.index && !this.focusTabs) {
-        roundRect(ctx, x + 3, y + 3, cw - 6, this.cellH - 6, 8);
-        ctx.fillStyle = 'rgba(200,170,110,0.3)'; ctx.fill();
+        if (!drawGameCursor(ctx, x + 3, y + 3, cw - 6, this.cellH - 6)) {
+          roundRect(ctx, x + 3, y + 3, cw - 6, this.cellH - 6, 8);
+          ctx.fillStyle = 'rgba(200,170,110,0.3)'; ctx.fill();
+        }
       }
       drawIcon(ctx, it.icon, x + 10, y + 14, 48);
       ctx.font = `29px ${FONT}`;
@@ -434,7 +452,6 @@ class GridPanel {
       const uv = this.panel.hit(raycaster);
       let hover = null;                          // 't3' = tab 3, 'c12' = cell 12
       if (uv) {
-        G.ui.pointerTarget = true;
         const px = uv.x * this.panel.canvas.width, py = (1 - uv.y) * this.panel.canvas.height;
         const cw = (this.panel.canvas.width - 60) / this.cols;
         if (py >= 82 && py <= 132) {
@@ -444,8 +461,9 @@ class GridPanel {
         } else if (py >= this.gridTop) {
           const r = Math.floor((py - this.gridTop) / this.cellH), c = Math.floor((px - 30) / cw);
           const i = (this.top + r) * this.cols + c;
-          if (r >= 0 && r < this.rows && c >= 0 && c < this.cols && items[i]) hover = 'c' + i;
+          if (r >= 0 && r < this.rows && c >= 0 && c < this.cols && this.items[i]) hover = 'c' + i;
         }
+        G.ui.pointerTarget = !!hover;
       }
       const apply = h => {
         if (h[0] === 't') { const t = +h.slice(1); if (t !== this.tab || !this.focusTabs) { this.tab = t; this.focusTabs = true; this.index = 0; this.top = 0; changed = true; } }
@@ -454,17 +472,18 @@ class GridPanel {
       // the laser moves the cursor only when it moves onto another tab / cell; the trigger picks it
       if (this.hover === undefined) this.hover = hover;   // just opened: remember, don't jump
       else if (hover !== this.hover) { this.hover = hover; if (hover) apply(hover); }
-      else if (hover && G.input.xrPressed('right', 0)) apply(hover);
+      if (hover && (G.vr ? input.xrPressed('right', 0) : input.mousePressed?.(0))) apply(hover);
     }
     if (changed) { this.draw(); G.audio?.playSystemSe(0); }
     if (input.confirm()) {
       if (this.focusTabs) { this.focusTabs = false; this.draw(); return true; }
-      const it = items[this.index];
+      // Navigation or a pointer hit may have changed tabs during this update.
+      const it = this.items[this.index];
       if (it && it.enabled !== false) { G.audio?.playSystemSe(1); this.onSelect?.(it, this.index); }
       else G.audio?.playSystemSe(3);
       return true;
     }
-    if (input.cancel()) { G.audio?.playSystemSe(2); this.onCancel?.(); return true; }
+    if (input.cancel() || G.ui?.menuOpen && input.menu()) { G.audio?.playSystemSe(2); this.onCancel?.(); return true; }
     return false;
   }
 }
@@ -604,15 +623,15 @@ class KeyboardPanel {
       const uv = this.panel.hit(raycaster);
       let hover = null;
       if (uv) {
-        G.ui.pointerTarget = true;
         const px = uv.x * this.panel.canvas.width, py = (1 - uv.y) * this.panel.canvas.height;
         hover = this.rects.find(k => px >= k.x && px < k.x + k.w && py >= k.y && py < k.y + k.h) || null;
+        G.ui.pointerTarget = !!hover;
       }
       const key = hover ? `${hover.row}:${hover.col}` : null;
       // the laser picks the key it moves onto; the trigger presses the one under it
       if (this.hover === undefined) this.hover = key;
       else if (key !== this.hover) { this.hover = key; if (hover) { this.row = hover.row; this.col = hover.col; changed = true; } }
-      if (hover && input.xrPressed('right', 0)) { this.row = hover.row; this.col = hover.col; this.press(hover.key); return true; }
+      if (hover && (G.vr ? input.xrPressed('right', 0) : input.mousePressed?.(0))) { this.row = hover.row; this.col = hover.col; this.press(hover.key); return true; }
     }
     if (changed) { this.draw(); G.audio?.playSystemSe(0); }
     if (G.vr && input.xrPressed('right', 4)) { this.press(this.keysOf(this.row)[this.col]); return true; }   // A: the key picked
@@ -645,6 +664,7 @@ export class UI {
     this.root.add(this.toastPanel.mesh);
     this.hud = new Panel(512, 356, 0.24);
     this.hud.mesh.renderOrder = 900;
+    this.navigation = new NavigationMap(Panel, this.root, camera, this.hud.mesh, FONT);
     this.raycaster = new THREE.Raycaster();
     this.pointerLine = null;
     this.msg = null;
@@ -683,6 +703,7 @@ export class UI {
   }
 
   attachHud(target) {
+    this.navigation.attach(!!target);
     if (this.hud.mesh.parent) this.hud.mesh.parent.remove(this.hud.mesh);
     this.hudFollow = target || null;
     if (target) {
@@ -990,11 +1011,11 @@ export class UI {
     if (ray) {
       const uv = this.choice.panel.hit(ray);
       if (uv) {
-        this.pointerTarget = true;
         const r = Math.floor(((1 - uv.y) * this.choice.panel.canvas.height - 100) / this.choice.rowH);
+        this.pointerTarget = r >= 0 && r < this.choice.items.length;
         if (r >= 0 && r < this.choice.items.length) {
           if (r !== this.choice.index) { this.choice.index = r; changed = true; }
-          if (input.xrPressed('right', 0)) pick = r;
+          if (G.vr ? input.xrPressed('right', 0) : input.mousePressed?.(0)) pick = r;
         }
       }
     }
@@ -1577,7 +1598,18 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- pointer
+  unlockPointer() {
+    // Scripted shops, dialogue choices and name entry also need a visible PC cursor.
+    if (!G.vr && G.input.pointerLocked) document.exitPointerLock?.();
+  }
   pointerRay() {
+    if (!G.vr) {
+      const input = G.input, p = input.pointer, rect = input.dom?.getBoundingClientRect?.();
+      if (!p?.seen || input.pointerLocked || !rect?.width || !rect?.height || p.x < rect.left || p.x > rect.right || p.y < rect.top || p.y > rect.bottom) return null;
+      this.camera.updateMatrixWorld(true); this.root.updateMatrixWorld(true);
+      this.raycaster.setFromCamera(new THREE.Vector2((p.x - rect.left) / rect.width * 2 - 1, -(p.y - rect.top) / rect.height * 2 + 1), this.camera);
+      return this.raycaster;
+    }
     const c = G.input.controllers.right;
     if (!G.vr || !c) return null;
     const m = c.ray.matrixWorld;
@@ -1590,35 +1622,28 @@ export class UI {
   openMenu() {
     if (this.menuOpen) return;
     this.menuOpen = true;
+    this.unlockPointer();
     this.menuIndex = 0;
     this.placeRoot(true);
     this.showMainMenu();
   }
   closeMenu() {
+    this.navigation.close();
+    if (this.sceneOpen === 'map') this.sceneOpen = null;
     this.menuOpen = false;
     this.list.close();
     this.grid.close();
     this.consumedConfirm = true;
   }
   showMainMenu() {
-    const s = G.settings;
     const items = [
       { text: tr('계속하기'), id: 'resume' },
+      { text: tr('지도'), id: 'map', right: G.vr ? '' : 'N' },
       { text: tr('아이템'), id: 'items' },
-      { text: tr('스킬'), id: 'skills' },
-      { text: tr('장비'), id: 'equip' },
-      { text: tr('서약'), id: 'oath', enabled: G.state.party.spirits.length > 0 },
-      { text: tr('상태 보기'), id: 'status' },
-      { text: tr('무기·방패 모양 조정'), id: 'adjust' },
-      // (not while an event holds the map for its fight: a save then would come back without the event's own progress)
-      { text: tr('VR 세이브'), id: 'save', enabled: !G.state.system.saveDisabled && !G.map?.interpreter?.running() },
-      { text: tr('VR 로드'), id: 'load' },
+      { text: tr('캐릭터'), id: 'character' },
+      { text: tr('저장 / 불러오기'), id: 'saves' },
       { text: tr('협력'), id: 'coop' },
-      { text: tr('회전 방식: {v}', { v: s.snapTurn ? tr('스냅 {a}°', { a: s.snapAngle }) : tr('부드럽게') }), id: 'turn' },
-      { text: tr('이동 속도: {v} m/s', { v: s.moveSpeed.toFixed(1) }), id: 'speed' },
-      { text: tr('난이도(적 공격력): ×{v}', { v: s.difficulty.toFixed(2) }), id: 'diff' },
-      { text: tr('전투·화면 설정'), id: 'options' },
-      { text: tr('PC 모니터 관전 화면 설정'), id: 'spectator' },
+      { text: tr('설정'), id: 'settings' },
       { text: tr('타이틀로'), id: 'title' },
     ];
     this.grid.close();
@@ -1635,19 +1660,56 @@ export class UI {
     this.list.panel.mesh.position.set(0, 0, 0);
   }
   reopenMain(id) {
-    const order = ['resume', 'items', 'skills', 'equip', 'oath', 'status', 'adjust', 'save', 'load', 'coop', 'turn', 'speed', 'diff', 'options', 'spectator', 'title'];
-    this.menuIndex = Math.max(0, order.indexOf(id));
-    this.showMainMenu();
+    if (['status', 'skills', 'equip', 'oath', 'adjust'].includes(id)) { this.showCharacterMenu(id); return; }
+    if (['turn', 'speed', 'diff', 'options', 'spectator'].includes(id)) { this.showSettingsMenu(id); return; }
+    if (['save', 'load'].includes(id)) { this.showSaveLoadMenu(id); return; }
+    const order = ['resume', 'map', 'items', 'character', 'saves', 'coop', 'settings', 'title'];
+    this.menuIndex = Math.max(0, order.indexOf(id)); this.showMainMenu();
+  }
+  menuGroup(title, items, selected, parent) {
+    this.grid.close(); this.menuIndex = ['resume', 'map', 'items', 'character', 'saves', 'coop', 'settings', 'title'].indexOf(parent);
+    this.list.open(tr('메뉴') + ' › ' + title, [...items, { text: '‹ ' + tr('뒤로'), id: 'back-main' }], {
+      index: Math.max(0, items.findIndex(item => item.id === selected)),
+      onSelect: (_i, item) => item.id === 'back-main' ? this.reopenMain(parent) : this.onMenu(item.id),
+      onCancel: () => this.reopenMain(parent),
+    });
+  }
+  showCharacterMenu(selected = 'status') {
+    this.menuGroup(tr('캐릭터'), [
+      { text: tr('상태 보기'), id: 'status' }, { text: tr('스킬'), id: 'skills' },
+      { text: tr('장비'), id: 'equip' }, { text: tr('서약'), id: 'oath', enabled: G.state.party.spirits.length > 0 },
+      { text: tr('무기·방패 모양 조정'), id: 'adjust' },
+    ], selected, 'character');
+  }
+  showSaveLoadMenu(selected = 'save') {
+    this.menuGroup(tr('저장 / 불러오기'), [
+      { text: tr('VR 세이브'), id: 'save', enabled: !G.state.system.saveDisabled && !G.map?.interpreter?.running() && !G.coop?.phantom },
+      { text: tr('VR 로드'), id: 'load' },
+    ], selected, 'saves');
+  }
+  showSettingsMenu(selected = 'options') {
+    const s = G.settings;
+    this.menuGroup(tr('설정'), [
+      { text: tr('전투·화면 설정'), id: 'options' },
+      { text: tr('회전 방식: {v}', { v: s.snapTurn ? tr('스냅 {a}°', { a: s.snapAngle }) : tr('부드럽게') }), id: 'turn' },
+      { text: tr('이동 속도: {v} m/s', { v: s.moveSpeed.toFixed(1) }), id: 'speed' },
+      { text: tr('난이도(적 공격력): ×{v}', { v: s.difficulty.toFixed(2) }), id: 'diff' },
+      { text: tr('PC 모니터 관전 화면 설정'), id: 'spectator' },
+    ], selected, 'settings');
   }
   onMenu(id) {
     const s = G.settings;
     switch (id) {
       case 'resume': this.closeMenu(); break;
+      case 'character': this.showCharacterMenu(); break;
+      case 'saves': this.showSaveLoadMenu(); break;
+      case 'settings': this.showSettingsMenu(); break;
       case 'items': this.showItems(); break;
       case 'skills': this.showSkills(); break;
       case 'equip': this.showEquipSlots(); break;
       case 'oath': this.showOath(); break;
       case 'status': this.showStatus(); break;
+      case 'map': this.showMap(); break;
       case 'adjust': this.adjTarget = 'weapon'; this.showAdjust(); break;
       case 'save': G.openSaveMenu?.(); break;
       case 'load': G.openLoadMenu?.(); break;
@@ -1665,8 +1727,41 @@ export class UI {
       case 'diff':
         s.difficulty = s.difficulty >= 1.5 ? 0.5 : +(s.difficulty + 0.25).toFixed(2);
         G.saveSettings?.(); this.reopenMain('diff'); break;
-      case 'title': this.closeMenu(); this.returnToTitle(); break;
+      case 'title':
+        this.list.open(tr('타이틀로 돌아갈까요?'), [{ text: tr('취소') }, { text: tr('타이틀로') }], {
+          onSelect: i => { if (i === 1) { this.closeMenu(); this.returnToTitle(); } else this.reopenMain('title'); },
+          onCancel: () => this.reopenMain('title'),
+        }); break;
       default: break;
+    }
+  }
+  showMap() {
+    this.unlockPointer();
+    this.mapReturnMenu = this.menuOpen;
+    this.menuOpen = true; this.sceneOpen = 'map';
+    this.list.close(); this.grid.close();
+    this.navigation.open = true; this.navigation.page = 0; this.navigation.dirty = true;
+    this.placeRoot(true); this.consumedConfirm = true;
+  }
+  closeMap() {
+    this.navigation.close(); this.sceneOpen = null;
+    if (this.mapReturnMenu) this.reopenMain('map');
+    else this.closeMenu();
+    this.consumedConfirm = true;
+  }
+  updateMap() {
+    if (G.input.cancel() || G.input.menu() || G.input.mapPressed?.()) { this.closeMap(); return; }
+    const page = G.input.navY();
+    if (page) { this.navigation.page += page; this.navigation.dirty = true; }
+    const ray = this.pointerRay(), hit = ray && this.navigation.full.hit(ray);
+    if (hit) {
+      const x = hit.x * 1024, y = (1 - hit.y) * 1024;
+      const back = x > 800 && y < 65, prev = x >= 650 && x < 820 && y > 930, next = x >= 820 && y > 930;
+      this.pointerTarget = back || prev || next;
+      if (this.pointerTarget && G.input.confirm()) {
+        if (back) this.closeMap();
+        else { this.navigation.page += prev ? -1 : 1; this.navigation.dirty = true; }
+      }
     }
   }
   // an item / skill does something (effects or a damage formula)
@@ -1907,6 +2002,7 @@ export class UI {
     const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
     const items = [
       { text: tr('VR 이동 속도'), id: 'vrSpeed', right: `×${s.vrSpeed ?? 2}`, desc: tr('스틱으로 걷는 속도 배율 (VR에서만)') },
+      { text: tr('미니맵'), id: 'minimap', right: s.minimap === false ? tr('끔') : tr('켬') },
       { text: tr('휘두르기 판정'), id: 'swing', right: SWING[s.swingLevel ?? 2], desc: tr('이 정도 세기로 휘둘러야 공격이 들어갑니다 (VR)') },
       { text: tr('이펙트 밝기'), id: 'fx', right: `${Math.round((s.fxBrightness ?? 0.5) * 100)}%`, desc: tr('번쩍임·빛·스킬 애니메이션의 밝기') },
       { text: tr('스킬 애니메이션'), id: 'anims', right: ANIMS[s.skillAnims || 'all'], desc: tr('원작 스킬·공격 애니메이션을 대상 위치에 재생합니다') },
@@ -1924,6 +2020,7 @@ export class UI {
       index,
       onSelect: (i, it) => {
         if (it.id === 'vrSpeed') s.vrSpeed = cycle([1, 1.5, 2, 2.5, 3], s.vrSpeed ?? 2);
+        if (it.id === 'minimap') s.minimap = s.minimap === false;
         if (it.id === 'swing') s.swingLevel = ((s.swingLevel ?? 2) + 1) % 4;
         if (it.id === 'fx') s.fxBrightness = cycle([0.25, 0.5, 0.75, 1], s.fxBrightness ?? 0.5);
         if (it.id === 'anims') s.skillAnims = cycle(['all', 'skills', 'off'], s.skillAnims || 'all');
@@ -2017,7 +2114,7 @@ export class UI {
       ...a.equips.map(e => { const d = itemData(e.kind, e.id); return { text: d ? d.name : '—', icon: d?.icon_index, enabled: !!d }; }),
       ...a.partners.map(sid => { const it = this.oathInfo(sid); return { text: it.name, right: it.lv, desc: it.effect }; }),
     ];
-    this.list.open(tr('상태'), items, { onSelect: () => {}, onCancel: () => this.showMainMenu() });
+    this.list.open(tr('상태'), items, { onSelect: () => {}, onCancel: () => this.reopenMain('status') });
   }
   returnToTitle() { G.returnToTitle?.(); }
 
@@ -2374,6 +2471,7 @@ export class UI {
   update(dt) {
     this.consumedConfirm = false;
     this.pointerTarget = false;
+    if (this.sceneBusy() || this.msg || this.keyboard.visible || this.prompt?.shown) this.unlockPointer();
     if (this.actionLockUntil && G.time < this.actionLockUntil) this.consumedConfirm = true;
     const anyPanel = this.msg || this.menuOpen || this.sceneOpen || this.banner || this.toasts.length || this.remote?.shown || this.prompt?.shown;
     if (anyPanel) this.placeRoot();
@@ -2388,13 +2486,14 @@ export class UI {
     }
     if (this.msg) this.updateMessage();
     else if (this.menuOpen || this.sceneOpen) {
-      if (this.keyboard.visible) this.keyboard.update(this.pointerRay());
+      if (this.navigation.open) this.updateMap();
+      else if (this.keyboard.visible) this.keyboard.update(this.pointerRay());
       else if (this.grid.visible) this.grid.update(this.pointerRay());
       else if (this.list.visible) this.list.update(this.pointerRay());
       this.consumedConfirm = true;
-    } else if (G.input.menu() && G.map && (!G.map.interpreter.running() || G.map.interpreter.waitMode === 'battle') && !G.combat?.playerDead) {
+    } else if ((G.input.menu() || G.input.mapPressed?.()) && G.map && (!G.map.interpreter.running() || G.map.interpreter.waitMode === 'battle') && !G.combat?.playerDead && !this.messageBusy()) {
       // (an event holding the map for its fight - 그랑・기뇰's play: the menu opens as in any fight, as walking goes on)
-      this.openMenu();
+      if (G.input.mapPressed?.()) this.showMap(); else this.openMenu();
     }
     this.updateBossPrompt(dt);
     this.updateRemote();
@@ -2406,6 +2505,8 @@ export class UI {
     }
     this.drawHud();
     this.updateHudFollow();
+    this.navigation.update(dt, !!this.hud.mesh.visible && !G.combat?.playerDead && !this.msg && !this.banner?.blocking,
+      !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
     this.updatePointerLine();
   }
   updateHudFollow() {

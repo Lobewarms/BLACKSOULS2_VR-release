@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Input } from '../src/core/input.js';
+import { G } from '../src/core/globals.js';
 
 function browser(t) {
   const listeners = new Map();
@@ -52,4 +53,18 @@ test('unlocking the mouse releases held buttons without swallowing Escape', t =>
   assert.equal(input.pointerLocked, false);
   assert.equal(input.block(), false);
   assert.equal(input.cancel(), true);
+});
+
+test('menu mouse clicks keep the pointer free and confirm only a hit target', t => {
+  const saved = { ui: G.ui, vr: G.vr }; t.after(() => Object.assign(G, saved));
+  const { input, emit } = browser(t); G.vr = false;
+  let locks = 0; input.lockPointer = () => locks++;
+  G.ui = { sceneBusy: () => true, messageBusy: () => false, pointerTarget: false };
+  emit('mousedown', { button: 0, clientX: 321, clientY: 234 });
+  assert.equal(locks, 0); assert.deepEqual(input.pointer, { x: 321, y: 234, seen: true });
+  assert.equal(input.confirm(), false, 'clicks outside an interactive hit cannot activate a menu row');
+  G.ui.pointerTarget = true; assert.equal(input.confirm(), true);
+  emit('mousemove', { clientX: 400, clientY: 250 }); assert.deepEqual(input.pointer, { x: 400, y: 250, seen: true });
+  emit('mouseup', { button: 0 }); G.ui.sceneBusy = () => false;
+  emit('mousedown', { button: 0, clientX: 400, clientY: 250 }); assert.equal(locks, 1, 'gameplay still captures the mouse normally');
 });

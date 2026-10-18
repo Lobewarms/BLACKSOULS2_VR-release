@@ -11,6 +11,8 @@ PC CONTROLS
 WASD: move             Shift: run             Mouse: look
 Left click: attack     Right click: guard     Space: dodge
 E / Enter: interact    Tab: menu               Esc: cancel
+N: full area map. Click menu entries and Back, or use arrows and Enter.
+Menu > Character: status, skills and equipment. Menu > Save / Load: saves.
 See CONTROLS_en.txt for all controls.
 
 META QUEST 3 / PC VR
@@ -21,6 +23,8 @@ Quest needs the PC to run the game; the mod does not run on the headset by itsel
 Left stick: move       Right stick: turn      Right-hand swing: attack
 Left grip: guard       A: dodge / confirm     Y: menu / B: cancel
 Flick the right stick down to interact.
+The minimap is above your left controller. Open Menu > Map for the full area.
+The map shows your position, facing direction and named exits. B returns.
 
 NEED HELP?
 You need Windows 10/11, an up-to-date Chrome or Edge, and your original game.

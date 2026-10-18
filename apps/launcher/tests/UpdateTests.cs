@@ -2,7 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Net.Sockets;
 using System.Security.Cryptography;
+using System.Text;
+using System.Threading.Tasks;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 using BlacksoulsCommunity;
@@ -28,6 +32,109 @@ internal static class UpdateTests
         var assets = new List<object> { new { name = name, browser_download_url = prefix + name, size = 3 } };
         if (checksum) assets.Add(new { name = name + ".sha256", browser_download_url = prefix + name + ".sha256", size = 100 });
         return new JavaScriptSerializer().Serialize(new { tag_name = tag, draft = false, prerelease = preview, assets = assets });
+    }
+
+    private sealed class Reply
+    {
+        public int Status = 200;
+        public byte[] Body;
+        public string Headers = "";
+        public Reply(string body) { Body = Encoding.UTF8.GetBytes(body); }
+    }
+
+    // TcpListener needs no HTTP URL reservation/admin permission and stays entirely local.
+    private sealed class LocalUpdates : IDisposable
+    {
+        private readonly TcpListener listener = new TcpListener(IPAddress.Loopback, 0);
+        private readonly Task serving;
+        public readonly Uri Endpoint;
+        public readonly List<Dictionary<string, string>> Requests = new List<Dictionary<string, string>>();
+
+        public LocalUpdates(params Reply[] replies)
+        {
+            listener.Start();
+            Endpoint = new Uri("http://127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port + "/latest");
+            serving = Task.Run(delegate {
+                foreach (Reply reply in replies)
+                {
+                    using (TcpClient peer = listener.AcceptTcpClient())
+                    using (NetworkStream stream = peer.GetStream())
+                    {
+                        peer.ReceiveTimeout = 5000;
+                        var reader = new StreamReader(stream, Encoding.ASCII, false, 1024, true);
+                        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                        reader.ReadLine();
+                        string line;
+                        while (!String.IsNullOrEmpty(line = reader.ReadLine()))
+                        {
+                            int colon = line.IndexOf(':');
+                            if (colon > 0) headers[line.Substring(0, colon)] = line.Substring(colon + 1).Trim();
+                        }
+                        Requests.Add(headers);
+                        bool identified = headers.ContainsKey("User-Agent") && headers["User-Agent"] == "BlacksoulsVR-Updater";
+                        byte[] body = identified ? reply.Body : Encoding.UTF8.GetBytes("User-Agent required");
+                        byte[] head = Encoding.ASCII.GetBytes("HTTP/1.1 " + (identified ? reply.Status : 403) + " Test\r\nContent-Length: " + body.Length + "\r\nConnection: close\r\n" + reply.Headers + "\r\n");
+                        stream.Write(head, 0, head.Length);
+                        stream.Write(body, 0, body.Length);
+                    }
+                }
+            });
+        }
+
+        public void Dispose()
+        {
+            listener.Stop();
+            try { serving.GetAwaiter().GetResult(); } catch (SocketException) { }
+        }
+    }
+
+    private static ReleaseCheckException Failure(Func<ReleaseUpdate> action, ReleaseCheckFailure expected, string name)
+    {
+        try { action(); }
+        catch (ReleaseCheckException error) { Check(error.Failure == expected, name); return error; }
+        throw new Exception(name);
+    }
+
+    private static void HttpChecks(ReleaseIdentity identity, ReleaseUpdate update, string digest, string directory)
+    {
+        using (var server = new LocalUpdates(new Reply(Release("v2.9.0", false, identity.Repository, true)),
+            new Reply(Release("v2.9.0", false, identity.Repository, true)), new Reply(digest), new Reply("") { Body = new byte[] { 1, 2, 3 } }))
+        using (var client = new ReleaseClient())
+        {
+            Check(client.CheckAt(identity, server.Endpoint).GetAwaiter().GetResult() == null, "First HTTP check finds the installed version");
+            Check(client.CheckAt(identity, server.Endpoint).GetAwaiter().GetResult() == null, "Repeated HTTP check retains its required User-Agent");
+            update.ChecksumUrl = new Uri(server.Endpoint, "/checksum").AbsoluteUri;
+            update.InstallerUrl = new Uri(server.Endpoint, "/setup").AbsoluteUri;
+            string downloaded = client.Download(update, Path.Combine(directory, "http-download")).GetAwaiter().GetResult();
+            Check(File.ReadAllBytes(downloaded).SequenceEqual(new byte[] { 1, 2, 3 }) && server.Requests.Count == 4 &&
+                server.Requests.All(h => h["User-Agent"] == "BlacksoulsVR-Updater"), "Check, recheck, checksum and installer all send the required identity");
+        }
+        using (var server = new LocalUpdates(new Reply("limited") { Status = 403, Headers = "X-RateLimit-Remaining: 0\r\nRetry-After: 120\r\n" }))
+        using (var client = new ReleaseClient())
+        {
+            var error = Failure(() => client.CheckAt(identity, server.Endpoint).GetAwaiter().GetResult(), ReleaseCheckFailure.RateLimited, "GitHub quota failures are distinguished from offline errors");
+            Check(error.RetryAfterUtc > DateTime.UtcNow.AddSeconds(110), "Rate-limit response preserves the server retry time");
+            var repeated = Failure(() => client.CheckAt(identity, server.Endpoint).GetAwaiter().GetResult(), ReleaseCheckFailure.RateLimited, "Retry during cooldown returns the quota explanation");
+            Check(server.Requests.Count == 1 && repeated.RetryAfterUtc == error.RetryAfterUtc, "Repeated clicks do not hit a rate-limited endpoint again");
+            foreach (string language in new[] { "en", "ja", "ko", "zh" })
+                Check(!String.IsNullOrWhiteSpace(error.PlayerMessage(language)) && (language == "en" || error.PlayerMessage(language) != error.PlayerMessage("en")), "Localized quota explanation: " + language);
+            Check(!error.PlayerMessage("en").Contains("internet connection"), "Online quota failures never blame the player's internet");
+        }
+        var cases = new[] {
+            new { Reply = new Reply("denied") { Status = 403 }, Kind = ReleaseCheckFailure.Forbidden },
+            new { Reply = new Reply("missing") { Status = 404 }, Kind = ReleaseCheckFailure.NotFound },
+            new { Reply = new Reply("unavailable") { Status = 503 }, Kind = ReleaseCheckFailure.ServiceUnavailable },
+            new { Reply = new Reply("<html>not release JSON</html>"), Kind = ReleaseCheckFailure.InvalidResponse },
+            new { Reply = new Reply(Release("v3.0.0", false, identity.Repository, false)), Kind = ReleaseCheckFailure.IncompleteRelease },
+            new { Reply = new Reply("limited") { Status = 429 }, Kind = ReleaseCheckFailure.RateLimited }
+        };
+        foreach (var item in cases)
+            using (var server = new LocalUpdates(item.Reply))
+            using (var client = new ReleaseClient())
+                Failure(() => client.CheckAt(identity, server.Endpoint).GetAwaiter().GetResult(), item.Kind, "HTTP update error classification: " + item.Kind);
+        Check(ReleaseClient.Describe(new WebException("timeout", WebExceptionStatus.Timeout)).Failure == ReleaseCheckFailure.Timeout, "Timeout is not reported as offline");
+        Check(ReleaseClient.Describe(new WebException("TLS", WebExceptionStatus.TrustFailure)).Failure == ReleaseCheckFailure.SecureConnection, "Certificate failure identifies the secure connection");
+        Check(ReleaseClient.Describe(new WebException("DNS", WebExceptionStatus.NameResolutionFailure)).Failure == ReleaseCheckFailure.Connection, "DNS failure keeps the connection explanation");
     }
 
     [STAThread]
@@ -77,6 +184,7 @@ internal static class UpdateTests
                 Reject(() => client.Download(update, targetDir).GetAwaiter().GetResult(), "Corrupt download fails");
                 Check(!File.Exists(downloaded), "Remove failed installer download");
             }
+            HttpChecks(identity, update, digest, directory);
             File.WriteAllText(Path.Combine(directory, "release.json"), new JavaScriptSerializer().Serialize(new { schema = 1, repository = identity.Repository, version = identity.Version }));
             Check(ReleaseIdentity.Load(directory).Version == identity.Version, "Load CI release metadata");
             Application.EnableVisualStyles();

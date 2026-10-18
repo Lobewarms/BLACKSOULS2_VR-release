@@ -12,6 +12,7 @@ export class Input {
     this.keys = new Set();
     this.keysPrev = new Set();
     this.mouse = { dx: 0, dy: 0, buttons: 0, prevButtons: 0, wheel: 0 };
+    this.pointer = { x: 0, y: 0, seen: false };
     this.pointerLocked = false;
     this.lockFresh = 0;                              // movements right after the lock still to be checked
     this.lastMoves = [];                             // sizes of the last few movements taken
@@ -36,8 +37,9 @@ export class Input {
       this.releaseMouse();
     });
     dom.addEventListener('mousedown', e => {
+      this.trackPointer(e);
       this.mouse.buttons |= 1 << e.button;
-      if (!this.pointerLocked && !G.vr) this.lockPointer();
+      if (!this.pointerLocked && !G.vr && !G.ui?.sceneBusy() && !G.ui?.messageBusy()) this.lockPointer();
     });
     addEventListener('mouseup', e => { this.mouse.buttons &= ~(1 << e.button); });
     dom.addEventListener('contextmenu', e => e.preventDefault());
@@ -72,6 +74,7 @@ export class Input {
   // or one far bigger than all of the last few (a jump comes alone between small ones; a fast flick grows over several
   // movements and goes on, so after one drop the next is always taken)
   onMouseMove(e) {
+    this.trackPointer(e);
     if (!this.pointerLocked) return;
     const m = Math.max(Math.abs(e.movementX), Math.abs(e.movementY));
     const recent = this.lastMoves.length ? Math.max(...this.lastMoves) : 0;
@@ -184,6 +187,10 @@ export class Input {
     const [x, y] = this.axes.right;
     return Math.abs(x) > Math.abs(y) ? x : 0;
   }
+  trackPointer(e) {
+    if (!Number.isFinite(e.clientX) || !Number.isFinite(e.clientY)) return;
+    this.pointer.x = e.clientX; this.pointer.y = e.clientY; this.pointer.seen = true;
+  }
   // menu navigation (up/down) for UI lists: -1, 0, 1 edge-triggered
   navY() {
     if (G.vr) {
@@ -209,7 +216,8 @@ export class Input {
   }
   confirm() {
     if (G.vr) return this.xrPressed('right', 4) || this.xrPressed('right', 0) && G.ui?.pointerTarget;
-    return this.keyPressed('KeyE') || this.keyPressed('Enter') || this.keyPressed('Space') || this.keyPressed('KeyZ');
+    return this.keyPressed('KeyE') || this.keyPressed('Enter') || this.keyPressed('Space') || this.keyPressed('KeyZ') ||
+      !this.pointerLocked && !!G.ui?.pointerTarget && this.mousePressed(0);
   }
   // world interaction (talk / examine): VR = right stick down
   interact() {
@@ -243,6 +251,7 @@ export class Input {
   }
   // quick slots: VR = X (left) held, PC = Q held; PC number keys 1-8 use a slot directly
   quickHeld() { return G.vr ? this.xrHeld('left', 4) : this.key('KeyQ'); }
+  mapPressed() { return !G.vr && this.keyPressed('KeyN'); }
   quickPressed() { return G.vr ? this.xrPressed('left', 4) : this.keyPressed('KeyQ'); }
   // emotes (src/emotes.js): VR = B (right) held - the cancel button, nothing outside menus and messages, nor
   // any of the game's events but three scenes (which an emote never opens in); PC = T held

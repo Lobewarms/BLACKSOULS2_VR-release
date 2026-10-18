@@ -52,6 +52,7 @@ namespace BlacksoulsCommunity
             private ReleaseUpdate update;
             private bool busy;
             private string language;
+            private string lastCheckMessage;
 
             public UpdateController(Form form, ReleaseIdentity identity, string directory, bool checkOnShow)
             {
@@ -97,6 +98,13 @@ namespace BlacksoulsCommunity
 
             private void Log(string message) { if (!form.IsDisposed) log.AppendText(Environment.NewLine + message + Environment.NewLine); }
 
+            private void LogCheck(string message)
+            {
+                if (message == lastCheckMessage) return;
+                lastCheckMessage = message;
+                Log(message);
+            }
+
             private async System.Threading.Tasks.Task Check()
             {
                 if (busy) return;
@@ -108,13 +116,18 @@ namespace BlacksoulsCommunity
                     if (form.IsDisposed) return;
                     button.Text = update == null ? Text("Check for updates", "更新を確認", "업데이트 확인", "检查更新") :
                         Text("Download update", "更新をダウンロード", "업데이트 받기", "下载更新") + " (" + update.Version + ")";
-                    Log(update == null ? Text("You're up to date.", "最新バージョンです。", "최신 버전입니다.", "已是最新版本。") :
+                    LogCheck(update == null ? Text("You're up to date.", "最新バージョンです。", "최신 버전입니다.", "已是最新版本。") :
                         Text("An update is available: ", "更新があります: ", "새 버전이 있습니다: ", "有可用更新: ") + update.Version);
                 }
-                catch (Exception)
+                catch (Exception error)
                 {
+                    if (form.IsDisposed) return;
                     button.Text = Text("Retry update check", "更新の確認を再試行", "업데이트 확인 재시도", "重试检查更新");
-                    Log(Text("Couldn't check for updates. Check your internet connection and try again.", "更新を確認できませんでした。接続を確認して再試行してください。", "업데이트를 확인하지 못했습니다. 인터넷 연결을 확인하고 다시 시도하세요.", "无法检查更新。请检查网络连接后重试。"));
+                    var failure = error as ReleaseCheckException;
+                    LogCheck(failure != null ? failure.PlayerMessage(language) : Text("The update check couldn't be completed. Please restart the launcher and try again.",
+                        "更新確認を完了できませんでした。ランチャーを再起動して再試行してください。",
+                        "업데이트 확인을 완료하지 못했습니다. 런처를 다시 시작하고 다시 시도하세요.",
+                        "无法完成更新检查，请重新启动启动器后重试。"));
                 }
                 finally { busy = false; if (!form.IsDisposed) button.Enabled = true; }
             }

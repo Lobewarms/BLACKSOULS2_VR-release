@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.10
+BLACK SOULS II VR - community version 0.2.11
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,11 +7,12 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Enemy names now appear above nearby enemies before you attack them.
-- Your HUD and enemy nameplates show status effects, buffs and debuffs.
-- Effect names remain visible even when an effect has no icon.
-- Extra effects cycle into view; the Status menu lists all your active effects.
-- Includes co-op enemy buff indicators and the earlier save-language fixes.
+- Navigate with a live minimap and a full area map: press N or open Menu > Map.
+- Maps use the game's tile artwork and show your facing direction and named exits.
+- Main menu fits one screen, with Character, Save / Load and Settings groups.
+- Click menus and Back on PC, or use the controller pointer in VR.
+- Menus use the game's window skin; status effects use the game's own icons.
+- Fixed update checks failing after the first successful check.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.
