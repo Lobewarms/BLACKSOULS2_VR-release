@@ -1,0 +1,8 @@
+{
+  "repository": "https://github.com/Lobewarms/BLACKSOULS2_VR-release",
+  "commit": "0806cc65ba0061d0fad311022f47fb0b3f2b7405",
+  "version": "2026.10.16-13",
+  "archive": "BLACKSOULS_VR_2026.10.16-13.zip",
+  "archive_sha256": "1b432a9c5c9be32ecb86907873e1997562b812530f701b69296cb347bd684f71",
+  "launcher_sha256": "f100ea530727af44504f8fb6c3a1129c70712cfc1cc284f7c6961efdc781199f"
+}

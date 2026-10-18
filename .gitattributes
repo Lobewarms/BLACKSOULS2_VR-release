@@ -1,0 +1,5 @@
+* text=auto eol=lf
+*.exe -text
+*.glb -text
+*.zip -text
+BLACKSOULS_VR/app/vendor/** -whitespace

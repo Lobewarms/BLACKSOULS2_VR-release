@@ -1,0 +1,17 @@
+BLACK SOULS II VR - modified community fork
+
+This is a MODIFIED version, not the original release by Lobewarms.
+Original: https://github.com/Lobewarms/BLACKSOULS2_VR-release
+Fork: https://github.com/dimasma0305/BLACKSOULS2_VR-release
+
+This fork unpacks the mod into version control and adds automated linting,
+regression tests, import validation and reproducible release packaging.
+See upstream.json for the imported release, commit and checksums.
+
+The Windows launcher is the unchanged upstream binary. Launcher source was
+not included in the upstream release, so this fork does not rebuild it.
+The launcher may offer upstream updates; installing them can replace fork files.
+
+Free distribution only, under the original LICENSE. No original BLACK SOULS II
+game files or saves are included. You must provide your own game installation.
+Vendored three.js and WebXR hand assets retain their included MIT licenses.

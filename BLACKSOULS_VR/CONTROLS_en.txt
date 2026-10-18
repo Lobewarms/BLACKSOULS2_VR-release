@@ -1,0 +1,45 @@
+﻿BLACK SOULS II VR - Controls  (version 2026.10.16-13)
+================================================
+
+VR
+--
+Move              Left stick (click the stick: run / walk)
+Turn              Right stick left / right
+Attack            Swing the weapon in your right hand (guns, bows, the staff that shoots magic: right trigger)
+Charged blow      Hold the right trigger, then swing
+Break             Hold the left trigger and swing with your right hand (a gun in the shield slot: left trigger fires)
+Guard             Left grip - shield toward the attack (raise it just before the hit: perfect guard)
+Dodge             A
+Disarm            Click the right stick
+Examine / talk    Flick the right stick down
+Jump              Flick the right stick up
+Quick slots       Hold X, move your left hand onto a slot, release X
+Spells / throws   Pick from the quick slots, aim with your right hand, right trigger
+Weapon arts       Pick from the quick slots, then hit an enemy with the weapon
+Emotes            Hold B, move your right hand onto a balloon, release B
+Resins            Held in the left hand: rub along the blade of the right-hand weapon
+Herb bottle       Held in the hand: bring it to your mouth
+Blood vial        Held in the hand: stab it into your body
+Menu              Y
+Confirm           A (or point with the laser, right trigger)
+Cancel            B
+In menus          Right stick (number input: left / right = digit, up / down = value)
+Weapon hold       Menu -> weapon / shield model adjust
+
+PC
+--
+Move              W A S D (Shift: run)
+Look              Mouse (click the game view to lock it)
+Attack            Left click (hold and release: charged blow)
+Break             Hold F (or the wheel button) and left click
+Guard             Right click
+Dodge             Space
+Disarm            H
+Jump              C
+Examine / talk /  E / Enter
+confirm
+Quick slots       Hold Q and pick with the mouse / keys 1-8
+Emotes            Hold T and pick with the mouse
+Menu              Tab
+Cancel            Esc
+In menus          Arrow keys (number input: left / right = digit, up / down = value)

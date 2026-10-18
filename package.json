@@ -1,0 +1,17 @@
+{
+  "name": "blacksouls2-vr-community-fork",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Modified BLACK SOULS II VR fork with source-based checks and release packaging",
+  "engines": { "node": ">=24" },
+  "scripts": {
+    "lint": "eslint BLACKSOULS_VR/app/src tests scripts eslint.config.js --max-warnings 0",
+    "test": "node --test tests/*.test.mjs",
+    "check:imports": "node scripts/check-imports.mjs"
+  },
+  "devDependencies": {
+    "eslint": "10.13.0",
+    "globals": "17.13.0"
+  }
+}

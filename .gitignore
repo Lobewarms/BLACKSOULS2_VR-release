@@ -1,0 +1,15 @@
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+dist/
+coverage/
+BLACKSOULS_VR/saves/
+BLACKSOULS_VR/coop_server.json
+BLACKSOULS_VR/*.log
+BLACKSOULS_VR/Game.exe
+BLACKSOULS_VR/Data/
+BLACKSOULS_VR/Graphics/
+BLACKSOULS_VR/Audio/
+BLACKSOULS_VR/Game.rgss3a
