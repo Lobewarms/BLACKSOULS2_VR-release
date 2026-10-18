@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.16
+BLACK SOULS II VR - community version 0.2.17
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,17 +7,14 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Weapon instant-death effects and stacking on-hit effects now apply correctly.
-- High-hit-count weapon upgrades keep their full attack count.
-- Armor evasion, counterattack bonuses and enemy health regeneration now work.
-- Damage-reduction piercing effects honor their intended physical/magical type.
-- Extra-action bonuses shorten desktop attack and ranged-attack recovery.
-- Weapon accuracy penalties and critical evasion now affect real hit rolls.
-- Enemy instant-death spells respect your resistances and death-saving effects.
+- Weapon stun now applies the original Stun status instead of being converted
+  into extra stagger buildup. This fixes Great Sword and other stun weapons.
+- Successful stuns interrupt enemy attacks and prevent actions until they expire.
+- Enemy effect labels show Stun using the original game's icon.
+- Stun chances still respect enemy resistance, immunity and luck. Great Sword's
+  base chance is 80%; a landed hit is not a guaranteed stun.
 
-AGI is a combat stat, separate from walking speed. Run like Dodo controls walking.
-In VR, melee still requires a physical swing; extra actions do not create hits
-while you hold the weapon still.
+Normal stagger and Break mechanics remain available alongside weapon stun.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

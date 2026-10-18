@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { G } from '../src/core/globals.js';
 import { $data } from '../src/data/data.js';
 import { BattlerBase, GameState } from '../src/game/state.js';
+import { battlerEffects } from '../src/ui/battler-status.js';
 
 globalThis.addEventListener ||= () => {};
 const { ActionEnemy, CombatSystem } = await import('../src/combat/combat.js');
@@ -43,7 +44,7 @@ function environment(t) {
   const combat = Object.assign(Object.create(CombatSystem.prototype), {
     symbols: new Map(), powerUntil: 0, shotKind: 'gun', weapon: new THREE.Group(), disarmed: false,
     heldBoss: () => false, slipsWithAnswer: () => null, groggyHit() {}, damageRemovesStates() {},
-    popup() {}, popupAtPlayer() {}, applyBuffEffects: () => false, checkEnemyDeath() {},
+    popup() {}, popupAtPlayer() {}, spawnGlow() {}, applyBuffEffects: () => false, checkEnemyDeath() {},
     killEnemy(e) { e.b.addState(1); e.state = 'dead'; killed.push(e); },
     takeArmedSkill: () => null, afterPlayerAction() {}, hitPoint: () => new THREE.Vector3(),
     later(delay, fn) { pending.push({ delay, fn }); },
@@ -118,6 +119,67 @@ test('weapon death traits can kill and death-resistant enemies remain alive', t 
   hit(); assert.equal(enemy.alive, true); assert.equal(killed.length, 0);
   enemy.b.features.length = 0;
   hit(); assert.equal(enemy.b.hp, 0); assert.equal(enemy.b.isState(1), true); assert.equal(killed.length, 1);
+});
+
+function stunWeapon(t) {
+  const e = environment(t);
+  // Synthetic fixture: the installed Great Sword has attack-state 13 at 80%.
+  // Stun restricts actions and lasts one enemy turn; use the normal state path.
+  $data.weapons[1].features.push(trait(32, 13, 0.8));
+  Object.assign($data.states[13], { name: 'Stun', icon_index: 21, restriction: 4, auto_removal_timing: 1 });
+  return e;
+}
+
+test('weapon stun interrupts an enemy attack, appears in its effects and expires before AI can act again', t => {
+  const { enemy, combat, hit } = stunWeapon(t);
+  enemy.state = 'windup'; enemy.timer = 1; enemy.act = {}; enemy.move = 'charge'; enemy.marker = {};
+  combat.fadingMarkers = [];
+  hit();
+  assert.equal(enemy.b.isState(13), true, 'weapon stun must apply the real status, not only reduce the groggy gauge');
+  assert.equal(enemy.state, 'recover'); assert.equal(enemy.act, null); assert.equal(enemy.move, null);
+  assert.equal(enemy.marker, null); assert.equal(combat.fadingMarkers.length, 1);
+  assert.equal(enemy.stateTimers[13], 2);
+  assert.deepEqual(battlerEffects(enemy.b).map(effect => [effect.name, effect.icon]), [['Stun', 21]]);
+  combat.enemyAI(enemy, 1.5, { fx: 0, fy: 0 }, 0);
+  assert.equal(enemy.state, 'recover', 'the restricted enemy cannot start another attack');
+  combat.tickEnemyStates(enemy, 2);
+  assert.equal(enemy.b.isState(13), false); assert.equal(combat.enemyRestricted(enemy), false);
+  combat.enemyAI(enemy, 0.3, { fx: 0, fy: 0 }, 0);
+  assert.equal(enemy.state, 'chase', 'normal AI resumes after stun expires');
+  assert.deepEqual(battlerEffects(enemy.b), []);
+});
+
+test('weapon stun observes the 80% boundary, enemy susceptibility, immunity and missed attacks', t => {
+  const { enemy, hit } = stunWeapon(t);
+  Math.random.mock.mockImplementation(() => 0.8); hit(); assert.equal(enemy.b.isState(13), false);
+  Math.random.mock.mockImplementation(() => 0.79); hit(); assert.equal(enemy.b.isState(13), true);
+  enemy.b.removeState(13); enemy.b.features = [trait(13, 13, 0.5)];
+  Math.random.mock.mockImplementation(() => 0.4); hit(); assert.equal(enemy.b.isState(13), false);
+  Math.random.mock.mockImplementation(() => 0.39); hit(); assert.equal(enemy.b.isState(13), true);
+  enemy.b.removeState(13); enemy.b.features = [trait(14, 13, 0)];
+  hit(); assert.equal(enemy.b.isState(13), false);
+  enemy.b.features = []; $data.weapons[1].features.push(trait(22, 0, -1));
+  hit(); assert.equal(enemy.b.isState(13), false, 'a missed physical hit cannot apply stun');
+});
+
+test('VR weapon hits and direct stun skills retain the same real status application', t => {
+  const { enemy, combat, hit } = stunWeapon(t); G.vr = true;
+  hit(); assert.equal(enemy.b.isState(13), true); assert.equal(combat.enemyRestricted(enemy), true);
+  enemy.b.removeState(13);
+  const skill = attack(2, { effects: [{ code: 21, data_id: 13, value1: 0.8 }] });
+  combat.applyUsableToEnemy(enemy, skill, null);
+  assert.equal(enemy.b.isState(13), true); assert.equal(enemy.stateTimers[13], 2);
+});
+
+test('stun weapons retain ordinary groggy buildup without converting their stun rate into a second groggy bonus', t => {
+  const { actor, enemy, combat, hit } = stunWeapon(t);
+  delete combat.groggyHit;
+  enemy.b.enemyId = 1; enemy.b.data = { features: [] };
+  combat.groggyMax(enemy); const full = enemy.grog;
+  hit();
+  assert.equal(enemy.b.isState(13), true);
+  assert.ok(Math.abs(full - enemy.grog - actor.atk) < 1e-8);
+  assert.ok(enemy.grog > 0); assert.notEqual(enemy.state, 'stagger', 'stun does not require emptying the independent groggy gauge');
 });
 
 test('dagger repetitions and upgraded machine-gun traits deliver every real hit', t => {

@@ -88,13 +88,13 @@ function spinAngle(t) {
 function turnWidth(a) { const c = Math.cos(a); return Math.sign(c || 1) * Math.max(0.06, Math.abs(c)); }
 // blow after blow: within RUSH.window s the swings after the first RUSH.free hit weaker
 const RUSH = { window: 1.5, free: 2, mults: [0.6, 0.4, 0.25] };
-// groggy (in place of the weapons' stun, which kept enemies helpless blow after blow): every enemy that can be stunned has a
+// groggy is independent of weapon stun: every enemy that can be stunned has a
 // gauge from its stats - (ATK + DEF + MDF) / 3, a little more the bigger it is (max HP^0.25) and the less it can be stunned
 // (/ sqrt of its stun rate); stun-proof ones have none. A blow carrying the attacker's weapon states (the "normal attack"
-// effect) takes the attacker's ATK from it (MAT for a magic one) times how hard it hit, a little more for a weapon that
-// stunned (+40% at 100%), never more than a tenth of the gauge in one attack. With no blow for 3 s it fills 5% a second.
+// effect) takes the attacker's ATK from it (MAT for a magic one) times how hard it hit,
+// never more than a tenth of the gauge in one attack. With no blow for 3 s it fills 5% a second.
 // Emptied, the enemy is broken as by a Break, and it is full again when the enemy gets up
-const GROGGY = { k: 20, stun: 0.4, cap: 0.1, delay: 3, regen: 0.05 };
+const GROGGY = { k: 20, cap: 0.1, delay: 3, regen: 0.05 };
 // the one sound of a Break (or a groggy gauge) that lands - the user's choice: the game's own 金属 (1) at half pitch, from
 // where it starts (its first 0.07 s are silent, twice that slowed down)
 const BREAK_SE = { name: '金属 (1)', volume: 100, pitch: 50, from: 0.07 };
@@ -2738,7 +2738,6 @@ export class CombatSystem {
         } else if (v > 0) { e.b.hp = Math.min(e.b.mhp, e.b.hp + v); e.drawBar(); }
       } else if (ef.code === 21 && ef.data_id === 0) {   // "normal attack" states: the attacker's own (poison blades...)
         for (const id of actor?.atkStates() || []) {
-          if (id === STUN) continue;                   // (stun: the groggy gauge instead)
           if (Math.random() < this.stateEffectChance(actor, e.b, obj, id, ef.value1 * actor.atkStatesRate(id))) this.addEnemyState(e, id);
         }
         this.groggyHit(e, actor, obj, mult, blow);
@@ -3370,8 +3369,7 @@ export class CombatSystem {
   groggyHit(e, actor, obj, mult, blow) {
     const max = this.groggyMax(e);
     if (!max || !actor || !e.alive || e.state === 'stagger' || e.grogDown || this.inDuel(e)) return;     // (her duel: no groggy)
-    const stun = THREE.MathUtils.clamp(actor.featuresSum(32, STUN), 0, 1);
-    let g = (obj?.hit_type === 2 ? actor.mat : actor.atk) * (1 + GROGGY.stun * stun) * Math.max(0, mult);
+    let g = (obj?.hit_type === 2 ? actor.mat : actor.atk) * Math.max(0, mult);
     const used = blow?.grog?.get(e) || 0;
     g = Math.min(g, GROGGY.cap * max - used);
     if (!(g > 0)) return;

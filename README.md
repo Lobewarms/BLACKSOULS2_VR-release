@@ -56,6 +56,7 @@ It remembers your selected folder after you launch the game.
 - **Status effects:** Nearby enemies show their name, health and effects overhead. VR keeps the wrist HUD; extra effects cycle into view and **Menu → Status** shows the complete list.
 - **Held equipment:** PC weapons rest low at the side and disappear during menus and dialogue, keeping the room and people in view.
 - **Stats and speed:** Equipment changes combat stats, damage, resistances and on-hit effects. AGI affects formulas that use it; walking speed is controlled separately by Run like Dodo. Extra-action bonuses shorten desktop and ranged attack recovery. VR melee follows your physical swing.
+- **Weapon stun:** Successful stun effects interrupt enemy attacks and briefly prevent actions. The enemy's effects show the original Stun icon. Listed chances are adjusted by enemy resistance and luck; immune enemies cannot be stunned.
 - **Where are my saves?** Mod saves are in the `saves` folder beside the launcher. Your original game and original saves are not changed. Setup keeps mod saves during upgrades and uninstall.
 - **Updates:** Download new versions from [this project's releases](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases). Click **Check for updates** in the launcher. If an update is available, click **Download update**, then open setup when prompted. Your saves are kept.
 

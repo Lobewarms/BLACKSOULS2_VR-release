@@ -936,7 +936,8 @@ and per-target debounce; do not turn one held pose into repeated free attacks.
 
 Weapon/state effects must use actual attack and damage paths. Normal attack state
 traits include death state 1, combine rates for a given state before rolling and
-apply original resistance/rate/LUK rules. Preserve the groggy replacement for stun.
+apply original resistance/rate/LUK rules. This release retained the groggy
+replacement for stun; 0.2.17 below restores the original weapon status.
 Keep full legitimate attack counts (upgraded Hans' Machine Gun reaches 12 hits),
 with bounded validation for malformed values. Accuracy penalties, skill success
 rates and target critical evasion must participate in real hit/critical rolls.
@@ -976,3 +977,28 @@ specific effect behavior, not exhaustive compatibility for every story event.
 The user chose gameplay effects first while the game was closed. The stationary
 skeleton screenshot remains unidentified and needs a later live inspection; do
 not claim this release fixes that particular object.
+
+## Weapon stun restoration (0.2.17)
+
+The user reported that Great Sword's advertised stun never triggers. Private
+read-only verification found weapon IDs 123-132 have feature 32/state 13/value
+0.8. Attack 1 and Mow Down 81 carry the normal-attack-state effect. State 13
+restricts actions, uses original icon 21, and lasts one turn. The inherited
+normal-attack loop explicitly skipped state 13 and converted its chance to a
+groggy bonus; 0.2.16 retained that exception, so it did not restore weapon stun.
+
+Apply weapon stun through the shared stateEffectChance/addEnemyState path,
+respecting actual hit, susceptibility, immunity, LUK and original ignore tags.
+The existing restriction handler cancels windups/actions and their telegraphs,
+prevents AI actions, and resumes after the enemy-state timer expires (one enemy
+turn is two seconds in this port). Existing status display uses the original
+state name and icon. Keep ordinary groggy/Break mechanics, but remove the old
+stun-to-groggy bonus now that the weapon's original status is applied directly.
+
+Four regressions failed against 0.2.16 and pass with the fix: actual attack
+interruption/status display/expiry/AI recovery, chance/resistance/immunity/misses,
+VR and direct-skill application, and independent groggy buildup. Private runtime
+verification used the installed Great Sword, Attack, Mow Down and Stun database
+records against synthetic battlers with no player-save access. Both attacks
+applied the real state, restricted actions, and expired after two seconds. Keep
+original data outside Git/releases; these checks are not a live headset playtest.
