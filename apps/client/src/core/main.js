@@ -199,7 +199,10 @@ function clearMapView() {
   markers.clear();
   G.floorAt = () => 0;
   if (view.mesh) { scene.remove(view.mesh.group); view.mesh.dispose(); view.mesh = null; }
-  for (const c of view.loop?.copies || []) scene.remove(c.obj);
+  for (const c of view.loop?.copies || []) {
+    scene.remove(c.obj);
+    c.obj.traverse(o => { if (o.isInstancedMesh) o.dispose(); });
+  }
   view.loop = null;
   for (const s of view.sprites) s.dispose();
   view.sprites = [];
@@ -254,6 +257,7 @@ async function presentMap(seeds = [], rebuild = false, open = null) {
     isWall: (x, y) => mesh.isSolid(x, y), spotOnSolid: (x, y, lying, above) => mesh.spotOnSolid(x, y, lying, above),
     onSideWall: (x, y) => mesh.onSideWall(x, y), isDoorway: (x, y) => mesh.isDoorway(x, y), drawer: mesh.drawer, tileFlag: id => grid.flag(id),
     joinsBelow: mesh.joinsBelow, joinsBeside: mesh.joinsBeside,
+    tilesetNames: grid.tileset.tileset_names,
   };
   view.mapInfo = mapInfo;
   for (const ev of G.map.eventList) view.sprites.push(new CharacterSprite(ev, scene, mapInfo));

@@ -13,7 +13,8 @@ import {
 } from './tiles.js';
 import { loadImage, pixelTexture } from '../data/assets.js';
 import { PLAYER_BLOCK_REGIONS } from './mapanalysis.js';
-import { LYING_TILES } from '../entities/lying.js';
+import { isLyingTile } from '../entities/lying.js';
+import { furnitureFloor, furnitureGeometry, isUprightFurnitureTile } from '../entities/furniture.js';
 import { voxelGeometryOf, SLAB_THICKNESS } from '../combat/weapons.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
@@ -225,6 +226,8 @@ export async function loadTilesetImages(tileset) {
 }
 
 export async function buildMapMesh(grid, opts = {}) {
+  const furniture = furnitureFloor(grid);
+  grid = furniture.grid;
   const images = await loadTilesetImages(grid.tileset);
   const parWallImg = opts.parallaxWalls && grid.map.parallax_name ? await loadImage('Graphics/Parallaxes', grid.map.parallax_name) : null;
   const drawer = new TileDrawer(images, grid.flags);
@@ -581,8 +584,7 @@ export async function buildMapMesh(grid, opts = {}) {
   // walls with the blankets on their faces
   const lyingTile = new Set();
   for (let t = 0; t < 1024; t++) {
-    const list = LYING_TILES[grid.tileset.tileset_names[5 + (t >> 8)]];
-    if (list && list.includes(t & 255)) lyingTile.add(t);
+    if (isLyingTile(t, grid.tileset.tileset_names)) lyingTile.add(t);
   }
   const cand = new Uint8Array(w * h);
   // (maphints solids: cells the map leaves walkable or draws as water that are part of a block - a facade's columns drawn
@@ -2194,7 +2196,8 @@ export async function buildMapMesh(grid, opts = {}) {
         cols.push(b);
       }
       const arch = cols.some(c => c.archFlat);
-      const fixed = arch || cols.some(c => longCell[idx(c.x, c.topY)]) || (cols.length > 1 && cols.some(c => c.againstWall));
+      const fixedFurniture = cols.every(c => c.tiles.every(t => isUprightFurnitureTile(t, grid.tileset.tileset_names)));
+      const fixed = fixedFurniture || arch || cols.some(c => longCell[idx(c.x, c.topY)]) || (cols.length > 1 && cols.some(c => c.againstWall));
       // a map hint keeps some small pictures facing as in 2D (the croquet hoops)
       const flat = !fixed && !!flatTiles && cols.every(c => c.tiles.every(t => flatTiles.has(t)));
       // low and wide - 2 to 4 tiles across and wider than tall (a row of barrels, a bench, a low fence): turning
@@ -2345,6 +2348,7 @@ export async function buildMapMesh(grid, opts = {}) {
       stacks: stacks.map(st => ({ x: st.x, y: st.cellY, top: st.topY, foot: st.footY, elev: st.elev, againstWall: st.againstWall, drop: st.drop || 0, tiles: st.tiles, joined: !!st.joined, arch: st.arch ? (st.archFlat ? 'flat' : 'turning') : '' })),
       footShadows: [...footShadowAt.entries()].map(([i, t]) => [i % w, (i / w) | 0, t]),
       lying: lyingCols.map(c => ({ x: c.x, y: c.y1, top: c.y0, tiles: c.pieces })),
+      furniture: furniture.cells.map(c => ({ x: c.x, y: c.y, tile: c.tile, kind: c.profile.kind, direction: c.profile.direction })),
       boxes: boxes.map(b => b.line ? { line: b.line.map(st => [st.x, st.cellY, st.footY]), fixed: true } : { x0: b.x0, n: b.n, cy: b.cy, fixed: b.fixed, slab: !!b.slab }),
       stats: { invisibleCells: invisibleCells.map(i => [i % w, (i / w) | 0]), falls: fallStats,
         // (walls drawn between two walkable places that ended at one level: a terraced place laid flat?)
@@ -2956,6 +2960,41 @@ export async function buildMapMesh(grid, opts = {}) {
 
   const group = new THREE.Group();
   group.name = 'map';
+  let furnitureMaterial = null;
+  // A room's chairs stay aligned with its tables, regardless of the camera.
+  if (furniture.cells.length) {
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = TS;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const pixels = new Map(), byTile = new Map();
+    const pixelsFor = tile => {
+      if (!pixels.has(tile)) {
+        ctx.clearRect(0, 0, TS, TS);
+        drawer.draw(ctx, tile, 0, 0);
+        pixels.set(tile, ctx.getImageData(0, 0, TS, TS).data);
+      }
+      return pixels.get(tile);
+    };
+    for (const c of furniture.cells) {
+      if (!byTile.has(c.tile)) byTile.set(c.tile, { geometry: furnitureGeometry(c.profile, pixelsFor, T), cells: [] });
+      byTile.get(c.tile).cells.push(c);
+    }
+    furnitureMaterial = new THREE.MeshLambertMaterial({ vertexColors: true });
+    for (const { geometry, cells } of byTile.values()) {
+      if (!geometry) continue;
+      // Repeated seating shares its geometry and draw call, including theatre rows.
+      const mesh = new THREE.InstancedMesh(geometry, furnitureMaterial, cells.length), matrix = new THREE.Matrix4();
+      cells.forEach((c, i) => {
+        matrix.makeTranslation((c.x + 0.5) * T, floorAt(c.x, c.y) * T, (c.y + 0.5) * T);
+        mesh.setMatrixAt(i, matrix);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.computeBoundingBox(); mesh.computeBoundingSphere();
+      mesh.name = 'furniture';
+      mesh.matrixAutoUpdate = false;
+      group.add(mesh);
+    }
+  }
   const staticTex = pixelTexture(staticAtlas.canvas);
   const animTex = pixelTexture(animAtlas.canvas);
   animTex.wrapS = THREE.RepeatWrapping;
@@ -3237,9 +3276,10 @@ export async function buildMapMesh(grid, opts = {}) {
       }
     },
     dispose() {
-      group.traverse(o => { if (o.geometry) o.geometry.dispose(); });
+      group.traverse(o => { if (o.geometry) o.geometry.dispose(); if (o.isInstancedMesh) o.dispose(); });
       for (const m of [matStatic, matAnim, matBbStatic, matBbAnim, matObj, matObjAnim]) m.dispose();
       staticTex.dispose(); animTex.dispose();
+      furnitureMaterial?.dispose();
     },
   };
 }

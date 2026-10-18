@@ -20,6 +20,11 @@ export const LYING_TILES = {
   'evilcastle_B': [202, 203, 210, 211],                                                  // coffins
   '病棟': [80, 81],                                                                      // hospital bed
   'クリミア (4)': [174, 182, 190],                                                        // hospital bed (190: its foot, walkable)
-  'Inside_B': [81, 82, 88, 89, 90, 94],                                                  // beds (81-90: the green double bed, 퀸・랜드 ５)
+  'Inside_B': [80, 81, 82, 83, 84, 85, 86, 88, 89, 90, 91, 92, 93, 94,                  // beds, including the single and damaged variants
+    96, 97, 98, 99, 100, 107, 108, 120],                                               // tables and bench (not the adjacent pianos or stools)
   '子供部屋2': [8, 16],                                                                   // bed (16: its foot, walkable)
 };
+
+export function isLyingTile(id, names) {
+  return id > 0 && id < 1024 && !!LYING_TILES[names?.[5 + (id >> 8)]]?.includes(id & 255);
+}

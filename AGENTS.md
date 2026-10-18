@@ -341,3 +341,39 @@ read-only verification against the user's actual archive confirmed identical
 recovered pixels. Private inspection files stay outside this repository under
 workspace .tools or the system temp directory, and never enter release packages.
 No game/headset playtest or new 3D model assets are claimed.
+
+
+## Furniture perspective (0.2.6)
+
+Furniture previously shared the character billboard path, so chairs, cabinets
+and bookcases could turn toward the camera. The low-block list also missed
+Inside_B single/damaged beds and several tables. Tile events never consulted
+that list and could stand a known bed upright because of its priority/flags.
+
+furniture.js provides explicit sheet/index profiles verified against the user's
+installed art. VXTileD and RoyalTileset-TileB chair views resolve to matching
+front/rear drawings and fixed map directions; Inside_B/VXTileD stools have their
+own profiles. Existing voxel geometry folds the art into horizontal seats,
+upright backrests and front/rear legs, retaining pixel edges and rear artwork.
+Transparent bottom margins are removed from leg spans so feet touch the floor.
+No game art is committed or packaged. Repeated map seating uses InstancedMesh
+per tile, with explicit instance-buffer disposal for maps and loop copies.
+
+furnitureFloor creates a rendering grid over the original lower floor layers;
+it never alters the gameplay grid, event priority or through state. Objects on
+impassable bases retain the existing wall/side-view rendering. The known upright
+cupboard/bookcase/piano/crate pieces use fixed boxes in map and tile-event paths.
+Known flat event furniture uses a low horizontal block. Doors, living actors,
+unknown art and special side-wall placement keep their existing rules. Tile-event
+arrangement keys now include mode, priority and through state for page changes.
+
+Validation: 33 JavaScript tests include real Three.js furniture geometry, shape
+normals, directions, unchanged collision, transparent foot margins, event page
+changes, fixed storage, full map build and instance disposal, with synthetic art.
+Private read-only inspection covered the installed tileset images and all 410
+map records: 234 eligible chair/stool placements across 22 maps, plus one matching
+event page. All 28 art profiles generated geometry with feet on y=0. A private
+perspective preview checked six representative models from front, rear and side
+at player eye height. These are geometry previews and data checks; no full-game
+or headset playtest is claimed. Private art and map files remain outside the
+repository under workspace .tools and must never enter release artifacts.

@@ -6,6 +6,8 @@ import { T } from '../world/mapmesh.js';
 import { loadCanvas } from '../data/assets.js';
 import { TS } from '../world/tiles.js';
 import { BalloonIcon, BALLOON_SIZE } from '../ui/balloons.js';
+import { tileFurniture, furnitureGeometry, isUprightFurnitureTile } from './furniture.js';
+import { isLyingTile } from './lying.js';
 
 const sheetCache = new Map();
 async function loadSheet(name) {
@@ -191,6 +193,7 @@ export class CharacterSprite {
     if (this.isDoorGraphic() && (this.mapInfo.isWall(c.x, c.y - 1) || this.mapInfo.isDoorway?.(c.x, c.y))) return 'stand';
     // drawn on a side-view tower's wall: hangs on it
     if (this.mapInfo.onSideWall?.(c.x, c.y)) return 'stand';
+    if (this.furnitureProfile()) return 'furniture';
     // drawn with a tile that blocks the way (a pane of a church window, a crate): it stands up as that tile
     // does on the map, whatever its priority
     if (c.tileId > 0 && c.priorityType === 0 && this.mapInfo.tileFlag) {
@@ -206,6 +209,10 @@ export class CharacterSprite {
     if (c.priorityType === 2) return 'over';
     if (c.through && (c.tileId > 0 || /^[!$]*!/.test(c.characterName || ''))) return 'lie';
     return 'stand';
+  }
+  furnitureProfile() {
+    const id = this.ch.tileId, names = this.mapInfo.tilesetNames;
+    return tileFurniture(id, names) || (isLyingTile(id, names) ? { kind: 'flat', front: id } : null);
   }
   isDoorGraphic() { return /door|ドア|扉|門|gate/i.test(this.ch.characterName || ''); }
   // corpses (and the blood / sign pieces on the same sheet, fallen people, a dead dog, a skeleton lying still):
@@ -226,6 +233,7 @@ export class CharacterSprite {
 
   async rebuild(key) {
     this.key = key;
+    this.tp = null;
     if (this.mesh) { this.group.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.mesh = null; }
     if (this.slab) { this.group.remove(this.slab); this.slab.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } }); }
     this.slab = undefined;
@@ -266,13 +274,23 @@ export class CharacterSprite {
     this.rowsFixed = !!sheetCanvas && !rowsAreViews(c.characterName, sheetCanvas, info, c.characterIndex);
     this.translucent = !!sheetCanvas && translucentArt(c.characterName, sheetCanvas, info, c.characterIndex);
     const lying = this.mode === 'lie';
-    const geo = new THREE.PlaneGeometry(w, h);
-    if (lying) {
+    const furniture = this.mode === 'furniture' ? this.furnitureProfile() : null;
+    let geo = furniture ? furnitureGeometry(furniture, id => {
+      const ctx = this.tileCanvas.getContext('2d', { willReadFrequently: true });
+      ctx.clearRect(0, 0, TS, TS);
+      this.mapInfo.drawer.draw(ctx, id, 0, 0);
+      return ctx.getImageData(0, 0, TS, TS).data;
+    }, T) : null;
+    this.isFurniture = !!geo;
+    geo ||= new THREE.PlaneGeometry(w, h);
+    if (this.isFurniture) {
+      tex.dispose();
+    } else if (lying) {
       // flat on the floor, raised a little, with a soft shadow under it so it reads as an object
       geo.rotateX(-Math.PI / 2);
       geo.translate(0, 0.07, 0);
     } else geo.translate(0, h / 2, 0);
-    const mat = new THREE.MeshLambertMaterial({ map: tex, alphaTest: this.translucent ? 0.02 : 0.4, side: THREE.DoubleSide,
+    const mat = new THREE.MeshLambertMaterial({ map: this.isFurniture ? null : tex, vertexColors: this.isFurniture, alphaTest: this.translucent ? 0.02 : 0.4, side: THREE.DoubleSide,
       transparent: this.translucent, depthWrite: !this.translucent });
     this.mesh = new THREE.Mesh(geo, mat);
     // facade objects (doors set into a wall) do not rotate; chests etc. stand in front of the wall
@@ -435,7 +453,8 @@ export class CharacterSprite {
     const cx = Math.round(rx), cy = Math.round(ry);
     if (cx !== this.spotX || cy !== this.spotY || this.spotMode !== this.mode) {
       this.spotX = cx; this.spotY = cy; this.spotMode = this.mode;
-      this.spot = c.isEvent ? this.mapInfo.spotOnSolid?.(cx, cy, this.mode === 'lie', c.priorityType === 2) || null : null;
+      const lying = this.mode === 'lie' || (this.mode === 'furniture' && this.furnitureProfile()?.kind === 'flat');
+      this.spot = c.isEvent ? this.mapInfo.spotOnSolid?.(cx, cy, lying, c.priorityType === 2) || null : null;
       this.inDoorway = !!this.mapInfo.isDoorway?.(cx, cy);
     }
     const spot = this.spot;
@@ -475,7 +494,7 @@ export class CharacterSprite {
     const onPicture = this.mode === 'over' && !!spot?.about;
     this.mesh.position.y = jump + (this.mode === 'over' && !spot ? 1.9 : 0) + (onPicture && !this.info?.object ? 4 / TS * T : 0) - drop;
     if (this.shadow) this.shadow.visible = !spot || spot.ground;
-    if (this.mode === 'lie') {
+    if (this.mode === 'lie' || this.mode === 'furniture') {
       this.mesh.rotation.y = 0;
       this.mesh.position.z = 0;
     } else if (flatSpot) {
@@ -486,6 +505,9 @@ export class CharacterSprite {
       // front face instead, over it like the 2D drawing (the notch is behind it, so the cell stays walkable)
       this.mesh.rotation.y = 0;
       this.mesh.position.z = (this.inDoorway ? 0.51 : -0.48) * T;
+    } else if (isUprightFurnitureTile(c.tileId, this.mapInfo.tilesetNames)) {
+      this.mesh.rotation.y = 0;
+      this.mesh.position.z = 0;
     } else {
       this.mesh.rotation.y = Math.atan2(viewer.x - wx, viewer.z - wz);
       this.mesh.position.z = 0;
@@ -538,7 +560,7 @@ export function layoutTilePictures(sprites, mapInfo) {
     const c = s.ch;
     if (!c.isEvent || !(c.tileId > 0) || !s.mesh || s.hiddenNow !== false || (s.mode !== 'stand' && s.mode !== 'over')) continue;
     ups.set(c.x + c.y * w, s);
-    key += c.x + ',' + c.y + ',' + c.tileId + ';';
+    key += `${c.x},${c.y},${c.tileId},${s.mode},${c.priorityType},${!!c.through};`;
   }
   if (key === sprites.tileLayoutKey) return;
   sprites.tileLayoutKey = key;
@@ -578,9 +600,10 @@ export function layoutTilePictures(sprites, mapInfo) {
       done.add(b);
     }
     const n = group.length, tall = Math.max(...group.map(g => cols.get(g).length));
-    if (n === 1 && tall === 1) continue;
+    const furniture = group.every(g => cols.get(g).every(s => !s || isUprightFurnitureTile(s.ch.tileId, mapInfo.tilesetNames)));
+    if (n === 1 && tall === 1 && !furniture) continue;
     const against = n > 1 && group.some(g => { const col = cols.get(g), top = col[col.length - 1].ch; return mapInfo.isWall(top.x, top.y - 1); });
-    const fixed = n >= 5 || tall >= 5 || against;
+    const fixed = furniture || n >= 5 || tall >= 5 || against;
     const slab = !fixed && n >= 2 && n <= 4 && n > tall;
     // drawn above characters from its foot up (an arch over the road): it hangs over head height, as a
     // single such tile does
