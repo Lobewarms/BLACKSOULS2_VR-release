@@ -790,3 +790,27 @@ map and merged lower-right pickups. Review images are ignored under dist/preview
 The temporary fixture and export middleware are outside distributed sources and
 must be removed from the client before building. The private data server uses an
 isolated temporary save directory; it must not modify the player's installed saves.
+
+## Resized panel GPU storage (0.2.13)
+
+The user's stretched Status screenshot exposed a GPU lifecycle bug. Panel.resize
+changed canvas dimensions while reusing an uploaded CanvasTexture. Three.js r170
+allocates immutable texStorage2D on the initial upload; subsequent texSubImage2D
+uploads cannot resize it. The renderer could retain Status pixels while the main
+menu used its narrow command geometry, or stretch old commands across Status.
+Node canvas/layout tests did not allocate GPU storage and missed the defect.
+
+Recreate the CanvasTexture and its Source whenever pixel dimensions change,
+preserve sampler/color/UV settings, update the existing material map and dispose
+the previous texture. Texture.copy shares Source, so restore the fresh Source
+after copying. Keep the mesh and material stable for pointer hit targets. An
+unchanged size is a no-op; world-width-only changes replace geometry without
+clearing the canvas or reallocating texture storage.
+
+Regression tests exercise actual main/status/equipment/back transitions, texture
+and source identities, disposal, unchanged/world-only resize and adaptive choice
+and speaker-name panels. Private browser QA reproduced distorted old pixels before
+the fix, then verified repeated Main > Status > Back > Equipment > Back > Status
+and dialogue on actual WebGL rendering with original game art. Test state remains
+synthetic and the fixture never reads or writes player saves. Preview fixtures and
+export helpers must stay outside production builds and release packages.

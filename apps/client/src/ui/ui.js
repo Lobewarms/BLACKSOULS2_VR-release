@@ -45,11 +45,21 @@ class Panel {
   }
   commit() { this.tex.needsUpdate = true; }
   resize(width, height, widthM = this.widthM) {
-    if (this.canvas.width === width && this.canvas.height === height && this.widthM === widthM) return;
-    this.canvas.width = width; this.canvas.height = height;
+    const pixelsChanged = this.canvas.width !== width || this.canvas.height !== height;
+    if (!pixelsChanged && this.widthM === widthM) return;
+    if (pixelsChanged) {
+      this.canvas.width = width; this.canvas.height = height;
+      // Three.js allocates immutable GPU texture storage on its first upload.
+      // Reusing that texture after a canvas resize leaves old pixels or rejects
+      // uploads. Copy sampler settings while retaining an entirely fresh Source.
+      const previous = this.tex, texture = new THREE.CanvasTexture(this.canvas), source = texture.source;
+      texture.copy(previous); texture.source = source; texture.onUpdate = previous.onUpdate;
+      this.tex = texture; this.mesh.material.map = texture; this.mesh.material.needsUpdate = true;
+      previous.dispose();
+      this.commit();
+    }
     this.widthM = widthM; this.heightM = widthM * height / width;
     this.mesh.geometry.dispose(); this.mesh.geometry = new THREE.PlaneGeometry(this.widthM, this.heightM);
-    this.commit();
   }
   clear() { this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
   // uv hit from a ray (VR pointer)
