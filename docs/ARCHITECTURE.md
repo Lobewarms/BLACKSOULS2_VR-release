@@ -69,3 +69,13 @@ BLACKSOULS_VR/                  generated release layout
 CI builds and tests on Windows and Linux. Tag releases promote the already-tested
 Linux artifact to GitHub Releases, together with its checksum and installable Python
 wheel. The publish job does not rebuild the browser application.
+
+## Windows setup
+
+`packaging/windows/setup.iss` uses Inno Setup 6 to install the verified portable
+payload per user. `tooling/release/build_installer.ps1` verifies the input ZIP,
+compiles the installer and writes its SHA-256. Windows CI silently installs it,
+compares every installed file with the distribution manifest, checks upgrade and
+uninstall, and confirms player-created saves survive both. The release job promotes
+that tested EXE unchanged alongside the portable ZIP. It contains all mod files,
+not the original game or a bundled browser. The upstream launcher remains unchanged.

@@ -18,7 +18,7 @@ jobs:
       contents: read
 
   publish:
-    name: Publish tested mod ZIP
+    name: Publish tested Windows setup and portable ZIP
     needs: validate
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -35,6 +35,15 @@ jobs:
         with:
           name: mod-package-ubuntu-latest
           path: dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: mod-package-windows-latest
+          path: windows-artifacts
+      - name: Promote tested Windows installer
+        run: |
+          cp windows-artifacts/*.exe windows-artifacts/*.exe.sha256 dist/
+          cd dist
+          sha256sum --check *.exe.sha256
       - name: Validate tag and tested release
         env:
           RELEASE_TAG: ${{ github.ref_name }}
@@ -51,6 +60,6 @@ jobs:
             echo "Release already exists; refusing to replace published assets."
             exit 1
           fi
-          gh release create "$RELEASE_TAG" dist/*.zip dist/*.sha256 dist/*.whl \
+          gh release create "$RELEASE_TAG" dist/*.exe dist/*.zip dist/*.sha256 dist/*.whl \
             --verify-tag --title "BLACK SOULS II VR community fork $RELEASE_TAG" \
             --notes-file FORK_NOTICE.txt

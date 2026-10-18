@@ -5,7 +5,7 @@
 
 **Modified fork, not an original Lobewarms release.**
 Original: [Lobewarms/BLACKSOULS2_VR-release](https://github.com/Lobewarms/BLACKSOULS2_VR-release).
-Upstream base: **2026.10.16-13**. Fork: **0.2.0**.
+Upstream base: **2026.10.16-13**. Fork: **0.2.1**.
 
 First-person PCVR for BLACK SOULS II, including Meta Quest through Quest Link,
 Air Link or Virtual Desktop. You must supply your own original game. No game files
@@ -13,10 +13,17 @@ or saves are included. Free distribution only, under [LICENSE](LICENSE).
 
 ## Download and play
 
-Download **BLACKSOULS_VR_fork_VERSION.zip** from this fork's
+**Windows: download [BLACKSOULS_VR_Setup_0.2.1.exe](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases/download/v0.2.1/BLACKSOULS_VR_Setup_0.2.1.exe).**
+Run the setup EXE, then open **BLACK SOULS II VR** from the Start menu. Select your
+original game folder and click **Launch**. Desktop play uses keyboard/mouse; for VR,
+connect your headset to the PC first, then use **ENTER VR** in the game window.
+No ZIP extraction, Node.js or build tools are needed. Setup installs the complete mod
+for your Windows user without an administrator prompt, with an optional desktop shortcut.
+It still requires your original game and a supported browser. Quest is PCVR, not standalone.
+
+A portable **BLACKSOULS_VR_fork_VERSION.zip** is also available from
 [Releases](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases).
-Unzip outside your game directory, run `BLACKSOULS_VR/BlacksoulsVR.exe`, select your
-original game folder, then use **ENTER VR**. Players need no Node.js or build tools.
+Extract outside your game directory and run `BLACKSOULS_VR/BlacksoulsVR.exe`.
 The ZIP includes the Python co-op server, models, third-party licenses and a checksum
 manifest. The companion `.sha256` checks the whole ZIP.
 
@@ -98,23 +105,39 @@ Python launch. No game files or headset are needed for CI. Successful CI does no
 replace a PCVR playtest; headset rendering and full story-event compatibility remain
 manual checks.
 
+## Build the Windows installer
+
+Install Inno Setup 6 on Windows, then after `npm run package`:
+
+```powershell
+./tooling/release/build_installer.ps1 -Archive dist/BLACKSOULS_VR_fork_0.2.1.zip -Version 0.2.1
+```
+
+The installer bundles the verified portable distribution and creates Start menu
+shortcuts. Its default writable location is `%LOCALAPPDATA%\Programs\BLACKSOULS-VR`.
+Player-created saves are retained during upgrades and uninstall. The setup EXE is
+currently unsigned. Python is only needed by players who host the optional co-op relay.
+
 ## CI/CD
 
 Pushes to `main` and pull requests run lint, tests, the Vite production build, portable
 package tests and Python wheel creation on **Windows and Linux**. Each run provides
-ZIP, checksum and wheel artifacts, retained for 14 days.
+ZIP, checksum and wheel artifacts, retained for 14 days. Windows additionally builds
+an Inno Setup EXE and verifies installation against the file manifest, upgrade,
+uninstall and retention of player-created saves.
 
 A `v*` tag runs the same checks. After success, publishing downloads the tested
 Linux artifact, checks its version and checksum, and promotes it to a GitHub Release.
-It does not rebuild the client. Existing releases are never overwritten.
+It also promotes the tested Windows setup EXE and its checksum. It does not rebuild
+the client. Existing releases are never overwritten.
 
 For the next release, update the root and client `package.json`, the server's
 `pyproject.toml` and `__init__.py`, then run `npm install --package-lock-only` and commit.
 After green CI, push the matching tag, for example:
 
 ```sh
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.2.2
+git push origin v0.2.2
 ```
 
 No personal token secret is needed. Check jobs have read-only repository permissions;

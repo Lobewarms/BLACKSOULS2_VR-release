@@ -1,5 +1,12 @@
 BLACK SOULS II VR - modified community fork
 
+WINDOWS PLAYERS: download BLACKSOULS_VR_Setup_0.2.1.exe from the release assets.
+Run setup, open BLACK SOULS II VR from the Start menu, select your original game
+folder, then click Launch. No manual ZIP extraction or developer tools needed.
+Connect your PC VR headset before launching, then click ENTER VR in the game window.
+The portable ZIP remains available for users who prefer manual extraction.
+
+
 This is a MODIFIED version, not the original release by Lobewarms.
 Original: https://github.com/Lobewarms/BLACKSOULS2_VR-release
 Fork: https://github.com/dimasma0305/BLACKSOULS2_VR-release
