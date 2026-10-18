@@ -1572,3 +1572,43 @@ The public literal source diff is refreshed to runtime commit0e28fe6 (0.2.26):
 48 original modules,20 unchanged after import moves,28 modified,35 new,0 missing;
 2448 added/620 removed lines in modified originals after import normalization.
 Existing six comparison images remain explicitly labelled0.2.25.
+
+## Repeated event choices and picture ownership (0.2.26)
+
+The reported Victoria meter is driven by original Troop213 and common events
+182/183/301. Its variable86 starts at0; authored actions add1 or2 and select
+discrete picture stages below5, from5 through9, and at10 or above. It is not a
+mouse-tapping meter. Preserve the original choices, conditions and numeric gates;
+do not automatically award relationship progress or add an invented input loop.
+
+The port retained merged-choice results after using them. Jump to Label could
+therefore revisit command102 and silently reuse an old answer. The first choice
+block now discards its already-applied result; each later merged block consumes
+its result once. New visits rebuild visible/enabled rows and ask the player again.
+
+Original Game_Interpreter routes picture commands to Game_Troop.screen in battle
+and Game_Map.screen otherwise. Game_Troop.clear clears its screen; Troop213 has
+no Erase Picture commands and relies on that ownership. The port's single global
+picture map leaked the meter into exploration. Battle buckets now isolate picture
+IDs, including child common events, and are released on battle end or combat
+reset. Map pictures survive. Stale commands and asynchronous image loads cannot
+restore an ended scope. Preserve the existing stage-play routing for its owner.
+
+Co-op's current picture messages have only map picture IDs, without a battle
+namespace. Do not pass battle-scoped show/move/erase into that map transport:
+it would read or delete an unrelated map picture with the same number. Ordinary
+map picture transport stays unchanged. Bind enemy skill common events to their
+specific battle so overlapping or later fights cannot steal a delayed command.
+
+Use neutral synthetic text/images and command sequences for public regressions.
+Keep original event data and scene artwork in private read-only caches; do not
+publish them or include explicit scene playback in visual QA. Tests cover repeat
+choices, merged/cancel/visibility mapping, staged numeric progress, overlapping
+picture IDs, delayed image loads, child ownership and combat cleanup.
+
+The combined0.2.26 source passes585 JavaScript regressions, ESLint, Ruff,
+production build,8 packaging tests and7 Python protocol tests locally. Choice
+regressions reproduced6 failures before the fix; scope regressions also caught
+reset-before-first-picture and completed-but-retained battle owners. Validation
+uses original numeric control-flow inspection plus neutral fixtures, not a full
+scene or physical-headset playthrough.

@@ -217,6 +217,9 @@ export class Interpreter {
       }
       this.choiceGroup.results = results;
       this.branch[indent] = results.get(groupIdx[0]);
+      // The first block resumes directly after this callback. Only later
+      // merged blocks still need their answer; a label loop must ask anew.
+      results.delete(groupIdx[0]);
     };
   }
   choiceCond(cond) {
@@ -227,6 +230,7 @@ export class Interpreter {
     const g = this.choiceGroup;
     if (!g || !g.results || !g.results.has(this.index)) return false;
     this.branch[this.indent] = g.results.get(this.index);
+    g.results.delete(this.index);
     return true;
   }
   c402() { if (this.branch[this.indent] !== this.params[0]) this.skipBranch(); return true; }
@@ -641,17 +645,27 @@ export class Interpreter {
     return true;
   }
   c230() { this.wait(this.params[0]); return true; }
-  // (co-op: the guests in this world see the pictures too - coop.js onPicture)
-  c231() { G.screen.showPicture?.(this.params); G.coop?.onPicture?.(this, 231, this.params); return true; }
+  // Co-op's existing picture transport owns map IDs only.
+  pictureCommand(code) {
+    const troop = (this.root || this).troop;
+    const battle = troop ? G.combat?.battleOf?.(this) : null;
+    // VX Ace gives the troop its own Game_Screen. Common-event children share
+    // that owner; an ended troop must never write into the map's picture IDs.
+    if (troop && (!battle || battle.done)) return;
+    if (code === 231) G.screen.showPicture?.(this.params, battle);
+    else if (code === 232) G.screen.movePicture?.(this.params, battle);
+    else G.screen.erasePicture?.(this.params[0], battle);
+    if (!troop) G.coop?.onPicture?.(this, code, this.params);
+  }
+  c231() { this.pictureCommand(231); return true; }
   c232() {
-    G.screen.movePicture?.(this.params);
-    G.coop?.onPicture?.(this, 232, this.params);
+    this.pictureCommand(232);
     if (this.params[11]) this.wait(this.params[10]);
     return true;
   }
   c233() { return true; }
   c234() { if (this.params[3]) this.wait(this.params[2]); return true; }
-  c235() { G.screen.erasePicture?.(this.params[0]); G.coop?.onPicture?.(this, 235, this.params); return true; }
+  c235() { this.pictureCommand(235); return true; }
   c236() {
     G.screen.setWeather?.(this.params[0], this.params[1], this.params[2]);
     if (this.params[3]) this.wait(this.params[2]);

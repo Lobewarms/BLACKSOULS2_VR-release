@@ -217,9 +217,11 @@ export class ScreenFx {
     this.flash = { r: color.red / 255, g: color.green / 255, b: color.blue / 255, a: color.alpha / 255 * THREE.MathUtils.lerp(1, k * k, glare), dur: frames, t: frames };
   }
   startShake() { G.input?.haptic('left', 0.3, 120); G.input?.haptic('right', 0.3, 120); }
-  showPicture(params) { G.pictures?.show(params); }
-  movePicture(params) { G.pictures?.move(params); }
-  erasePicture(n) { G.pictures?.erase(n); }
+  showPicture(params, battle = null) { G.pictures?.show(params, battle); }
+  movePicture(params, battle = null) { G.pictures?.move(params, battle); }
+  erasePicture(n, battle = null) { G.pictures?.erase(n, battle); }
+  endBattlePictures(battle) { G.pictures?.endBattle(battle); }
+  clearBattlePictures() { G.pictures?.clearBattlePictures(); }
   setWeather(type, power = 0, frames = 0) {
     this.weather ||= new WorldWeather(G.three?.scene);
     this.weather.set(type, power, frames);

@@ -690,6 +690,7 @@ export class CombatSystem {
   // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
   reset({ keepState = false, carry = false } = {}) {
     G.screen?.clearBattleTones?.();
+    G.screen?.clearBattlePictures?.();
     // (carry - a map change: an event's run that is past its fight, in its win or lose branch, goes on on the new map as
     // the original's map interpreter would - 혼돈 던전 / 시공 던전's defeat, CE269, takes the party out and then lets the
     // menu and saving back; dropped with the old map, saving stayed shut until 고왕의 뼛가루. One still in its fight
@@ -1222,6 +1223,7 @@ export class CombatSystem {
   }
   onBattleEnd(battle) {
     G.screen?.endBattleTone?.(battle);
+    G.screen?.endBattlePictures?.(battle);
     G.player.floatDown?.();                         // (blown up by the wind when it ended: let down gently)
     if (battle.result === 0 && battle.private) G.coop?.hallucinationBeaten?.(battle.hallKey);
     if (battle.result === 0) {
@@ -1283,6 +1285,7 @@ export class CombatSystem {
   // the battle a troop event belongs to (several fights can run at once)
   battleOf(interp) {
     const root = interp ? (interp.root || interp) : null;
+    if (root && root.battleOwner !== undefined) return root.battleOwner && !root.battleOwner.done && this.battles.includes(root.battleOwner) ? root.battleOwner : null;
     return (root && this.battles.find(x => x.troopInterp === root)) || this.battles.find(x => !x.done);
   }
   enemyCondition(index, sub, stateId, interp) {
@@ -2768,7 +2771,7 @@ export class CombatSystem {
       } else if (ef.code === 12) {                       // MP by a share (a minus: taken away)
         const v = Math.floor((e.b.mmp * ef.value1 + ef.value2) * e.b.rec);
         e.b.mp = Math.max(0, Math.min(e.b.mmp, e.b.mp + v));
-      } else if (ef.code === 44) this.fightCommonEvent(ef.data_id);
+      } else if (ef.code === 44) this.fightCommonEvent(ef.data_id, e.battle);
     }
     // buffs / debuffs (a curse on its weapon, its legs shot): a cold glow as it goes down, a warm one up
     const before = e.b.buffs.reduce((a, v) => a + v, 0);
@@ -2854,7 +2857,7 @@ export class CombatSystem {
   }
   // a common event a skill that strikes calls (effect 44) runs at once beside the fight, as VX Ace runs it in the
   // battle - 비전・귀섬 calls 最期の太刀, and 귀신 무사's last stand ends in 할복 (once a use, however many it hits)
-  fightCommonEvent(id) {
+  fightCommonEvent(id, battle = null) {
     if (G.coop?.phantom) return;                   // (another player's world: its events are run there)
     const list = commonEventList(id);
     if (!list) return;
@@ -2862,6 +2865,7 @@ export class CombatSystem {
     (this.ceAt ||= {})[id] = G.time;
     const it = new Interpreter(1);
     it.troop = true;
+    it.battleOwner = battle;
     it.setup(list, 0);
     this.sideInterps.push(it);
   }
@@ -3933,6 +3937,7 @@ export class CombatSystem {
       b.pageDone.add(key);
       b.troopInterp = new Interpreter(1);
       b.troopInterp.troop = true;                  // its music changes play even during battle music
+      b.troopInterp.battleOwner = b;
       b.troopInterp.setup(page.list, 0);
       b.troopInterp.update();                      // at once, like the original processing it right away
       return;
@@ -4961,14 +4966,14 @@ export class CombatSystem {
       // before it: let down gently)
       if (d.skill && this.liftInfo().falls.has(d.skill.id)) {
         if (this.playerDead || !d.e.alive) { G.player.floatDown?.(); continue; }
-        this.runSkillCommonEvents(d.skill);
+        this.runSkillCommonEvents(d.skill, b);
         this.liftFall(d);
         continue;
       }
       if (this.playerDead || !d.skill || !d.e.alive) continue;
       const head = G.player.headWorld(new THREE.Vector3());
       if (d.skill.animation_id > 0) G.screen.playAnimationOn(head.clone().add(new THREE.Vector3(0, -0.5, 0)), d.skill.animation_id, { world: true, size: 2.2 });
-      this.runSkillCommonEvents(d.skill);
+      this.runSkillCommonEvents(d.skill, b);
       this.enemyStrikePlayer(d.e, d.skill, { blockable: false, certain: true, delayed: true });
     }
   }
@@ -5137,7 +5142,7 @@ export class CombatSystem {
     const plan = e.plan, s = e.skill, fam = e.move;
     if (!plan) { this.endMove(e, 0.5); return; }
     G.coop?.onBossMove?.(e);                       // (its co-op guests see it go off as well - coop.js)
-    if (!e.puppet) this.runSkillCommonEvents(s);
+    if (!e.puppet) this.runSkillCommonEvents(s, e.battle);
     const ep = e.worldPos(new THREE.Vector3());
     if (this.releaseNewMove(e, fam, plan, s, ep)) return;          // (bossmoves.js)
     const anim = s.animation_id > 0 ? s.animation_id : 0;
@@ -6137,7 +6142,7 @@ export class CombatSystem {
     const skill = e.skill;
     G.coop?.onEnemyAct?.(e, skill);
     // (a co-op guest's copy of the host's enemy only shows its move: what it does is done on the host's side)
-    if (!e.puppet && !(e.move === 'flurry' && e.comboStep > 0)) this.runSkillCommonEvents(skill);     // (a flurry is one use of it)
+    if (!e.puppet && !(e.move === 'flurry' && e.comboStep > 0)) this.runSkillCommonEvents(skill, e.battle);     // (a flurry is one use of it)
     const plan = e.plan || this.planAttack(e, skill, e.style);
     // (from where its area was laid down)
     const ep = plan?.ox !== undefined ? new THREE.Vector3(plan.ox, plan.oy, plan.oz) : e.worldPos(new THREE.Vector3());
@@ -6893,13 +6898,14 @@ export class CombatSystem {
     if (e.ring) e.ring.material.opacity = 0;
     G.audio?.playSystemSe(8);
   }
-  runSkillCommonEvents(skill) {
+  runSkillCommonEvents(skill, battle = null) {
     for (const ef of skill?.effects || []) {
       if (ef.code !== 44) continue;
       const list = commonEventList(ef.data_id);
       if (!list) continue;
       const it = new Interpreter(1);
       it.troop = true;
+      it.battleOwner = battle;
       it.setup(list, 0);
       this.sideInterps.push(it);
     }

@@ -7,6 +7,10 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
+- Repeated event choices open again correctly instead of reusing an earlier
+  answer. Victoria's heart meter keeps the original staged progression.
+- Pictures from battle events disappear when those events end, without
+  deleting unrelated map pictures.
 - Creatures without a name in the original game no longer display labels
   such as "Enemy 157". Their health and status effects remain visible.
 - Named enemies continue to show their original game names. Changing into

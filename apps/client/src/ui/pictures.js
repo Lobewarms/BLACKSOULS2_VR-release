@@ -33,6 +33,8 @@ export class PictureLayer {
   constructor(ui, camera) {
     this.ui = ui;
     this.pics = new Map();           // picture number -> state
+    this.battlePics = new Map();     // each original troop Game_Screen owns its picture numbers
+    this.endedBattles = new WeakSet();
     this.canvas = document.createElement('canvas');
     this.canvas.width = SW; this.canvas.height = SH;
     this.ctx = this.canvas.getContext('2d');
@@ -59,11 +61,31 @@ export class PictureLayer {
   }
 
   // ---- event commands ----
-  show(p) {
+  picturesFor(battle = null, create = false) {
+    if (!battle) return this.pics;
+    if (battle.done || this.endedBattles.has(battle)) return null;
+    let pictures = this.battlePics.get(battle);
+    if (!pictures && create) { pictures = new Map(); this.battlePics.set(battle, pictures); this.dirty = true; }
+    return pictures;
+  }
+  displayedPictures() {
+    let pictures = this.pics;
+    for (const [battle, owned] of this.battlePics) {
+      if (battle.done) { owned.clear(); this.endedBattles.add(battle); this.battlePics.delete(battle); this.dirty = true; }
+      else pictures = owned;
+    }
+    return pictures;
+  }
+  show(p, battle = null) {
+    const pictures = this.picturesFor(battle, true);
+    if (!pictures) return;
     // (a stage play's curtain is hung on the stage instead - src/theater.js)
-    if (G.theater?.takePicture(p)) { if (this.pics.delete(p[0])) this.dirty = true; return; }
+    if ((!battle || G.theater?.battle === battle) && G.theater?.takePicture(p)) {
+      if (pictures.delete(p[0])) this.dirty = true;
+      return;
+    }
     const [n, name, origin, designation, px, py, zx, zy, opacity, blend] = p;
-    const previous = this.pics.get(n);
+    const previous = pictures.get(n);
     const pic = {
       name, origin, blend,
       x: designation ? G.state.v(px) : px, y: designation ? G.state.v(py) : py,
@@ -71,27 +93,49 @@ export class PictureLayer {
       // that loaded art for this frame; a cached promise resolves after render.
       zx, zy, opacity, angle: 0, img: previous?.name === name ? previous.img : null, d: 0, target: null,
     };
-    this.pics.set(n, pic);
-    if (name && !pic.img) loadImage('Graphics/Pictures', name).then(img => { if (this.pics.get(n) === pic) { pic.img = img; this.dirty = true; } });
+    pictures.set(n, pic);
+    if (name && !pic.img) loadImage('Graphics/Pictures', name).then(img => {
+      if (this.picturesFor(battle) === pictures && pictures.get(n) === pic) { pic.img = img; this.dirty = true; }
+    });
     this.dirty = true;
   }
-  move(p) {
+  move(p, battle = null) {
     const [n, , origin, designation, px, py, zx, zy, opacity, blend, duration] = p;
-    const pic = this.pics.get(n);
+    const pic = this.picturesFor(battle)?.get(n);
     if (!pic) return;
     pic.origin = origin; pic.blend = blend;
     pic.target = { x: designation ? G.state.v(px) : px, y: designation ? G.state.v(py) : py, zx, zy, opacity };
     pic.d = duration | 0;            // Game_Picture: a 0-frame move does nothing
   }
-  erase(n) { G.theater?.erasePicture(n); if (this.pics.delete(n)) this.dirty = true; }
-  clear() { this.pics.clear(); this.dirty = true; }
+  erase(n, battle = null) {
+    if (battle && (battle.done || this.endedBattles.has(battle))) return;
+    if (!battle || G.theater?.battle === battle) G.theater?.erasePicture(n);
+    if (this.picturesFor(battle)?.delete(n)) this.dirty = true;
+  }
+  endBattle(battle) {
+    if (battle) this.endedBattles.add(battle);
+    const pictures = this.battlePics.get(battle);
+    if (!pictures && !this.dirty) return;
+    pictures?.clear(); this.battlePics.delete(battle); this.dirty = true;
+    this.render(); // do not leave the final meter/backdrop visible until another logic tick
+  }
+  clearBattlePictures() {
+    if (!this.battlePics.size && !this.dirty) return;
+    for (const [battle, pictures] of this.battlePics) { pictures.clear(); this.endedBattles.add(battle); }
+    this.battlePics.clear(); this.dirty = true; this.render();
+  }
+  clear() {
+    this.pics.clear();
+    for (const [battle, pictures] of this.battlePics) { pictures.clear(); this.endedBattles.add(battle); }
+    this.battlePics.clear(); this.dirty = true;
+  }
 
   // Port menu/map shortcuts differ from RPG Maker's B button. An active original
   // viewer may intentionally leave its picture to a separate autorun that checks
   // B and erases it. Ask that controller to close itself; never erase arbitrary
   // persistent pictures or change its switches here.
   requestViewerCancel() {
-    if (!this.pics.size || !G.input?.requestRmCancel) return false;
+    if (this.displayedPictures() !== this.pics || !this.pics.size || !G.input?.requestRmCancel) return false;
     for (const event of G.map?.eventList || []) {
       if (event.erased || !event.page || ![3, 4].includes(event.trigger)) continue;
       const list = event.list || [];
@@ -111,7 +155,8 @@ export class PictureLayer {
 
   // 60 Hz: moves (Game_Picture#update_move)
   update() {
-    for (const pic of this.pics.values()) {
+    this.displayedPictures(); // release finished scopes even if the end hook was bypassed
+    for (const pictures of [this.pics, ...this.battlePics.values()]) for (const pic of pictures.values()) {
       if (pic.d <= 0 || !pic.target) continue;
       const d = pic.d, t = pic.target;
       pic.x = (pic.x * (d - 1) + t.x) / d;
@@ -126,7 +171,8 @@ export class PictureLayer {
 
   // per rendered frame: redraw when something changed, keep the screen in front of the player
   render() {
-    const any = this.pics.size > 0;
+    const pictures = this.displayedPictures();
+    const any = pictures.size > 0;
     if (any) {
       if (this.wasEmpty) this.ui.placeRoot(true);      // a new picture scene starts where the player looks
       else this.ui.placeRoot();
@@ -138,8 +184,8 @@ export class PictureLayer {
     const ctx = this.ctx;
     ctx.clearRect(0, 0, SW, SH);
     let drawn = 0, dim = 0;
-    for (const n of [...this.pics.keys()].sort((a, b) => a - b)) {
-      const pic = this.pics.get(n);
+    for (const n of [...pictures.keys()].sort((a, b) => a - b)) {
+      const pic = pictures.get(n);
       const img = pic.img;
       if (!img || pic.opacity <= 0) continue;
       const sx = pic.zx / 100, sy = pic.zy / 100;
