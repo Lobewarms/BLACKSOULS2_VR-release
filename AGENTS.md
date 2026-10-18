@@ -1539,3 +1539,31 @@ It replaces the older standalone0.2.11 launcher sample and shows installed
 0.2.23 with a0.2.25 update available. Keep that version/update caption accurate.
 Copy its original PNG without visual edits, verify the published bytes, and
 include it as a standalone community screenshot in the upstream PR.
+
+## Original unnamed enemy labels (0.2.26)
+
+The user reported "Enemy157" above the worm-like battler. Read-only installed
+Enemies.rvdata2 verification shows157 has empty name/note and battler_name113.
+The original Game_Enemy and enemy-selection window use the database name
+directly; the custom HP/status script does not supply another name. No name
+override exists for this creature. Preserve its intentional blank name; do not
+infer a species from the picture, asset identifier, editor troop label or ID.
+
+ActionEnemy.drawBar now omits the debug-ID fallback and the unused title
+background when stripEscapes(name).trim() is empty. Health, groggy, status icons,
+visibility rules and existing texture lifetimes are unchanged. Keep the same
+canvas/texture size to avoid the earlier immutable GPU-storage resize bug.
+Named forms retain their actual names; transforming to/from unnamed forms must
+clear or restore the title through the existing cache/build lifecycle.
+The unused four-language Enemy{id} label entry was removed.
+
+Regressions execute the real enemy build/nameplate/transform path and verify
+half-health gauge width, status labels, formatting-only blank names, texture
+reuse and named-to-unnamed-to-named transitions. Use synthetic data in shipped
+tests; original databases and scripts stay in private read-only audit caches.
+
+Local verification passed557 JavaScript tests, ESLint, Ruff, production build
+and8 packaging tests. Private rendered QA placed the real installed enemy157
+in an isolated test scene at75% HP with original Sleep/Poison icons. Its title
+is absent while both gauges/effects remain visible. The saved PNG was opened
+and inspected; it is not a claim that this creature normally spawns in that room.

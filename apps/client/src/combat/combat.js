@@ -554,15 +554,21 @@ export class ActionEnemy {
     const gmax = this.sys?.groggyMax ? this.sys.groggyMax(this) : 0;
     const grog = gmax ? Math.max(0, Math.min(1, (this.grog ?? gmax) / gmax)) : 0;
     const page = Math.floor((G.time || 0) / 3) % Math.max(1, Math.ceil(effects.length / 4));
-    const name = stripEscapes(this.b.name).trim() || tr('적 {id}', { id: this.b.enemyId });
+    // Some original enemies deliberately have no name. Keep their HP/effects
+    // visible without exposing database IDs or inventing an artwork-based name.
+    const name = stripEscapes(this.b.name).trim();
     const key = `${name}/${this.b.hp}/${this.b.mhp}/${this.state}/${gmax}/${Math.round(grog * 488)}/${effectsKey(effects)}/${page}/${iconAssetRevision()}`;
     if (key === this.lastBar) return;
     this.lastBar = key;
     const ctx = this.barCanvas.getContext('2d');
     ctx.clearRect(0, 0, 512, 184);
-    ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, 0, 512, effects.length ? 184 : 88);
-    ctx.font = `bold 42px ${FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(fitLabel(ctx, name, 488), 256, 25);
+    const top = name ? 0 : 40;
+    ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, top, 512, (effects.length ? 184 : 88) - top);
+    ctx.textBaseline = 'middle';
+    if (name) {
+      ctx.font = `bold 42px ${FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+      ctx.fillText(fitLabel(ctx, name, 488), 256, 25);
+    }
     ctx.fillStyle = '#301010'; ctx.fillRect(10, 50, 492, 20);
     ctx.fillStyle = this.state === 'stagger' ? '#ffd040' : '#c02424';
     ctx.fillRect(12, 52, 488 * Math.max(0, Math.min(1, this.b.hp / this.b.mhp)), 16);

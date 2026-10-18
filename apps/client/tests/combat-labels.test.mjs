@@ -13,9 +13,10 @@ const { battlerEffects } = await import('../src/ui/battler-status.js');
 const { initAssets } = await import('../src/data/assets.js');
 
 function canvas() {
-  const record = { texts: [], icons: [], clears: 0 };
+  const record = { texts: [], icons: [], rects: [], clears: 0 };
   const ctx = new Proxy({
-    clearRect() { record.texts.length = 0; record.icons.length = 0; record.clears++; },
+    clearRect() { record.texts.length = 0; record.icons.length = 0; record.rects.length = 0; record.clears++; },
+    fillRect(x, y, w, h) { record.rects.push({ x, y, w, h, fill: this.fillStyle }); },
     fillText(text, x, y) { record.texts.push({ text, x, y }); },
     drawImage(...args) { record.icons.push(args); },
     measureText: text => ({ width: Array.from(String(text)).length * 12 }),
@@ -127,6 +128,53 @@ test('enemy nameplate appears before damage and updates states, buffs, pages, de
   enemy.barTex.addEventListener('dispose', () => disposed++);
   enemy.bar.material.addEventListener('dispose', () => disposed++);
   enemy.remove(); assert.equal(disposed, 2); assert.equal(enemy.group.parent, null);
+});
+
+test('original unnamed enemies retain HP and effects without a database ID or an invented title', async t => {
+  environment(t); await initAssets();
+  const { ActionEnemy } = await import('../src/combat/combat.js');
+  $data.enemies[157] = { ...$data.enemies[1], id: 157, name: '', note: '' };
+  const glow = new THREE.Texture(); t.after(() => glow.dispose());
+  const sys = { root: new THREE.Group(), skyHidden: () => false, glowTexture: () => glow, groggyMax: () => 100 };
+  const enemy = new ActionEnemy(sys, null, 157, 0, 0, { dormant: true });
+  await enemy.ready; t.after(() => enemy.remove());
+  const record = enemy.barCanvas.record, head = new THREE.Vector3(0, 1.6, 3);
+  const hpWidth = () => record.rects.find(rect => rect.fill === '#c02424').w;
+  const full = hpWidth();
+  enemy.b.hp = enemy.b.mhp / 2;
+  enemy.b.addState(2); enemy.b.addState(3);
+  enemy.updateNameplate(head);
+  assert.equal(enemy.bar.visible, true);
+  assert.equal(hpWidth(), full / 2, 'hiding an absent name must not hide or corrupt the HP gauge');
+  assert.deepEqual(record.texts.map(entry => entry.text), ['Poison', 'Curse']);
+  assert.ok(record.rects[0].y > 0, 'an unnamed enemy has no empty title background above its gauges');
+  const clean = record.clears;
+  enemy.updateNameplate(head); assert.equal(record.clears, clean, 'unchanged unnamed labels still reuse their texture');
+  $data.enemies[157].name = '\\C[0]   ';
+  enemy.updateNameplate(head);
+  assert.deepEqual(record.texts.map(entry => entry.text), ['Poison', 'Curse'], 'formatting-only names are unnamed too');
+});
+
+test('enemy transformations clear the previous title for an unnamed form and restore the next real name', async t => {
+  environment(t); await initAssets();
+  const { ActionEnemy, CombatSystem } = await import('../src/combat/combat.js');
+  $data.enemies[157] = { ...$data.enemies[1], id: 157, name: '' };
+  $data.enemies[158] = { ...$data.enemies[1], id: 158, name: 'Translated Fiend' };
+  const glow = new THREE.Texture(); t.after(() => glow.dispose());
+  const sys = { root: new THREE.Group(), skyHidden: () => false, glowTexture: () => glow, groggyMax: () => 0,
+    dropMarker() {}, hideBlade() {} };
+  const enemy = new ActionEnemy(sys, null, 1, 0, 0, { dormant: true });
+  await enemy.ready; t.after(() => enemy.remove());
+  const head = new THREE.Vector3(0, 1.6, 3);
+  enemy.updateNameplate(head);
+  assert.ok(enemy.barCanvas.record.texts.some(entry => entry.text === 'Test Fiend'));
+  CombatSystem.prototype.transformEnemy.call(sys, enemy, 157);
+  await enemy.ready; enemy.updateNameplate(head);
+  assert.equal(enemy.bar.visible, true);
+  assert.deepEqual(enemy.barCanvas.record.texts, [], 'an unnamed form cannot inherit the old title or expose its ID');
+  CombatSystem.prototype.transformEnemy.call(sys, enemy, 158);
+  await enemy.ready; enemy.updateNameplate(head);
+  assert.deepEqual(enemy.barCanvas.record.texts.map(entry => entry.text), ['Translated Fiend']);
 });
 
 test('co-op status metadata carries buffs without changing legacy enemy tuples', async t => {
