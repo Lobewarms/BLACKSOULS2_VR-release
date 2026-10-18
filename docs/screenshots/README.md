@@ -17,6 +17,11 @@ save the rendered canvas. They do not replace lighting, materials or screen
 tones. Debug map launches use their default new-game test state and do not write
 saves. These are desktop visual checks, not physical-headset testing.
 
+The direct map launch also skips the opening character setup. Its initial
+placeholder actor has an empty portrait name, so the fork's HUD and menu have
+no face to load in these captures. These examples do not test portraits from
+an initialized gameplay save; no unrelated portrait was substituted.
+
 **Correction:** the earlier red-versus-green pair showed this fork with two
 different tone settings. It was not an upstream-versus-fork comparison and has
 been removed. Upstream resets the map screen tone to neutral.
@@ -67,9 +72,11 @@ Ignoring relative import-path moves and line endings for the summary only:
 Modified original modules contain 2,443 added and 620 removed lines after those
 import-path moves are normalized.
 
-## Additional community launcher example
+## Launcher screenshot supplied by the fork maintainer
 
-This is a standalone community screenshot from version 0.2.11, not a comparison
-with upstream. It shows PC/VR selection, discovery and collapsible options.
+The supplied image shows the installed community launcher at version 0.2.23
+with an update to 0.2.25 available. It shows PC/VR selection, automatic game
+discovery, collapsible options and the update button. This is a standalone
+community screenshot, not an upstream comparison.
 
-![Community Windows launcher in PC mode](launcher-pc-0.2.11.png)
+![User-provided community launcher 0.2.23 showing the 0.2.25 update](launcher-pc-0.2.23-update.png)

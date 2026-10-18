@@ -1522,3 +1522,20 @@ Inspect every saved PNG itself and verify non-uniform pixels and distinct hashes
 before publishing. Metadata, valid PNG dimensions, HTTP200 and matching remote
 blob hashes do not establish that the visible image contains the rendered frame.
 The PR comparisons should be visible directly, with links to open each PNG.
+
+### Portrait context and supplied launcher capture
+
+The user asked why the player portrait is absent and supplied a launcher image
+for the PR. Read-only original Actors.rvdata2 inspection shows actor1 has empty
+face_name, character_name !Flame and class13. Direct map captures call newGame
+then jump past opening character setup, retaining this placeholder. The HUD and
+classic menu use the actual actor's faceName/faceIndex; no unrelated actor face
+should be inserted to decorate those comparisons. Label this test-state limit
+in the gallery and PR. Existing initialized gameplay portraits are a separate
+case; these captures do not verify them.
+
+The user-provided launcher screenshot is authorized for public documentation.
+It replaces the older standalone0.2.11 launcher sample and shows installed
+0.2.23 with a0.2.25 update available. Keep that version/update caption accurate.
+Copy its original PNG without visual edits, verify the published bytes, and
+include it as a standalone community screenshot in the upstream PR.
