@@ -68,6 +68,7 @@ export class GameMap {
     this.playerChar = new PlayerChar();
     this.needRefresh = false;
     this.exitRevision = 0;
+    this.exitPages = new WeakMap();
     this.transfer = null;          // pending {mapId, x, y, dir, fade}
     this.transferring = false;
     this.commonParallel = [];
@@ -91,8 +92,10 @@ export class GameMap {
   requestRefresh() { this.needRefresh = true; }
 
   onEventPageChanged(ev) {
+    const previousPage = this.exitPages.get(ev);
+    this.exitPages.set(ev, ev.page);
     if (this.loading) return;
-    this.exitRevision++;
+    if (previousPage !== ev.page) this.exitRevision++;
     G.combat?.onEventPageChanged(ev);
     // (a tile it lays that opens the way where the map's own tiles shut it - a bridge a lever lays: the 3D view is built again
     // with it, or without it - mapbuild.js openingTiles)

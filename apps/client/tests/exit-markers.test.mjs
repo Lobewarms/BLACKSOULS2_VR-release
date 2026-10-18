@@ -81,6 +81,18 @@ test('exit revisions ignore map-loading setup but record later real page transit
   assert.equal(meshRebuilds(), 0);
 });
 
+test('repeated inactive and erased event refreshes do not rebuild stable exit markers', t => {
+  const { map, event, switches, meshRebuilds } = environment(t, [page([transfer(2)], { switch1_valid: true, switch1_id: 10 })]);
+  assert.equal(event.page, null);
+  for (let i = 0; i < 20; i++) { map.requestRefresh(); map.refresh(); }
+  assert.equal(map.exitRevision, 0, 'an unchanged null page is not a route transition');
+  switches.add(10); map.refresh(); assert.equal(map.exitRevision, 1);
+  event.erase(); assert.equal(map.exitRevision, 2);
+  for (let i = 0; i < 20; i++) { map.requestRefresh(); map.refresh(); }
+  assert.equal(map.exitRevision, 2, 'an erased page must not keep invalidating the marker collection');
+  assert.deepEqual(collectCurrentExits(map), []); assert.equal(meshRebuilds(), 0);
+});
+
 test('locked, erased and changed-destination pages immediately hide stale circles before refreshing their collection', t => {
   const { map, event, switches, markers } = environment(t, [page([]),
     page([transfer(2)], { switch1_valid: true, switch1_id: 10 }),

@@ -820,7 +820,10 @@ export helpers must stay outside production builds and release packages.
 Exit rings must follow the current usable event page, not only the pages present
 when the map mesh was built. GameMap.exitRevision invalidates route presentation
 after event page changes. collectCurrentExits reads live, non-erased event pages
-and runtime coordinates with the existing transfer-analysis rules. Update world
+and the revision cache records pages during loading. Repeated null/erased-page
+callbacks are not route transitions and must not churn marker GPU resources.
+The collector uses current pages and runtime coordinates with the existing
+transfer-analysis rules. Update world
 markers and navigation analysis together, without rebuilding collision or geometry.
 Show rings immediately with cached/fallback destination names; asynchronous name
 loads must check the map, presentation token, revision and exit-array identity
