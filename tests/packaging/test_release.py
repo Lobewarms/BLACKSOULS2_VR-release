@@ -22,7 +22,7 @@ class PackagingTests(unittest.TestCase):
             second = package.build(VERSION, Path(directory) / 'b.zip')
             self.assertEqual(first.read_bytes(), second.read_bytes())
             manifest = package.verify(first)
-            for name in ['BlacksoulsVR.exe', 'coop_server.py', 'app/index.html', 'LICENSE',
+            for name in ['BlacksoulsVR.exe', 'BlacksoulsVR.Engine.exe', 'coop_server.py', 'app/index.html', 'LICENSE',
                          'FORK_NOTICE.txt', 'AGENTS.md', 'START_HERE.txt', 'app/licenses/three.LICENSE',
                          'app/licenses/webxr-input-profiles-assets.LICENSE.md',
                          'server/blacksouls_vr_coop/server.py', 'app/models/hands/left.glb']:

@@ -2,7 +2,8 @@ BLACK SOULS II VR - How to play
 
 START PLAYING
 1. Open BLACK SOULS II VR from the Start menu (or run BlacksoulsVR.exe).
-2. Click Browse and choose your original BLACK SOULS II folder, containing Game.exe.
+2. The app looks for your game automatically. Choose a copy if several are found.
+   If none is found, click Browse and choose your original game folder, containing Game.exe.
 3. Click Launch. Keep the launcher open while playing.
 4. On PC, click inside the game window to capture your mouse.
 
@@ -28,6 +29,7 @@ then click Launch again. For missing tiles or emotes, the optional RPG Maker
 VX Ace RTP may help. README_en.txt contains the full setup guide.
 
 SAVES AND UPDATES
+Your game folder is remembered after you launch the game.
 Mod saves are in the saves folder beside BlacksoulsVR.exe. Your original game and
 saves are not changed. Setup keeps mod saves during upgrades and uninstall.
 Download community updates here:

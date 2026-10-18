@@ -13,11 +13,17 @@ Retain required original-author credits, modification notice and license files.
 ## Project background
 
 Modified community fork by dimasma0305, based on Lobewarms release 2026.10.16-13.
-The upstream Windows launcher source is unavailable; preserve its verified binary.
+The upstream Windows launcher source is unavailable; preserve its verified binary
+as BlacksoulsVR.Engine.exe. Our source-built BlacksoulsVR.exe detects games first.
 Its built-in updater points to upstream and may overwrite fork files. Direct players
 to this fork's releases for updates. Do not claim headset playtesting from CI results.
 
 ## Structure
+
+`apps/launcher/` is the Windows discovery bootstrap; build it with
+`./tooling/release/build_launcher.ps1` before packaging locally. It uses the Windows
+.NET Framework compiler and system libraries, with no runtime package downloads.
+
 
 ```text
 apps/client/                    npm workspace: Vite browser app
@@ -225,3 +231,30 @@ are consumed by the client. Original multilingual documentation is retained.
 
 Update versions through parsed fields in package-lock.json; never do a global
 substring replacement, which can also alter dependency versions and URLs.
+
+## Automatic game discovery
+
+The native bootstrap checks the saved launcher.json gameDir first without editing
+other settings, then scans common user/game directories and Steam libraryfolders.vdf.
+A candidate must have Game.exe plus extracted System.rvdata2 or a version-3 RGSS
+archive header, and its folder name or Game.ini title must identify BLACK SOULS II.
+A folder explicitly selected by the user only needs valid game-data markers.
+The scanner skips reparse points and inaccessible directories, bounds recursion,
+directory count and elapsed time, and supports cancellation. A single copy is
+prefilled automatically; multiple copies require selection; Browse is the fallback.
+There is no universal BLACK SOULS II install directory; do not promise whole-disk detection.
+
+The original launcher receives --game via a correctly quoted process argument and
+retains game validation, localization, VR options, server, saves and browser launch.
+The native bootstrap exits after handing off. Config remains at the original
+launcher location; the original launcher persists the selection when Launch is used.
+All original CLI diagnostics pass through. The upstream binary is unchanged and
+retains its recorded digest, under a different filename beside the bootstrap.
+
+CI builds and tests the Windows bootstrap once, then downloads the identical
+artifact into both packaging jobs. It does not commit generated executables.
+The existing package verifier validates the stock engine digest and the manifest
+checksums for the bootstrap. Original pre-bootstrap releases remain verifiable.
+Tests cover real Windows process argument round trips, Unicode, wrong game titles,
+extracted/packed candidates, multiple copies, nested roots, Steam libraries, limits,
+cancellation and preserving settings. No original game is used or executed by tests.

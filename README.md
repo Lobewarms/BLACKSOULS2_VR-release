@@ -13,7 +13,7 @@ A desktop shortcut is optional during setup.
 
 ## Play on your PC
 
-1. In the launcher, click **Browse** and choose your original game folder (the one containing `Game.exe`).
+1. Open the app. It looks for BLACK SOULS II automatically and fills in the game folder. If it finds several copies, choose one. If it finds none, click **Browse** and choose the folder containing `Game.exe`.
 2. Click **Launch** and keep the launcher open while playing.
 3. Click inside the game window to use the mouse.
 
@@ -37,6 +37,9 @@ Quest requires the PC to run the game; this download does not install on the hea
 See [all controls](docs/upstream/CONTROLS_en.txt) for the controller buttons.
 
 ## Help
+
+The app checks common game folders, Downloads, Desktop, Documents and Steam libraries.
+It remembers your selected folder after you launch the game.
 
 - **What do I need?** Windows 10/11, an up-to-date Chrome or Edge, and your original game.
 - **VR NOT SUPPORTED?** Start Quest Link or SteamVR first, close the game window, then click **Launch** again.

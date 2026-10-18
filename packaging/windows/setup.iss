@@ -33,7 +33,7 @@ RestartApplications=no
 SetupLogging=yes
 
 [Messages]
-WelcomeLabel2=This will install BLACK SOULS II VR on your PC.%n%nYou will need your own copy of BLACK SOULS II. After setup, choose your game folder and click Launch.%n%nFor VR, connect your headset to your PC before launching the game.%n%nModified community version by dimasma0305. Original VR mod by Lobewarms.
+WelcomeLabel2=This will install BLACK SOULS II VR on your PC.%n%nYou will need your own copy of BLACK SOULS II. After setup, the app will look for your game automatically. Confirm the folder and click Launch.%n%nFor VR, connect your headset to your PC before launching the game.%n%nModified community version by dimasma0305. Original VR mod by Lobewarms.
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
@@ -54,4 +54,4 @@ Name: "{group}\Uninstall BLACK SOULS II VR"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\BLACK SOULS II VR"; Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"; Description: "Open BLACK SOULS II VR (select your original game folder)"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"; Description: "Open BLACK SOULS II VR"; Flags: nowait postinstall skipifsilent

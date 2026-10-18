@@ -53,7 +53,7 @@ def collect(root=ROOT):
         if source.name.lower() in {'game.exe', 'game.rgss3a', 'coop_server.json'}:
             raise ValueError(f'Game or local configuration file in distribution: {name}')
         payload[name] = source.read_bytes()
-    launcher = PREFIX + 'BlacksoulsVR.exe'
+    launcher = PREFIX + 'BlacksoulsVR.Engine.exe'
     if sha256(payload[launcher]) != upstream['launcher_sha256']:
         raise ValueError('Launcher differs from the documented upstream binary')
     for filename, target in [('LICENSE', 'LICENSE'), ('FORK_NOTICE.txt', 'FORK_NOTICE.txt'),
@@ -115,7 +115,11 @@ def verify(path):
             if sha256(archive.read(name)) != digest:
                 raise ValueError(f'Checksum mismatch: {name}')
         upstream = json.loads(archive.read(PREFIX + 'upstream.json'))
-        if sha256(archive.read(PREFIX + 'BlacksoulsVR.exe')) != upstream['launcher_sha256']:
+        # Older releases used the stock launcher directly; newer ones add discovery.
+        engine = PREFIX + 'BlacksoulsVR.Engine.exe'
+        if engine not in names:
+            engine = PREFIX + 'BlacksoulsVR.exe'
+        if sha256(archive.read(engine)) != upstream['launcher_sha256']:
             raise ValueError('Launcher provenance mismatch')
     return manifest
 

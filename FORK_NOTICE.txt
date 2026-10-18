@@ -2,11 +2,12 @@ BLACK SOULS II VR - community version 0.2.2
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
-Choose your original BLACK SOULS II game folder and click Launch.
+The app looks for your game automatically. Confirm the folder and click Launch.
+If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-Simpler setup and help focused on playing. Open How to play from the Start menu
+Automatic game detection and simpler setup and help focused on playing. Open How to play from the Start menu
 for PC controls, Quest setup and troubleshooting.
 
 This is a modified version by dimasma0305 of the original mod by Lobewarms.
