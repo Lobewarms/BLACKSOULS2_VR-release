@@ -519,3 +519,37 @@ read failures, unchanged saved metadata and the actual co-op menu wiring. Save
 menu/notification translations are checked in all four supported languages with
 a Chinese browser locale. Original game data and player save files remain private
 and are never included in repository fixtures. No headset playtest is claimed.
+
+## Combat status and enemy names (0.2.10)
+
+Enemy bars previously rendered only HP and groggy to a 128x22 canvas, so there
+was no enemy name or state renderer. Player HUD states were icon-only, omitted
+iconless effects and did not invalidate when icon assets loaded. The new shared
+battler-status.js builds named states (priority order) plus parameter buffs and
+debuffs from the game database; missing artwork never removes the text label.
+
+The player HUD is larger, readable on its existing desktop/wrist anchors and does
+not depth-test against weapons or terrain. It shows four effects per page, cycles
+overflow every four seconds and points to the full Status menu list. Enemy bars
+are now 512x184 nameplates with names, the same HP/groggy values and four effect
+labels per page, cycling every three seconds. Text fits its allotted area. Both
+render caches include status identity, page and icon asset revision; otherwise
+textures are reused. Rebuilding an enemy clears the cache; removal disposes its
+nameplate texture/material. Existing combat values and status lifetimes are not
+changed. Labels hide for defeated, hidden or untargetable enemies and beyond 18m;
+normal world depth testing keeps them behind walls.
+
+Co-op snapshots carry optional top-level buffs metadata for normal and private
+enemies. The original 15-field normal / 17-field hallucination tuples stay intact,
+so older clients can ignore the extension and newer clients accept legacy hosts.
+Only eight integer levels in -2..2 are accepted. It is display metadata and does
+not change authoritative combat stats or guest hit reporting. Empty snapshots
+clear the indicators; host state IDs already use the existing transport.
+
+Regression tests use actual Three.js meshes, canvases with synthetic data and real
+BattlerBase state/buff methods. They cover missing icons, removal/expiry, all effect
+pages, menu overflow, late-asset invalidation, desktop/wrist anchors, name visibility,
+distance/hidden/death rules, disposal and co-op send/receive compatibility. A local
+browser preview checked the real UI canvases/3D nameplates for desktop and a
+simulated controller anchor using synthetic art. This is not a headset playtest.
+Temporary preview HTML and game assets must never enter the packaged app.

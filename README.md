@@ -44,6 +44,7 @@ It remembers your selected folder after you launch the game.
 - **What do I need?** Windows 10/11, an up-to-date Chrome or Edge, and your original game.
 - **VR NOT SUPPORTED?** Start Quest Link or SteamVR first, close the game window, then click **Launch** again.
 - **Missing tiles or emotes?** Installing the optional RPG Maker VX Ace RTP may help.
+- **Status effects:** Your HUD shows active effects below HP and MP (above the left controller in VR). Extra effects cycle into view; open **Menu → Status** for the complete list. Nearby enemies show their name, health and effects overhead.
 - **Where are my saves?** Mod saves are in the `saves` folder beside the launcher. Your original game and original saves are not changed. Setup keeps mod saves during upgrades and uninstall.
 - **Updates:** Download new versions from [this project's releases](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases). Click **Check for updates** in the launcher. If an update is available, click **Download update**, then open setup when prompted. Your saves are kept.
 

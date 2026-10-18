@@ -10,6 +10,7 @@ import { archivedIconCanvas, sheetForIcon } from '../data/iconfallback.js';
 import { itemData, spiritActorId, BAG_MAX } from '../game/state.js';
 import { quickSlots, quickSlotOf, assignQuickSlot, entryStatus } from './quickslots.js';
 import { cleanName, NAME_LEN } from '../network/coopnet.js';
+import { battlerEffects, effectsKey, fitLabel } from './battler-status.js';
 
 export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
@@ -642,7 +643,7 @@ export class UI {
     this.root.add(this.bannerPanel.mesh);
     this.toastPanel = new Panel(900, 300, 0.75);
     this.root.add(this.toastPanel.mesh);
-    this.hud = new Panel(512, 232, 0.17, { depthTest: true });
+    this.hud = new Panel(512, 356, 0.24);
     this.hud.mesh.renderOrder = 900;
     this.raycaster = new THREE.Raycaster();
     this.pointerLine = null;
@@ -1516,18 +1517,28 @@ export class UI {
     this.hud.mesh.visible = !!leader;
     if (!leader) return;
     const mv = G.scripts?.menuVar, sen = mv && (!mv.switchId || G.state.sw(mv.switchId)) ? G.state.v(mv.variable) : null;
-    // the player's states, by their icons as the original's battle status shows them (poison, a resin, a boss's rule
-    // going round - 그랑・기뇰's 악랄영역): a row under the rest, only while there are any
-    // (and its buffs / debuffs, by the original's arrows - 목수의 못, a curse)
-    const icons = [...leader.states.map(id => $data.states[id]?.icon_index || 0), ...leader.buffIcons()].filter(i => i > 0).slice(0, 12);
-    const key = `${leader.hp}/${leader.mhp}/${leader.mp}/${leader.mmp}/${G.state.party.gold}/${G.combat?.stamina?.toFixed?.(2)}/${sen}/${icons.join(',')}`;
+    const effects = battlerEffects(leader);
+    const page = Math.floor((G.time || 0) / 4) % Math.max(1, Math.ceil(effects.length / 4));
+    const key = `${leader.hp}/${leader.mhp}/${leader.mp}/${leader.mmp}/${G.state.party.gold}/${G.combat?.stamina?.toFixed?.(2)}/${sen}/${effectsKey(effects)}/${page}/${iconAssetRevision()}`;
     if (key === this.lastHud) return;
     this.lastHud = key;
     const p = this.hud;
     const { ctx, canvas } = p;
     p.clear();
-    windowBg(ctx, 2, 2, canvas.width - 4, (icons.length ? 232 : 188) - 4, 0.72);
-    icons.forEach((ic, i) => drawIcon(ctx, ic, 24 + i * 38, 188, 34));
+    const shown = effects.slice(page * 4, page * 4 + 4), more = effects.length - shown.length;
+    const height = 188 + (shown.length + (more ? 1 : 0)) * 32;
+    windowBg(ctx, 2, 2, canvas.width - 4, height - 4, 0.82);
+    ctx.font = `28px ${FONT}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+    shown.forEach((effect, i) => {
+      const y = 188 + i * 32;
+      drawIcon(ctx, effect.icon, 24, y, 28);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(fitLabel(ctx, stripEscapes(effect.name), canvas.width - 86), 62, y + 14);
+    });
+    if (more) {
+      ctx.fillStyle = '#e8d8a8';
+      ctx.fillText(tr('외 {n}개 효과', { n: more }), 26, 188 + shown.length * 32 + 14);
+    }
     const r = Math.max(0, leader.hp / Math.max(1, leader.mhp));
     ctx.fillStyle = 'rgba(60,10,10,0.9)'; ctx.fillRect(22, 20, canvas.width - 44, 28);
     ctx.fillStyle = r > 0.3 ? '#b8222a' : '#ff3030'; ctx.fillRect(22, 20, (canvas.width - 44) * r, 28);
@@ -2000,6 +2011,8 @@ export class UI {
     const items = [
       { text: `${a.name || '???'}  Lv ${a.level}`, right: $data.classes[a.classId]?.name || '' },
       { text: `HP ${a.hp}/${a.mhp}`, right: `MP ${a.mp}/${a.mmp}` },
+      { text: tr('상태 효과'), enabled: false },
+      ...battlerEffects(a).map(effect => ({ text: effect.name, icon: effect.icon, desc: effect.description })),
       ...[2, 3, 4, 5, 6, 7].map(i => ({ text: P[i], right: String(a.param(i)) })),
       ...a.equips.map(e => { const d = itemData(e.kind, e.id); return { text: d ? d.name : '—', icon: d?.icon_index, enabled: !!d }; }),
       ...a.partners.map(sid => { const it = this.oathInfo(sid); return { text: it.name, right: it.lv, desc: it.effect }; }),

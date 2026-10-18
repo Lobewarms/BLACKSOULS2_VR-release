@@ -22,6 +22,7 @@ import { FloorMarker, MARK } from './telegraph.js';
 import { buildIconModel, getAdjust, setAdjust, resetAdjust, defaultAdjust } from './weapons.js';
 import { WeaponFx, ELEMENT_FX } from './weaponfx.js';
 import { desktopRest, desktopSwing } from './desktop-weapon.js';
+import { battlerEffects, effectsKey, fitLabel } from '../ui/battler-status.js';
 import { openFights } from '../world/maphints.js';
 import { personalPage } from '../network/coopworld.js';
 import { SHIELD_SOUND } from '../ui/audio.js';
@@ -449,7 +450,7 @@ function makeShieldMesh(large) {
 
 // ------------------------------------------------------------------ action enemy
 let netSeq = 0;                  // (co-op: the number the players share for one enemy body - coop.js)
-class ActionEnemy {
+export class ActionEnemy {
   constructor(sys, battle, enemyId, fx, fy, opts = {}) {
     this.sys = sys; this.battle = battle;
     this.netId = ++netSeq;
@@ -506,13 +507,15 @@ class ActionEnemy {
     this.mesh = new THREE.Mesh(geo, this.mat);
     this.mesh.rotation.order = 'YXZ';              // (turned to the player, then leant - in its own plane, or toward them)
     this.group.add(this.mesh);
-    // HP bar
-    const bar = document.createElement('canvas'); bar.width = 128; bar.height = 22;      // (HP, and the groggy gauge under it)
+    // Name, HP/groggy and active status effects share one camera-facing nameplate.
+    const bar = document.createElement('canvas'); bar.width = 512; bar.height = 184;
     this.barCanvas = bar;
+    this.lastBar = null;
     this.barTex = new THREE.CanvasTexture(bar);
-    this.bar = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.barTex, depthTest: false, transparent: true }));
-    this.bar.scale.set(0.7, 0.09 * 22 / 16, 1);
-    this.bar.position.y = h + 0.18 - 0.09 * 3 / 16;
+    this.barTex.colorSpace = THREE.SRGBColorSpace;
+    this.bar = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.barTex, depthTest: true, depthWrite: false, transparent: true, toneMapped: false }));
+    this.bar.scale.set(1.65, 1.65 * bar.height / bar.width, 1);
+    this.bar.position.y = h + 0.12 + this.bar.scale.y / 2;
     this.bar.renderOrder = 1400;
     this.bar.visible = false;
     this.group.add(this.bar);
@@ -546,25 +549,50 @@ class ActionEnemy {
   }
   drawBar() {
     if (!this.barCanvas) return;
-    const ctx = this.barCanvas.getContext('2d');
-    ctx.clearRect(0, 0, 128, 22);
-    ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, 128, 16);
-    ctx.fillStyle = this.state === 'stagger' ? '#ffd040' : '#c02424';
-    ctx.fillRect(2, 2, 124 * Math.max(0, this.b.hp / this.b.mhp), 12);
-    // the groggy gauge (what is left of it), for an enemy that has one
+    const effects = battlerEffects(this.b, this.statusBuffs ?? this.b.buffs);
     const gmax = this.sys?.groggyMax ? this.sys.groggyMax(this) : 0;
+    const grog = gmax ? Math.max(0, Math.min(1, (this.grog ?? gmax) / gmax)) : 0;
+    const page = Math.floor((G.time || 0) / 3) % Math.max(1, Math.ceil(effects.length / 4));
+    const name = stripEscapes(this.b.name).trim() || tr('적 {id}', { id: this.b.enemyId });
+    const key = `${name}/${this.b.hp}/${this.b.mhp}/${this.state}/${gmax}/${Math.round(grog * 488)}/${effectsKey(effects)}/${page}/${iconAssetRevision()}`;
+    if (key === this.lastBar) return;
+    this.lastBar = key;
+    const ctx = this.barCanvas.getContext('2d');
+    ctx.clearRect(0, 0, 512, 184);
+    ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, 0, 512, effects.length ? 184 : 88);
+    ctx.font = `bold 42px ${FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(fitLabel(ctx, name, 488), 256, 25);
+    ctx.fillStyle = '#301010'; ctx.fillRect(10, 50, 492, 20);
+    ctx.fillStyle = this.state === 'stagger' ? '#ffd040' : '#c02424';
+    ctx.fillRect(12, 52, 488 * Math.max(0, Math.min(1, this.b.hp / this.b.mhp)), 16);
+    // the groggy gauge (what is left of it), for an enemy that has one
     if (gmax) {
-      ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 16, 128, 6);
+      ctx.fillStyle = '#29251d'; ctx.fillRect(10, 74, 492, 8);
       ctx.fillStyle = '#ece0b4';
-      ctx.fillRect(2, 17, 124 * Math.max(0, this.grog / gmax), 4);
+      ctx.fillRect(12, 76, 488 * grog, 4);
     }
+    ctx.font = `34px ${FONT}`; ctx.textAlign = 'left';
+    // Cycle pages so every active effect is readable even with many simultaneous states.
+    effects.slice(page * 4, page * 4 + 4).forEach((effect, i) => {
+      const x = 12 + (i % 2) * 250, y = 96 + Math.floor(i / 2) * 40;
+      drawIcon(ctx, effect.icon, x, y, 32);
+      ctx.fillStyle = '#fff';
+      ctx.fillText(fitLabel(ctx, stripEscapes(effect.name), 202), x + 38, y + 16);
+    });
     this.barTex.needsUpdate = true;
+  }
+  updateNameplate(head) {
+    if (!this.bar) return;
+    this.bar.visible = this.alive && !this.hidden && this.group.visible && !this.untargetable && head.distanceTo(this.group.position) < 18;
+    if (this.bar.visible) this.drawBar();
   }
   // (lift: off the floor - a boss in the middle of a leap)
   worldPos(target = new THREE.Vector3()) { return target.set((this.fx + 0.5) * T, (G.floorAt ? G.floorAt(this.fx, this.fy) : 0) + (this.lift || 0), (this.fy + 0.5) * T); }
   remove() {
     this.sys.root.remove(this.group);
     this.mesh?.geometry.dispose(); this.mat?.dispose();
+    this.barTex?.dispose(); this.bar?.material.dispose();
+    this.ring?.geometry.dispose(); this.ring?.material.dispose();
     this.cueRing?.geometry.dispose(); this.cueRing?.material.dispose();
     for (const gh of this.ghosts || []) gh.g.material.dispose();
     this.balloon?.dispose();
@@ -4000,6 +4028,7 @@ export class CombatSystem {
       const wp = e.worldPos(tmpA);
       e.group.position.copy(wp);
       e.group.position.y += e.hover || 0;
+      e.updateNameplate(head);
       e.mesh.rotation.y = Math.atan2(head.x - wp.x, head.z - wp.z);
       e.mesh.rotation.z = 0; e.mesh.position.x = 0; e.mesh.position.z = 0;
       // (one hanging high over the player - the stage machine in the flies - leans its face down toward them)
@@ -6292,6 +6321,7 @@ export class CombatSystem {
       e.outOfFight = !!(n.flags & 128);
       e.noTarget = !!(n.flags & 4) || (!!(n.flags & 64) && !G.coop?.rules?.guestStartsBoss) || e.outOfFight;
       e.boss = !!(n.flags & 32);
+      e.statusBuffs = n.statusBuffs ?? null;
       // (a boss made stronger for its co-op fight - coop.js scaleBosses: its HP, MP and groggy gauge as big as there)
       if ((e.b.coopK || 1) !== n.k) { e.b.coopK = n.k; e.grogId = null; }
       const fresh = G.time - (e.netReported ?? -9) < 0.6;

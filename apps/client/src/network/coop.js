@@ -31,6 +31,7 @@ import { FloorMarker, MARK } from '../combat/telegraph.js';
 import { NEW_MOVES } from '../combat/bossmoves.js';
 import { exitOf } from '../game/interpreter.js';
 import { tr } from '../ui/i18n.js';
+import { packEnemyBuffs, readEnemyBuffs } from './enemy-status.js';
 import { NO_H_SWITCH, refOf, indexMap, isRef, sayAt, pictureAt, soundAt, animationAt, musicOk, guard } from './coopguard.js';
 
 const PROTO = 11;
@@ -941,7 +942,8 @@ export class Coop {
     if (!this.ready()) return;
     const m = G.map.mapId, list = [], fights = [];
     const syms = new Map([...G.combat.symbols.values()].filter(s => s.enemy).map(s => [s.enemy, s]));
-    for (const e of G.combat.netEnemies()) {
+    const enemies = G.combat.netEnemies(), buffs = packEnemyBuffs(enemies);
+    for (const e of enemies) {
       list.push(this.enemyEntry(e, e.battle ? null : syms.get(e)));
       fights.push(e.battle?.coopIn ? e.battle : null);
     }
@@ -952,7 +954,7 @@ export class Coop {
       const key = JSON.stringify(mine);
       if (key === p.enKey && !mine.length) continue;          // (nothing there, as last told)
       p.enKey = key;
-      this.send({ t: 'en', m, e: mine }, p.id);
+      this.send({ t: 'en', m, e: mine, buffs }, p.id);
     }
   }
   enemyEntry(e, sym = null) {
@@ -2031,6 +2033,7 @@ export class Coop {
         if (!this.badEnemyAt || now() - this.badEnemyAt > 5) { this.badEnemyAt = now(); console.warn('[coop] enemy entry not taken:', JSON.stringify(n).slice(0, 240)); }
         continue;
       }
+      e.statusBuffs = readEnemyBuffs(m.buffs, e.id);
       list.push(e);
     }
     G.combat.applyPuppets(list);
@@ -2583,12 +2586,15 @@ export class Coop {
     const m = G.map.mapId, groups = G.combat.hallGroups();
     for (const p of this.guests()) {
       if (p.pose?.m !== m) continue;
-      const list = [];
-      if (p.hvm === m && p.hv?.size) for (const [key, g] of groups) if (p.hv.has(key)) for (const e of g.enemies) list.push([...this.enemyEntry(e, g.sym), key, r2(g.age)]);
+      const list = [], enemies = [];
+      if (p.hvm === m && p.hv?.size) for (const [key, g] of groups) if (p.hv.has(key)) for (const e of g.enemies) {
+        list.push([...this.enemyEntry(e, g.sym), key, r2(g.age)]);
+        enemies.push(e);
+      }
       const k = JSON.stringify(list);
       if (k === p.henKey && !list.length) continue;
       p.henKey = k;
-      this.send({ t: 'hen', m, e: list }, p.id);
+      this.send({ t: 'hen', m, e: list, buffs: packEnemyBuffs(enemies) }, p.id);
     }
   }
   onHallEnemies(m, from) {
@@ -2601,6 +2607,7 @@ export class Coop {
       if (!e || typeof key !== 'string' || !HALL_KEY.test(key) || !isNum(age, 1e7) || age < 0) continue;
       if (!seen.has(key) || !this.followHall(key, from, age)) continue;
       e.hallKey = key;
+      e.statusBuffs = readEnemyBuffs(m.buffs, e.id);
       list.push(e);
     }
     G.combat.applyPuppets(list, from);
