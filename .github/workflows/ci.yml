@@ -39,18 +39,24 @@ jobs:
           cache-dependency-path: requirements-dev.txt
       - run: npm ci --ignore-scripts
       - run: python -m pip install -r requirements-dev.txt
+      - name: Install co-op server package
+        run: python -m pip install -e ./packages/coop-server
       - name: JavaScript lint
         run: npm run lint
-      - name: Resolve browser module imports
-        run: npm run check:imports
+      - name: Build browser app and resolve npm dependencies
+        run: npm run build
       - name: Python lint
         run: python -m ruff check .
       - name: JavaScript regression tests
         run: npm test
-      - name: Python protocol and packaging tests
-        run: python -m unittest discover -s tests -p "test_*.py" -v
+      - name: Python protocol tests
+        run: python -m unittest discover -s packages/coop-server/tests -p "test_*.py" -v
+      - name: Packaging and portable launcher tests
+        run: python -m unittest discover -s tests/packaging -p "test_*.py" -v
       - name: Build distribution and checksum
-        run: python scripts/package_release.py
+        run: python tooling/release/package_release.py
+      - name: Build installable Python wheel
+        run: python -m pip wheel --no-deps --wheel-dir dist ./packages/coop-server
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mod-package-${{ matrix.os }}

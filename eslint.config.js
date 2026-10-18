@@ -1,7 +1,7 @@
 import globals from 'globals';
 
 export default [
-  { ignores: ['BLACKSOULS_VR/app/vendor/**', 'dist/**', 'node_modules/**'] },
+  { ignores: ['third_party/**', '**/dist/**', 'dist/**', 'node_modules/**'] },
   {
     files: ['**/*.js', '**/*.mjs'],
     languageOptions: {

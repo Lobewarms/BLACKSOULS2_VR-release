@@ -2,4 +2,4 @@
 *.exe -text
 *.glb -text
 *.zip -text
-BLACKSOULS_VR/app/vendor/** -whitespace
+third_party/** -whitespace

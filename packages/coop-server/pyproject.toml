@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling==1.32.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "blacksouls-vr-coop"
+version = "0.2.0"
+description = "BLACK SOULS II VR co-op relay server"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+dependencies = []
+
+[project.scripts]
+blacksouls-vr-coop = "blacksouls_vr_coop.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/blacksouls_vr_coop"]

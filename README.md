@@ -3,111 +3,127 @@
 [![CI](https://github.com/dimasma0305/BLACKSOULS2_VR-release/actions/workflows/ci.yml/badge.svg)](https://github.com/dimasma0305/BLACKSOULS2_VR-release/actions/workflows/ci.yml)
 [![Release](https://github.com/dimasma0305/BLACKSOULS2_VR-release/actions/workflows/release.yml/badge.svg)](https://github.com/dimasma0305/BLACKSOULS2_VR-release/actions/workflows/release.yml)
 
-**This is a modified fork, not an original Lobewarms release.**
+**Modified fork, not an original Lobewarms release.**
 Original: [Lobewarms/BLACKSOULS2_VR-release](https://github.com/Lobewarms/BLACKSOULS2_VR-release).
-Imported upstream version: **2026.10.16-13**. Fork version: **0.1.0**.
+Upstream base: **2026.10.16-13**. Fork: **0.2.0**.
 
-An unofficial first-person PCVR mod for BLACK SOULS II, including Meta Quest through
-Quest Link, Air Link or Virtual Desktop. You must provide your own original game.
-No game files or saves are included. See [LICENSE](LICENSE) and [FORK_NOTICE.txt](FORK_NOTICE.txt).
+First-person PCVR for BLACK SOULS II, including Meta Quest through Quest Link,
+Air Link or Virtual Desktop. You must supply your own original game. No game files
+or saves are included. Free distribution only, under [LICENSE](LICENSE).
 
 ## Download and play
 
-1. Open this fork's [Releases](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases).
-2. Download **BLACKSOULS_VR_fork_VERSION.zip**, not GitHub's automatic "Source code" archive.
-3. Unzip outside your original game folder. Run `BLACKSOULS_VR/BlacksoulsVR.exe` on Windows.
-4. Choose the original game folder and launch. Connect your headset and select **ENTER VR**.
+Download **BLACKSOULS_VR_fork_VERSION.zip** from this fork's
+[Releases](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases).
+Unzip outside your game directory, run `BLACKSOULS_VR/BlacksoulsVR.exe`, select your
+original game folder, then use **ENTER VR**. Players need no Node.js or build tools.
+The ZIP includes the Python co-op server, models, third-party licenses and a checksum
+manifest. The companion `.sha256` checks the whole ZIP.
 
-The ZIP includes the original multilingual guides, fork attribution, licenses,
-upstream provenance and a per-file checksum manifest. The companion `.sha256`
-checks the whole download. See the [English guide](BLACKSOULS_VR/README_en.txt)
-and [controls](BLACKSOULS_VR/CONTROLS_en.txt); Korean, Japanese and Chinese guides are beside them.
+See [English setup](docs/upstream/README_en.txt) and
+[controls](docs/upstream/CONTROLS_en.txt); Korean, Japanese and Chinese guides are alongside them.
+The launcher is an unchanged upstream binary whose source was not supplied. CI verifies
+its digest. Its updater may replace fork files with upstream files; use this fork's
+Releases for fork updates.
 
-The launcher is an **unchanged upstream prebuilt executable**. Its source was not
-published in the upstream archive, so CI verifies its SHA-256 instead of compiling it.
-Its updater may offer the original upstream version and replace fork files;
-get fork updates from this fork's Releases page. `version.json` and `app/version.txt`
-retain the upstream format/version; `package.json` is the fork's release version.
+## Structure
 
-## Source layout
+```text
+apps/client/                    npm workspace: Vite browser app
+  src/
+    core/ data/ game/ world/     runtime, loading, interpreter, map systems
+    entities/ combat/ ui/       characters, battles, presentation
+    network/ vr/               co-op, headset and controller support
+  public/                      runtime configuration and legacy map-editor data
+  tests/                       JavaScript regression tests
+packages/coop-server/           installable Python package
+  src/blacksouls_vr_coop/       runtime and CLI
+  tests/                       co-op protocol tests
+packaging/                     distribution mappings and portable adapters
+vendor/launcher/               upstream executable and provenance only
+tooling/release/               release builder and verifier
+tests/packaging/               package and portable-entry integration tests
+docs/                          architecture and original multilingual guides
+.github/workflows/             CI and release automation
+```
 
-| Path | Purpose |
-| --- | --- |
-| `BLACKSOULS_VR/app/src/` | Editable browser JavaScript modules |
-| `BLACKSOULS_VR/app/vendor/` | Bundled three.js and WebXR hands, with licenses |
-| `BLACKSOULS_VR/coop_server.py` | Python co-op server; no runtime pip dependencies |
-| `BLACKSOULS_VR/BlacksoulsVR.exe` | Upstream Windows launcher binary |
-| `tests/` | Marshal reader, co-op protocol and packaging regression tests |
-| `scripts/` | Browser import checks and deterministic release packaging |
-| `distribution.json` | Explicit allowlist of files included in releases |
-| `upstream.json` | Imported commit, archive digest and launcher digest |
-| `UPSTREAM_README.md` | Preserved original repository README |
+See [architecture and runtime compatibility](docs/ARCHITECTURE.md).
 
-The checked-in ZIP is replaced by its unpacked contents. Generated ZIPs go to
-`dist/` and GitHub Releases rather than Git history. Existing runtime paths are
-preserved so the launcher can still find the application and co-op server.
+## Libraries and build tooling
 
-## Development checks
+- **Three.js 0.170.0** is installed through npm, matching the upstream renderer revision.
+- **@webxr-input-profiles/assets 1.0.20** supplies the hand models; their bytes match upstream.
+- **Vite 8.3.4** resolves imports and bundles the client and dependencies for offline use.
+- **ESLint** and **Ruff** lint first-party JavaScript and Python.
+- The Python server uses a standard **src-layout package and Hatchling** wheel build.
+  Its runtime uses standard-library `asyncio`; no pip dependencies are required to
+  run the server from the portable ZIP.
 
-Use **Node.js 24** and **Python 3.13**. From the repository root:
+The npm workspace lockfile records exact versions and integrity hashes. Dependency
+licenses are emitted into the browser build. Generated files and npm packages are
+not committed to source control.
+
+## Develop
+
+Use **Node.js 24** and **Python 3.13** from the repository root:
 
 ```sh
 npm ci --ignore-scripts
 python -m pip install -r requirements-dev.txt
+python -m pip install -e ./packages/coop-server
 npm run lint
-npm run check:imports
 npm test
+npm run build
 python -m ruff check .
-python -m unittest discover -s tests -p "test_*.py" -v
-python scripts/package_release.py
+python -m unittest discover -s packages/coop-server/tests -v
+python -m unittest discover -s tests/packaging -v
+npm run package
 ```
 
-No original game assets, headset, server connection or launcher execution are
-needed for these checks. Lint covers first-party code; vendor code stays unchanged.
-Tests exercise the real Marshal reader and co-op parser using synthetic data and
-in-memory streams. Packaging tests check repeatability, checksums and required files.
-These checks do **not** verify every game event, headset rendering or launcher safety.
-Runtime changes still need a Windows/PCVR playtest with your own game copy.
+`npm run build` produces `apps/client/dist/`. `npm run package` also creates the portable
+ZIP and checksum in root `dist/`. To build the installable server wheel:
 
-## CI and releases
+```sh
+python -m pip wheel --no-deps --wheel-dir dist ./packages/coop-server
+python -m blacksouls_vr_coop --help
+```
 
-**CI** runs on `main` pushes, pull requests, manual dispatch and reusable calls.
-Both **Ubuntu and Windows** run lint, browser import checks, JavaScript tests,
-Python protocol/packaging tests, then build ZIPs and SHA-256 checksums. Downloadable
-run artifacts are retained for 14 days.
+`npm run dev` starts Vite on localhost. The frontend still needs the original launcher's
+backend for `/api`, `/game` and `/rtp`. Start the launcher with your game folder and set
+`BLACKSOULS_VR_BACKEND` to that local backend URL before starting Vite. Vite forwards
+those paths to it. The co-op relay is separate from the game-data backend.
 
-**Release** runs on `v*` tags. It requires the full CI matrix to pass before publishing
-a GitHub Release with the ZIP and checksum. Tags must match `package.json` exactly,
-prefixed with `v`. Existing releases are never silently overwritten.
+Tests use synthetic game data, in-memory protocol streams and an isolated portable
+Python launch. No game files or headset are needed for CI. Successful CI does not
+replace a PCVR playtest; headset rendering and full story-event compatibility remain
+manual checks.
 
-To publish the next version:
+## CI/CD
 
-1. Run `npm version 0.1.1 --no-git-tag-version` (substitute the desired version).
-   Update the fork version in this README.
-2. Commit and push to `main`; wait for green CI.
-3. Tag that commit and push it:
+Pushes to `main` and pull requests run lint, tests, the Vite production build, portable
+package tests and Python wheel creation on **Windows and Linux**. Each run provides
+ZIP, checksum and wheel artifacts, retained for 14 days.
 
-   ```sh
-   git tag v0.1.1
-   git push origin v0.1.1
-   ```
+A `v*` tag runs the same checks. After success, publishing downloads the tested
+Linux artifact, checks its version and checksum, and promotes it to a GitHub Release.
+It does not rebuild the client. Existing releases are never overwritten.
 
-No personal token is required in repository secrets: publishing uses `GITHUB_TOKEN`.
-Checks have read-only repository permissions. Only the release publishing job has
-`contents: write`. Actions are pinned to commit SHAs; Dependabot checks Actions,
-npm and Python tooling weekly.
+For the next release, update the root and client `package.json`, the server's
+`pyproject.toml` and `__init__.py`, then run `npm install --package-lock-only` and commit.
+After green CI, push the matching tag, for example:
 
-## Updating from upstream
+```sh
+git tag v0.2.1
+git push origin v0.2.1
+```
 
-Review the new upstream archive and license, then import its runtime files into
-`BLACKSOULS_VR/`. Update `upstream.json` with the precise upstream commit, version,
-archive SHA-256 and launcher SHA-256. Review `distribution.json` changes explicitly
-when runtime files are added or removed. Never include game data, saves, local
-server settings or development dependencies. Run checks and a PCVR playtest before
-publishing runtime changes.
+No personal token secret is needed. Check jobs have read-only repository permissions;
+only publishing has `contents: write`. Actions are SHA-pinned; Dependabot checks
+npm workspaces, Python build tooling and Actions weekly.
 
-## Distribution terms
+## Upstream and licenses
 
-Modified versions must be **free of charge**, credit the original and clearly state
-that they are modified. Do not bundle the original game. The upstream [LICENSE](LICENSE)
-remains in force. Third-party components retain their own included licenses.
+[Original README](docs/upstream/REPOSITORY_README.md),
+[provenance](vendor/launcher/upstream.json), [fork notice](FORK_NOTICE.txt),
+and [license](LICENSE). Modified distributions must be free, credit the original and
+clearly identify themselves as modified. Never include original game data or saves.
