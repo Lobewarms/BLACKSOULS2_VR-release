@@ -13,6 +13,7 @@ export class Input {
     this.dom = dom;
     this.keys = new Set();
     this.keysPrev = new Set();
+    this.rmCancelFrame = null;                      // native Escape unlock, for the next original event logic tick
     this.mouse = { dx: 0, dy: 0, buttons: 0, prevButtons: 0, wheel: 0 };
     this.mousePresses = 0;                         // clicks completed between rendered frames still count once
     this.pointer = { x: 0, y: 0, seen: false };
@@ -52,6 +53,7 @@ export class Input {
       this.pageFocused = false;
       this.stopDesktopLook();
       this.keys.clear(); this.keysPrev.clear();
+      this.rmCancelFrame = null;
       this.releaseMouse();
     });
     addEventListener('focus', () => { this.pageFocused = true; });
@@ -75,6 +77,14 @@ export class Input {
         this.releaseMouse();
         const scripted = this.scriptUnlockPending;
         this.scriptUnlockPending = false;
+        // Escape can unlock the browser without a keyboard event. Original
+        // picture-view autoruns still need their B condition to run its own
+        // switch/Erase Picture commands. Keep this until logic advances, not
+        // merely until a high-refresh render ends; scripted UI releases and
+        // focus loss must never synthesize an event cancel.
+        if (!scripted && hadLock && !G.vr && !this.pointerBusy() && this.pageFocused && document.hasFocus?.() !== false) {
+          this.rmCancelFrame = G.frame;
+        }
         if (!scripted && hadLock && this.pointerBusy() && this.pageFocused && document.hasFocus?.() !== false) {
           this.desktopLookWanted = true; this.pointerUiPaused = true; this.softLook = false;
         } else if (!scripted && hadLock) this.stopDesktopLook();
@@ -458,7 +468,11 @@ export class Input {
     }
     switch (code) {
       case 11: return this.key('ShiftLeft') || this.key('ShiftRight');
-      case 12: return this.key('Escape') || this.key('Backspace') || this.key('KeyX');
+      case 12: {
+        const native = this.rmCancelFrame != null && this.rmCancelFrame === G.frame;
+        if (!native) this.rmCancelFrame = null;
+        return native || this.key('Escape') || this.key('Backspace') || this.key('KeyX');
+      }
       case 13: return this.key('Enter') || this.key('Space') || this.key('KeyZ') || this.key('KeyE');
       case 14: return G.time < (this.rmXUntil || 0);
       case 15: return this.key('Tab');

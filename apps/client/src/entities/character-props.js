@@ -14,6 +14,19 @@ export function characterPropProfile(ch) {
   if (name === 'Map1_b' && [0, 1].includes(index) && [6, 8].includes(ch.direction)) return { kind: 'table', height: 0.55 };
   if ((name === 'Map1_b' && [0, 1, 4, 6].includes(index) || name === '三角木馬')
     && !ch.stepAnime && !ch.moveType) return { kind: 'grounded' };
+  // Original full-sheet inspection: these slots contain freestanding physical
+  // props. Their selected drawings have different transparent bottom margins;
+  // using another frame's lowest pixel leaves them hovering above their support.
+  // Do not extend this to mixed flame, window, noose or wall-altar slots.
+  const stationary = /^[!$]*!/.test(ch.characterName || '') && ch.priorityType === 1
+    && !ch.stepAnime && !ch.moveType && !ch.through;
+  // Other3 slot4 is rocks/posts with water-ripple animation, not a hovering
+  // creature. All three frames share a waterline within each direction row.
+  if (name === 'Other3' && index === 4 && /^[!$]*!/.test(ch.characterName || '')
+    && ch.priorityType === 1 && !ch.moveType && !ch.through) return { kind: 'grounded' };
+  if (stationary && ((name === 'vardo' || name === 'パラソル') && index === 0
+    || name === 'Other3' && [1, 2, 3].includes(index)
+    || name === 'Map1_a' && [1, 3, 5].includes(index))) return { kind: 'grounded' };
   return null;
 }
 

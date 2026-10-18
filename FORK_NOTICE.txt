@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.20
+BLACK SOULS II VR - community version 0.2.21
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,18 +7,18 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Areas have more distinct lighting and visibility: open towns, forests and
-  snowy regions no longer share the same dungeon-style fog and carried light.
-- Original map colours and grayscale effects appear correctly, with scripted
-  lighting changes preserved.
-- Rain, snow, drifting leaves, mist and light shafts use the original game's
-  weather rules and artwork where available.
-- Outdoor areas without a usable sky picture receive suitable original sky
-  artwork. The original moon-over-lake panorama also appears correctly.
-- Verified forest-border artwork keeps its foliage shapes instead of being
-  stretched into opaque building blocks.
+- Boats and water scenery meet the actual river surface instead of hanging
+  above it. Invisible water-blocking tiles no longer become solid walls.
+- River bridge decks keep connected islands level instead of being mistaken
+  for stairs that progressively lower the river and its boats.
+- Stationary props, lamps and joined scenery rest on their visible supporting
+  feet, with their original artwork and animations preserved.
+- Scenery at opposite map edges no longer joins into a misplaced picture.
+- Exiting the moon viewer with Escape clears its image correctly, including
+  when the browser releases the mouse without sending a key press.
 
-The dialogue, equipment and gameplay fixes from previous updates are included.
+The area atmosphere, dialogue, equipment and gameplay fixes from previous
+updates are included.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

@@ -1158,3 +1158,59 @@ player saves. Combat may be paused in a private review harness to keep cameras
 stationary; this is visual inspection, not a full playthrough or physical headset
 test. Temporary review pages and export controls must be removed before builds
 and kept out of production/release packages.
+
+## Water support, scenery grounding and picture cancel (0.2.21)
+
+The Carroll River report identified a boat and icy rock rendered at floor zero
+above the parallax water. Empty water cells must use the exact OPEN_LEVEL of
+the rendered water plane rather than a neighbor-height or zero fallback.
+Fully clear, impassable nonanimated source tiles over water are collision
+markers, not backed solid masses. Normalize their presentation only after
+confirming the source image loaded and every alpha is zero; low-alpha visible
+art and unavailable images must not qualify. Original grid passage is unchanged.
+
+Grounding must measure the pixels actually rendered at the foot: remove the
+same shadow removed by requestUpright and use its 0.4 alpha cutoff. An empty
+padded column beside an assembled stem is not a foot and cannot prevent the
+whole picture from dropping to its real support. Preserve elevated/arch/wall
+attachments and real counter support. Bound numeric horizontal key lookups in
+both map and event picture assembly; (width,y) aliases (0,y+1).
+
+Private full-sheet inspection supports selected-frame grounding for stationary
+object-sheet wagon/parasol frames, Other3 slots1-3 and Map1_a slots1/3/5.
+Other3 slot4 contains physical rocks/posts with animated water ripples; its
+per-direction bottom remains constant through all three animation patterns.
+Allow that animation while preserving normal-priority/no-through/no-movement
+guards. Reevaluate the profile at placement time so a same-graphic event page
+change cannot leave stale eligibility. Moving hands, flames, windows, nooses,
+wall altars, real flying actors and mounted pictures retain their existing rules.
+
+Private scans covered 410 original maps and all graphical event pages, using
+actual source canvases and entry reachability. The checks identify consistent
+water support, picture grouping and visible-foot geometry; they cannot prove
+every story-switch configuration or physical headset behavior. Review flags
+for wall/bridge attachments are not automatically confirmed floating bugs.
+Keep all original images/data, contact sheets and raw audit reports outside Git
+and releases. Shipped regressions use synthetic maps and artwork.
+
+Do not correct the Carroll ferry by stretching its stairs or raising water
+independently of its terrain. Verified VXTileE cells102/107 are complete bridge
+decks, not stairs. When such a deck is passable and not solid/pit, an underlying
+bank face must not split same-level floor components. The prior inferred drops
+sank connected islands from0 to-2 to-4 and placed water6.675m below the ferry
+landing. Correct deck classification joins the reachable islands at0, keeps the
+landing at0 and water at-.45tile (-.675m); all11 boats and the16 icy rocks/two
+posts then have their visible bottoms on that surface. Restrict to actual
+source-sheet identity/cells; rails, broken pieces, true stairs, inaccessible or
+blocked decks, walls and original passage flags retain their rules.
+
+The moon picture is owned by a separate original autorun, not by the action
+event's lifetime. Browser-native Escape pointer unlock may omit keydown, so
+queue the original RPG Maker B/code12 condition until the next map logic tick
+(G.frame epoch), surviving intervening render-only frames. Exclude scripted UI
+unlocks, busy UI, VR and focus loss; blur flushes the cue. Do not inject generic
+UI cancel, edit story switches directly or erase all pictures at event end.
+Private replay of the original Map9 telescope/autorun confirms picture1 is
+erased and switch393 clears while an unrelated persistent picture2 survives.
+The original Leave choice never displays the moon. Tests include async picture
+loading and ordinary keyboard/controller cancel behavior.

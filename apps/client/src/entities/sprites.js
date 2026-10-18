@@ -535,7 +535,7 @@ export class CharacterSprite {
     // a frame drawn with empty rows under it stands on its visible bottom; on a wall face the 2D placement
     // (empty rows included) is what puts it at the right height
     let drop = !spot || spot.side === 'top' || spot.free || spot.about ? (this.footDrop || 0) : 0;
-    if (this.propProfile?.kind === 'grounded' && !flatSpot && !this.facade && this.bodyCanvas) {
+    if (characterPropProfile(c)?.kind === 'grounded' && !flatSpot && !this.facade && this.bodyCanvas) {
       const frame = characterPropFrame(c, this.bodyCanvas, this.info);
       if (frame) drop = (this.info.fh - frame.bottom) / this.info.fh * this.bodySize[1];
     }
@@ -643,7 +643,9 @@ export function layoutTilePictures(sprites, mapInfo) {
     const group = [f];
     done.add(f);
     for (;;) {
-      const a = group[group.length - 1], b = footAt.get(a.ch.x + 1 + a.ch.y * w);
+      const a = group[group.length - 1];
+      if (a.ch.x + 1 >= w) break;
+      const b = footAt.get(a.ch.x + 1 + a.ch.y * w);
       if (!b || done.has(b)) break;
       const ca = cols.get(a), cb = cols.get(b);
       if (!ca.some((t, k) => t && cb[k] && (mapInfo.joinsBeside ? mapInfo.joinsBeside(t.ch.tileId, cb[k].ch.tileId) : true))) break;

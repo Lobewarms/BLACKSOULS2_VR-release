@@ -18,6 +18,7 @@ import { furnitureFloor, furnitureGeometry, isUprightFurnitureTile } from '../en
 import { voxelGeometryOf, SLAB_THICKNESS } from '../combat/weapons.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FoliageTileDrawer, isFoliageTile } from './foliage.js';
+import { isBridgeDeckTile } from './bridges.js';
 
 export const T = 1.5; // meters per tile
 
@@ -399,9 +400,13 @@ export async function buildMapMesh(grid, opts = {}) {
     const ctx = c.getContext('2d', { willReadFrequently: true });
     drawer.draw(ctx, id, 0, 0, 0);
     const d = ctx.getImageData(0, 0, TS, TS).data;
-    let r = 0, g = 0, b = 0, n = 0;
-    for (let k = 0; k < d.length; k += 4) if (d[k + 3] > 128) { r += d[k]; g += d[k + 1]; b += d[k + 2]; n++; }
+    let r = 0, g = 0, b = 0, n = 0, maxAlpha = 0;
+    for (let k = 0; k < d.length; k += 4) {
+      maxAlpha = Math.max(maxAlpha, d[k + 3]);
+      if (d[k + 3] > 128) { r += d[k]; g += d[k + 1]; b += d[k + 2]; n++; }
+    }
     const avg = n ? { rgb: [r / n, g / n, b / n], lum: (0.299 * r + 0.587 * g + 0.114 * b) / n, cover: n / (TS * TS) } : { rgb: [72, 64, 56], lum: 64, cover: 0 };
+    avg.empty = maxAlpha === 0;
     tileAvgs.set(id, avg);
     return avg;
   };
@@ -491,6 +496,19 @@ export async function buildMapMesh(grid, opts = {}) {
   if (opts.openSky) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const ids = [0, 1, 2].map(z => grid.tile(x, y, z)).filter(isVisible);
     if (ids.length && ids.every(t => tileAvg(t).cover === 0)) clear[idx(x, y)] = 1;
+  }
+  // A fully transparent, blocked marker over a river still shows the water in
+  // 2D. It is not a building with opaque backing. Keep original passage flags;
+  // only remove invented geometry after successfully reading the source art.
+  const readableTile = t => !!images[t >= TILE.A4 ? 3 : t >= TILE.A3 ? 2 : t >= TILE.A2 ? 1 : t >= TILE.A1 ? 0 : t >= TILE.A5 ? 4 : 5 + Math.floor(t / 256)];
+  if (parKind === 'water') for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+    const i = idx(x, y);
+    if (pit[i] || grid.anyPassable(x, y)) continue;
+    const ids = [0, 1, 2].map(z => grid.tile(x, y, z)).filter(isVisible);
+    // An animated frame may be blank before its later frames appear. Only
+    // nonanimated, completely clear source tiles establish an empty marker.
+    if (!ids.length || !ids.every(t => !isA1(t) && readableTile(t) && tileAvg(t).empty)) continue;
+    empty[i] = 1; solid[i] = 0; isSide[i] = 0; wallKind[i] = -1; raisedTop[i] = 0;
   }
   // over an open void, impassable upper-layer tiles with nothing under them are railings / bridge edges
   if (openVoid) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
@@ -829,7 +847,11 @@ export async function buildMapMesh(grid, opts = {}) {
     const i = idx(x, y);
     if (empty[i] || solid[i] === SOLID_MASS || solid[i] === SOLID_VOID) continue;
     const t0 = grid.tile(x, y, 0), t1 = grid.tile(x, y, 1);
-    if (isWallSide(t0) || isWallSide(t1)) sideCell[i] = 1;
+    // A bridge painted over a bank face spans the gap at its deck height.
+    // Treating its walkable boards as stairs invents a descent at every bank
+    // and progressively sinks connected islands, water and ferry landings.
+    const bridge = !solid[i] && !pit[i] && grid.anyPassable(x, y) && isBridgeDeckTile(grid.tile(x, y, 2), grid.tileset.tileset_names);
+    if ((isWallSide(t0) || isWallSide(t1)) && !bridge) sideCell[i] = 1;
     else if (!solid[i] && !pit[i] && onStairTile(x, y)) stairCell[i] = 1;
   }
   // (and there one level is only what you can walk across: a roof's edge stops you, so the street behind the
@@ -2199,7 +2221,7 @@ export async function buildMapMesh(grid, opts = {}) {
       if (boxOf.has(st)) continue;
       const cols = [st];
       for (;;) {
-        const a = cols[cols.length - 1], b = at.get(key(a.x + 1, a.cellY, a.elev));
+        const a = cols[cols.length - 1], b = a.x + 1 < w ? at.get(key(a.x + 1, a.cellY, a.elev)) : null;
         if (!b || boxOf.has(b) || !sameLevel(a, b) ||
           (!(a.whole && b.whole) && !a.tiles.some((t, r) => r < b.tiles.length && hConnected(t, b.tiles[r])))) break;
         cols.push(b);
@@ -2247,25 +2269,32 @@ export async function buildMapMesh(grid, opts = {}) {
     gapCv.width = gapCv.height = TS;
     const gapCtx = gapCv.getContext('2d', { willReadFrequently: true });
     const gaps = new Map();
-    const bottomGap = t => {
-      if (gaps.has(t)) return gaps.get(t);
+    const bottomGap = (t, stripShadow) => {
+      const key = t + (stripShadow ? 'bare' : 'raw');
+      if (gaps.has(key)) return gaps.get(key);
       gapCtx.clearRect(0, 0, TS, TS);
-      drawer.draw(gapCtx, t, 0, 0);
+      if (stripShadow) gapCtx.drawImage(shadowPart(t, false), 0, 0);
+      else drawer.draw(gapCtx, t, 0, 0);
       const a = gapCtx.getImageData(0, 0, TS, TS).data;
       let g = 0;
       for (let y = TS - 1; y >= 0; y--) {
         let any = false;
-        for (let x = 0; x < TS && !any; x++) if (a[(y * TS + x) * 4 + 3] > 40) any = true;
+        for (let x = 0; x < TS && !any; x++) if (a[(y * TS + x) * 4 + 3] >= 102) any = true;
         if (any) break;
         g++;
       }
-      gaps.set(t, g >= TS ? 0 : g);
-      return gaps.get(t);
+      gaps.set(key, g >= TS ? 0 : g);
+      return gaps.get(key);
     };
     for (const box of boxes) {
       const pcs = box.line || box.cols;
       if (pcs.some(st => st.elev || st.arch || (st.againstWall && !st.onTable))) continue;
-      const drop = Math.min(...pcs.filter(st => !st.whole || st.tiles[0]).map(st => bottomGap(st.tiles[0]))) / TS;   // (a whole one's columns with nothing on its foot row: higher up)
+      // Match requestUpright's actual alpha: a shadow left on the floor is no
+      // longer part of the upright foot, nor is an alpha-tested-out halo.
+      // Joined crowns/arms may have a padded empty column beside their stem.
+      // That absent foot must not pin the whole assembly above the ground.
+      const feet = pcs.filter(st => st.tiles[0]);
+      const drop = feet.length ? Math.min(...feet.map(st => bottomGap(st.tiles[0], !st.onTable && hasShadow(st.tiles[0])))) / TS : 0;
       for (const st of pcs) st.drop = drop;
     }
   }
@@ -3116,6 +3145,7 @@ export async function buildMapMesh(grid, opts = {}) {
     const x = Math.round(fx), y = Math.round(fy);
     if (!valid(x, y)) return 0;
     const i = idx(x, y);
+    if (empty[i] && parKind === 'water') return OPEN_LEVEL;
     if (pit[i]) return pitE[i];
     if (slope[i]) {
       const v = THREE.MathUtils.clamp(fy - (y - 0.5), 0, 1);
