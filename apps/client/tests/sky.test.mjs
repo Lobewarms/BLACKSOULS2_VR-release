@@ -95,8 +95,76 @@ test('fallback clouds fill the sky with original image pixels, crop the plain lo
   const previous = sky.group;
   await sky.setMap({ parallax_name: 'CloudySky1', parallax_show: true }, { fallbackSky: 'CloudySky1' });
   assert.notEqual(sky.group, previous); assert.equal(sky.isFallback, false);
-  assert.equal(sky.group.children.length, 2, 'an explicitly authored horizon retains its original band and framing');
+  assert.equal(sky.group.children.length, 3, 'an explicitly authored horizon keeps its band plus textured overhead coverage');
   assert.equal(sky.group.children[1].material.map.image.height, 80);
+});
+
+test('authored horizon skies have visible image coverage at every overhead angle instead of a flat colour cap', async t => {
+  const { sky } = environment(t);
+  for (const name of ['月湖', 'Ocean1', 'Ocean2', 'Ocean3', 'CloudySky1', '47261773_p0', 'cr',
+    'normandy-1827275_1280', 'mont-st-michel-1022830_1280', 'Mountains4']) {
+    await sky.setMap({ parallax_name: name, parallax_show: true });
+    const originalBand = sky.group.children[1];
+    assert.equal(originalBand.geometry.type, 'CylinderGeometry', 'the original horizon must keep its authored projection');
+    sky.group.updateMatrixWorld(true);
+    const textured = sky.group.children.filter(mesh => mesh.material.map);
+    for (const elevation of [55, 70, 85, 89.9, 90]) for (const heading of [0, 45, 90, 180, 270]) {
+      const e = elevation * Math.PI / 180, a = heading * Math.PI / 180;
+      const ray = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(Math.cos(e) * Math.cos(a), Math.sin(e), Math.cos(e) * Math.sin(a)));
+      const hits = ray.intersectObjects(textured, false);
+      assert.ok(hits.length, `${name}: overhead ${elevation}/${heading} needs real image pixels`);
+      assert.ok(hits.some(hit => {
+        const colors = hit.object.geometry.attributes.color;
+        return !colors || colors.itemSize !== 4 || [hit.face.a, hit.face.b, hit.face.c].every(i => colors.getW(i) > .95);
+      }), 'the textured cap must be fully visible above the horizon blend');
+    }
+  }
+});
+
+test('original black space and unverified custom panoramas retain their authored background rules', async t => {
+  const { sky } = environment(t);
+  for (const name of ['月面', 'UnverifiedCustomPanorama']) {
+    await sky.setMap({ parallax_name: name, parallax_show: true });
+    assert.equal(sky.group.children.length, 2, 'do not extend surface art or unverified objects over the player');
+  }
+});
+
+test('moon-lake overhead uses the original star field without copying its moon or lake into the zenith', async t => {
+  const artwork = { width: 160, height: 100, pixel: (x, y) => y >= 50 ? [255, 0, 0, 255]
+    : x < 100 ? [0, 255, 0, 255] : [10 + x % 20, 15 + y % 20, 90, 255] };
+  const { sky } = environment(t, async () => artwork);
+  await sky.setMap({ parallax_name: '月湖', parallax_show: true });
+  const cap = sky.group.children.find(mesh => mesh.name === 'horizon-sky-cap');
+  assert.ok(cap, 'the moon panorama needs actual star artwork overhead');
+  const source = cap.material.map.image, pixels = source.getContext('2d').getImageData(0, 0, source.width, source.height).data;
+  for (let i = 0; i < pixels.length; i += 4) {
+    assert.equal(pixels[i + 2], 90, 'only upper-right stars enter the cap, never the moon or water');
+    assert.ok(pixels[i] < 30 && pixels[i + 1] < 35);
+  }
+  assert.equal(cap.material.depthWrite, false); assert.equal(cap.material.fog, false);
+  assert.equal(cap.material.map.wrapS, THREE.MirroredRepeatWrapping);
+  assert.equal(cap.material.map.wrapT, THREE.MirroredRepeatWrapping);
+});
+
+test('full-sky domes retain textured pole coverage and authored caps release both source textures on transfer', async t => {
+  const { sky } = environment(t);
+  for (const name of ['StarlitSky', 'CloudySky2', 'BlueSky', '64380033_p2_master1200']) {
+    await sky.setMap({ parallax_name: name, parallax_show: true }); sky.group.updateMatrixWorld(true);
+    for (const y of [-1, 1]) {
+      // Avoid the exact shared pole/meridian triangle edges, whose floating
+      // point residue can make CPU rays miss an otherwise rasterized surface.
+      const hits = new THREE.Raycaster(new THREE.Vector3(), new THREE.Vector3(1e-4, y, 1.3e-4).normalize())
+        .intersectObjects(sky.group.children.filter(mesh => mesh.material.map), false);
+      assert.ok(hits.length, name + ' keeps its original dome pole');
+    }
+  }
+  await sky.setMap({ parallax_name: '月湖', parallax_show: true });
+  const old = sky.group, textures = new Set(old.children.map(mesh => mesh.material.map).filter(Boolean));
+  assert.equal(textures.size, 2, 'horizon art and its safe star crop have independent textures');
+  let disposed = 0; for (const texture of textures) texture.addEventListener('dispose', () => disposed++);
+  await sky.setMap({ parallax_name: 'Ocean1', parallax_show: true });
+  assert.equal(disposed, 2); assert.equal(old.parent, null);
+  assert.notEqual(sky.group, old);
 });
 
 test('disabled, unavailable and rejected sky images retain the area fog/background without inventing an indoor sky', async t => {

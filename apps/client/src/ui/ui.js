@@ -1960,6 +1960,7 @@ export class UI {
   // ---------------------------------------------------------------- menus
   openMenu() {
     if (this.menuOpen) return;
+    G.pictures?.requestViewerCancel?.();
     this.menuOpen = true;
     this.unlockPointer();
     this.menuIndex = 0;
@@ -2113,6 +2114,7 @@ export class UI {
     }
   }
   showMap() {
+    G.pictures?.requestViewerCancel?.();
     this.unlockPointer();
     this.mapReturnMenu = this.menuOpen;
     this.menuOpen = true; this.sceneOpen = 'map';

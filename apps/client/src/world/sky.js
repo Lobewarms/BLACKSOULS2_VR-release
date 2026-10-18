@@ -16,6 +16,21 @@ const REACH = Math.tan(40 * Math.PI / 180); // the band reaches about 40° up an
 const FOG = 0x030305;                       // the fog / background without a sky (main.js)
 const FALLBACK_SKIES = new Set(['CloudySky1', 'CloudySky2', 'StarlitSky', '64380033_p2_master1200']);
 
+// Safe sky-only portions of the original horizon panoramas. The moon/lake
+// image's right-hand stars exclude its moon, flare and reflected water.
+const HORIZON_CAP_CROPS = {
+  月湖: [0.7, 0, 0.3, 256 / 720],
+  CloudySky1: [0, 0, 1, 0.25],
+  Ocean1: [0, 0, 1, 0.4],
+  Ocean2: [0, 0, 1, 0.4],
+  Ocean3: [0, 0, 1, 0.4],
+  '47261773_p0': [0, 0, 1, 0.35],
+  cr: [0.5, 0, 0.5, 0.075],
+  'normandy-1827275_1280': [0, 0, 0.375, 0.24],
+  'mont-st-michel-1022830_1280': [0, 0, 0.35, 0.4],
+  Mountains4: [0, 0, 1, 0.3],
+};
+
 function fallbackClouds(name, img, fallback) {
   if (!fallback || name !== 'CloudySky1') return img;
   // This original panorama's lower half is a plain horizon/ground fade. Its
@@ -151,10 +166,12 @@ export class Sky {
     fillGeo.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
     const fill = new THREE.Mesh(fillGeo, new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }));
     fill.renderOrder = -10; band.renderOrder = -9;
-    for (const m of [fill, band]) m.frustumCulled = false;
+    const cap = this.horizonCap(name, cv, bandH, n);
+    for (const m of [fill, band, cap].filter(Boolean)) m.frustumCulled = false;
     this.group = new THREE.Group();
     this.group.name = 'sky';
     this.group.add(fill, band);
+    if (cap) this.group.add(cap);
     this.scene.add(this.group);
     this.offset = bandH * (0.5 - horizon);    // the horizon row at eye level
     this.name = name;
@@ -162,6 +179,36 @@ export class Sky {
     this.scene.fog?.color.copy(hor);
     this.scene.background = hor.clone();
     this.update();
+  }
+  horizonCap(name, image, bandH, repeats) {
+    const crop = HORIZON_CAP_CROPS[name];
+    if (!crop) return null;
+    const [x, y, w, h] = crop, cv = document.createElement('canvas');
+    const sx = Math.round(image.width * x), sy = Math.round(image.height * y);
+    cv.width = Math.max(1, Math.round(image.width * w)); cv.height = Math.max(1, Math.round(image.height * h));
+    cv.getContext('2d').drawImage(image, sx, sy, cv.width, cv.height, 0, 0, cv.width, cv.height);
+    const texture = new THREE.CanvasTexture(cv);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = texture.wrapT = THREE.MirroredRepeatWrapping;
+    texture.anisotropy = 4;
+    const edge = Math.atan2(bandH / 2, R);
+    const start = Math.max(0, edge - 12 * Math.PI / 180), end = Math.max(start + 0.01, edge - 2 * Math.PI / 180);
+    const geometry = new THREE.SphereGeometry(R * 0.999, 128, 48, 0, 2 * Math.PI, 0, Math.PI / 2 - start);
+    geometry.scale(-1, 1, 1);
+    const pos = geometry.attributes.position, uv = geometry.attributes.uv, rgba = [];
+    const tileU = Math.max(0.7, 2 * Math.PI / repeats * cv.width / image.width), tileV = Math.max(0.7, bandH / R * cv.height / image.height);
+    for (let i = 0; i < pos.count; i++) {
+      const px = pos.getX(i), py = pos.getY(i), pz = pos.getZ(i), radius = Math.hypot(px, pz);
+      const angle = Math.atan2(radius, py), elevation = Math.PI / 2 - angle;
+      const u = radius > 1e-6 ? angle * px / radius : 0, v = radius > 1e-6 ? angle * pz / radius : 0;
+      uv.setXY(i, 0.5 + u / tileU, 0.5 + v / tileV);
+      rgba.push(1, 1, 1, THREE.MathUtils.smoothstep(elevation, start, end));
+    }
+    geometry.setAttribute('color', new THREE.Float32BufferAttribute(rgba, 4));
+    const cap = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ map: texture, vertexColors: true,
+      transparent: true, fog: false, depthWrite: false }));
+    cap.name = 'horizon-sky-cap'; cap.renderOrder = -8;
+    return cap;
   }
   // a picture that is the whole background (a sky, space, a texture): all over the sky. Round the horizon it lies
   // as on a globe; over the head (and under the feet) flat round the pole instead, so it does not crowd into a

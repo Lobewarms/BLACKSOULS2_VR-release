@@ -1214,3 +1214,42 @@ Private replay of the original Map9 telescope/autorun confirms picture1 is
 erased and switch393 clears while an unrelated persistent picture2 survives.
 The original Leave choice never displays the moon. Tests include async picture
 loading and ordinary keyboard/controller cancel behavior.
+
+## Horizon sky coverage and semantic viewer exit (0.2.22)
+
+Map9's authored Moon Lake panorama used the legacy cylinder plus a constant
+upper-hemisphere colour. Its 1280x720 aspect with two repeats ends the image at
+roughly41.46 degrees elevation, producing the reported large plain-blue circle.
+Keep the original horizon projection and add a small inward spherical cap with
+azimuthal UVs and a smooth overlap below the cylinder's top. Verified sky-only
+crops come from the selected game's original panoramas at runtime, never from
+bundled game images. Moon Lake's right30%/top256-of720 pixels contain stars
+without its moon, flare or water. Other audited named crops avoid churches,
+ships, mountains and sea. The Moon Surface's genuinely black empty space and
+unverified custom panoramas retain their original rules. Full-sky domes retain
+their existing projection. Resource cleanup must dispose both horizon/cap
+textures once; tests ray-check visible textured coverage through the zenith,
+preserve the original cylinder, and verify crops with synthetic marker pixels.
+
+The user's still-persistent moon was verified against the running .21 bundle;
+the missing path was Tab/M/N or left-Y opening the port menu/map. Those are
+different from original B and deliberately perform a scripted pointer unlock,
+so the earlier native-Escape bridge correctly did not run. Menu/map entry now
+asks PictureLayer to recognize an active autorun/parallel controller whose true
+B12 branch erases a currently visible named picture, then requests original B
+for the next map-logic epoch. The original controller performs its own switch
+and picture cleanup. Do not erase pictures directly or globally map menu keys
+to B. Ignore erased/inactive/action pages, Else/later unrelated erases, wrong
+button codes, unrelated picture IDs and hidden images. Keep persistent pictures
+and the newly opened port menu. Original Map9 data and real UI/Input were
+privately replayed for all four entry controls after12 viewing ticks; picture1
+and switch393 clear on the next tick while persistent picture2 survives.
+No original assets/data or private review controls enter the release.
+
+The original telescope autorun also repeats Show Picture every logic tick.
+Replacing its loaded image with null lets the asynchronous cache promise resolve
+only after that frame renders, causing flicker or invisibility at steady60Hz.
+Reuse ready artwork only for the same picture ID and name; reset the other
+Show Picture fields normally. Preserve identity checks for pending replacements
+and erasures. Regressions must render synchronously after each repeated show,
+and confirm a delayed image cannot resurrect a viewer cancelled from the menu.

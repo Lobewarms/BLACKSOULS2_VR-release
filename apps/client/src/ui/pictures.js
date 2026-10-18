@@ -63,13 +63,16 @@ export class PictureLayer {
     // (a stage play's curtain is hung on the stage instead - src/theater.js)
     if (G.theater?.takePicture(p)) { if (this.pics.delete(p[0])) this.dirty = true; return; }
     const [n, name, origin, designation, px, py, zx, zy, opacity, blend] = p;
+    const previous = this.pics.get(n);
     const pic = {
       name, origin, blend,
       x: designation ? G.state.v(px) : px, y: designation ? G.state.v(py) : py,
-      zx, zy, opacity, angle: 0, img: null, d: 0, target: null,
+      // Some original autoruns re-show the same image every logic tick. Retain
+      // that loaded art for this frame; a cached promise resolves after render.
+      zx, zy, opacity, angle: 0, img: previous?.name === name ? previous.img : null, d: 0, target: null,
     };
     this.pics.set(n, pic);
-    if (name) loadImage('Graphics/Pictures', name).then(img => { if (this.pics.get(n) === pic) { pic.img = img; this.dirty = true; } });
+    if (name && !pic.img) loadImage('Graphics/Pictures', name).then(img => { if (this.pics.get(n) === pic) { pic.img = img; this.dirty = true; } });
     this.dirty = true;
   }
   move(p) {
@@ -82,6 +85,29 @@ export class PictureLayer {
   }
   erase(n) { G.theater?.erasePicture(n); if (this.pics.delete(n)) this.dirty = true; }
   clear() { this.pics.clear(); this.dirty = true; }
+
+  // Port menu/map shortcuts differ from RPG Maker's B button. An active original
+  // viewer may intentionally leave its picture to a separate autorun that checks
+  // B and erases it. Ask that controller to close itself; never erase arbitrary
+  // persistent pictures or change its switches here.
+  requestViewerCancel() {
+    if (!this.pics.size || !G.input?.requestRmCancel) return false;
+    for (const event of G.map?.eventList || []) {
+      if (event.erased || !event.page || ![3, 4].includes(event.trigger)) continue;
+      const list = event.list || [];
+      for (let i = 0; i < list.length; i++) {
+        const command = list[i];
+        if (command.code !== 111 || command.parameters?.[0] !== 11 || command.parameters[1] !== 12) continue;
+        // Only the true B branch owns this cancellation, not its Else branch or
+        // an unrelated later Erase Picture command on the same event page.
+        for (let j = i + 1; j < list.length && list[j].indent > command.indent; j++) {
+          const next = list[j], picture = next.code === 235 ? this.pics.get(next.parameters?.[0]) : null;
+          if (picture?.name && picture.opacity > 0) { G.input.requestRmCancel(); return true; }
+        }
+      }
+    }
+    return false;
+  }
 
   // 60 Hz: moves (Game_Picture#update_move)
   update() {

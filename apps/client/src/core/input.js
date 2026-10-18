@@ -83,7 +83,7 @@ export class Input {
         // merely until a high-refresh render ends; scripted UI releases and
         // focus loss must never synthesize an event cancel.
         if (!scripted && hadLock && !G.vr && !this.pointerBusy() && this.pageFocused && document.hasFocus?.() !== false) {
-          this.rmCancelFrame = G.frame;
+          this.requestRmCancel();
         }
         if (!scripted && hadLock && this.pointerBusy() && this.pageFocused && document.hasFocus?.() !== false) {
           this.desktopLookWanted = true; this.pointerUiPaused = true; this.softLook = false;
@@ -451,7 +451,14 @@ export class Input {
   attackPressed() { return !G.vr && this.mousePressed(0); }
   // RPG Maker's own buttons, held down (events check them with "Button is being pressed"): the
   // opening's "press down to get out of bed", "B closes the picture", the date talk on X...
+  requestRmCancel() { this.rmCancelFrame = G.frame; }
   rmButton(code) {
+    // Semantic menu opening can also finish an active original picture viewer.
+    // This feeds event B only, including VR, without closing the new port menu.
+    if (code === 12) {
+      if (this.rmCancelFrame != null && this.rmCancelFrame === G.frame) return true;
+      this.rmCancelFrame = null;
+    }
     // (down also counts when the stick is simply pulled back / S is held, like a pad's down button:
     // in VR nobody knows which way the map's "down" is right after a cutscene)
     if (code === 2 && (G.vr ? this.axes.left[1] > 0.6 : this.key('KeyS') || this.key('ArrowDown'))) return true;
@@ -468,11 +475,7 @@ export class Input {
     }
     switch (code) {
       case 11: return this.key('ShiftLeft') || this.key('ShiftRight');
-      case 12: {
-        const native = this.rmCancelFrame != null && this.rmCancelFrame === G.frame;
-        if (!native) this.rmCancelFrame = null;
-        return native || this.key('Escape') || this.key('Backspace') || this.key('KeyX');
-      }
+      case 12: return this.key('Escape') || this.key('Backspace') || this.key('KeyX');
       case 13: return this.key('Enter') || this.key('Space') || this.key('KeyZ') || this.key('KeyE');
       case 14: return G.time < (this.rmXUntil || 0);
       case 15: return this.key('Tab');
