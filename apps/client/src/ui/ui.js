@@ -192,8 +192,7 @@ class ListPanel {
   }
   open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '' } = {}) {
     this.title = title; this.items = items; this.onSelect = onSelect; this.onCancel = onCancel; this.onAdjust = onAdjust;
-    // (index -1: no row picked yet - the event choices, as the original's 誤選択防止 script: the first up / down, or the
-    // laser moved onto a row, picks one; the confirm button does nothing until then)
+    // Explicit index -1 leaves a list unselected; normal dialogue starts at its first row.
     this.index = index < 0 ? -1 : Math.min(index, Math.max(0, items.length - 1)); this.top = 0; this.footer = footer;
     this.hover = -2;          // the row under the laser right now does not count as a move
     this.panel.mesh.visible = true;
@@ -853,7 +852,7 @@ export class UI {
     if (r.reveal < r.total) { r.reveal = Math.min(r.total, r.reveal + 2); this.drawMessage(r); }
     else if (r.choices && !r.choiceUp) {
       r.choiceUp = true;
-      this.choice.open('', r.choices.map(c => ({ text: c.text, enabled: true })), { index: -1, onSelect: () => {}, onCancel: () => {} });
+      this.choice.open('', r.choices.map(c => ({ text: c.text, enabled: true })), { index: 0, onSelect: () => {}, onCancel: () => {} });
       this.choice.panel.mesh.visible = true;
       this.layoutPanels(r);
     }
@@ -892,7 +891,7 @@ export class UI {
       if (msg.choices) {
         msg.state = 'choice';
         this.choice.open('', msg.choices.map(c => ({ text: c.text, enabled: c.enabled })), {
-          index: -1,
+          index: 0,
           onSelect: i => { msg.onChoice?.(i); this.closeMessage(); },
           onCancel: () => { if (msg.cancelable) { msg.onChoice?.(-1); this.closeMessage(); } },
         });

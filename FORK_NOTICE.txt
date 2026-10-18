@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.3
+BLACK SOULS II VR - community version 0.2.4
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,11 +7,10 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Fixed attacks or guarding staying held after switching windows or releasing the mouse.
-- Graphics can load again after a temporary download failure.
-- Fixed incorrect decoding of some Japanese text.
-- Save-slot errors no longer show occupied slots as empty. Failed saves and loads
-  display a message, and a failed load keeps you in the menu.
+- Corpse graphics now lie flat instead of standing upright, including bodies that
+  block movement or take part in a scene.
+- Dialogue options start with the first option highlighted. Opening the options
+  does not automatically confirm an answer, and disabled answers remain disabled.
 
 This is a modified version by dimasma0305 of the original mod by Lobewarms.
 Original: https://github.com/Lobewarms/BLACKSOULS2_VR-release

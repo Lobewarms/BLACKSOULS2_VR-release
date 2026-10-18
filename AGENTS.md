@@ -284,3 +284,26 @@ The runtime tests use synthetic data and simulated browser events/network replie
 The save compatibility test round-trips the actual GameState serializer/parser.
 Input, image-cache and text-encoding tests were run against the unmodified code and
 failed before their fixes. No original game or headset playtest was available.
+
+## Corpse rendering and initial choice highlight (0.2.4)
+
+User reports: corpses drawn upright and dialogue choices not highlighting the
+first answer. CharacterSprite.isCorpseGraphic already recognized Japanese corpse,
+DamageN and stationary-skeleton sheets, but layMode used blocking priority to
+stand them up. Recognized event corpse graphics now choose lie before wall,
+priority and acting overrides, leaving collision properties untouched. Added
+bounded English corpse/cadaver/dead-body graphic names without matching Undead
+characters. Walking skeletons, living actors and doors keep their existing modes.
+
+The user's first-choice preference overrides the old intentional misselection
+prevention script port. Local and remote dialogue choice panels open at index 0.
+The frame opening choices still returns before processing confirmation, so opening
+and choosing remain distinct actions. Disabled choices retain their enabled flag.
+Explicit unselected lists (index -1) are still supported by ListPanel when needed.
+
+Tests construct real Three.js meshes and UI panels using synthetic canvases. They
+assert horizontal geometry/upward normals, stable frame selection across viewer
+positions, revival back to an upright graphic, unchanged collision properties,
+first-row focus, no opening-frame answer and disabled-answer behavior. These tests
+failed against the prior runtime and pass after the fixes. No original game images
+or headset rendering are involved, so manual in-game visual verification remains.

@@ -183,6 +183,9 @@ export class CharacterSprite {
   layMode() {
     const c = this.ch;
     if (!c.isEvent) return 'stand';
+    // Corpse artwork is drawn from above. Blocking priority and scene movement
+    // affect event logic, but must not turn a body into an upright billboard.
+    if (this.isCorpseGraphic()) return 'lie';
     // a door set into a wall stands on the wall whatever its priority (doors are usually "below characters"),
     // also one in a doorway with the drop behind it (the side-view tower)
     if (this.isDoorGraphic() && (this.mapInfo.isWall(c.x, c.y - 1) || this.mapInfo.isDoorway?.(c.x, c.y))) return 'stand';
@@ -210,7 +213,9 @@ export class CharacterSprite {
   // row the event sets instead of changing with the side they are seen from
   isCorpseGraphic() {
     const n = this.ch.characterName || '';
-    return /死体|Damage\d|骸骨擬態/i.test(n) || (/骸骨/.test(n) && this.ch.moveType === 0);
+    return /死体|Damage\d|骸骨擬態/i.test(n) ||
+      /(?:^|[!$ _-])(?:corpses?|cadavers?|dead[ _-]?(?:body|dog|person|man|woman))(?=$|[ _-]|\d)/i.test(n) ||
+      (/骸骨/.test(n) && this.ch.moveType === 0);
   }
   // doors / gates set into a wall stay flat against it; everything else stands in front of the wall
   isDoorLike() {
