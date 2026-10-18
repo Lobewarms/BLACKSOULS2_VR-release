@@ -1509,3 +1509,16 @@ the inherited20 unchanged runtime modules. Diff review artifacts contain mod
 source only; original game data, raw audit inputs and capture controls stay
 private. Fork runtime bundle SHA256 for these captures:
 b890a0e41b35a72792c872c4d1cc0a465fa038ab21e1628cdcd83526b2e21941.
+
+### Saved-frame verification
+
+The first comparison upload contained five identical black PNGs despite correct
+live browser previews. The private capture helper awaited a metadata POST after
+rendering and before reading the WebGL canvas; its non-preserved drawing buffer
+had already cleared. Snapshot the canvas synchronously immediately after the
+render, before any await/network work, then encode/upload that frozen snapshot.
+This changes capture timing only, not the renderer or source comparisons.
+Inspect every saved PNG itself and verify non-uniform pixels and distinct hashes
+before publishing. Metadata, valid PNG dimensions, HTTP200 and matching remote
+blob hashes do not establish that the visible image contains the rendered frame.
+The PR comparisons should be visible directly, with links to open each PNG.
