@@ -14,6 +14,11 @@ foreach ($entry in $manifest.files.PSObject.Properties) {
     $actualDigest = (Get-FileHash -LiteralPath $installedFile -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($actualDigest -ne $entry.Value) { throw "Installed file differs: $relativePath" }
 }
+# Exercise the actual installed entry assembly, including the hosted vendor form.
+$preview = Join-Path $testRoot 'launcher.png'
+$process = Start-Process -FilePath (Join-Path $installPath 'BlacksoulsVR.exe') -ArgumentList @('--lang', 'en', '--screenshot', "`"$preview`"") -WorkingDirectory $installPath -WindowStyle Hidden -PassThru
+if (-not $process.WaitForExit(15000)) { Stop-Process -Id $process.Id -Force; throw 'Installed launcher did not open and render' }
+if (-not (Test-Path -LiteralPath $preview)) { throw 'Installed launcher failed to render its form' }
 # An upgrade must retain player-created saves, and uninstall must not delete them.
 $savePath = Join-Path $installPath 'saves'
 New-Item -ItemType Directory -Path $savePath | Out-Null

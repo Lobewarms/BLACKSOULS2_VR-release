@@ -2,6 +2,7 @@
 import argparse
 import hashlib
 import json
+import os
 import re
 import subprocess
 import tomllib
@@ -11,6 +12,21 @@ from pathlib import Path, PurePosixPath
 ROOT = Path(__file__).resolve().parents[2]
 PREFIX = 'BLACKSOULS_VR/'
 MANIFEST = PREFIX + 'MANIFEST.json'
+
+
+def release_identity(root=ROOT):
+    # Actions supplies the repository of this build, including builds in forks.
+    repository = os.environ.get('GITHUB_REPOSITORY')
+    if not repository:
+        remote = subprocess.check_output(['git', 'remote', 'get-url', 'origin'], cwd=root, text=True).strip()
+        match = re.fullmatch(r'(?:https://github\.com/|git@github\.com:)([^/]+/[^/]+?)(?:\.git)?', remote)
+        if not match:
+            raise ValueError('Cannot determine the GitHub release repository from origin')
+        repository = match[1]
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*', repository):
+        raise ValueError('Invalid GitHub release repository')
+    version = json.loads((root / 'package.json').read_text(encoding='utf-8'))['version']
+    return {'schema': 1, 'repository': repository, 'version': version}
 
 
 def sha256(data):
@@ -80,6 +96,7 @@ def build(version, output, root=ROOT):
     if client_version != version or server_version != version:
         raise ValueError('Root, client and server versions must agree for a monorepo release')
     payload = collect(root)
+    payload[PREFIX + 'release.json'] = (json.dumps(release_identity(root), indent=2, sort_keys=True) + '\n').encode()
     try:
         commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     except (OSError, subprocess.CalledProcessError):
@@ -114,6 +131,11 @@ def verify(path):
         for name, digest in expected.items():
             if sha256(archive.read(name)) != digest:
                 raise ValueError(f'Checksum mismatch: {name}')
+        if PREFIX + 'release.json' in names:
+            identity = json.loads(archive.read(PREFIX + 'release.json'))
+            if (identity.get('schema') != 1 or identity.get('version') != manifest['version']
+                    or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*', identity.get('repository', ''))):
+                raise ValueError('Invalid packaged release identity')
         upstream = json.loads(archive.read(PREFIX + 'upstream.json'))
         # Older releases used the stock launcher directly; newer ones add discovery.
         engine = PREFIX + 'BlacksoulsVR.Engine.exe'
@@ -136,6 +158,11 @@ def main():
             expected = json.loads((ROOT / 'package.json').read_text(encoding='utf-8'))['version']
             if manifest['version'] != args.version or args.version != expected:
                 raise ValueError('Tag, project version and tested artifact version must agree')
+            with zipfile.ZipFile(args.verify) as archive:
+                if PREFIX + 'release.json' in archive.namelist():
+                    identity = json.loads(archive.read(PREFIX + 'release.json'))
+                    if identity != release_identity():
+                        raise ValueError('Tested artifact belongs to a different release repository')
         checksum = args.verify.with_name(args.verify.name + '.sha256')
         if checksum.is_file() and checksum.read_text(encoding='utf-8').split()[0] != sha256(args.verify.read_bytes()):
             raise ValueError('Archive SHA-256 does not match its published checksum')

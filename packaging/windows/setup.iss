@@ -7,15 +7,18 @@
 #ifndef InstallerOutput
   #error InstallerOutput must be supplied by the release build
 #endif
+#ifndef RepositoryURL
+  #error RepositoryURL must be supplied by the release build
+#endif
 
 [Setup]
 AppId={{691EADBE-DDB2-4460-AD58-B32AD0B36620}
 AppName=BLACK SOULS II VR Community Fork
 AppVersion={#AppVersion}
 AppPublisher=dimasma0305; original mod by Lobewarms
-AppPublisherURL=https://github.com/dimasma0305/BLACKSOULS2_VR-release
-AppSupportURL=https://github.com/dimasma0305/BLACKSOULS2_VR-release/issues
-AppUpdatesURL=https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases
+AppPublisherURL={#RepositoryURL}
+AppSupportURL={#RepositoryURL}/issues
+AppUpdatesURL={#RepositoryURL}/releases
 DefaultDirName={localappdata}\Programs\BLACKSOULS-VR
 DefaultGroupName=BLACK SOULS II VR
 PrivilegesRequired=lowest

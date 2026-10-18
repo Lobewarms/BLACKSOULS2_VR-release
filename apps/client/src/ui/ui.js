@@ -1,3 +1,4 @@
+import { bonfireShown, bonfirePickable } from '../data/scriptdata.js';
 // VR-friendly UI: message window (RPG Maker escape codes), choices, number input, HUD,
 // notifications, pause menu, shop, bonfire warp.
 import * as THREE from 'three';
@@ -2016,11 +2017,12 @@ export class UI {
     this.toast(tr('{label}: VR판에서는 아직 지원하지 않습니다', { label }));
   }
   openBonfireWarp() {
-    const list = (G.scripts.bonfires || []).filter(b => G.state.sw(b.switchId));
+    const sw = id => G.state.sw(id);
+    const list = (G.scripts.bonfires || []).filter(b => bonfireShown(b, sw));
     if (!list.length) { this.toast(tr('이동할 수 있는 화톳불이 없습니다')); return; }
     this.sceneOpen = 'bonfire';
     this.placeRoot(true);
-    this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, desc: b.desc[0] })), {
+    this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, desc: b.desc[0], enabled: bonfirePickable(b, sw) })), {
       onSelect: i => {
         const b = list[i];
         this.list.close(); this.sceneOpen = null;

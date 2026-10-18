@@ -32,9 +32,8 @@ SAVES AND UPDATES
 Your game folder is remembered after you launch the game.
 Mod saves are in the saves folder beside BlacksoulsVR.exe. Your original game and
 saves are not changed. Setup keeps mod saves during upgrades and uninstall.
-Download community updates here:
-https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases
-The launcher's own updater may install a different version from the original author.
+Click Check for updates in the launcher. When a new version is available, click
+Download update, then open setup when prompted. Your saves are kept.
 
 CREDITS
 Modified community version by dimasma0305. Original VR mod by Lobewarms:

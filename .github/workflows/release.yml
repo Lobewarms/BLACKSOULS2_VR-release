@@ -60,6 +60,10 @@ jobs:
             echo "Release already exists; refusing to replace published assets."
             exit 1
           fi
-          gh release create "$RELEASE_TAG" dist/*.exe dist/*.zip dist/*.sha256 dist/*.whl \
+          release_flags=(--latest)
+          if [[ "$RELEASE_TAG" == *-* ]]; then
+            release_flags=(--prerelease --latest=false)
+          fi
+          gh release create "$RELEASE_TAG" dist/*.exe dist/*.zip dist/*.sha256 dist/*.whl "${release_flags[@]}" \
             --verify-tag --title "BLACK SOULS II VR community fork $RELEASE_TAG" \
             --notes-file FORK_NOTICE.txt

@@ -91,16 +91,65 @@ function menuVariable(src) {
   return { variable: +v[1], label: str('Var_Prefix'), suffix: str('Var_Suffix'), switchId: +(/Disp_SW\s*=\s*(\d+)/.exec(src)?.[1] ?? 0) };
 }
 
+// the bonfire travel list (KURE ShortMove - Scene_ShortMove, the scene the bonfires call): MOVE_LIST[i] = [[name, the switch
+// that shows it, the switch that lets it be picked, the switch that takes it away], [map, x, y, direction]]; EXPLAN[i] its two
+// lines, CALL_COMMON[i] the common events run on arriving. Read whatever the spacing and the quotes, and however many of the
+// switches and the place it gives - in the original's order, one left out 0 (the direction: 2, as reserve_transfer has it).
+// Written another way, a copy of the game gave no bonfire to travel to, ever
+const SQ = String.raw`(?:"((?:\\.|[^"\\])*)"|'((?:\\.|[^'\\])*)')`;
+const STR = String.raw`(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')`;
+const MOVE_RE = new RegExp(String.raw`MOVE_LIST\s*\[\s*(\d+)\s*\]\s*=\s*\[\s*\[\s*${SQ}((?:\s*,\s*\d+)*)\s*\]\s*,\s*\[([\d\s,]*)\]\s*\]`, 'g');
+const EXPLAN_RE = new RegExp(String.raw`EXPLAN\s*\[\s*(\d+)\s*\]\s*=\s*\[\s*(${STR}(?:\s*,\s*${STR})*)\s*\]`, 'g');
+const CALL_RE = /CALL_COMMON\s*\[\s*(\d+)\s*\]\s*=\s*\[([\d,\s]*)\]/g;
+export function bonfireList(src) {
+  const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
+  const unq = (a, b) => (a ?? b ?? '').replace(/\\(.)/g, '$1');
+  const ints = s => s.split(',').map(t => t.trim()).filter(Boolean).map(Number);
+  const explan = {}, calls = {}, out = [];
+  for (const m of live.matchAll(EXPLAN_RE)) explan[+m[1]] = [...[...m[2].matchAll(new RegExp(SQ, 'g'))].map(s => unq(s[1], s[2])), '', ''].slice(0, 2);
+  for (const m of live.matchAll(CALL_RE)) calls[+m[1]] = ints(m[2]).filter(Boolean);
+  for (const m of live.matchAll(MOVE_RE)) {
+    const i = +m[1], [switchId = 0, selectSw = 0, eraseSw = 0] = ints(m[4]), [mapId, x, y, dir = 2] = ints(m[5]);
+    if (!mapId || y === undefined) continue;
+    out.push({ index: i, name: unq(m[2], m[3]), switchId, selectSw, eraseSw, mapId, x, y, dir, desc: explan[i] || ['', ''], commons: calls[i] || [] });
+  }
+  return out.sort((a, b) => a.index - b.index);
+}
+// which bonfires the travel list shows, and which of those can be picked - as the original's window has it
+// (Window_k_ShortMove_Command visible? / selectable?): one taken away (its switch on) is gone; one that can be taken away but is
+// not yet is there whatever else; else a switch of 0 shows it always, any other only when on. Picking it needs its switch (0: always)
+export function bonfireShown(b, sw) {
+  if (b.eraseSw) return !sw(b.eraseSw);
+  return !b.switchId || sw(b.switchId);
+}
+export function bonfirePickable(b, sw) { return !b.selectSw || sw(b.selectSw); }
+
 export async function loadScriptData() {
-  const out = { names: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null };
   let scripts;
-  try { scripts = await loadRvdata('Scripts'); } catch (e) { console.warn('Scripts.rvdata2 not readable', e); return out; }
-  const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
+  try { scripts = await loadRvdata('Scripts'); } catch (e) { console.warn('Scripts.rvdata2 not readable', e); return (G.scripts = readScripts([])); }
+  const entries = [];
   for (const [, nameRaw, code] of scripts) {
-    const name = bytesToString(nameRaw);
     if (!(code instanceof Uint8Array)) continue;
-    let src;
-    try { src = await inflate(code); } catch { continue; }
+    try { entries.push([bytesToString(nameRaw), await inflate(code)]); } catch { /* not a script */ }
+  }
+  const out = readScripts(entries);
+  G.scripts = out;
+  console.log(`[scripts] names ${Object.keys(out.names).length}, bonfires ${out.bonfires.length}, symbols ${Object.keys(out.symbols).length}, synthesis recipes ${out.synthesis?.recipes.length || 0}, storage ${out.keep ? 'up to ' + out.keep.limit : 'none'}, difficulty ${out.difficulty ? 'v' + out.difficulty.variable : 'none'}, font ${out.fontSize || 'default'}, screen ${out.screen ? out.screen.join('x') : 'default'}, SEN ${out.sen ? 'v' + out.sen.variable : 'none'}, menu variable ${out.menuVar ? 'v' + out.menuVar.variable : 'none'}`);
+  return out;
+}
+// what the game's scripts set up, from their sections ([name, source] in the game's order)
+export function readScripts(entries) {
+  const out = { names: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null };
+  const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
+  // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
+  // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
+  const holds = {
+    name: s => /NAME_LIST\s*=\s*\{/.test(s),
+    bonfire: s => /Scene_ShortMove/.test(s) && /MOVE_LIST\s*\[\s*\d+\s*\]\s*=/.test(s),
+    symbol: s => /SYMBOL_SETTING_LIST\s*=\s*\{/.test(s),
+  };
+  const byName = {}, byContent = {};
+  for (const [name, src] of entries) {
     // font size / screen size: the last assignment in script order wins (comment lines skipped)
     const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
     for (const m of live.matchAll(/Font\.default_size\s*=\s*(\d+)/g)) out.fontSize = +m[1];
@@ -110,22 +159,17 @@ export async function loadScriptData() {
     out.synthesis = synthesis(src) || out.synthesis;
     out.keep = keeper(src) || out.keep;
     out.difficulty = difficulty(src) || out.difficulty;
-    const key = Object.keys(want).find(k => name === want[k]);
-    if (!key) continue;
+    for (const k of Object.keys(want)) {
+      if (name === want[k]) (byName[k] ||= []).push(src);
+      else if (!byContent[k] && holds[k](src)) byContent[k] = src;
+    }
+  }
+  for (const key of Object.keys(want)) for (const src of byName[key] || (byContent[key] ? [byContent[key]] : [])) {
     if (key === 'name') {
       const block = /NAME_LIST\s*=\s*\{([\s\S]*?)\n\s*\}/.exec(src)?.[1] || '';
       for (const m of block.matchAll(/"([^"]*)"\s*=>\s*"([^"]*)"/g)) out.names[m[1]] = m[2];
     } else if (key === 'bonfire') {
-      const explan = {}, calls = {};
-      for (const m of src.matchAll(/EXPLAN\[(\d+)\]\s*=\s*\["([^"]*)"\s*,\s*"([^"]*)"\]/g)) explan[+m[1]] = [m[2], m[3]];
-      for (const m of src.matchAll(/CALL_COMMON\[(\d+)\]\s*=\s*\[([\d,\s]*)\]/g)) calls[+m[1]] = m[2].split(',').map(s => +s).filter(Boolean);
-      for (const m of src.matchAll(/MOVE_LIST\[(\d+)\]\s*=\s*\[\["([^"]*)",\s*(\d+),\s*\d+,\s*\d+\],\s*\[(\d+),\s*(\d+),\s*(\d+),\s*(\d+)\]\]/g)) {
-        const i = +m[1];
-        out.bonfires.push({
-          index: i, name: m[2], switchId: +m[3], mapId: +m[4], x: +m[5], y: +m[6], dir: +m[7],
-          desc: explan[i] || ['', ''], commons: calls[i] || [],
-        });
-      }
+      out.bonfires.push(...bonfireList(src));
       out.bonfires.sort((a, b) => a.index - b.index);
     } else if (key === 'symbol') {
       const clean = src.split(/\r?\n/).map(l => l.replace(/#.*$/, '')).join('\n');
@@ -140,7 +184,6 @@ export async function loadScriptData() {
       }
     }
   }
-  G.scripts = out;
-  console.log(`[scripts] names ${Object.keys(out.names).length}, bonfires ${out.bonfires.length}, symbols ${Object.keys(out.symbols).length}, synthesis recipes ${out.synthesis?.recipes.length || 0}, storage ${out.keep ? 'up to ' + out.keep.limit : 'none'}, difficulty ${out.difficulty ? 'v' + out.difficulty.variable : 'none'}, font ${out.fontSize || 'default'}, screen ${out.screen ? out.screen.join('x') : 'default'}, SEN ${out.sen ? 'v' + out.sen.variable : 'none'}, menu variable ${out.menuVar ? 'v' + out.menuVar.variable : 'none'}`);
+  for (const key of Object.keys(want)) if (entries.length && !byName[key] && !byContent[key]) console.warn(`[scripts] no ${want[key]} script found`);
   return out;
 }

@@ -20,13 +20,54 @@ namespace BlacksoulsCommunity
         private static void Main(string[] args)
         {
             Arguments = args;
+            try { SetProcessDPIAware(); } catch { }
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            // Preserve the upstream diagnostic and explicit-path command line contract.
-            if (args.Length > 0) { StartEngine(null); return; }
+            // Diagnostics do not show the player launcher and retain the upstream CLI.
+            if (args.Any(a => a == "--selftest" || a == "--test-appconfig" || a == "--test-autovr"))
+            { StartEngine(null); return; }
+            if (args.Length > 0) { RunLauncher(null); return; }
             string remembered = GameDiscovery.Remembered(AppDirectory);
-            if (remembered != null) { StartEngine(remembered); return; }
-            Application.Run(new DiscoveryForm());
+            if (remembered != null) { RunLauncher(remembered); return; }
+            using (var discovery = new DiscoveryForm())
+                if (discovery.ShowDialog() == DialogResult.OK) RunLauncher(discovery.SelectedGame);
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool SetProcessDPIAware();
+
+        private static void RunLauncher(string game)
+        {
+            try
+            {
+                var args = new List<string>(Arguments ?? new string[0]);
+                if (game != null) { args.Add("--game"); args.Add(game); }
+                for (int i = 0; i + 1 < args.Count; i++)
+                    if (args[i] == "--game") GameAssetCache.Prepare(args[i + 1], AppDirectory);
+                int screenshotIndex = args.IndexOf("--screenshot");
+                using (Form launcher = EngineHost.Create(AppDirectory, args.ToArray(), screenshotIndex < 0))
+                {
+                    if (screenshotIndex >= 0 && screenshotIndex + 1 < args.Count)
+                    {
+                        launcher.StartPosition = FormStartPosition.Manual;
+                        launcher.Location = new Point(-20000, -20000);
+                        launcher.Show();
+                        Application.DoEvents();
+                        using (var bitmap = new Bitmap(launcher.Width, launcher.Height))
+                        {
+                            launcher.DrawToBitmap(bitmap, new Rectangle(Point.Empty, bitmap.Size));
+                            bitmap.Save(args[screenshotIndex + 1], System.Drawing.Imaging.ImageFormat.Png);
+                        }
+                        launcher.Close();
+                    }
+                    else Application.Run(launcher);
+                }
+            }
+            catch (Exception error)
+            {
+                MessageBox.Show("The game launcher could not open. Please reinstall BLACK SOULS II VR.\n\n" + error.GetBaseException().Message,
+                    "BLACK SOULS II VR", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
         }
 
         public static string Quote(string argument)
@@ -81,7 +122,7 @@ namespace BlacksoulsCommunity
         private readonly ProgressBar progress = new ProgressBar();
         private bool scanning = true;
         private bool browseRequested;
-        private bool handedOff;
+        public string SelectedGame { get; private set; }
 
         public DiscoveryForm()
         {
@@ -166,9 +207,9 @@ namespace BlacksoulsCommunity
 
         private void Open(string path)
         {
-            if (handedOff) return;
-            handedOff = Program.StartEngine(path);
-            if (handedOff) Close();
+            SelectedGame = path;
+            DialogResult = DialogResult.OK;
+            Close();
         }
     }
 }

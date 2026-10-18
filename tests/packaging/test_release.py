@@ -5,6 +5,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 from pathlib import Path
 
@@ -23,12 +24,23 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             manifest = package.verify(first)
             for name in ['BlacksoulsVR.exe', 'BlacksoulsVR.Engine.exe', 'coop_server.py', 'app/index.html', 'LICENSE',
-                         'FORK_NOTICE.txt', 'AGENTS.md', 'START_HERE.txt', 'app/licenses/three.LICENSE',
+                         'FORK_NOTICE.txt', 'AGENTS.md', 'START_HERE.txt', 'release.json', 'app/licenses/three.LICENSE',
                          'app/licenses/webxr-input-profiles-assets.LICENSE.md',
                          'server/blacksouls_vr_coop/server.py', 'app/models/hands/left.glb']:
                 self.assertIn(package.PREFIX + name, manifest['files'])
             self.assertFalse(any('/saves/' in name or '/node_modules/' in name for name in manifest['files']))
             self.assertTrue(first.with_name('a.zip.sha256').is_file())
+
+    def test_update_identity_follows_ci_repository_and_packaged_version(self):
+        with patch.dict('os.environ', {'GITHUB_REPOSITORY': 'another-owner/another-fork'}):
+            with tempfile.TemporaryDirectory() as directory:
+                archive = package.build(VERSION, Path(directory) / 'fork.zip')
+                with zipfile.ZipFile(archive) as source:
+                    identity = json.loads(source.read(package.PREFIX + 'release.json'))
+                self.assertEqual(identity, {'schema': 1, 'repository': 'another-owner/another-fork', 'version': VERSION})
+        with patch.dict('os.environ', {'GITHUB_REPOSITORY': '../invalid'}):
+            with self.assertRaisesRegex(ValueError, 'Invalid GitHub'):
+                package.release_identity()
 
     def test_tampered_release_fails_verification(self):
         with tempfile.TemporaryDirectory() as directory:

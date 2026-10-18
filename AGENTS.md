@@ -12,11 +12,11 @@ Retain required original-author credits, modification notice and license files.
 
 ## Project background
 
-Modified community fork by dimasma0305, based on Lobewarms release 2026.10.16-13.
+Modified community fork by dimasma0305, based on Lobewarms release 2026.10.18-1.
 The upstream Windows launcher source is unavailable; preserve its verified binary
-as BlacksoulsVR.Engine.exe. Our source-built BlacksoulsVR.exe detects games first.
-Its built-in updater points to upstream and may overwrite fork files. Direct players
-to this fork's releases for updates. Do not claim headset playtesting from CI results.
+as BlacksoulsVR.Engine.exe. Our source-built BlacksoulsVR.exe detects games first, hosts the original launcher
+form and supplies the fork updater described below. The legacy upstream checker is
+disabled before the original form is constructed. Do not claim headset playtesting from CI results.
 
 ## Structure
 
@@ -244,9 +244,9 @@ directory count and elapsed time, and supports cancellation. A single copy is
 prefilled automatically; multiple copies require selection; Browse is the fallback.
 There is no universal BLACK SOULS II install directory; do not promise whole-disk detection.
 
-The original launcher receives --game via a correctly quoted process argument and
+The original launcher receives --game through its Options parser and
 retains game validation, localization, VR options, server, saves and browser launch.
-The native bootstrap exits after handing off. Config remains at the original
+The source launcher hosts that form in the same process. Config remains at the original
 launcher location; the original launcher persists the selection when Launch is used.
 All original CLI diagnostics pass through. The upstream binary is unchanged and
 retains its recorded digest, under a different filename beside the bootstrap.
@@ -451,3 +451,48 @@ the real CombatSystem/Interpreter with confirm/cancel, stat/SEN changes, upright
 retrieval beacons, corpse-side height/lifecycle, bone orientation, localized exit
 names, missing/cyclic-parent fallback and all four fallback languages. These tests
 and private artwork/data inspections do not constitute a full game/VR playtest.
+
+## Upstream merge and release updates (0.2.8)
+
+Merged upstream d39c2af (2026.10.18-1), preserving the source layout and community
+fixes. Imported the scriptdata parser and travel visibility/availability rules,
+plus the verified engine and original guides. Removed the root release ZIP and
+stale version.json introduced by that merge. Upstream ancestry is recorded.
+
+Translated script section names previously prevented bonfire tables from loading.
+The parser now falls back to script content, accepts both Ruby quote styles and
+spacing/defaults, and honors visibility, selection and erase switches. Synthetic
+regressions cover parsing and actual menu/transfer wiring.
+
+The original updater hardcodes Lobewarms, a date-version parser and an upstream-only
+URL allowlist. Passing --update-url cannot support fork SemVer. EngineHost.cs loads
+the verified engine assembly, temporarily sets its screenshot sentinel before
+constructing LauncherForm (skips CheckUpdateAsync), clears UpdateUrl, asserts that
+UpdateCheck stayed null, then restores Screenshot before the form is shown. It
+hides the old button and installs the source-controlled update button and localized
+status/progress text. The fork version/title survive language changes. The new
+engine resolves app/ from the entry assembly location. Tests instantiate the actual
+vendor form in a fresh temporary installation. The binary remains unchanged.
+
+package_release.py generates release.json inside the distribution, using
+GITHUB_REPOSITORY from Actions (or the local origin remote) and package.json's
+version. No owner, fork version or upstream URL is pinned in updater code. This
+file is consumed at runtime, unlike the removed upstream root version.json. The
+Windows setup URLs are supplied from the same verified identity. Keep the app's
+release.json beside its executable. Tag releases still promote the tested
+installer and ZIP after the existing checks pass.
+
+The updater uses GitHub's latest stable release API, numeric SemVer comparison,
+matching versioned setup/checksum assets from that repository, bounded installer
+size, exact byte count and SHA-256 before offering setup. Partial/failed downloads
+are removed, and unavailable updates never block playing. Setup targets the current
+installation directory and preserves saves using the existing installer contract.
+Players confirm closing the game before opening setup. Downloads are staged in
+the user's temporary directory. No API token or runtime package manager is needed.
+Diagnostic selftests pass through to the stock engine. --screenshot uses the hosted
+form without an online update check, so review images show the real fork UI.
+
+Native update tests cover version comparison, preview/downgrade behavior, fork URL
+selection, missing checksums, download/verification failures and real engine hosting.
+Packaging tests build under an alternate GITHUB_REPOSITORY to prevent accidentally
+pinning future forks to this owner. No automated result claims a headset playtest.

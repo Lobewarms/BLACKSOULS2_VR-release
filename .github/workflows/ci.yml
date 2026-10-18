@@ -16,14 +16,14 @@ concurrency:
 
 jobs:
   launcher:
-    name: Build and test automatic game discovery
+    name: Build and test Windows launcher and updates
     runs-on: windows-latest
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Build native Windows launcher and test discovery
+      - name: Build launcher and test discovery, updates and engine hosting
         shell: pwsh
         run: ./tooling/release/build_launcher.ps1
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

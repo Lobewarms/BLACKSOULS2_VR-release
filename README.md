@@ -6,7 +6,7 @@ You need your own copy of the original BLACK SOULS II game.
 
 ## Download
 
-**[Download for Windows](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases/download/v0.2.7/BLACKSOULS_VR_Setup_0.2.7.exe)**
+**[Download for Windows](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases/latest)**
 
 Run the installer, then open **BLACK SOULS II VR** from the Start menu.
 A desktop shortcut is optional during setup.
@@ -45,7 +45,7 @@ It remembers your selected folder after you launch the game.
 - **VR NOT SUPPORTED?** Start Quest Link or SteamVR first, close the game window, then click **Launch** again.
 - **Missing tiles or emotes?** Installing the optional RPG Maker VX Ace RTP may help.
 - **Where are my saves?** Mod saves are in the `saves` folder beside the launcher. Your original game and original saves are not changed. Setup keeps mod saves during upgrades and uninstall.
-- **Updates:** Download new versions from [this project's releases](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases). The launcher's own updater may install a different version from the original author.
+- **Updates:** Download new versions from [this project's releases](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases). Click **Check for updates** in the launcher. If an update is available, click **Download update**, then open setup when prompted. Your saves are kept.
 
 A [portable ZIP](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases) is also available:
 extract it outside your game folder and run `BLACKSOULS_VR/BlacksoulsVR.exe`.

@@ -16,7 +16,10 @@ $stagingPath = Join-Path ([IO.Path]::GetTempPath()) ('blacksouls-installer-' + [
 try {
     Expand-Archive -LiteralPath $archivePath -DestinationPath $stagingPath
     $payloadPath = Join-Path $stagingPath 'BLACKSOULS_VR'
-    & $Compiler "/DAppVersion=$Version" "/DPayloadDir=$payloadPath" "/DInstallerOutput=$outputPath" (Join-Path $repoRoot 'packaging/windows/setup.iss')
+    $identity = Get-Content -LiteralPath (Join-Path $payloadPath 'release.json') -Raw | ConvertFrom-Json
+    if ($identity.version -ne $Version -or $identity.repository -notmatch '^[A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*$') { throw 'Invalid release identity' }
+    $repositoryUrl = 'https://github.com/' + $identity.repository
+    & $Compiler "/DAppVersion=$Version" "/DRepositoryURL=$repositoryUrl" "/DPayloadDir=$payloadPath" "/DInstallerOutput=$outputPath" (Join-Path $repoRoot 'packaging/windows/setup.iss')
     if ($LASTEXITCODE -ne 0) { throw 'Inno Setup compilation failed' }
     $installer = Join-Path $outputPath "BLACKSOULS_VR_Setup_$Version.exe"
     $digest = (Get-FileHash -LiteralPath $installer -Algorithm SHA256).Hash.ToLowerInvariant()

@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.7
+BLACK SOULS II VR - community version 0.2.8
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,11 +7,10 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Loose books in Library Dream lie flat on desks and the floor.
-- Teleport circles show destination names from your game's translation.
-- Dropped souls/mana stand upright after death so they are easier to find.
-- Corpses and floor skeleton remains have visible thickness.
-- Fixed Black Soul and Tainted Black Soul use, including multiple at once.
+- Get community updates directly from the launcher, with download progress.
+- Update downloads are checked before setup opens; saves are kept.
+- Includes the original author's latest bonfire travel and launcher folder fixes.
+- Keeps the community fixes for books, furniture, remains, weapons and soul items.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.
