@@ -1,5 +1,6 @@
 {
   "files": {
+    "packaging/player/START_HERE.txt": "START_HERE.txt",
     "vendor/launcher/BlacksoulsVR.exe": "BlacksoulsVR.exe",
     "packaging/runtime/coop_server.py": "coop_server.py",
     "packaging/runtime/coop_server.cmd": "coop_server.cmd",

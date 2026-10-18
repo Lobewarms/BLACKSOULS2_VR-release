@@ -57,7 +57,8 @@ def collect(root=ROOT):
     if sha256(payload[launcher]) != upstream['launcher_sha256']:
         raise ValueError('Launcher differs from the documented upstream binary')
     for filename, target in [('LICENSE', 'LICENSE'), ('FORK_NOTICE.txt', 'FORK_NOTICE.txt'),
-                             ('vendor/launcher/upstream.json', 'upstream.json'), ('README.md', 'FORK_README.md')]:
+                             ('vendor/launcher/upstream.json', 'upstream.json'),
+                             ('AGENTS.md', 'AGENTS.md')]:
         payload[PREFIX + target] = (root / filename).read_bytes()
     for license_file in ['app/licenses/three.LICENSE', 'app/licenses/webxr-input-profiles-assets.LICENSE.md']:
         if PREFIX + license_file not in payload:
@@ -83,7 +84,6 @@ def build(version, output, root=ROOT):
         commit = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     except (OSError, subprocess.CalledProcessError):
         commit = 'unknown'
-    payload[PREFIX + 'FORK_VERSION.txt'] = (version + '\n').encode()
     manifest = {'version': version, 'commit': commit,
                 'files': {name: sha256(data) for name, data in sorted(payload.items())}}
     payload[MANIFEST] = (json.dumps(manifest, indent=2, sort_keys=True) + '\n').encode()

@@ -19,8 +19,15 @@ $savePath = Join-Path $installPath 'saves'
 New-Item -ItemType Directory -Path $savePath | Out-Null
 $sentinel = Join-Path $savePath 'installer-test-save.txt'
 Set-Content -LiteralPath $sentinel -Value 'preserve player data'
+# Simulate documents left by the older installer before upgrading.
+foreach ($obsolete in @('FORK_README.md', 'FORK_VERSION.txt')) {
+    Set-Content -LiteralPath (Join-Path $installPath $obsolete) -Value 'obsolete community document'
+}
 $process = Start-Process -FilePath $installerPath -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=`"$installPath`"") -WindowStyle Hidden -Wait -PassThru
 if ($process.ExitCode -ne 0 -or -not (Test-Path -LiteralPath $sentinel)) { throw 'Upgrade failed or removed save' }
+foreach ($obsolete in @('FORK_README.md', 'FORK_VERSION.txt')) {
+    if (Test-Path -LiteralPath (Join-Path $installPath $obsolete)) { throw "Upgrade retained obsolete document: $obsolete" }
+}
 $process = Start-Process -FilePath (Join-Path $installPath 'unins000.exe') -ArgumentList @('/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART') -WindowStyle Hidden -Wait -PassThru
 if ($process.ExitCode -ne 0) { throw "Uninstall failed: $($process.ExitCode)" }
 if (-not (Test-Path -LiteralPath $sentinel)) { throw 'Uninstall deleted player-created save' }

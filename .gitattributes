@@ -2,4 +2,3 @@
 *.exe -text
 *.glb -text
 *.zip -text
-third_party/** -whitespace

@@ -1,26 +1,18 @@
-BLACK SOULS II VR - modified community fork
+BLACK SOULS II VR - community version 0.2.2
 
-WINDOWS PLAYERS: download BLACKSOULS_VR_Setup_0.2.1.exe from the release assets.
-Run setup, open BLACK SOULS II VR from the Start menu, select your original game
-folder, then click Launch. No manual ZIP extraction or developer tools needed.
-Connect your PC VR headset before launching, then click ENTER VR in the game window.
-The portable ZIP remains available for users who prefer manual extraction.
+GET STARTED
+Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
+Choose your original BLACK SOULS II game folder and click Launch.
+For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
+WHAT'S NEW
+Simpler setup and help focused on playing. Open How to play from the Start menu
+for PC controls, Quest setup and troubleshooting.
 
-This is a MODIFIED version, not the original release by Lobewarms.
+This is a modified version by dimasma0305 of the original mod by Lobewarms.
 Original: https://github.com/Lobewarms/BLACKSOULS2_VR-release
-Fork: https://github.com/dimasma0305/BLACKSOULS2_VR-release
+Community updates: https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases
 
-This fork uses an npm workspace with Vite, npm-managed Three.js and WebXR assets,
-and an installable Python server package. It adds lint, regression tests,
-portable packaging and CI/CD. Generated releases retain the launcher layout.
-See upstream.json in the release (vendor/launcher/upstream.json in source) for
-upstream provenance. Dependency versions are recorded in package-lock.json.
-
-The Windows launcher is the unchanged upstream binary. Launcher source was
-not included in the upstream release, so this fork does not rebuild it.
-The launcher may offer upstream updates; installing them can replace fork files.
-
-Free distribution only, under the original LICENSE. No original BLACK SOULS II
-game files or saves are included. You must provide your own game installation.
-Three.js and WebXR assets retain their MIT licenses under app/licenses in releases.
+You need your own copy of BLACK SOULS II; no original game files are included.
+Free distribution only, under the original LICENSE. Third-party license notices
+are included with the application.

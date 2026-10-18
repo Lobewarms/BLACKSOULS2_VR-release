@@ -1,0 +1,40 @@
+BLACK SOULS II VR - How to play
+
+START PLAYING
+1. Open BLACK SOULS II VR from the Start menu (or run BlacksoulsVR.exe).
+2. Click Browse and choose your original BLACK SOULS II folder, containing Game.exe.
+3. Click Launch. Keep the launcher open while playing.
+4. On PC, click inside the game window to capture your mouse.
+
+PC CONTROLS
+WASD: move             Shift: run             Mouse: look
+Left click: attack     Right click: guard     Space: dodge
+E / Enter: interact    Tab: menu               Esc: cancel
+See CONTROLS_en.txt for all controls.
+
+META QUEST 3 / PC VR
+Connect your headset to your Windows PC using Quest Link, Air Link or Virtual
+Desktop before launching the game. Click ENTER VR at the bottom of the game window.
+Quest needs the PC to run the game; the mod does not run on the headset by itself.
+
+Left stick: move       Right stick: turn      Right-hand swing: attack
+Left grip: guard       A: dodge / confirm     Y: menu / B: cancel
+Flick the right stick down to interact.
+
+NEED HELP?
+You need Windows 10/11, an up-to-date Chrome or Edge, and your original game.
+If VR NOT SUPPORTED appears, start Quest Link or SteamVR, close the game window,
+then click Launch again. For missing tiles or emotes, the optional RPG Maker
+VX Ace RTP may help. README_en.txt contains the full setup guide.
+
+SAVES AND UPDATES
+Mod saves are in the saves folder beside BlacksoulsVR.exe. Your original game and
+saves are not changed. Setup keeps mod saves during upgrades and uninstall.
+Download community updates here:
+https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases
+The launcher's own updater may install a different version from the original author.
+
+CREDITS
+Modified community version by dimasma0305. Original VR mod by Lobewarms:
+https://github.com/Lobewarms/BLACKSOULS2_VR-release
+Free distribution only. See LICENSE and FORK_NOTICE.txt. No original game files included.

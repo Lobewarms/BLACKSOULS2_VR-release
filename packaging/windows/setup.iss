@@ -21,7 +21,7 @@ DefaultGroupName=BLACK SOULS II VR
 PrivilegesRequired=lowest
 MinVersion=10.0
 LicenseFile={#PayloadDir}\LICENSE
-InfoBeforeFile={#PayloadDir}\FORK_NOTICE.txt
+DisableWelcomePage=no
 OutputDir={#InstallerOutput}
 OutputBaseFilename=BLACKSOULS_VR_Setup_{#AppVersion}
 Compression=lzma2
@@ -32,15 +32,24 @@ CloseApplications=yes
 RestartApplications=no
 SetupLogging=yes
 
+[Messages]
+WelcomeLabel2=This will install BLACK SOULS II VR on your PC.%n%nYou will need your own copy of BLACK SOULS II. After setup, choose your game folder and click Launch.%n%nFor VR, connect your headset to your PC before launching the game.%n%nModified community version by dimasma0305. Original VR mod by Lobewarms.
+
 [Tasks]
 Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Shortcuts:"; Flags: unchecked
 
 [Files]
 Source: "{#PayloadDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; Superseded documents installed by earlier community releases.
+Type: files; Name: "{app}\FORK_README.md"
+Type: files; Name: "{app}\FORK_VERSION.txt"
+
 [Icons]
 Name: "{group}\BLACK SOULS II VR"; Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"
 Name: "{group}\Controls"; Filename: "{app}\CONTROLS_en.txt"
+Name: "{group}\How to play"; Filename: "{app}\START_HERE.txt"
 Name: "{group}\Uninstall BLACK SOULS II VR"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\BLACK SOULS II VR"; Filename: "{app}\BlacksoulsVR.exe"; WorkingDir: "{app}"; Tasks: desktopicon
 
