@@ -68,6 +68,10 @@ export function translateRuby(src) {
     line = rewritePostfix(line);
     const t = line.trim();
     let mm;
+    if ((mm = /^for\s+([a-z_]\w*)\s+in\s+(-?\d+)\s*(\.\.\.?)\s*(-?\d+)$/.exec(t))) {
+      out.push(`for (let ${mm[1]} = ${mm[2]}; ${mm[1]} ${mm[3] === '...' ? '<' : '<='} ${mm[4]}; ${mm[1]}++) {`);
+      continue;
+    }
     if ((mm = /^if\s+(.+?)(\s+then)?$/.exec(t))) { out.push(`if (${mm[1]}) {`); continue; }
     if ((mm = /^unless\s+(.+)$/.exec(t))) { out.push(`if (!(${mm[1]})) {`); continue; }
     if ((mm = /^elsif\s+(.+)$/.exec(t))) { out.push(`} else if (${mm[1]}) {`); continue; }
@@ -122,6 +126,7 @@ function buildHelpers() {
           if (k === 'members') return p.members();
           if (k === 'leader') return p.leader();
           if (k === 'item_number') return item => p.itemCount(itemKind(item), item?.id);
+          if (k === 'item_container') return kind => makeArrayProxy(id => p.itemCount(kind, +id), () => {});
           if (k === 'has_item_q') return (item, inc) => p.hasItem(itemKind(item), item?.id, inc);
           if (k === 'lose_item') return (item, n) => p.gainItem(itemKind(item), item?.id, -n);
           if (k === 'lose_gold') return n => p.gainGold(-n);

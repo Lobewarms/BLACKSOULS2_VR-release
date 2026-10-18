@@ -377,3 +377,77 @@ perspective preview checked six representative models from front, rear and side
 at player eye height. These are geometry previews and data checks; no full-game
 or headset playtest is claimed. Private art and map files remain outside the
 repository under workspace .tools and must never enter release artifacts.
+
+
+## Loose books and desk support (0.2.7)
+
+The user identified books standing upright in the dream room. Installed Map101
+is named Library Dream and uses four loose Inside_C book/paper tiles (315, 318,
+319, 330). Their blocking flags sent them through the upright standee path.
+
+Explicit Inside_C 56-80 and VXTileD 204-205 loose-book/paper profiles now create
+thin horizontal pixel geometry: covers 1.5 px thick, open books 1 px, papers
+0.2 px (32 px per tile). These profiles are distinct from bed-height flat blocks,
+bookcases and the animated 本/浮遊本 character sheets. Do not use a broad book-name
+regex; the installed game also uses floating books as animated event characters.
+
+furnitureFloor examines a grid exposing only the lower layers. A book on a desk
+is extracted even when that desk is impassable; the desk's passage/counter flags
+and geometry stay intact. Map instances rest at the support's solidTop, otherwise
+at floorAt. Tile-event books request lying placement from spotOnSolid so they
+land on the supporting tabletop. Rendering never changes the gameplay grid,
+reading event priority or through state. Impassable wall bases keep their existing
+rendering; the loose-floor/desk rule does not flatten bookshelf/architectural art.
+
+Private read-only map inspection found 35 eligible placements across five maps,
+including 11 on tabletops and all four in Library Dream. Those four generated
+horizontal original-art geometry with thickness between 0.0094 and 0.0704 metres.
+Private eye-height geometry previews checked covers, open books and papers from
+front and rear. No original art or map records are committed or distributed.
+Book regression checks cover thin horizontal
+geometry, floor/table support, retained desks, no duplicate upright books and
+unchanged interaction/animated-character rules. Full game/headset playtesting
+remains separate from these geometry and data checks.
+
+
+## Retrieval beacon, remains, destination names and soul items (0.2.7)
+
+The user's translation clarification applies specifically to the teleport-circle
+labels, not the launcher. MapInfos editor names stay available for existing uses.
+loadMapNames preloads destination display_name values from the installed game,
+retaining a small text cache independently of full-map eviction. destinationName
+uses that title or the nearest named parent; failures/cycles fall back to localized
+Area {id} in ko/en/ja/zh. buildMapView resolves exit labels before constructing
+markers. This uses the installed game's translated names, not machine translation
+of game dialogue or a shipped map-name database. The dream library's exits include
+Dungeon and Room of Reminiscence; unnamed rooms use their parent/fallback.
+
+The original retrieval event is event 1 calling common event 32, using !Flame
+slot 5 with below-player priority. CharacterSprite now checks isSoulEvent before
+priority-based layMode, preserving the upright animated beacon without changing
+its retrieval logic. Corpse top quads are raised by 0.18 m (0.12 m for recognized
+skeletal corpse graphics) and gain pixel-shaped side geometry from the selected
+sheet frame. The side mesh is rebuilt only when the actual frame changes and is
+disposed on graphic/page changes and map removal. Slot 0 of 死体・血・サイン is bodies;
+the blood/sign slots keep their decal treatment. Existing living/walking-character
+rules remain. Explicit floor-bone tile profiles cover Dungeon_B 240-242/248-250,
+Outside_C 24-25 and VXTileE 28 with 3.5 px thickness. Outside_C aliases were verified
+pixel-identical to the reviewed bone art. Read-only inspection found 322 eligible
+floor-remains placements across 23 installed maps.
+
+Black Soul (item 17 / common event 221) and Tainted Black Soul (79 / 222) are
+intentionally consumable=false in the original database: their event handles
+quantity, confirmation, item removal, permanent parameter increases and SEN cost.
+The Ruby adapter lacked item_container queries and could not compile literal
+for i in 2..7 loops, so the entire removal/stat script failed. Added read-only
+item-container count access and translation of literal inclusive/exclusive integer
+for ranges. Preserve the database flag; forcing consumable=true would spend items
+before confirmation or twice. Actual single/batch scripts for both items were
+run privately against isolated inventory/actor state; all four removed the right
+quantity and applied HP, MP and parameters. No original game state/save was changed.
+
+45 client tests now pass. New checks cover range boundaries, item counts, use via
+the real CombatSystem/Interpreter with confirm/cancel, stat/SEN changes, upright
+retrieval beacons, corpse-side height/lifecycle, bone orientation, localized exit
+names, missing/cyclic-parent fallback and all four fallback languages. These tests
+and private artwork/data inspections do not constitute a full game/VR playtest.

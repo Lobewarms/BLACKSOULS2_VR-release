@@ -26,6 +26,7 @@ const ENTRIES = [
   // loading / title / saves (main.js)
   ['로딩 중...', 'Loading...', '読み込み中...', '加载中...'],
   ['맵 로딩: {map}', 'Loading map: {map}', 'マップ読み込み中: {map}', '正在加载地图: {map}'],
+  ['지역 {id}', 'Area {id}', 'エリア {id}', '区域 {id}'],
   ['맵 로딩 실패: {err}', 'Failed to load the map: {err}', 'マップの読み込みに失敗: {err}', '地图加载失败: {err}'],
   ['개발용 실행: 저장하지 않습니다', 'Dev run: not saving', '開発用起動: セーブしません', '开发用启动：不保存'],
   ['VR 세이브 {n}번에 저장했습니다', 'Saved to VR slot {n}', 'VRセーブ {n} に保存しました', '已保存到 VR 存档 {n}'],

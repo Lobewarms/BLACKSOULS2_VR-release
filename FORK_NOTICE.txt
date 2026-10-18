@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.6
+BLACK SOULS II VR - community version 0.2.7
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,10 +7,11 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Chairs have horizontal seats, upright backrests and legs that touch the floor.
-  They keep their direction as you move around them.
-- Common cabinets, bookcases, crates and pianos stay in place as you look around.
-- Fixed more beds and tables standing upright, including furniture used by events.
+- Loose books in Library Dream lie flat on desks and the floor.
+- Teleport circles show destination names from your game's translation.
+- Dropped souls/mana stand upright after death so they are easier to find.
+- Corpses and floor skeleton remains have visible thickness.
+- Fixed Black Soul and Tainted Black Soul use, including multiple at once.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

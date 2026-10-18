@@ -79,15 +79,44 @@ test('a corpse mesh stays horizontal from different views and can stand again af
   const normal = sprite.mesh.geometry.getAttribute('normal');
   assert.ok(normal.getY(0) > 0.99, 'the drawing must face upward');
   sprite.place(new THREE.Vector3(5, 2, 1));
+  assert.ok(sprite.bodySides, 'fallen bodies must have visible side geometry');
+  sprite.bodySides.geometry.computeBoundingBox();
+  const volume = sprite.bodySides.geometry.boundingBox;
+  assert.ok(Math.abs(volume.min.y - 0.015) < 1e-6);
+  assert.ok(Math.abs(volume.max.y - 0.195) < 1e-6, 'the body should stand 18 cm above its base');
+  const sideGeometry = sprite.bodySides.geometry;
   const row = sprite.mesh.material.map.offset.y;
   sprite.place(new THREE.Vector3(-5, 2, -1));
   assert.equal(sprite.mesh.rotation.y, 0, 'the body must not turn toward the viewer');
   assert.equal(sprite.mesh.material.map.offset.y, row, 'the selected corpse drawing must remain unchanged');
+  assert.equal(sprite.bodySides.geometry, sideGeometry, 'walking around a body must not rebuild its sides');
+  let disposed = false; sideGeometry.addEventListener('dispose', () => { disposed = true; });
   ch.characterName = names[1];
   await sprite.rebuild(sprite.graphicKey());
   assert.equal(sprite.mode, 'stand');
+  assert.equal(disposed, true); assert.equal(sprite.bodySides, null);
   assert.ok(sprite.mesh.geometry.getAttribute('normal').getZ(0) > 0.99);
   sprite.dispose();
+});
+
+test('the dropped soul/mana flame stays upright despite its below-player event priority', t => {
+  environment(t);
+  const ch = { ...character('!Flame'), priorityType: 0, isSoulEvent: () => true };
+  const sprite = new CharacterSprite(ch, new THREE.Group(), mapInfo);
+  assert.equal(sprite.layMode(), 'stand');
+  ch.through = true;
+  assert.equal(sprite.layMode(), 'stand', 'retrieval beacons must not become floor decals');
+  assert.equal(ch.priorityType, 0); assert.equal(ch.through, true);
+  sprite.dispose();
+});
+
+test('mixed corpse-sheet blood and signs remain flat decals without raised body sides', async t => {
+  environment(t);
+  const { corpseDepth } = await import('../src/entities/remains.js');
+  assert.equal(corpseDepth('死体・血・サイン', 0), 0.18);
+  assert.equal(corpseDepth('死体・血・サイン', 1), 0);
+  assert.equal(corpseDepth('死体・血・サイン', 2), 0);
+  assert.equal(corpseDepth('$骸骨', 0), 0.12);
 });
 
 function dialogue(t, choices) {

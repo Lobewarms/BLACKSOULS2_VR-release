@@ -8,7 +8,7 @@ import { CharacterSprite, layoutTilePictures } from '../src/entities/sprites.js'
 import { G } from '../src/core/globals.js';
 import { initAssets } from '../src/data/assets.js';
 
-const names = ['', '', '', '', '', 'Inside_B', '', 'VXTileD', 'RoyalTileset-TileB'];
+const names = ['', '', '', '', '', 'Inside_B', 'Inside_C', 'VXTileD', 'RoyalTileset-TileB'];
 function pixels() {
   const px = new Uint8ClampedArray(32 * 32 * 4);
   for (let y = 2; y < 32; y++) for (let x = 5; x < 27; x++) {
@@ -157,4 +157,86 @@ test('the full map renderer builds a fixed chair mesh without a duplicate stande
   const cabinet = await buildMapMesh(original, { analysisOnly: true });
   assert.equal(cabinet.boxes.length, 1);
   assert.equal(cabinet.boxes[0].fixed, true, 'map cupboards also keep their orientation');
+});
+
+test('loose books and papers have thin horizontal geometry while bookcases remain upright', () => {
+  for (const [index, maxHeight] of [[56, 0.08], [60, 0.05], [80, 0.01]]) {
+    const profile = tileFurniture(256 + index, names);
+    assert.equal(profile?.kind, 'book');
+    const geometry = furnitureGeometry(profile, pixels);
+    geometry.computeBoundingBox();
+    const box = geometry.boundingBox;
+    assert.ok(Math.abs(box.min.y) < 1e-6);
+    assert.ok(box.max.y > 0 && box.max.y < maxHeight, 'books must not become bed-height blocks');
+    assert.ok(box.max.x - box.min.x > 0.8 && box.max.z - box.min.z > 1, 'pages spread across the supporting surface');
+    geometry.dispose();
+  }
+  assert.equal(tileFurniture(72, names), null, 'a bookcase on Inside_B is not loose paper on Inside_C');
+  assert.equal(isUprightFurnitureTile(72, names), true);
+});
+
+test('map books rest on their floor or tabletop without deleting the desk or duplicating art', async t => {
+  environment(t);
+  t.mock.method(globalThis, 'fetch', async () => Response.json({ files: [] }));
+  await initAssets();
+  for (const table of [false, true]) {
+    const original = grid();
+    original.data[22] = 312; original.flags[312] = 15;
+    if (table) { original.data[4] = 2864; original.flags[2864] = 15 | 128; }
+    const prepared = furnitureFloor(original);
+    assert.equal(prepared.cells.length, 1);
+    assert.equal(prepared.grid.anyPassable(1, 1), !table);
+    assert.equal(original.anyPassable(1, 1), false);
+    assert.equal(original.tile(1, 1, 2), 312);
+    const mesh = await buildMapMesh(original), book = mesh.group.getObjectByName('furniture');
+    assert.ok(book?.isInstancedMesh);
+    const matrix = new THREE.Matrix4(); book.getMatrixAt(0, matrix);
+    const support = new THREE.Vector3().setFromMatrixPosition(matrix).y;
+    assert.equal(support, table ? T * 0.5 : 0);
+    assert.equal(mesh.isSolid(1, 1), table, 'the desk must remain solid');
+    assert.equal(mesh.isStackCell(1, 1), false, 'no upright duplicate book');
+    mesh.dispose();
+  }
+});
+
+test('book events lie on their support and keep interactions and animated book characters intact', async t => {
+  environment(t);
+  const ch = { isEvent: true, id: 3, tileId: 316, characterName: '', priorityType: 1, through: false,
+    x: 1, y: 1, realX: 1, realY: 1, opacity: 255, page: {}, jumping: () => false };
+  let laysOnSupport = false;
+  const sprite = new CharacterSprite(ch, new THREE.Group(), {
+    tilesetNames: names, isWall: () => true, drawer: { draw() {} },
+    spotOnSolid: (_x, _y, lying) => {
+      laysOnSupport = lying;
+      return { x: 1.5, y: 0.5, z: 1.5, side: 'top', ground: false };
+    },
+  });
+  await sprite.rebuild(sprite.graphicKey());
+  for (const viewer of [new THREE.Vector3(5, 1.6, 5), new THREE.Vector3(-5, 1.6, -5)]) {
+    sprite.place(viewer);
+    assert.equal(sprite.mode, 'furniture'); assert.equal(sprite.mesh.rotation.y, 0);
+    assert.equal(sprite.group.position.y, T * 0.5);
+  }
+  assert.equal(laysOnSupport, true);
+  assert.equal(ch.priorityType, 1); assert.equal(ch.through, false);
+  ch.tileId = 0;
+  for (const name of ['本', '!浮遊本02(黄ばみ)', '!浮遊本06']) {
+    ch.characterName = name;
+    assert.equal(sprite.layMode(), 'stand', 'animated book characters use their original frames');
+  }
+  sprite.dispose();
+});
+
+test('floor skeletons and scattered bones lie horizontally with visible depth', () => {
+  for (const [sheet, ids] of [['Dungeon_B', [240, 241, 242, 248, 249, 250]], ['Outside_C', [24, 25]], ['VXTileE', [28]]]) {
+    for (const id of ids) {
+      const profile = tileFurniture(id, ['', '', '', '', '', sheet]);
+      assert.equal(profile?.kind, 'remains');
+      const geometry = furnitureGeometry(profile, pixels); geometry.computeBoundingBox();
+      const box = geometry.boundingBox;
+      assert.ok(Math.abs(box.min.y) < 1e-6 && box.max.y > 0.15 && box.max.y < 0.18);
+      assert.ok(box.max.z - box.min.z > 1, 'skeletal artwork must lie along the ground');
+      geometry.dispose();
+    }
+  }
 });

@@ -4,6 +4,7 @@ import { buildMapMesh } from './mapmesh.js';
 import { analyzeMap, reachableCells } from './mapanalysis.js';
 import { doorPictureHeight } from '../entities/sprites.js';
 import * as H from './maphints.js';
+import { loadMapNames, destinationName } from '../data/data.js';
 
 // what the map hints tell buildMapMesh for a map
 export function meshHintOptions(mapId) {
@@ -91,6 +92,8 @@ export async function buildMapView({ map, grid, mapId, events, pageOf, seeds = [
   const meshGrid = viewGrid(laid, mapId, events, open);
   map.__id = mapId;
   const ana = pageOf ? analyzeMap(map, grid, pageOf) : analyzeMap(map, grid);
+  await loadMapNames(ana.exits.filter(e => e.mapId !== mapId).map(e => e.mapId));
+  for (const exit of ana.exits) if (exit.mapId > 0 && exit.mapId !== mapId) exit.label = destinationName(exit.mapId);
   const walk = seeds.length ? reachableCells(map, laid, ana, [...seeds, ...H.walkedTo(mapId)]) : null;
   // how tall each door picture stands: a doorway with a door opens up to its top (the wall goes on above it)
   const doorH = new Map();

@@ -2985,7 +2985,8 @@ export async function buildMapMesh(grid, opts = {}) {
       // Repeated seating shares its geometry and draw call, including theatre rows.
       const mesh = new THREE.InstancedMesh(geometry, furnitureMaterial, cells.length), matrix = new THREE.Matrix4();
       cells.forEach((c, i) => {
-        matrix.makeTranslation((c.x + 0.5) * T, floorAt(c.x, c.y) * T, (c.y + 0.5) * T);
+        const support = ['book', 'remains'].includes(c.profile.kind) && isSolid(c.x, c.y) ? solidTop[idx(c.x, c.y)] : floorAt(c.x, c.y);
+        matrix.makeTranslation((c.x + 0.5) * T, support * T, (c.y + 0.5) * T);
         mesh.setMatrixAt(i, matrix);
       });
       mesh.instanceMatrix.needsUpdate = true;

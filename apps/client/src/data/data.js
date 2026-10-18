@@ -1,6 +1,7 @@
 // Database loading ($data_* equivalents) from Data/*.rvdata2
 import { loadMarshal } from './marshal.js';
 import { fetchBinary, resolve } from './assets.js';
+import { tr } from '../ui/i18n.js';
 
 export const $data = {
   actors: null, classes: null, skills: null, items: null, weapons: null, armors: null,
@@ -34,12 +35,39 @@ export async function loadDatabase(onProgress) {
 }
 
 const mapCache = new Map();
+const mapTitles = new Map();
 export async function loadMap(mapId) {
   if (mapCache.has(mapId)) return mapCache.get(mapId);
   const map = await loadRvdata(`Map${String(mapId).padStart(3, '0')}`);
+  mapTitles.set(mapId, String(map.display_name || '').trim());
   mapCache.set(mapId, map);
   if (mapCache.size > 6) mapCache.delete(mapCache.keys().next().value);
   return map;
+}
+
+// MapInfos contains the developer's editor labels, often untranslated. Destination
+// maps contain the player-facing names from the installed language of the game.
+export async function loadMapNames(ids) {
+  const seen = new Set();
+  let pending = [...new Set(ids.filter(id => id > 0))];
+  for (let depth = 0; pending.length && depth < 8; depth++) {
+    const current = pending.filter(id => !seen.has(id));
+    if (!current.length) break;
+    current.forEach(id => seen.add(id));
+    await Promise.allSettled(current.map(id => mapTitles.has(id) ? null : loadMap(id)));
+    pending = [...new Set(current.filter(id => !mapTitles.get(id)).map(id => $data.mapInfos?.get(id)?.parent_id).filter(id => id > 0))];
+  }
+}
+
+export function destinationName(mapId) {
+  let id = mapId;
+  const seen = new Set();
+  for (let depth = 0; id > 0 && depth < 8 && !seen.has(id); depth++) {
+    seen.add(id);
+    if (mapTitles.get(id)) return mapTitles.get(id);
+    id = $data.mapInfos?.get(id)?.parent_id;
+  }
+  return tr('지역 {id}', { id: mapId });
 }
 
 export function mapName(mapId) {

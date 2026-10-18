@@ -35,6 +35,16 @@ for (const [sheet, ids] of [['Inside_B', [104, 105, 106]], ['VXTileD', [72, 102,
   const list = PROFILES[sheet] ||= {};
   for (const id of ids) list[id] = { kind: 'stool', front: id, seat: 5, foot: 23, direction: 2 };
 }
+// Loose covers, open pages and scattered papers, drawn from above. Bookcases
+// and the game's animated floating-book character sheets are separate artwork.
+for (const [sheet, ids] of [['Inside_C', Array.from({ length: 25 }, (_, i) => 56 + i)], ['VXTileD', [204, 205]]]) {
+  const list = PROFILES[sheet] ||= {};
+  for (const id of ids) list[id] = { kind: 'book', front: id, thickness: sheet === 'Inside_C' ? (id < 60 ? 1.5 : id < 72 ? 1 : 0.2) : (id === 204 ? 1.5 : 1) };
+}
+for (const [sheet, ids] of [['Dungeon_B', [240, 241, 242, 248, 249, 250]], ['Outside_C', [24, 25]], ['VXTileE', [28]]]) {
+  const list = PROFILES[sheet] ||= {};
+  for (const id of ids) list[id] = { kind: 'remains', front: id, thickness: 3.5 };
+}
 
 export function tileFurniture(id, names) {
   if (!(id > 0 && id < 1024)) return null;
@@ -46,6 +56,7 @@ export function tileFurniture(id, names) {
 // original floor. The caller's grid still owns collision and event interaction.
 export function furnitureFloor(grid) {
   const cells = new Map();
+  const lowerGrid = Object.assign(Object.create(grid), { tile: (x, y, z) => z === 2 ? 0 : grid.tile(x, y, z) });
   const lowerPassage = (x, y, bit, extra = []) => {
     for (const id of [...extra, grid.tile(x, y, 1), grid.tile(x, y, 0)]) {
       const flag = grid.flag(id);
@@ -56,8 +67,10 @@ export function furnitureFloor(grid) {
   };
   for (let y = 0; y < grid.h; y++) for (let x = 0; x < grid.w; x++) {
     const tile = grid.tile(x, y, 2), profile = tileFurniture(tile, grid.tileset.tileset_names);
-    // Do not turn a wall, water or empty space beneath a prop into walkable floor.
-    if (profile && Object.values(DIR_BIT).some(bit => lowerPassage(x, y, bit)) &&
+    // A book on an impassable desk keeps that desk underneath it. Other
+    // impassable bases keep the existing wall/side-view rendering.
+    const table = ['book', 'remains'].includes(profile?.kind) && lowerGrid.isTableTop(x, y);
+    if (profile && (table || Object.values(DIR_BIT).some(bit => lowerPassage(x, y, bit))) &&
         (grid.tile(x, y, 0) || grid.tile(x, y, 1))) cells.set(x + y * grid.w, { x, y, tile, profile });
   }
   if (!cells.size) return { grid, cells: [] };
@@ -81,10 +94,11 @@ export function furnitureGeometry(profile, pixelsFor, size = 1.5) {
     const px = pixels.slice(from * TS * 4, to * TS * 4);
     return voxelGeometryOf(px, TS, to - from, thickness);
   };
-  if (profile.kind === 'flat') {
-    const g = part(0, TS, TS * 0.45);
+  if (profile.kind === 'flat' || profile.kind === 'book' || profile.kind === 'remains') {
+    const thickness = profile.kind === 'flat' ? TS * 0.45 : profile.thickness;
+    const g = part(0, TS, thickness);
     if (!g) return null;
-    return g.rotateX(-Math.PI / 2).translate(0, TS * 0.225, 0).scale(unit, unit, unit);
+    return g.rotateX(-Math.PI / 2).translate(0, thickness / 2, 0).scale(unit, unit, unit);
   }
   const seatH = 10, depth = 16, thick = 1.5;
   const seat = part(profile.seat, profile.foot, thick);

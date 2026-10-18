@@ -8,6 +8,7 @@ import { TS } from '../world/tiles.js';
 import { BalloonIcon, BALLOON_SIZE } from '../ui/balloons.js';
 import { tileFurniture, furnitureGeometry, isUprightFurnitureTile } from './furniture.js';
 import { isLyingTile } from './lying.js';
+import { corpseDepth, corpseSides } from './remains.js';
 
 const sheetCache = new Map();
 async function loadSheet(name) {
@@ -168,6 +169,7 @@ export class CharacterSprite {
   }
   dispose() {
     this.balloon?.dispose();
+    this.clearBodySides();
     this.parent.remove(this.group);
     if (this.mesh) { this.mesh.geometry.dispose(); this.mesh.material.map?.dispose(); this.mesh.material.dispose(); }
     this.faces = null;
@@ -185,6 +187,8 @@ export class CharacterSprite {
   layMode() {
     const c = this.ch;
     if (!c.isEvent) return 'stand';
+    // The death-retrieval flame is a beacon, even on a below-player event page.
+    if (c.isSoulEvent?.()) return 'stand';
     // Corpse artwork is drawn from above. Blocking priority and scene movement
     // affect event logic, but must not turn a body into an upright billboard.
     if (this.isCorpseGraphic()) return 'lie';
@@ -234,7 +238,8 @@ export class CharacterSprite {
   async rebuild(key) {
     this.key = key;
     this.tp = null;
-    if (this.mesh) { this.group.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh.material.dispose(); this.mesh = null; }
+    this.clearBodySides();
+    if (this.mesh) { this.group.remove(this.mesh); this.mesh.geometry.dispose(); this.mesh.material.map?.dispose(); this.mesh.material.dispose(); this.mesh = null; }
     if (this.slab) { this.group.remove(this.slab); this.slab.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } }); }
     this.slab = undefined;
     this.tileCanvas = null;
@@ -274,6 +279,9 @@ export class CharacterSprite {
     this.rowsFixed = !!sheetCanvas && !rowsAreViews(c.characterName, sheetCanvas, info, c.characterIndex);
     this.translucent = !!sheetCanvas && translucentArt(c.characterName, sheetCanvas, info, c.characterIndex);
     const lying = this.mode === 'lie';
+    this.bodyDepth = lying && this.isCorpseGraphic() ? corpseDepth(c.characterName, c.characterIndex) : 0;
+    this.bodyCanvas = sheetCanvas;
+    this.bodySize = [w, h];
     const furniture = this.mode === 'furniture' ? this.furnitureProfile() : null;
     let geo = furniture ? furnitureGeometry(furniture, id => {
       const ctx = this.tileCanvas.getContext('2d', { willReadFrequently: true });
@@ -288,7 +296,7 @@ export class CharacterSprite {
     } else if (lying) {
       // flat on the floor, raised a little, with a soft shadow under it so it reads as an object
       geo.rotateX(-Math.PI / 2);
-      geo.translate(0, 0.07, 0);
+      geo.translate(0, this.bodyDepth ? this.bodyDepth + 0.015 : 0.07, 0);
     } else geo.translate(0, h / 2, 0);
     const mat = new THREE.MeshLambertMaterial({ map: this.isFurniture ? null : tex, vertexColors: this.isFurniture, alphaTest: this.translucent ? 0.02 : 0.4, side: THREE.DoubleSide,
       transparent: this.translucent, depthWrite: !this.translucent });
@@ -306,6 +314,34 @@ export class CharacterSprite {
       this.shadow.rotation.x = -Math.PI / 2;
       this.shadow.position.y = 0.015;
       this.group.add(this.shadow);
+    }
+  }
+
+  clearBodySides() {
+    if (this.bodySides) {
+      this.bodySides.parent?.remove(this.bodySides);
+      this.bodySides.geometry.dispose(); this.bodySides.material.dispose();
+    }
+    this.bodySides = null; this.bodyFrame = '';
+  }
+  updateBodySides(row, pattern) {
+    if (!this.bodyDepth || !this.bodyCanvas) return;
+    const key = `${this.ch.characterIndex},${row},${pattern}`;
+    if (key !== this.bodyFrame) {
+      this.bodyFrame = key;
+      const geometry = corpseSides(this.bodyCanvas, this.info, this.ch.characterIndex, row, pattern,
+        this.bodySize[0], this.bodySize[1], this.bodyDepth);
+      if (!geometry) { if (this.bodySides) this.bodySides.visible = false; return; }
+      if (this.bodySides) { this.bodySides.geometry.dispose(); this.bodySides.geometry = geometry; }
+      else {
+        this.bodySides = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({ vertexColors: true }));
+        this.mesh.add(this.bodySides);
+      }
+      this.bodySides.visible = true;
+    }
+    if (this.bodySides) {
+      const from = this.mesh.material, to = this.bodySides.material;
+      to.opacity = from.opacity; to.transparent = from.transparent; to.blending = from.blending;
     }
   }
 
@@ -453,7 +489,7 @@ export class CharacterSprite {
     const cx = Math.round(rx), cy = Math.round(ry);
     if (cx !== this.spotX || cy !== this.spotY || this.spotMode !== this.mode) {
       this.spotX = cx; this.spotY = cy; this.spotMode = this.mode;
-      const lying = this.mode === 'lie' || (this.mode === 'furniture' && this.furnitureProfile()?.kind === 'flat');
+      const lying = this.mode === 'lie' || (this.mode === 'furniture' && ['flat', 'book', 'remains'].includes(this.furnitureProfile()?.kind));
       this.spot = c.isEvent ? this.mapInfo.spotOnSolid?.(cx, cy, lying, c.priorityType === 2) || null : null;
       this.inDoorway = !!this.mapInfo.isDoorway?.(cx, cy);
     }
@@ -537,6 +573,7 @@ export class CharacterSprite {
       }
     }
     const pattern = c.pattern < 3 ? c.pattern : 1;
+    this.updateBodySides(row, pattern);
     const bx = info.single ? 0 : (c.characterIndex % 4) * 3;
     const by = info.single ? 0 : Math.floor(c.characterIndex / 4) * 4;
     const tex = mat.map;
