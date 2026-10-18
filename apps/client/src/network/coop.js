@@ -20,6 +20,7 @@ import * as THREE from 'three';
 import { G } from '../core/globals.js';
 import { $data } from '../data/data.js';
 import { GameState, itemData } from '../game/state.js';
+import { normalizeMoveSpeed } from '../game/movement-speed.js';
 import { getAdjust } from '../combat/weapons.js';
 import { resolveImage, resolveAudio } from '../data/assets.js';
 import { T } from '../world/mapmesh.js';
@@ -318,7 +319,7 @@ export class Coop {
     this.peers = new Map();     // the others: id -> { id, host, heard, seq, avatar, pose }
     this.hostId = null;         // (guest) the host's id
     this.summoned = false;      // (guest) standing in the host's world
-    this.home = null;           // (guest) its own world while it is away: { state, mapId, x, y, dir }
+    this.home = null;           // (guest) its own world while it is away: { state, mapId, x, y, dir, moveSpeed }
     this.flags = new Map();     // (host) the world's changes not sent yet
     this.follow = null;         // (guest) where the host went last
     this.lastError = '';        // why the last visit could not begin (the co-op menu says it)
@@ -1511,7 +1512,8 @@ export class Coop {
   summon(world, place) {
     G.combat.reset();                    // (a fight of its own left unfinished ends in its own world, as on leaving a map)
     const pc = G.map.playerChar;
-    this.home = { state: G.state, mapId: G.map.mapId, x: pc.x, y: pc.y, dir: pc.direction || 2 };
+    const moveSpeed = normalizeMoveSpeed(pc.moveSpeed);
+    this.home = { state: G.state, mapId: G.map.mapId, x: pc.x, y: pc.y, dir: pc.direction || 2, moveSpeed };
     this.restAt = null;                  // (no bonfire of the host's world rested at yet)
     this.scrOf.clear(); this.authNow = undefined; this.leadsNow = false;     // (nothing of this world's screens known yet)
     this.bossCall = null; this.bossGo = null;
@@ -1520,7 +1522,7 @@ export class Coop {
     G.map.interpreter.clear();
     G.map.reservedCommon = [];
     this.summoned = true;
-    G.enterWorld(st, { mapId: place.m, x: place.x, y: place.y, dir: place.d });
+    G.enterWorld(st, { mapId: place.m, x: place.x, y: place.y, dir: place.d, moveSpeed });
     console.info('[coop] in the host\'s world');
   }
   goHome() {
@@ -1531,7 +1533,7 @@ export class Coop {
     G.combat.reset({ keepState: true });
     G.map.interpreter.clear();
     G.map.reservedCommon = [];
-    G.enterWorld(h.state, { mapId: h.mapId, x: h.x, y: h.y, dir: h.dir });
+    G.enterWorld(h.state, { mapId: h.mapId, x: h.x, y: h.y, dir: h.dir, moveSpeed: normalizeMoveSpeed(h.moveSpeed ?? h.state.start?.moveSpeed) });
     console.info('[coop] back home');
   }
   onMap(m) {
@@ -2255,7 +2257,7 @@ export class Coop {
   enterAway(st, place, phase) {
     if (this.role !== 'world' || this.wphase !== 'choosing') return;
     G.combat.reset();
-    if (!this.home) { const pc = G.map.playerChar; this.home = { state: G.state, mapId: G.map.mapId, x: pc.x, y: pc.y, dir: pc.direction || 2 }; }
+    if (!this.home) { const pc = G.map.playerChar; this.home = { state: G.state, mapId: G.map.mapId, x: pc.x, y: pc.y, dir: pc.direction || 2, moveSpeed: normalizeMoveSpeed(pc.moveSpeed) }; }
     this.summoned = true;
     G.map.interpreter.clear();
     G.map.reservedCommon = [];

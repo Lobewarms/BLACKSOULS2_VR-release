@@ -382,7 +382,9 @@ class ListPanel {
     if ((this.adaptive || this.classic) && !G.vr) { ctx.fillStyle = 'rgba(5,6,9,0.12)'; ctx.fillRect(4, 4, canvas.width - 8, canvas.height - 8); }
     windowBg(ctx, 4, 4, canvas.width - 8, canvas.height - 8, G.vr ? 0.9 : 0.25, G.vr ? 1 : 0.65);
     if ((this.adaptive || this.classic) && !G.vr) { ctx.fillStyle = 'rgba(5,6,9,0.08)'; ctx.fillRect(20, 20, canvas.width - 40, canvas.height - 40); }
-    ctx.textBaseline = 'middle';
+    // This canvas is also used by the classic menu's economy summary. Clearing
+    // pixels does not reset drawing state, so every list redraw owns alignment.
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.fillStyle = '#e8d8a8';
     const backButton = !!this.onCancel && !!G.ui?.menuOpen && !this.classic;
     if (this.title && !this.classic) this.drawTitle(ctx, canvas.width - (backButton ? 240 : 72));

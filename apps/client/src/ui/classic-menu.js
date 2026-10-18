@@ -80,6 +80,9 @@ export function paintClassicMenu({ overview, commandPanel, leader, members, gold
 
   if (commandPanel) {
     const ctx = commandPanel.ctx, width = commandPanel.canvas.width;
+    // The command list redraws on hover and selection without resizing. Keep
+    // right-aligned economy values from changing that shared canvas's state.
+    ctx.save();
     // Append beneath the command rows. Never clear or redraw their selection.
     if (sen != null) {
       frame(ctx, 4, 730, width - 8, 94);
@@ -89,6 +92,7 @@ export function paintClassicMenu({ overview, commandPanel, leader, members, gold
     frame(ctx, 4, 850, width - 8, 86);
     if (currencyUnit) write(ctx, stripEscapes(currencyUnit), 24, 874, width - 48, 22, 'left', textColor(16));
     write(ctx, number(gold), width - 24, 907, width - 48, 32, 'right', textColor(0), false);
+    ctx.restore();
     commandPanel.commit();
   }
   return { membersDrawn: party.length, overviewHeight: overview.canvas.height, summaryTop: sen == null ? 850 : 730, toolBounds };

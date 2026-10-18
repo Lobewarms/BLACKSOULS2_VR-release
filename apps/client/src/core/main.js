@@ -22,6 +22,8 @@ import { Theater } from '../ui/theater.js';
 import { Emotes } from '../ui/emotes.js';
 import { CharacterSprite, layoutTilePictures } from '../entities/sprites.js';
 import { Poke } from '../game/poke.js';
+import { WorldPickup } from '../game/world-pickup.js';
+import { normalizeMoveSpeed } from '../game/movement-speed.js';
 import { Sky } from '../world/sky.js';
 import { BalloonIcon } from '../ui/balloons.js';
 import { loadScriptData } from '../data/scriptdata.js';
@@ -129,6 +131,7 @@ G.theater = new Theater(scene);
 G.coop = new Coop(scene);                // (co-op: another player in this world, or this one in theirs - coop.js)
 G.emotes = new Emotes();                 // (co-op: a balloon put up over this player's head - emotes.js)
 const markers = new TransferMarkers(scene);
+const worldPickup = new WorldPickup();
 G.floorAt = () => 0;
 
 // hands instead of the controller models (hidden while they hold the weapon / shield)
@@ -391,7 +394,7 @@ async function saveVr(slot = 1, silent = false, kind = 'vr') {
   if ((kind === 'world') !== (G.coop.role === 'world')) return false;      // (never the one kind of save for the other)
   if (DEV_RUN) { if (!silent) G.ui.toast(tr('개발용 실행: 저장하지 않습니다')); return false; }
   const pc = G.map.playerChar;
-  G.state.start = { x: pc.x, y: pc.y, dir: pc.direction };
+  G.state.start = { x: pc.x, y: pc.y, dir: pc.direction, moveSpeed: normalizeMoveSpeed(pc.moveSpeed) };
   G.state.mapId = G.map.mapId;
   const leader = G.state.party.leader();
   const state = G.state.toJSON();
@@ -537,6 +540,7 @@ function enterWorld(state, overridePos) {
   mode = 'game';
   G.ui.list.close();
   const pos = overridePos || { mapId: state.mapId, ...state.start };
+  G.map.playerChar.moveSpeed = normalizeMoveSpeed(pos.moveSpeed ?? state.start?.moveSpeed);
   G.map.mapId = -1;
   G.map.reserveTransfer(pos.mapId, pos.x, pos.y, pos.dir || 2, 0);
   G.screen.setBrightness(0);
@@ -798,6 +802,7 @@ function frameBody() {
       const alpha = acc / STEP;
       layoutTilePictures(view.sprites, view.mapInfo);
       for (const s of view.sprites) s.update(head, alpha);
+      worldPickup.update(view.sprites, head);
       G.poke.update(dt, view.sprites);       // (bare hands pressing / pulling people: after they are placed)
       G.sky.update();
       updatePlayerBalloon(head);

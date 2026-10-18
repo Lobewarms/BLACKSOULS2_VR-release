@@ -27,6 +27,9 @@ Quest needs the PC to run the game; the mod does not run on the headset by itsel
 Left stick: move       Right stick: turn      Right-hand swing: attack
 Left grip: guard       A: dodge / confirm     Y: menu / B: cancel
 Flick the right stick down to interact.
+To collect a world item, bring your right hand close and squeeze its grip.
+An empty left hand can also collect items. With a shield, left grip still guards.
+Successful grabs give a short vibration.
 The minimap is above your left controller. Open Menu > Map for the full area.
 The map shows your position, facing direction and named exits. B returns.
 

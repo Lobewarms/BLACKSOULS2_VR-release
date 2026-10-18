@@ -2,6 +2,7 @@
 import { $data } from '../data/data.js';
 import { G } from '../core/globals.js';
 import { hashGet } from '../data/marshal.js';
+import { normalizeMoveSpeed } from './movement-speed.js';
 
 // script 131 ステータス限界突破: the most a param can be - the script's own limits (actors 999,999 HP, 99,999 MP, 9,999
 // the rest; enemies 9,999,999 HP) plus every <限界変動:n,v> on the battler's actor / class / equipment / states / enemy
@@ -825,7 +826,7 @@ export class GameState {
     if (timer) this.system.timer = { working: !!timer.working, count: timer.count || 0 };
     const map = get('map'); const player = get('player');
     this.mapId = map?.map_id || $data.system.start_map_id;
-    this.start = { x: player?.x ?? 0, y: player?.y ?? 0, dir: player?.direction || 2 };
+    this.start = { x: player?.x ?? 0, y: player?.y ?? 0, dir: player?.direction || 2, moveSpeed: normalizeMoveSpeed(player?.move_speed) };
     this.importedFrom = label;
   }
 

@@ -847,3 +847,72 @@ Regression tests cover route page transitions, marker positions and disposal,
 wrapped choice text/hits/scrolling, and pointer pause/resume lifecycle. Private
 browser fixtures exercise the real renderer with original art and synthetic game
 state; remove them from the client before production builds.
+
+## VR world pickups (0.2.15)
+
+Read-only inspection of the installed original data confirmed that Mental Ward
+(Map012) exits to Lutwidge Town (Map005). Its item drops use trigger-0 !Flame
+events with ordinary positive item commands and collected pages; chests use the
+same original event pipeline. Keep original game data and private inspection
+scripts outside Git and release packages.
+
+Input.grabPressed buffers WebXR squeeze edges independently of combat polling.
+Fast start/end pairs between frames count once. Event-capable controllers must
+not replay delayed gamepad polling. Clear stale grabs on UI, session/source loss
+and controller replacement; grips held through a menu need a new squeeze.
+Preserve existing shield, pose, consumable and other sampled button semantics.
+
+WorldPickup runs after sprite placement. Check physical hand proximity to the
+actual visible mesh or slab, trim upright sprite alpha margins, require short
+head-to-hand reach and clear static-world sight lines. Ignore hidden, inactive,
+stale, occupied and boss-blocked targets. Shield grip keeps guard; the right
+grip and an empty left hand can collect. Detect positive event rewards only to
+identify object interactions, then dispatch Player.startActionEvent. Inventory,
+messages, choices, switches and network authority belong to the original event.
+Never give inventory directly from the grab handler.
+
+Action targeting uses rendered support positions and nearest map-loop copies.
+VR prioritizes actual controller aim before tile fallbacks; desktop keeps its
+tile-first behavior. Preserve script-facing direction and propagate refused
+starts instead of falling through to unrelated underfoot items.
+
+Regression tests exercise real GameEvent/Interpreter/GameParty transitions,
+collected pages, co-op refusal, hand ownership, occlusion, visual placement and
+WebXR squeeze/source lifecycle with synthetic fixtures. These are simulated
+controller tests, not a physical headset playtest.
+
+The clipped-command screenshot was a shared-canvas drawing-state leak:
+paintClassicMenu ended economy drawing with textAlign=right. A same-size list
+redraw reused that alignment and painted command text mostly left of the canvas.
+Set list text alignment explicitly and save/restore the appended economy's
+canvas state. Tests reproduce actual open/selection/hover/Status/Back redraws
+without resizing, and assert complete text bounds and stable texture identity.
+Fresh interactive browser verification was stopped by the user's physical
+Escape; do not claim that the current changes received a new browser playtest.
+
+The installed Run like Dodo skill 340 invokes common event 43, whose Normal/Fast
+choices run player move-route command 29 with speeds 4/5. It is a persistent route
+setting, not a battler status. Free Player locomotion must multiply its PC/VR,
+sprint and guard factors by the original exponential speed-index ratio. Keep
+forced routes on their own existing grid movement. Save optional start.moveSpeed,
+restore it when entering a world, and import original player.move_speed. Old or
+invalid values default to 4. Regression fixtures use synthetic skill/events;
+private read-only verification of the installed event confirmed 2x Fast distance
+and 1x after Normal without changing actual game files or saves.
+
+Co-op home snapshots must include the current live movement speed even if the
+player has not saved since choosing it. Preserve that speed during a summon and
+restore the home speed on return; the visited world's later route changes do
+not rewrite it. Legacy snapshots use their saved speed or the normal default.
+
+The Torture Chambers rack is Map 063 event 3 at (27,17), !$Map1_c direction 8,
+pattern 1: a 32x96 rack frame drawn from above. Its selected frame also leaves
+18 bottom rows transparent while an unrelated frame reaches the bottom, so
+all-frame margin minima suspended it by 0.84375m. Known rack and
+Map1_b table/bed frames use original selected pixels horizontally with visible
+thickness and floor-reaching supports sampled from their artwork. Keep adjacent
+shackle columns hanging and cupboards/instruments upright. Selected-frame base
+grounding is limited to verified stationary Map1_b/wooden-horse props; preserve
+wall attachments and actual top surfaces. Tests cover geometry, support height,
+source-frame selection, page changes and resource disposal. Private N-API canvas
+inspection used actual local art without computer control or saves access.

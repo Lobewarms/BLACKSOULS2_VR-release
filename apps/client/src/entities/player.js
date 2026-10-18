@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { G } from '../core/globals.js';
 import { T } from '../world/mapmesh.js';
+import { movementSpeedRate } from '../game/movement-speed.js';
+import { eventActionPosition } from './event-position.js';
 
 const R = 0.22;          // body radius in tiles (~0.33 m)
 const EVENT_R = 0.24;    // blocking event radius in tiles (about a person, like the player)
@@ -246,7 +248,7 @@ export class Player {
       const f = this.forward2D();
       // stick y negative = forward
       const fwd = -mv.y, side = mv.x;
-      let speed = s.moveSpeed * (input.running() ? s.runMultiplier : 1);
+      let speed = s.moveSpeed * movementSpeedRate(pc) * (input.running() ? s.runMultiplier : 1);
       if (G.vr) speed *= s.vrSpeed ?? 2;                // setting VR 이동 속도
       if (G.combat?.inCombat && G.combat.guardUp) speed *= 0.55;
       mvx = (f.x * fwd - f.z * side) * speed * dt / T;
@@ -401,43 +403,70 @@ export class Player {
   askBossAction() {
     const pc = G.map.playerChar, d = this.facingDir();
     const dx = d === 4 ? -1 : d === 6 ? 1 : 0, dy = d === 8 ? -1 : d === 2 ? 1 : 0;
+    const f = this.aimDirection(), best = this.actionCone(f, ev => !ev.net?.hidden);
+    if (G.vr && best) return this.startActionEvent(best.ev);
     if (G.coop.phantomTouch([...G.map.eventsXy(pc.x, pc.y).filter(ev => ev.triggerIn([0]) && !ev.normalPriority()),
-      ...G.map.eventsXy(pc.x + dx, pc.y + dy).filter(ev => ev.triggerIn([0, 1, 2]) && ev.normalPriority())], 'action')) return;
+      ...G.map.eventsXy(pc.x + dx, pc.y + dy).filter(ev => ev.triggerIn([0, 1, 2]) && ev.normalPriority())], 'action')) return true;
     // (as tryAction: else the nearest action event in front - in 3D a door or a bonfire is seldom faced square on)
-    const best = this.actionCone(this.aimDirection(), ev => !ev.net?.hidden);
-    if (best) G.coop.phantomTouch([best.ev], 'action');
+    return best ? this.startActionEvent(best.ev) : false;
   }
 
   tryAction() {
     const pc = G.map.playerChar;
     const d = this.facingDir();
     const dx = d === 4 ? -1 : d === 6 ? 1 : 0, dy = d === 8 ? -1 : d === 2 ? 1 : 0;
+    const f = this.aimDirection();
+    let best = G.vr ? this.actionCone(f) : null;
+    if (best) return this.startActionEvent(best.ev);
     if (G.map.actionAt(pc.x, pc.y, pc.x + dx, pc.y + dy)) return true;
     // forgiving cone search for 3D: nearest action event in front
-    const f = this.aimDirection();
-    const best = this.actionCone(f);
-    if (best && !G.map.interpreter.running()) {
-      // face it like the original requires: an event that walks the player "forward" (through a door)
-      // goes toward it, not sideways off a ledge
-      const ex = G.map.nearX(best.ev.realX, pc.fx) - pc.fx, ey = G.map.nearY(best.ev.realY, pc.fy) - pc.fy;
-      pc.direction = Math.abs(ex) > Math.abs(ey) ? (ex > 0 ? 6 : 4) : (ey > 0 ? 2 : 8);
-      best.ev.start();
-      return true;
-    }
+    if (!G.vr) best = this.actionCone(f);
+    if (best) return this.startActionEvent(best.ev);
     if (!best && !G.map.interpreter.running() && G.combat?.allies?.talkTo(f)) return true;
     return false;
+  }
+  // World grabs use the same event and co-op authority path as the action button.
+  // Never grant inventory directly or report an event that refused to start.
+  startActionEvent(ev) {
+    const map = G.map, pc = map?.playerChar;
+    if (!pc || !this.canMove() || G.ui?.sceneOpen || G.combat?.gripAdjust || map.interpreter.running()) return false;
+    if (!ev || !map.eventList.includes(ev) || !ev.page || ev.erased || ev.starting || ev.locked || ev.empty()
+      || ![0, 1, 2].includes(ev.trigger) || map.eventList.some(other => other.starting)
+      || G.combat?.hidesEvent?.(ev) || G.arena?.blocksTrigger?.(ev)
+      || G.coop?.phantom && (ev.net?.hidden || ev.net?.gone)) return false;
+    const position = eventActionPosition(ev, map, pc);
+    if (!position) return false;
+    // Scripted "move forward" commands must face the chosen visible target.
+    const previousDirection = pc.direction, ex = position.x - pc.fx, ey = position.y - pc.fy;
+    if (Math.hypot(ex, ey) > 1e-6) pc.direction = Math.abs(ex) > Math.abs(ey) ? (ex > 0 ? 6 : 4) : (ey > 0 ? 2 : 8);
+    const started = G.coop?.phantom ? G.coop.phantomTouch([ev], 'action') : ev.start();
+    if (!started) pc.direction = previousDirection;
+    return !!started;
   }
   // the action event nearest in front (f: the way the player points), { ev, score } or null
   actionCone(f, ok = () => true) {
     const pc = G.map.playerChar;
+    const ray = G.vr && G.input.controllers.right?.ray;
+    const aim = ray ? ray.getWorldPosition(new THREE.Vector3()) : null;
+    const origin = aim && Number.isFinite(aim.x) && Number.isFinite(aim.z)
+      ? { x: aim.x / T - 0.5, y: aim.z / T - 0.5 } : null;
     let best = null;
     for (const ev of G.map.eventList) {
-      if (ev.trigger !== 0 || ev.empty() || ev.erased || G.combat?.hidesEvent(ev) || G.arena?.blocksTrigger(ev) || !ok(ev)) continue;
-      const ex = G.map.nearX(ev.realX, pc.fx) - pc.fx, ey = G.map.nearY(ev.realY, pc.fy) - pc.fy;
+      if (ev.trigger !== 0 || !ev.page || ev.empty() || ev.erased || ev.starting || ev.locked
+        || G.combat?.hidesEvent?.(ev) || G.arena?.blocksTrigger?.(ev)
+        || G.coop?.phantom && (ev.net?.hidden || ev.net?.gone) || !ok(ev)) continue;
+      const position = eventActionPosition(ev);
+      if (!position) continue;
+      const ex = position.x - pc.fx, ey = position.y - pc.fy;
       const dist = Math.hypot(ex, ey);
       const maxD = ev.normalPriority() ? 1.7 : 1.1;
       if (dist > maxD) continue;
-      const dot = dist < 0.4 ? 1 : (ex * f.x + ey * f.z) / dist;
+      // VR points from the hand, which may be beside or past an event underfoot.
+      // That event must not beat the object the controller is actually aiming at.
+      const ax = origin ? G.map.nearX(position.x, origin.x) - origin.x : ex;
+      const ay = origin ? G.map.nearY(position.y, origin.y) - origin.y : ey;
+      const aimDist = Math.hypot(ax, ay);
+      const dot = !origin && dist < 0.4 ? 1 : (ax * f.x + ay * f.z) / (aimDist || 1);
       if (dot < 0.55) continue;
       const score = dist - dot;
       if (!best || score < best.score) best = { ev, score };

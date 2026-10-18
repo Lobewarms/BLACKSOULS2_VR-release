@@ -4,6 +4,8 @@ import { G } from './globals.js';
 
 const DEAD = 0.18;
 const dz = v => (Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD));
+const grabState = source => ({ source, events: false, held: !!source?.gamepad?.buttons[1]?.pressed, pending: false, pressed: false });
+const hasGrabSource = (session, source) => !!source && Array.from(session?.inputSources || []).includes(source);
 
 export class Input {
   constructor(renderer, dom) {
@@ -32,6 +34,8 @@ export class Input {
     this.btnPrev = { left: [], right: [] };
     this.axes = { left: [0, 0], right: [0, 0] };
     this.controllers = {};                           // three.js controller spaces
+    this.grabs = { left: grabState(null), right: grabState(null) };
+    this.grabSession = null;
     this.runToggle = false;
     this.snapReady = true;
 
@@ -183,27 +187,94 @@ export class Input {
 
   setupXR(scene, rig) {
     const xr = this.renderer.xr;
+    xr.addEventListener?.('sessionend', () => {
+      this.grabSession = null;
+      this.grabs = { left: grabState(null), right: grabState(null) };
+    });
     for (let i = 0; i < 2; i++) {
       const ctrl = xr.getController(i);
       const grip = xr.getControllerGrip(i);
       ctrl.userData.index = i;
       ctrl.addEventListener('connected', e => {
-        const hand = e.data.handedness === 'left' ? 'left' : 'right';
+        this.syncGrabSession(xr.getSession?.());
+        const old = ctrl.userData.inputSource;
+        if (old && old !== e.data) this.disconnectGrabSource(ctrl, grip, old);
+        const hand = e.data.handedness;
+        if (hand !== 'left' && hand !== 'right') return;
         ctrl.userData.hand = hand; grip.userData.hand = hand;
+        ctrl.userData.inputSource = e.data;
         this.controllers[hand] = { ray: ctrl, grip };
         this.hands[hand] = { source: e.data };
+        this.grabs[hand] = grabState(e.data);
         const gp = e.data.gamepad, va = gp?.vibrationActuator;
         console.info('[xr]', hand, 'controller:', e.data.profiles?.[0] || '?', '| vibration:',
           gp?.hapticActuators?.length ? 'hapticActuators' : va ? `vibrationActuator (${(va.effects || []).join(', ') || 'no effect list'})` : 'none');
         G.onControllerConnected?.(hand, ctrl, grip);
       });
-      ctrl.addEventListener('disconnected', () => {
-        const hand = ctrl.userData.hand;
-        if (hand) { this.hands[hand] = null; delete this.controllers[hand]; }
-      });
+      ctrl.addEventListener('disconnected', e => this.disconnectGrabSource(ctrl, grip, e.data || ctrl.userData.inputSource));
+      ctrl.addEventListener('squeezestart', e => this.recordGrab(ctrl, e.data, true));
+      ctrl.addEventListener('squeezeend', e => this.recordGrab(ctrl, e.data, false));
       rig.add(ctrl);
       rig.add(grip);
     }
+  }
+
+  disconnectGrabSource(ctrl, grip, source) {
+    const hand = ctrl.userData.hand;
+    if (hand && this.hands[hand]?.source === source && this.controllers[hand]?.ray === ctrl) {
+      this.hands[hand] = null; delete this.controllers[hand]; this.grabs[hand] = grabState(null);
+    }
+    if (ctrl.userData.inputSource === source) {
+      delete ctrl.userData.inputSource; delete ctrl.userData.hand; delete grip.userData.hand;
+    }
+  }
+  syncGrabSession(session) {
+    if (session === this.grabSession) return;
+    this.grabSession = session;
+    for (const hand of ['left', 'right']) {
+      const source = this.hands[hand]?.source;
+      this.grabs[hand] = grabState(hasGrabSource(session, source) ? source : null);
+    }
+  }
+  grabAllowed() {
+    return !!G.vr && !G.xrAway && !this.pointerBusy() && !G.ui?.prompt?.shown && !G.ui?.remote?.shown;
+  }
+  clearGrabEdges() {
+    for (const grab of Object.values(this.grabs || {})) { grab.pending = false; grab.pressed = false; }
+  }
+  recordGrab(ctrl, source, held) {
+    const session = this.renderer.xr.getSession?.();
+    this.syncGrabSession(session);
+    const hand = ctrl.userData.hand, grab = this.grabs[hand];
+    if (!grab || !source || grab.source !== source || this.controllers[hand]?.ray !== ctrl || !hasGrabSource(session, source)) return;
+    const pressed = held && !grab.held;
+    // Once a source emits squeeze events, they define its grip edges. Polling
+    // may arrive a frame later, and must not replay the same physical squeeze.
+    grab.events = true; grab.held = held;
+    if (!this.grabAllowed()) this.clearGrabEdges();
+    else if (pressed) grab.pending = true;
+  }
+  updateGrabs(session) {
+    this.syncGrabSession(session);
+    const allowed = this.grabAllowed();
+    for (const hand of ['left', 'right']) {
+      const source = this.hands[hand]?.source;
+      if (!hasGrabSource(session, source)) { this.grabs[hand] = grabState(null); continue; }
+      let grab = this.grabs[hand];
+      if (grab.source !== source) grab = this.grabs[hand] = grabState(source);
+      if (!grab.events) {
+        const held = !!source.gamepad?.buttons[1]?.pressed;
+        if (held && !grab.held) grab.pending = true;
+        grab.held = held;
+      }
+      grab.pressed = allowed && grab.pending;
+      grab.pending = false;
+    }
+  }
+  // Dedicated world-grab edge; combat and menu button semantics stay sampled.
+  grabPressed(hand) {
+    if (!this.grabAllowed()) { this.clearGrabEdges(); return false; }
+    return !!this.grabs?.[hand]?.pressed;
   }
 
   // call once per rendered frame before game logic
@@ -234,6 +305,7 @@ export class Input {
     if (Math.abs(ry) > 0.7 && Math.abs(ry) > Math.abs(rx) * 1.3) {
       if (this.rFlickReady) { this.rFlick = ry < 0 ? -1 : 1; this.rFlickReady = false; }
     } else if (Math.abs(ry) < 0.35) this.rFlickReady = true;
+    this.updateGrabs(session);
   }
   // call at end of frame
   endFrame() {

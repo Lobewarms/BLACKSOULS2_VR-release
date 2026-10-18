@@ -35,6 +35,10 @@ A desktop shortcut is optional during setup.
 4. Click **ENTER VR** at the bottom of the game window and put on your headset.
 
 Quest requires the PC to run the game; this download does not install on the headset.
+To collect a world item, bring your right hand close and squeeze the grip.
+An empty left hand can also collect items; holding a shield keeps its guard control.
+Successful grabs give a short vibration. Flick the right stick down for normal
+interactions with items, people and doors.
 See [all controls](docs/upstream/CONTROLS_en.txt) for the controller buttons.
 
 ## Help

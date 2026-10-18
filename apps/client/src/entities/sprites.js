@@ -9,6 +9,7 @@ import { BalloonIcon, BALLOON_SIZE } from '../ui/balloons.js';
 import { tileFurniture, furnitureGeometry, isUprightFurnitureTile } from './furniture.js';
 import { isLyingTile } from './lying.js';
 import { corpseDepth, corpseSides } from './remains.js';
+import { characterPropProfile, characterPropFrame, characterTableGeometry } from './character-props.js';
 
 const sheetCache = new Map();
 async function loadSheet(name) {
@@ -177,7 +178,8 @@ export class CharacterSprite {
 
   graphicKey() {
     const c = this.ch;
-    const g = c.tileId > 0 ? `tile:${c.tileId}` : c.characterName ? `${c.characterName}#${c.characterIndex}` : '';
+    let g = c.tileId > 0 ? `tile:${c.tileId}` : c.characterName ? `${c.characterName}#${c.characterIndex}` : '';
+    if (characterPropProfile(c)?.kind === 'table') g += `/${c.direction}/${c.pattern}`;
     return g ? `${g}|${this.layMode()}` : '';
   }
   // How an event stands in 3D, so you can tell at a glance what blocks you:
@@ -192,6 +194,7 @@ export class CharacterSprite {
     // Corpse artwork is drawn from above. Blocking priority and scene movement
     // affect event logic, but must not turn a body into an upright billboard.
     if (this.isCorpseGraphic()) return 'lie';
+    if (characterPropProfile(c)?.kind === 'table') return 'prop';
     // a door set into a wall stands on the wall whatever its priority (doors are usually "below characters"),
     // also one in a doorway with the drop behind it (the side-view tower)
     if (this.isDoorGraphic() && (this.mapInfo.isWall(c.x, c.y - 1) || this.mapInfo.isDoorway?.(c.x, c.y))) return 'stand';
@@ -282,8 +285,12 @@ export class CharacterSprite {
     this.bodyDepth = lying && this.isCorpseGraphic() ? corpseDepth(c.characterName, c.characterIndex) : 0;
     this.bodyCanvas = sheetCanvas;
     this.bodySize = [w, h];
+    this.propProfile = characterPropProfile(c);
+    this.propGeometry = false;
     const furniture = this.mode === 'furniture' ? this.furnitureProfile() : null;
-    let geo = furniture ? furnitureGeometry(furniture, id => {
+    let geo = this.mode === 'prop' && sheetCanvas ? characterTableGeometry(characterPropFrame(c, sheetCanvas, info), this.propProfile.height, T / TS) : null;
+    this.propGeometry = !!geo;
+    geo ||= furniture ? furnitureGeometry(furniture, id => {
       const ctx = this.tileCanvas.getContext('2d', { willReadFrequently: true });
       ctx.clearRect(0, 0, TS, TS);
       this.mapInfo.drawer.draw(ctx, id, 0, 0);
@@ -489,8 +496,11 @@ export class CharacterSprite {
     const cx = Math.round(rx), cy = Math.round(ry);
     if (cx !== this.spotX || cy !== this.spotY || this.spotMode !== this.mode) {
       this.spotX = cx; this.spotY = cy; this.spotMode = this.mode;
-      const lying = this.mode === 'lie' || (this.mode === 'furniture' && ['flat', 'book', 'remains'].includes(this.furnitureProfile()?.kind));
+      const lying = this.mode === 'lie' || this.mode === 'prop' || (this.mode === 'furniture' && ['flat', 'book', 'remains'].includes(this.furnitureProfile()?.kind));
       this.spot = c.isEvent ? this.mapInfo.spotOnSolid?.(cx, cy, lying, c.priorityType === 2) || null : null;
+      // A freestanding table rests on the floor or a real top surface. A wall's
+      // projected face must not suspend it in the air like a hanging picture.
+      if (this.mode === 'prop' && this.spot && this.spot.side !== 'top' && !this.spot.about) this.spot = null;
       this.inDoorway = !!this.mapInfo.isDoorway?.(cx, cy);
     }
     const spot = this.spot;
@@ -524,13 +534,17 @@ export class CharacterSprite {
     this.group.position.set(wx, wy, wz);
     // a frame drawn with empty rows under it stands on its visible bottom; on a wall face the 2D placement
     // (empty rows included) is what puts it at the right height
-    const drop = !spot || spot.side === 'top' || spot.free || spot.about ? (this.footDrop || 0) : 0;
+    let drop = !spot || spot.side === 'top' || spot.free || spot.about ? (this.footDrop || 0) : 0;
+    if (this.propProfile?.kind === 'grounded' && !flatSpot && !this.facade && this.bodyCanvas) {
+      const frame = characterPropFrame(c, this.bodyCanvas, this.info);
+      if (frame) drop = (this.info.fh - frame.bottom) / this.info.fh * this.bodySize[1];
+    }
     // (drawn above characters over a picture: its row's height is the height, the frame where 2D draws it -
     // 4 px up for a character sheet - not hung above head height on top of that)
     const onPicture = this.mode === 'over' && !!spot?.about;
     this.mesh.position.y = jump + (this.mode === 'over' && !spot ? 1.9 : 0) + (onPicture && !this.info?.object ? 4 / TS * T : 0) - drop;
     if (this.shadow) this.shadow.visible = !spot || spot.ground;
-    if (this.mode === 'lie' || this.mode === 'furniture') {
+    if (this.mode === 'lie' || this.mode === 'furniture' || this.mode === 'prop') {
       this.mesh.rotation.y = 0;
       this.mesh.position.z = 0;
     } else if (flatSpot) {
@@ -557,7 +571,7 @@ export class CharacterSprite {
     mat.blending = c.blendType === 1 ? THREE.AdditiveBlending : THREE.NormalBlending;
     // on a picture, at the size 2D draws it over that picture (people elsewhere are drawn a quarter bigger)
     this.mesh.scale.setScalar(onPicture && !info.object && !info.tile ? 1 / 1.25 : 1);
-    if (info.tile) return;
+    if (info.tile || this.propGeometry) return;
     let row;
     if (info.object || this.facade || this.mode === 'lie' || flatSpot || this.isCorpseGraphic() || this.rowsFixed || onPicture) row = (c.direction - 2) / 2;
     else {

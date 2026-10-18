@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.14
+BLACK SOULS II VR - community version 0.2.15
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,10 +7,18 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Exit circles refresh when doors unlock or routes change during play.
-- Long dialogue choices wrap so their full text remains readable.
-- Mouse control returns after closing conversations and menus.
-- Keeps the original menus, translucent HUD and circular minimap.
+- Pick up nearby world items in VR by bringing your hand close and squeezing
+  the right grip, or the left grip with an empty hand. Successful grabs vibrate.
+- Quick grip squeezes register reliably, including between frames.
+- Right-stick interactions aim at the visible item, including items on tables.
+- Item messages, choices and collected state follow the original game.
+- Main-menu labels remain complete when you move between commands.
+- Run like Dodo's Fast setting now increases walking speed and is saved.
+- Torture racks lie horizontally with supports, and loose stationary props rest
+  on their visible base instead of floating above the floor.
+
+Left grip still guards when you hold a shield. The right-stick-down interaction
+remains available for items, people and doors.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.
