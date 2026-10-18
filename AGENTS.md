@@ -1085,3 +1085,76 @@ menu under the original choice extension, so saving must not select a transfer.
 These checks verify specific rules, not a complete story or headset playthrough.
 Original turn order and the port's real-time action scheduler remain different.
 The previously reported stationary skeleton still needs live identification.
+
+## Area atmosphere and foliage (0.2.20)
+
+The user wants recognizable original-game atmosphere across locations and reports
+cut artwork, plain skies and cubic forest borders. Read-only metadata checks
+covered all 410 maps. Original map notes often specify tone, automatic weather
+and a map-fog image. Do not infer enclosure from weather or a nonempty parallax:
+342 maps have no parallax, including actual outdoor towns, forests and snow.
+Use verified tileset families and narrow source-tileset-guarded map exceptions;
+unrecognized and picture-only maps receive the neutral readable fallback.
+This is a shared presentation repair, not a claim of manually remodeling 410 maps.
+
+MapAtmosphere owns diffuse support, a restrained neutral local light and visibility
+distances. Original painted shadows should remain legible without a universal
+brown torch or black dungeon fog. Apply authored tones once on entry; geometry
+rebuilds must retain scripted tone/weather changes. Missing tone/weather notes
+reset to neutral/none, like original automatic scripts 133/134. Title/game-over
+teardown clears generated weather/effects and the previous map's tone.
+
+WorldTone composes material shader hooks instead of adding framebuffer copies
+or per-eye passes. In the pinned Three r170 shaders, output color conversion
+precedes fog. Apply weighted grayscale, then signed RGB offsets after fog and
+before alpha premultiplication; retain alpha and handle linear output explicitly.
+Share uniforms, preserve original onBeforeCompile/cache keys, discover future
+dynamic meshes and retain materials only weakly. HUD, menus, pictures and overlays
+are excluded by render order/depth testing or an explicit worldTone opt-out.
+Background colors always derive from a raw clone rather than accumulating tint.
+These are RGSS-compatible color semantics, not proprietary GPU pixel equivalence.
+
+Automatic weather and interpreter command 236 use rain/storm/snow/none, power0-9
+and logic-frame interpolation. Weather is depth-tested world geometry: reusable
+buffers, ten particles per power level, no particle lights. Keep flakes small
+enough to avoid large white blocks near the eye. Cloud dimming composes once.
+The original RichFog, Sunshine_1/2 and fallen_leaves01-04 images supply map mist,
+light cards and twelve leaf styles; load them from the selected game at runtime.
+Generated effects have bounded draw/instance counts, fade near the head and
+dispose GPU resources on stop/transfer. Persist only original Game_System cue
+settings (rich fog, sunshine type/position and leaf type); Game_Temp particles
+never belong in saves. Import those four settings from original saves.
+Subtractive radial kurayami images are edge masks, not uniform fog density.
+
+Authored sky panoramas have priority. Outdoor profiles without a usable sky may
+borrow original cloud/star panoramas appropriate to their tone and region.
+Cloud fallbacks cover the horizon and poles with image detail; avoid a large
+plain lower band. Preserve the sky setting, cancellation tokens, fallback colors,
+cached horizon restoration on rebuild and single disposal of shared textures.
+The original moon-over-lake panorama is a sky despite its name containing 湖;
+only its water portion belongs on the ground plane. No original art is bundled.
+
+Connected tree artwork had been promoted to SOLID_MASS by component size,
+creating opaque backing, stretched sides and consumed canopy art. Verified
+foliage cells on do2 and the two snow sheets stay alpha-aware picture stacks
+even above impassable grass. Preserve pre-existing A3/A4 walls, forced solids,
+cliffs, rocks and buildings. Original MapGrid passage remains authoritative;
+removing an invented visual mass must not open blocked forest paths. Validate
+source-frame coverage, alpha silhouettes, unchanged architecture and collision
+with synthetic regression art. Private actual-asset checks remain outside Git.
+
+The do2 border cells128-167 also bake opaque RGB(8,9,22) into 2D empty space;
+cell137 is entirely this matte. The 3D presentation drawer makes only exact,
+edge-connected matte pixels transparent. Preserve enclosed equal-color pixels,
+dark bark and all unrelated sheets/cells. Cache the filtered per-tile canvas;
+unreadable pixel data conservatively uses the original image. Use untouched
+source pixels for joinsBelow/joinsBeside and logical assemblies: using masked
+alpha for connectivity split whole trees into independently placed fragments.
+The ordinary 2D TileDrawer remains unfiltered. Full-renderer QA confirmed attached
+canopies/trunks and removed panels after both geometry and source-matte fixes.
+
+Visual QA uses original map/asset rendering and disposable debug state, never
+player saves. Combat may be paused in a private review harness to keep cameras
+stationary; this is visual inspection, not a full playthrough or physical headset
+test. Temporary review pages and export controls must be removed before builds
+and kept out of production/release packages.

@@ -17,6 +17,7 @@ import { isLyingTile } from '../entities/lying.js';
 import { furnitureFloor, furnitureGeometry, isUprightFurnitureTile } from '../entities/furniture.js';
 import { voxelGeometryOf, SLAB_THICKNESS } from '../combat/weapons.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { FoliageTileDrawer, isFoliageTile } from './foliage.js';
 
 export const T = 1.5; // meters per tile
 
@@ -230,7 +231,10 @@ export async function buildMapMesh(grid, opts = {}) {
   grid = furniture.grid;
   const images = await loadTilesetImages(grid.tileset);
   const parWallImg = opts.parallaxWalls && grid.map.parallax_name ? await loadImage('Graphics/Parallaxes', grid.map.parallax_name) : null;
-  const drawer = new TileDrawer(images, grid.flags);
+  const drawer = new FoliageTileDrawer(images, grid.flags, grid.tileset.tileset_names);
+  // Art connectivity is authored before the forest matte is removed. Using
+  // its rendered alpha here splits a crown into separately pivoting fragments.
+  const sourceDrawer = new TileDrawer(images, grid.flags);
   const { w, h } = grid;
   const flatTiles = opts.flatPictures ? new Set(opts.flatPictures) : null;   // maphints: pictures kept facing south
   // maphints terraces: a terraced town's stairs drawn as floor tiles (their edge pieces too)
@@ -410,9 +414,11 @@ export async function buildMapMesh(grid, opts = {}) {
 
   // ---- upper layer objects: 0 none, 1 flat decal, 2 solid (blocks some direction), 3 star
   const objType = new Uint8Array(w * h);
+  const foliageCell = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const t2 = grid.tile(x, y, 2);
     if (!isVisible(t2)) continue;
+    foliageCell[idx(x, y)] = isFoliageTile(t2, grid.tileset.tileset_names) ? 1 : 0;
     const f = grid.flag(t2);
     if (f & F.STAR) objType[idx(x, y)] = 3;
     else if ((f & F.ALL) !== 0) objType[idx(x, y)] = 2;
@@ -657,7 +663,10 @@ export async function buildMapMesh(grid, opts = {}) {
   for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
     const i = idx(x, y);
     if (forcedSolid[i] && !solid[i] && !empty[i]) { pit[i] = 0; cand[i] = 1; continue; }
-    if (solid[i] || empty[i] || pit[i] || propCell[i] || flatCell[i] || moundCell[i] || grid.anyPassable(x, y)) continue;
+    // Touching tree crowns form large blocked components too. Their original
+    // alpha silhouettes remain upright pictures, even over impassable grass;
+    // the component's size must not turn them into backed cubic wall faces.
+    if (solid[i] || empty[i] || pit[i] || propCell[i] || flatCell[i] || moundCell[i] || foliageCell[i] || grid.anyPassable(x, y)) continue;
     if (lyingTile.has(grid.tile(x, y, 2))) continue;
     if (isWaterTop(x, y) || grid.isTableTop(x, y) || !Number.isNaN(lipH[i])) continue; // water/lava, counters, ledges stay low
     if (onStairTile(x, y)) continue;                     // (a stair's edge piece goes with its stairs)
@@ -788,7 +797,7 @@ export async function buildMapMesh(grid, opts = {}) {
   // ones (a hole, an open grave) stay pictures on the floor
   const LOW_H = 0.5;                                    // tiles
   for (let i = 0; i < w * h; i++) {
-    if (solid[i] || empty[i] || pit[i] || extCell[i] || propCell[i] || flatCell[i] || moundCell[i]) continue;   // (props: pictures or nothing, no block)
+    if (solid[i] || empty[i] || pit[i] || extCell[i] || propCell[i] || flatCell[i] || moundCell[i] || foliageCell[i]) continue;   // (props/foliage: original pictures, no ground block)
     if (!Number.isNaN(lipH[i])) { solid[i] = SOLID_LOW; height[i] = lipH[i]; continue; }     // (maphints lips)
     const x = i % w, y = (i / w) | 0;
     if (grid.anyPassable(x, y) || isWaterTop(x, y) || onStairTile(x, y)) continue;
@@ -1796,8 +1805,8 @@ export async function buildMapMesh(grid, opts = {}) {
     const key = upperId + ':' + lowerId;
     if (connCache.has(key)) return connCache.get(key);
     sctx.clearRect(0, 0, TS, TS * 2);
-    drawer.draw(sctx, upperId, 0, 0);
-    drawer.draw(sctx, lowerId, 0, TS);
+    sourceDrawer.draw(sctx, upperId, 0, 0);
+    sourceDrawer.draw(sctx, lowerId, 0, TS);
     const a = sctx.getImageData(0, TS - 1, TS, 2).data;
     let both = 0, any = 0;
     for (let i = 0; i < TS; i++) {
@@ -1817,8 +1826,8 @@ export async function buildMapMesh(grid, opts = {}) {
     const key = leftId + ':' + rightId;
     if (hconnCache.has(key)) return hconnCache.get(key);
     hctx.clearRect(0, 0, TS * 2, TS);
-    drawer.draw(hctx, leftId, 0, 0);
-    drawer.draw(hctx, rightId, TS, 0);
+    sourceDrawer.draw(hctx, leftId, 0, 0);
+    sourceDrawer.draw(hctx, rightId, TS, 0);
     const a = hctx.getImageData(TS - 1, 0, 2, TS).data;
     let both = 0, any = 0;
     for (let i = 0; i < TS; i++) {
@@ -3064,7 +3073,7 @@ export async function buildMapMesh(grid, opts = {}) {
   let parallaxFloor = null;
   if (pname && !opts.openSky) {                          // (open sky: the picture is the sky round the map - sky.js - with nothing under it)
     let img = await loadImage('Graphics/Parallaxes', pname);
-    const backdrop = /ocean/i.test(pname) && img;
+    const backdrop = (/ocean/i.test(pname) || pname === '月湖') && img;
     if (backdrop) {
       // (a sky over the sea, drawn as a view: only the sea under the horizon lies under the map)
       const c = document.createElement('canvas');

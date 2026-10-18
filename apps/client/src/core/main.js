@@ -26,6 +26,9 @@ import { Poke } from '../game/poke.js';
 import { WorldPickup } from '../game/world-pickup.js';
 import { normalizeMoveSpeed } from '../game/movement-speed.js';
 import { Sky } from '../world/sky.js';
+import { MapAtmosphere } from '../world/atmosphere.js';
+import { EnvironmentEffects } from '../world/environment-effects.js';
+import { WorldTone } from '../world/world-tone.js';
 import { BalloonIcon } from '../ui/balloons.js';
 import { loadScriptData } from '../data/scriptdata.js';
 import { buildMapView } from '../world/mapbuild.js';
@@ -61,11 +64,9 @@ scene.add(rig);
 const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.08, 300);
 camera.position.set(0, G.settings.eyeHeight, 0);
 rig.add(camera);
-const hemi = new THREE.HemisphereLight(0xc8c4d8, 0x2a2018, 1.25);
-scene.add(hemi);
-const torch = new THREE.PointLight(0xffc890, 14, 13, 1.5);
-scene.add(torch);
+const atmosphere = new MapAtmosphere(scene);
 G.three = { renderer, scene, camera, rig };
+G.worldTone = new WorldTone(scene);
 const spectator = new Spectator(renderer, scene);
 G.spectator = spectator;
 
@@ -139,6 +140,7 @@ G.floorAt = () => 0;
 G.hands = new Hands();
 G.poke = new Poke();
 G.sky = new Sky(scene);
+G.environment = new EnvironmentEffects(scene);
 G.onControllerConnected = (hand, ctrl, grip) => {
   G.hands.attach(hand, ctrl);
   if (hand === 'left') G.ui.attachHud(grip);
@@ -214,10 +216,6 @@ function clearMapView() {
   view.sprites = [];
   G.poke?.reset();
 }
-function toneFromNote(note) {
-  const m = /<色調\s*(-?\d+),\s*(-?\d+),\s*(-?\d+)(?:,\s*(-?\d+))?>/.exec(note || '');
-  return m ? { red: +m[1], green: +m[2], blue: +m[3], gray: +(m[4] || 0) } : null;
-}
 // seeds: where the player arrives (the cells walkable from there decide which wall tops are solid);
 // rebuild: the same map again, the old view kept until the new one is ready (and dropped if a transfer
 // came first); open: cells to build as open floor (the dark a boss fight opened - arena.js)
@@ -270,14 +268,8 @@ async function presentMap(seeds = [], rebuild = false, open = null) {
   view.mapInfo = mapInfo;
   for (const ev of G.map.eventList) view.sprites.push(new CharacterSprite(ev, scene, mapInfo));
   // lighting / atmosphere per map
-  const tone = toneFromNote(G.map.map.note);
-  const dark = tone ? Math.max(0, -(tone.red + tone.green + tone.blue) / 3) : 0;
-  hemi.intensity = THREE.MathUtils.clamp(1.35 - dark / 120, 0.55, 1.35);
-  const outdoor = !!G.map.map.parallax_name && !/^yuka/i.test(G.map.map.parallax_name);
-  scene.fog.near = outdoor ? 16 : 9;
-  scene.fog.far = outdoor ? 70 : 36;
-  G.sky.setMap(G.map.map);                 // (its background picture round the sky - sky.js)
-  if (!rebuild) G.screen.startTone({ red: 0, green: 0, blue: 0, gray: 0 }, 0);
+  atmosphere.setMap(G.map.map, { mapId: G.map.mapId, tileset: grid.tileset, rebuild,
+    screen: G.screen, sky: G.sky, environment: G.environment });
 }
 
 // Active event pages can unlock or remove a route after the map was built.
@@ -515,7 +507,7 @@ G.enterWorld = enterWorld;
 // (what was going on in the game left goes with it: an event's run, the common events waiting - else a new game took them on)
 G.returnToTitle = () => {
   G.ui.clearDialoguePresentation();
-  G.coop.end('title', { stay: true }); G.combat.reset(); G.pictures?.clear(); clearMapView(); G.sky.clear(); G.audio.stopBgm(); G.audio.stopBgs();
+  G.coop.end('title', { stay: true }); G.combat.reset(); G.pictures?.clear(); clearMapView(); atmosphere.clear(); G.sky.clear(); G.audio.stopBgm(); G.audio.stopBgs();
   if (G.map) { G.map.interpreter.clear(); G.map.reservedCommon = []; }
   if (gameOverPanel) gameOverPanel.visible = false;
   G.state = null; mode = 'title'; showTitle();
@@ -558,7 +550,7 @@ G.gameOver = async () => {
   G.screen.fadeOut(60);
   await waitFrames(62);
   if (mode !== 'gameover') return;
-  G.combat.reset(); G.pictures?.clear(); clearMapView(); G.sky.clear();
+  G.combat.reset(); G.pictures?.clear(); clearMapView(); atmosphere.clear(); G.sky.clear();
   G.ui.hud.mesh.visible = false;
   const panel = await gameOverArt();
   const head = G.player.headWorld(new THREE.Vector3()), fwd = G.player.forwardVec();
@@ -776,7 +768,8 @@ function frameBody() {
       refreshExitMarkers();
       if (markers.update(dt, head)) refreshExitMarkers(true);
       view.mesh.update(G.time);
-      torch.position.set(head.x, head.y + 0.2, head.z);
+      atmosphere.update(head);
+      G.environment.update(dt, head);
       G.coop.update(dt, head);               // (last: a visit that ends here sends the player elsewhere at once)
     } else {
       G.screen.updateLogic();

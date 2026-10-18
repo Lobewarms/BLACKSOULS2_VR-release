@@ -3,6 +3,7 @@ import { $data } from '../data/data.js';
 import { G } from '../core/globals.js';
 import { hashGet } from '../data/marshal.js';
 import { normalizeMoveSpeed } from './movement-speed.js';
+import { originalEnvironmentState } from './environment-state.js';
 
 // script 131 ステータス限界突破: the most a param can be - the script's own limits (actors 999,999 HP, 99,999 MP, 9,999
 // the rest; enemies 9,999,999 HP) plus every <限界変動:n,v> on the battler's actor / class / equipment / states / enemy
@@ -882,6 +883,7 @@ export class GameState {
     }
     const sys = get('system');
     if (sys) {
+      this.system.environmentEffects = originalEnvironmentState(sys);
       Object.assign(this.system, {
         saveDisabled: !!sys.save_disabled, menuDisabled: !!sys.menu_disabled,
         encounterDisabled: !!sys.encounter_disabled, formationDisabled: !!sys.formation_disabled,

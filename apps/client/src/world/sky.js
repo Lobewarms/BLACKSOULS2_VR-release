@@ -4,7 +4,8 @@
 // round as the original loops it, with the colours of its top and bottom edge above and below; the distance fog
 // takes its horizon colour so far walls fade into it. Water surfaces (the open water below) and floor pictures
 // (yuka: the 遠景床 script) stay floors, pictures that are no sky (a wall, a texture - maphints.js NOT_SKY) are
-// left out, and maps without a background keep the black sky. Setting: 하늘 배경
+// left out. Outdoor area profiles can provide an original sky when the map has
+// none; indoor maps retain their safe background colour. Setting: 하늘 배경
 import * as THREE from 'three';
 import { G } from '../core/globals.js';
 import { loadImage } from '../data/assets.js';
@@ -13,6 +14,17 @@ import { skyPicture, skyAllOver } from './maphints.js';
 const R = 200;                              // m: its corners stay inside the camera's far plane
 const REACH = Math.tan(40 * Math.PI / 180); // the band reaches about 40° up and down from eye level
 const FOG = 0x030305;                       // the fog / background without a sky (main.js)
+const FALLBACK_SKIES = new Set(['CloudySky1', 'CloudySky2', 'StarlitSky', '64380033_p2_master1200']);
+
+function fallbackClouds(name, img, fallback) {
+  if (!fallback || name !== 'CloudySky1') return img;
+  // This original panorama's lower half is a plain horizon/ground fade. Its
+  // detailed upper clouds make a continuous sky without a giant flat lower band.
+  const c = document.createElement('canvas');
+  c.width = img.width; c.height = Math.max(1, Math.floor(img.height / 2));
+  c.getContext('2d').drawImage(img, 0, 0, img.width, c.height, 0, 0, c.width, c.height);
+  return c;
+}
 
 // the picture without a border line drawn round it (a black column or a few black rows at its edge): repeated or
 // mirrored round the sky, that line showed as a dark seam
@@ -59,35 +71,51 @@ function seams(cx, W, H) {
 }
 
 export class Sky {
-  constructor(scene) {
+  constructor(scene, { imageLoader = loadImage } = {}) {
     this.scene = scene;
+    this.imageLoader = imageLoader;
     this.group = null;
     this.name = '';
     this.token = 0;
     this.offset = 0;
+    this.fallback = { background: FOG, fogColor: FOG, fallbackSky: '' };
+    this.horizon = null;
+    this.isFallback = false;
   }
   // the picture this map shows round its sky ('' none)
   wanted(map) {
     if (G.settings?.sky === false) return '';
     const name = map?.parallax_name || '';
     if (!name || !map.parallax_show || /^yuka/i.test(name)) return '';
-    if (/water|sea|river|lake|海|水|川|湖/i.test(name)) return '';
+    // This original panorama shows a moon above the lake, not a water floor.
+    if (name !== '月湖' && /water|sea|river|lake|海|水|川|湖/i.test(name)) return '';
     if (!skyPicture(name)) return '';            // (a wall, a texture, a thing: no sky - maphints.js)
     return name;
   }
-  async setMap(map) {
-    const name = this.wanted(map);
-    if (name && name === this.name && this.group) return;
+  async setMap(map, { background = FOG, fogColor = background, fallbackSky = '' } = {}) {
+    const authored = this.wanted(map);
+    const name = authored || (G.settings?.sky !== false && FALLBACK_SKIES.has(fallbackSky) ? fallbackSky : '');
+    const isFallback = !!name && !authored;
+    this.fallback = { background, fogColor, fallbackSky };
+    if (name && name === this.name && this.group && this.isFallback === isFallback) {
+      this.scene.fog?.color.copy(this.horizon);
+      this.scene.background = this.horizon.clone();
+      return;
+    }
     this.clear();
+    this.fallback = { background, fogColor, fallbackSky };
+    this.scene.fog?.color.set(fogColor);
+    this.scene.background = new THREE.Color(background);
     if (!name) return;
     const token = ++this.token;
-    const img = await loadImage('Graphics/Parallaxes', name).catch(() => null);
+    const img = await this.imageLoader('Graphics/Parallaxes', name).catch(() => null);
     if (token !== this.token || !img) return;
-    this.build(name, img);
+    this.build(name, img, { fallback: isFallback });
   }
-  refresh() { const m = G.map?.map; this.clear(); if (m) this.setMap(m); }
-  build(name, img) {
-    const cv = trimBorders(img);
+  refresh() { const m = G.map?.map, fallback = this.fallback; this.clear(); if (m) return this.setMap(m, fallback); }
+  build(name, img, { fallback = false } = {}) {
+    const cv = trimBorders(fallbackClouds(name, img, fallback));
+    this.isFallback = fallback;
     const W = cv.width, H = cv.height;
     const cx = cv.getContext('2d', { willReadFrequently: true });
     const avg = (x0, y0, w, h) => {
@@ -112,7 +140,7 @@ export class Sky {
     tex.wrapS = seamH ? THREE.RepeatWrapping : THREE.MirroredRepeatWrapping;
     tex.repeat.set(n, 1);
     tex.anisotropy = 4;
-    if (skyAllOver(name)) { this.buildDome(name, cv, tex, seamH, seamV, avg, color); return; }
+    if (fallback || skyAllOver(name)) { this.buildDome(name, cv, tex, seamH, seamV, avg, color); return; }
     const bandH = 2 * Math.PI * R / n * H / W;
     const bandGeo = new THREE.CylinderGeometry(R, R, bandH, 160, 1, true);
     bandGeo.scale(-1, 1, 1);                   // seen from inside, the right way round
@@ -130,7 +158,8 @@ export class Sky {
     this.scene.add(this.group);
     this.offset = bandH * (0.5 - horizon);    // the horizon row at eye level
     this.name = name;
-    this.scene.fog.color.copy(hor);
+    this.horizon = hor.clone();
+    this.scene.fog?.color.copy(hor);
     this.scene.background = hor.clone();
     this.update();
   }
@@ -183,7 +212,8 @@ export class Sky {
     this.scene.add(this.group);
     this.offset = 0;
     this.name = name;
-    this.scene.fog.color.copy(all);
+    this.horizon = all.clone();
+    this.scene.fog?.color.copy(all);
     this.scene.background = all.clone();
     this.update();
   }
@@ -191,10 +221,17 @@ export class Sky {
     this.token++;
     if (this.group) {
       this.scene.remove(this.group);
-      this.group.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.map?.dispose(); o.material.dispose(); } });
+      const geometries = new Set(), textures = new Set(), materials = new Set();
+      this.group.traverse(o => { if (o.isMesh) { geometries.add(o.geometry); materials.add(o.material); if (o.material.map) textures.add(o.material.map); } });
+      for (const geometry of geometries) geometry.dispose();
+      for (const texture of textures) texture.dispose();
+      for (const material of materials) material.dispose();
       this.group = null;
     }
     this.name = '';
+    this.fallback = { background: FOG, fogColor: FOG, fallbackSky: '' };
+    this.horizon = null;
+    this.isFallback = false;
     this.scene.fog?.color.setHex(FOG);
     this.scene.background = new THREE.Color(FOG);
   }

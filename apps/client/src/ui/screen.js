@@ -4,6 +4,7 @@ import { G } from '../core/globals.js';
 import { $data } from '../data/data.js';
 import { T } from '../world/mapmesh.js';
 import { loadCanvas } from '../data/assets.js';
+import { WorldWeather } from '../world/weather.js';
 
 // brightness of flashes and animation sprites (setting 이펙트 밝기)
 const fxk = () => THREE.MathUtils.clamp(G.settings.fxBrightness ?? 0.5, 0.1, 1);
@@ -197,8 +198,13 @@ export class ScreenFx {
   showPicture(params) { G.pictures?.show(params); }
   movePicture(params) { G.pictures?.move(params); }
   erasePicture(n) { G.pictures?.erase(n); }
-  setWeather() {}
-  effectHook() {}
+  setWeather(type, power = 0, frames = 0) {
+    this.weather ||= new WorldWeather(G.three?.scene);
+    this.weather.set(type, power, frames);
+  }
+  get weatherDimness() { return this.weather?.dimness || 0; }
+  clearWeather() { this.weather?.dispose(); this.weather = null; }
+  effectHook(name, args) { G.environment?.effectHook(name, args); }
   // being hit: the edges of the view flush red (setting 피격 붉은 테두리)
   hurtFlash(strength = 1) {
     if (G.settings.hitFlash === false) return;
@@ -247,6 +253,7 @@ export class ScreenFx {
 
   // 60 Hz logic tick
   updateLogic() {
+    this.weather?.updateLogic();
     if (this.fadeDur > 0) {
       const d = this.fadeDur;
       this.brightness = (this.brightness * (d - 1) + this.fadeTarget) / d;
@@ -266,21 +273,32 @@ export class ScreenFx {
 
   // per rendered frame: push values into overlay materials
   apply() {
+    if (this.weather) {
+      this.weather.attach(G.three?.scene);
+      const head = G.player?.headWorld?.(new THREE.Vector3());
+      this.weather.update(head, G.floorAt);
+    }
     const fadeA = 1 - this.brightness / 255;
     this.fadeSphere.visible = fadeA > 0.003;
     this.fadeSphere.material.opacity = fadeA;
     const t = this.tone;
-    const mr = 1 + Math.min(0, t.r) / 255, mg = 1 + Math.min(0, t.g) / 255, mb = 1 + Math.min(0, t.b) / 255;
-    const gray = t.gray / 255;
-    const avg = (mr + mg + mb) / 3;
-    const fr = mr + (avg - mr) * gray, fg = mg + (avg - mg) * gray, fb = mb + (avg - mb) * gray;
-    this.toneMul.visible = fr < 0.995 || fg < 0.995 || fb < 0.995;
-    this.toneMul.material.color.setRGB(fr, fg, fb);
-    this.toneMul.material.opacity = 1;
-    const ar = Math.max(0, t.r) / 255, ag = Math.max(0, t.g) / 255, ab = Math.max(0, t.b) / 255;
-    this.toneAdd.visible = ar + ag + ab > 0.01;
-    this.toneAdd.material.color.setRGB(ar * 0.6, ag * 0.6, ab * 0.6);
-    this.toneAdd.material.opacity = 1;
+    if (G.worldTone) {
+      G.worldTone.apply(t);
+      this.toneMul.visible = false;
+      this.toneAdd.visible = false;
+    } else {
+      const mr = 1 + Math.min(0, t.r) / 255, mg = 1 + Math.min(0, t.g) / 255, mb = 1 + Math.min(0, t.b) / 255;
+      const gray = t.gray / 255;
+      const avg = (mr + mg + mb) / 3;
+      const fr = mr + (avg - mr) * gray, fg = mg + (avg - mg) * gray, fb = mb + (avg - mb) * gray;
+      this.toneMul.visible = fr < 0.995 || fg < 0.995 || fb < 0.995;
+      this.toneMul.material.color.setRGB(fr, fg, fb);
+      this.toneMul.material.opacity = 1;
+      const ar = Math.max(0, t.r) / 255, ag = Math.max(0, t.g) / 255, ab = Math.max(0, t.b) / 255;
+      this.toneAdd.visible = ar + ag + ab > 0.01;
+      this.toneAdd.material.color.setRGB(ar * 0.6, ag * 0.6, ab * 0.6);
+      this.toneAdd.material.opacity = 1;
+    }
     if (this.flash) {
       const k = this.flash.t / this.flash.dur * this.flash.a;
       this.flashSphere.visible = k > 0.003;
