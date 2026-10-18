@@ -36,8 +36,8 @@ change in this community version.
 - Corrections to terrain, floating scenery, area skies and environmental colours.
 - Earned Steam achievement support when playing a compatible Steam copy.
 
-See the [sample screenshots](docs/screenshots/README.md) for the launcher,
-PC interface and environmental colour comparison.
+See the [actual upstream-versus-community screenshots](docs/screenshots/README.md)
+and [runtime source diff](docs/screenshots/upstream-runtime.diff).
 
 ## Play on your PC
 

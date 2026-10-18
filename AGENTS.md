@@ -1473,9 +1473,39 @@ The user requested the original fan-mod notice, free-distribution/streaming term
 and original gameplay video on the main README, followed by an upstream PR with
 sample screenshots. Keep original-author credit and the actual LICENSE intact;
 the original video must not be presented as footage of every fork improvement.
-Only the five selected, labelled application renders in docs/screenshots were
-authorized for public documentation. They are excluded by the release allowlist.
+The selected, labelled application renders in docs/screenshots are authorized
+for public documentation. They are excluded by the release allowlist.
 Do not publish private audit reports, review controls, original asset files,
 game data or saves. Screenshot character values are test scene state, not proof
 of normal progression. Keep detailed developer change inventories in PRs or this
 file; the main README remains player-focused.
+
+### Correct upstream comparison
+
+The user challenged the red/green pair and explicitly requested real upstream
+versus fork images, a real source diff, and a PR edit. That pair rendered the
+fork twice while toggling raw/adapted map tone. Upstream d39c2af actually resets
+screen tone to zero on map entry; do not present the fork's raw-tone render as
+an upstream baseline. The misleading pair and older standalone HUD/menu samples
+were replaced by six actual paired captures; one labelled old launcher sample
+remains. No runtime changes accompany this correction.
+
+The private runner serves all60 hash-verified original ZIP app files unmodified
+and the actual production fork bundle in separate localhost origins, sharing
+the same isolated game-data backend. It adds identical private HTML capture
+controls only: pause actor logic, teleport to matching tiles, set yaw0/pitch.12,
+open/close the normal menu, capture. Rendering/material/light/tone APIs are not
+overridden. Both screenshots are1280x720 and have equal local camera positions
+and rotations; terrain determines the rig's world height independently.
+Pairs cover Map161 tile26,50 and Map101 tile22,23 (HUD/main menu).
+All upstream files remained byte-identical after capture.
+
+The public runtime diff compares literal upstream ZIP JS entries against fork
+786bdba, with moved filenames matched and line endings normalized. It includes
+actual import-path changes and35 new modules. The separate summary ignores
+relative JS import moves:48 original modules retained,20 unchanged,28 modified,
+0 missing, +2443/-620 lines in modified originals. Preserve attribution for
+the inherited20 unchanged runtime modules. Diff review artifacts contain mod
+source only; original game data, raw audit inputs and capture controls stay
+private. Fork runtime bundle SHA256 for these captures:
+b890a0e41b35a72792c872c4d1cc0a465fa038ab21e1628cdcd83526b2e21941.
