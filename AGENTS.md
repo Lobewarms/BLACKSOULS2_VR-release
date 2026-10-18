@@ -258,3 +258,29 @@ checksums for the bootstrap. Original pre-bootstrap releases remain verifiable.
 Tests cover real Windows process argument round trips, Unicode, wrong game titles,
 extracted/packed candidates, multiple copies, nested roots, Steam libraries, limits,
 cancellation and preserving settings. No original game is used or executed by tests.
+
+## Runtime bug fixes (0.2.3)
+
+- Input: blur previously cleared keyboard state only. Mouse buttons, prior button
+  edges, accumulated look movement and wheel could remain latched without mouseup.
+  Blur now clears desktop input; pointer unlock releases the mouse while retaining
+  Escape so the same press can still cancel a menu. Tests reproduce both sequences.
+- Assets: failed image/canvas promises were cached forever. Successful and pending
+  requests are still shared, but null/rejected results evict their exact cache entry
+  so later requests can retry. Tests fail once then succeed, including canvas loads.
+- Marshal: plain strings were UTF-8 decoded before their following encoding ivars.
+  Shift-JIS bytes C2 A9 were therefore irreversibly turned into copyright-sign text.
+  Wrapped strings now retain bytes until encoding is known; object links get the
+  final decoded value. Tests preserve UTF-8 and binary behavior too.
+- Saves: HTTP/listing failures could become an empty list, bypassing overwrite
+  confirmation. Manual saving now requires a successfully parsed slot inventory.
+  Save transport validates response status, slot entries and core saved-state shape;
+  legacy missing metadata becomes an empty metadata object without losing the slot.
+  Failed loads toast and return null; callers retain menus and never enter that
+  state. Manual writes toast on network failure as well as HTTP failure. New player
+  messages are translated in all four supported UI languages.
+
+The runtime tests use synthetic data and simulated browser events/network replies.
+The save compatibility test round-trips the actual GameState serializer/parser.
+Input, image-cache and text-encoding tests were run against the unmodified code and
+failed before their fixes. No original game or headset playtest was available.

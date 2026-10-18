@@ -42,3 +42,17 @@ test('decodes byte strings without requiring game assets', () => {
   assert.equal(bytesToString('hello'), 'hello');
   assert.equal(bytesToString(null), '');
 });
+
+const rubyText = (data, encoding) => [73, 34, data.length + 5, ...data, 6,
+  58, 13, ...Buffer.from('encoding'), 34, encoding.length + 5, ...Buffer.from(encoding)];
+
+test('honors Shift-JIS encoding even when its bytes are also valid UTF-8', () => {
+  const wrapped = rubyText([0xc2, 0xa9], 'Windows-31J');
+  const value = marshal(91, 7, ...wrapped, 64, 6);
+  assert.deepEqual(value, ['ﾂｩ', 'ﾂｩ'], 'object links must refer to the decoded string');
+});
+
+test('encoding-wrapped UTF-8 text and binary data keep their original types', () => {
+  assert.equal(marshal(...rubyText([0xc2, 0xa9], 'UTF-8')), '©');
+  assert.deepEqual(marshal(...rubyText([0xff], 'UTF-8')), Uint8Array.from([0xff]));
+});

@@ -10,6 +10,18 @@ const missing = new Set();
 const IMAGE_EXT = ['.png', '.jpg', '.jpeg', '.bmp', '.gif'];
 const AUDIO_EXT = ['.ogg', '.m4a', '.mp3', '.wav'];
 
+// Share pending/successful loads, but allow the next request to retry a failure.
+function cachedAsset(cache, key, load) {
+  if (cache.has(key)) return cache.get(key);
+  const forget = () => { if (cache.get(key) === pending) cache.delete(key); };
+  const pending = Promise.resolve().then(load).then(value => {
+    if (value == null) forget();
+    return value;
+  }, error => { forget(); throw error; });
+  cache.set(key, pending);
+  return pending;
+}
+
 export async function initAssets() {
   const res = await fetch('/api/manifest');
   const { files, rtp = [] } = await res.json();
@@ -72,22 +84,18 @@ export function loadImage(folder, name) {
     if (name && !missing.has(k)) { missing.add(k); console.warn('missing image', k); }
     return Promise.resolve(null);
   }
-  if (imageCache.has(path)) return imageCache.get(path);
-  const p = new Promise(resolveP => {
+  return cachedAsset(imageCache, path, () => new Promise(resolveP => {
     const img = new Image();
     img.onload = () => resolveP(img);
     img.onerror = () => { console.warn('failed image', path); resolveP(null); };
     img.src = gameUrl(path);
-  });
-  imageCache.set(path, p);
-  return p;
+  }));
 }
 
 // Canvas copy of an image, optionally hue-rotated (RPG Maker battler hue).
 export async function loadCanvas(folder, name, hue = 0) {
   const key = `${folder}/${name}#${hue}`;
-  if (canvasCache.has(key)) return canvasCache.get(key);
-  const p = loadImage(folder, name).then(img => {
+  return cachedAsset(canvasCache, key, () => loadImage(folder, name).then(img => {
     if (!img) return null;
     const c = document.createElement('canvas');
     c.width = img.width; c.height = img.height;
@@ -95,9 +103,7 @@ export async function loadCanvas(folder, name, hue = 0) {
     ctx.drawImage(img, 0, 0);
     if (hue % 360) rotateHue(c, hue);
     return c;
-  });
-  canvasCache.set(key, p);
-  return p;
+  }));
 }
 
 function rotateHue(canvas, offset) {

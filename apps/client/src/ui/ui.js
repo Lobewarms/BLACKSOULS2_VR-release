@@ -1226,7 +1226,7 @@ export class UI {
     this.list.open(kind === 'world' ? tr('서버 세이브 불러오기') : tr('세이브 불러오기'), items, {
       onSelect: async (i, it) => {
         const st = it.rm ? G.stateOfRm(it.rm.contents, it.rm.label) : await G.loadSave(it.slot, it.kind);
-        if (c.role !== 'world' || c.wphase !== 'choosing') return;
+        if (!st || c.role !== 'world' || c.wphase !== 'choosing') return;
         this.closeMenu();
         c.worldLoad(st);
       },

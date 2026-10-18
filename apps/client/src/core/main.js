@@ -8,6 +8,7 @@ import { $data, loadDatabase, mapName } from '../data/data.js';
 import { MarshalReader } from '../data/marshal.js';
 import { billboardUniforms, T } from '../world/mapmesh.js';
 import { GameState } from '../game/state.js';
+import { readSaveSlots, readSaveState, writeSaveFile } from '../game/savefiles.js';
 import { GameMap } from '../world/gamemap.js';
 import { Player } from '../entities/player.js';
 import { Input } from './input.js';
@@ -381,10 +382,13 @@ async function saveVr(slot = 1, silent = false, kind = 'vr') {
     state,
   };
   try {
-    const r = await fetch(`/api/${kind === 'world' ? 'worldsave' : 'vrsave'}/${slot}`, { method: 'POST', body: JSON.stringify(data) });
-    if (!silent) G.ui.toast(r.ok ? (kind === 'world' ? tr('개발자 서버 세이브 {n}번에 저장했습니다', { n: slot }) : tr('VR 세이브 {n}번에 저장했습니다', { n: slot })) : tr('저장 실패'));
-    return r.ok;
-  } catch { return false; }
+    await writeSaveFile(slot, data, kind);
+    if (!silent) G.ui.toast(kind === 'world' ? tr('개발자 서버 세이브 {n}번에 저장했습니다', { n: slot }) : tr('VR 세이브 {n}번에 저장했습니다', { n: slot }));
+    return true;
+  } catch {
+    if (!silent) G.ui.toast(tr('저장 실패'));
+    return false;
+  }
 }
 G.saveVr = () => saveVr(1);
 G.saveWorld = (slot = 0, silent = true) => saveVr(slot, silent, 'world');
@@ -402,7 +406,14 @@ async function showVrSaveMenu() {
   // (the developer's world: its own saves - in the opening alone, none yet)
   const kind = G.coop.role === 'world' ? 'world' : 'vr';
   if (G.state?.system.saveDisabled || G.coop.phantom || (kind === 'world' && !G.coop.world)) { G.ui.toast(tr('지금은 저장할 수 없습니다')); G.ui.reopenMain('save'); return; }
-  const have = new Map((await listVrSaves(kind)).map(s => [s.slot, s.meta || {}]));
+  let saves;
+  try { saves = await listVrSaves(kind, true); }
+  catch {
+    G.ui.toast(tr('저장 목록을 읽지 못했습니다. 다시 시도해 주세요'));
+    G.ui.reopenMain('save');
+    return;
+  }
+  const have = new Map(saves.map(s => [s.slot, s.meta]));
   const items = [];
   for (let n = 1; n <= SAVE_SLOTS; n++) {
     const m = have.get(n);
@@ -437,12 +448,17 @@ G.onBonfire = () => {
   G.combat.restAtBonfire();      // every enemy comes back (resting resets them, as in a Souls game)
   setTimeout(() => autosave().then(ok => ok && G.ui.toast(tr('화톳불: 자동 저장됨'))), 1500);
 };
-async function listVrSaves(kind = 'vr') {
-  try { return (await (await fetch(kind === 'world' ? '/api/worldsaves' : '/api/vrsaves')).json()).slots; } catch { return []; }
+async function listVrSaves(kind = 'vr', strict = false) {
+  try { return await readSaveSlots(kind); }
+  catch (error) { if (strict) throw error; return []; }
 }
 async function loadVrSave(slot, kind = 'vr') {
-  const data = await (await fetch(`/api/${kind === 'world' ? 'worldsave' : 'vrsave'}/${slot}`)).json();
-  return GameState.fromJSON(data.state);
+  try { return GameState.fromJSON(await readSaveState(slot, kind)); }
+  catch (error) {
+    console.warn('Save load failed', error);
+    G.ui.toast(tr('세이브를 불러오지 못했습니다. 다시 시도해 주세요'));
+    return null;
+  }
 }
 // (the developer's world - ui.js showWorldStart: a save of this game's own, or one of its developer-server saves)
 G.listSaves = kind => listVrSaves(kind);
@@ -470,6 +486,7 @@ async function readRmSave(file) {
 // ------------------------------------------------------------------ game start / title
 let mode = 'loading'; // loading | title | game | gameover
 async function startGame(state, overridePos) {
+  if (!state) return;
   G.coop.end('another game', { stay: true });       // (a save loaded or a new game: a co-op visit ends there)
   enterWorld(state, overridePos);
 }
@@ -613,7 +630,10 @@ async function showVrLoadMenu(back, kind = 'vr') {
   const slots = (await listVrSaves(kind)).sort((a, b) => a.slot - b.slot);
   G.ui.menuOpen = G.ui.menuOpen || mode === 'game';
   G.ui.list.open(kind === 'world' ? tr('개발자 서버 세이브 불러오기') : tr('VR 세이브 불러오기'), slots.map(s => ({ text: `${s.slot === 0 ? tr('오토') : tr('슬롯 {n}', { n: s.slot })}  ${s.meta.map || ''}`, right: metaDate(s.meta), desc: slotDesc(s.meta), slot: s.slot })), {
-    onSelect: async (i, it) => { G.ui.closeMenu(); startGame(await loadVrSave(it.slot, kind)); },
+    onSelect: async (i, it) => {
+      const state = await loadVrSave(it.slot, kind);
+      if (state) { G.ui.closeMenu(); startGame(state); }
+    },
     onCancel: back,
   });
 }

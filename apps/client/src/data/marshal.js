@@ -75,7 +75,7 @@ export class MarshalReader {
     return this.read();
   }
 
-  read() {
+  read(preserveStringBytes = false) {
     const t = String.fromCharCode(this.byte());
     switch (t) {
       case '0': return null;
@@ -91,7 +91,8 @@ export class MarshalReader {
         // (An enclosing 'I' wrapper re-decodes / replaces this entry.)
         const b = this.rawBytes().slice();
         let v;
-        try { v = strictUtf8.decode(b); } catch { v = b; }
+        if (preserveStringBytes) v = b;
+        else { try { v = strictUtf8.decode(b); } catch { v = b; } }
         this.register(v);
         return v;
       }
@@ -199,7 +200,9 @@ export class MarshalReader {
 
   readIvarWrapped() {
     const startIndex = this.objects.length;
-    const v = this.read();
+    // The encoding follows the string. Decoding as UTF-8 now can irreversibly
+    // change valid Shift-JIS bytes which happen to form valid UTF-8 as well.
+    const v = this.read(true);
     const n = this.int();
     let encoding = null;
     const extra = {};
@@ -210,9 +213,10 @@ export class MarshalReader {
       else if (k === 'encoding') encoding = val instanceof Uint8Array ? latin1.decode(val) : String(val);
       else extra[k] = val;
     }
-    if (v instanceof Uint8Array && encoding) {
+    if (v instanceof Uint8Array) {
       let s;
-      try { s = new TextDecoder(encoding.toLowerCase() === 'ascii' ? 'utf-8' : encoding, { fatal: true }).decode(v); }
+      const name = !encoding || encoding.toLowerCase() === 'ascii' ? 'utf-8' : encoding;
+      try { s = new TextDecoder(name, { fatal: true }).decode(v); }
       catch { return v; } // not valid text (e.g. zlib data tagged as UTF-8) -> keep raw bytes
       // replace the registered byte buffer so later '@' links resolve to the string
       const idx = this.objects.indexOf(v, startIndex);

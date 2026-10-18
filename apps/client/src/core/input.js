@@ -31,7 +31,10 @@ export class Input {
       if (['Tab', 'Space', 'ArrowUp', 'ArrowDown'].includes(e.code)) e.preventDefault();
     });
     addEventListener('keyup', e => this.keys.delete(e.code));
-    addEventListener('blur', () => this.keys.clear());
+    addEventListener('blur', () => {
+      this.keys.clear(); this.keysPrev.clear();
+      this.releaseMouse();
+    });
     dom.addEventListener('mousedown', e => {
       this.mouse.buttons |= 1 << e.button;
       if (!this.pointerLocked && !G.vr) this.lockPointer();
@@ -42,9 +45,16 @@ export class Input {
     addEventListener('wheel', e => { this.mouse.wheel += Math.sign(e.deltaY); }, { passive: true });
     document.addEventListener('pointerlockchange', () => {
       this.pointerLocked = document.pointerLockElement === dom;
+      if (!this.pointerLocked) this.releaseMouse();
       this.lockFresh = this.pointerLocked ? 2 : 0;
       this.lastMoves = []; this.dropNext = true;
     });
+  }
+
+  releaseMouse() {
+    this.mouse.buttons = 0; this.mouse.prevButtons = 0;
+    this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0;
+    this.lockFresh = 0; this.lastMoves = []; this.dropNext = true;
   }
   // PC mouse look: raw movement where the browser gives it (unadjustedMovement - the mouse's own counts, no Windows
   // pointer acceleration). Chrome on Windows otherwise works the movement out from its hidden cursor, which it keeps
