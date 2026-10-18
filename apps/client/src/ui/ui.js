@@ -881,6 +881,8 @@ export class UI {
     this.raycaster = new THREE.Raycaster();
     this.pointerLine = null;
     this.msg = null;
+    this.dialogue = null;
+    this.heldMessage = null;
     this.menuOpen = false;
     this.sceneOpen = null;
     this.prompt = null;                     // (co-op) join the boss fight? - askBossJoin
@@ -901,7 +903,7 @@ export class UI {
   placeRoot(force = false) {
     if (!G.vr) {
       const viewport = desktopViewport(G.input, G.three?.renderer);
-      const message = this.msg || (this.remote?.shown ? this.remote : null);
+      const message = this.msg || this.heldMessage?.message || (this.remote?.shown ? this.remote : null);
       const vertical = message ? ['top', 'center', 'bottom'][message.position ?? 2] : 'center';
       placeDesktopRoot(this.root, this.camera, viewport, { vertical });
       const hudWidth = Math.max(1, Math.min(320, viewport.width - 40, (viewport.height - 40) * 512 / this.hudPaintHeight));
@@ -958,12 +960,45 @@ export class UI {
 
   // ---------------------------------------------------------------- messages
   messageBusy() { return !!this.msg || !!this.banner?.blocking || !!G.arena?.busy; }
+  // Presentation can span several messages and scripted waits. Keep this
+  // separate from messageBusy: the interpreter must advance after each answer.
+  dialogueContinuing() {
+    const d = this.dialogue;
+    if (!d || d.map !== G.map || d.mapId !== G.map?.mapId || G.map?.transferring || G.combat?.playerDead
+      || d.owner.executionId !== d.executionId || !d.owner.running()) return false;
+    for (let it = d.owner; it; it = it.child) if (it.waitMode === 'battle') return false;
+    return true;
+  }
+  dialogueActive() { return !!this.msg || this.dialogueContinuing(); }
+  hideHeldMessage() {
+    if (!this.heldMessage) return;
+    this.heldMessage = null;
+    if (!this.msg && !this.remote?.shown) {
+      this.msgPanel.mesh.visible = false;
+      this.namePanel.mesh.visible = false;
+    }
+  }
+  clearDialoguePresentation() {
+    this.dialogue = null;
+    this.hideHeldMessage();
+    if (!this.msg && !this.sceneBusy() && !this.remote?.shown && !this.prompt?.shown) this.backdrop.visible = false;
+  }
+  updateDialoguePresentation() {
+    if (this.dialogue && !this.dialogueContinuing()) this.clearDialoguePresentation();
+    const held = this.heldMessage;
+    // Retain the acknowledged page only until logic processes the answer. The
+    // next page replaces it before rendering; deliberate waits can hide it.
+    if (held && (held.source.executionId !== held.executionId || !held.source.running() || held.source.waitMode !== 'message')) this.hideHeldMessage();
+  }
   sceneBusy() { return !!this.sceneOpen || this.menuOpen; }
   pointerBusy() {
-    return this.sceneBusy() || this.messageBusy() || this.list.visible || this.grid.visible || this.keyboard.visible || this.choice.visible;
+    return this.sceneBusy() || this.messageBusy() || this.dialogueActive() || this.list.visible || this.grid.visible || this.keyboard.visible || this.choice.visible;
   }
 
-  showMessage(msg) {
+  showMessage(msg, source = null) {
+    this.heldMessage = null;
+    const owner = source?.root || source;
+    this.dialogue = owner ? { owner, source, executionId: owner.executionId, map: G.map, mapId: G.map?.mapId } : null;
     const banner = bannerOf(msg);
     if (banner) { this.showBanner(banner.text, banner.color, true); return; }
     this.msg = msg;
@@ -1058,9 +1093,15 @@ export class UI {
     if (!this.msgPanel.mesh.visible) this.choice.panel.mesh.position.set(0, -0.05, 0);
   }
   closeMessage() {
+    const message = this.msg, d = this.dialogue;
     this.msg = null;
-    this.msgPanel.mesh.visible = false;
-    this.namePanel.mesh.visible = false;
+    if (message && this.dialogueContinuing()) {
+      this.heldMessage = { message, source: d.source, executionId: d.source.executionId };
+    } else {
+      this.clearDialoguePresentation();
+      this.msgPanel.mesh.visible = false;
+      this.namePanel.mesh.visible = false;
+    }
     this.choice.close();
     this.consumedConfirm = true;
     this.actionLockUntil = G.time + 0.25;
@@ -1085,7 +1126,7 @@ export class UI {
   updateBossPrompt(dt) {
     const p = this.prompt;
     if (!p) return;
-    if (this.msg || this.menuOpen || this.sceneOpen) { if (p.shown) { p.shown = false; if (this.msg?.state !== 'choice') this.choice.close(); } return; }
+    if (this.dialogueActive() || this.menuOpen || this.sceneOpen) { if (p.shown) { p.shown = false; if (this.msg?.state !== 'choice') this.choice.close(); } return; }
     if ((p.left -= dt) <= 0) { this.closeBossPrompt(); p.answer(false); return; }
     if (!p.shown) {
       p.shown = true;
@@ -1118,7 +1159,7 @@ export class UI {
   updateRemote() {
     const r = this.remote;
     if (!r) return;
-    if (this.msg || this.menuOpen || this.sceneOpen || this.prompt?.shown) {
+    if (this.dialogueActive() || this.menuOpen || this.sceneOpen || this.prompt?.shown) {
       if (r.shown) {
         if (!this.msg) { this.msgPanel.mesh.visible = false; this.namePanel.mesh.visible = false; }
         if (r.choiceUp && this.msg?.state !== 'choice' && !this.prompt?.shown) this.choice.close();
@@ -1792,7 +1833,7 @@ export class UI {
   drawHud() {
     const leader = G.state?.party.leader();
     this.hudPresent = !!leader;
-    this.hud.mesh.visible = !!leader && (G.vr || !this.sceneBusy() && !this.messageBusy() && !this.remote?.shown && !this.prompt?.shown && !G.combat?.playerDead);
+    this.hud.mesh.visible = !!leader && (G.vr || !this.sceneBusy() && !this.messageBusy() && !this.dialogueActive() && !this.remote?.shown && !this.prompt?.shown && !G.combat?.playerDead);
     if (!leader) return;
     if (!G.vr) { this.drawDesktopHud(leader); return; }
     this.statusPanel.mesh.visible = false;
@@ -2807,9 +2848,10 @@ export class UI {
   update(dt) {
     this.consumedConfirm = false;
     this.pointerTarget = false;
-    if (this.sceneBusy() || this.msg || this.keyboard.visible || this.prompt?.shown) this.unlockPointer();
+    this.updateDialoguePresentation();
+    if (this.sceneBusy() || this.dialogueActive() || this.keyboard.visible || this.prompt?.shown) this.unlockPointer();
     if (this.actionLockUntil && G.time < this.actionLockUntil) this.consumedConfirm = true;
-    const anyPanel = this.msg || this.menuOpen || this.sceneOpen || this.banner || this.toasts.length || this.remote?.shown || this.prompt?.shown;
+    const anyPanel = this.dialogueActive() || this.menuOpen || this.sceneOpen || this.banner || this.toasts.length || this.remote?.shown || this.prompt?.shown;
     if (anyPanel) this.placeRoot();
     if (this.banner) {
       this.banner.t += dt;
@@ -2842,7 +2884,7 @@ export class UI {
       if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
     }
     this.drawHud();
-    this.backdrop.visible = !G.vr && !!(this.sceneBusy() || this.msg || this.remote?.shown || this.prompt?.shown);
+    this.backdrop.visible = !G.vr && !!(this.sceneBusy() || this.dialogueActive() || this.remote?.shown || this.prompt?.shown);
     if (this.backdrop.visible) {
       const height = 1.1 * Math.tan(THREE.MathUtils.degToRad(this.camera.getEffectiveFOV()) / 2);
       this.backdrop.scale.set(height * this.camera.aspect, height, 1); this.backdrop.position.set(0, 0, -1.1);
@@ -2851,10 +2893,10 @@ export class UI {
     this.menuOverview.mesh.visible = !!this.menuOpen && this.menuSection === 'main' && this.list.visible && this.list.classic;
     if (this.menuOverview.mesh.visible) this.paintMainOverview();
     this.updateHudFollow();
-    this.navigation.update(dt, this.hudPresent && !G.combat?.playerDead && !this.msg && !this.banner?.blocking,
+    this.navigation.update(dt, this.hudPresent && !G.combat?.playerDead && !this.dialogueActive() && !this.banner?.blocking,
       !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
     if (!G.vr) this.placeRoot();
-    const rewardPaused = this.sceneBusy() || this.messageBusy() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
+    const rewardPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
     if (!this.hudPresent && this.rewardsHadPlayer) this.rewards.clear();
     this.rewardsHadPlayer = this.hudPresent;
     this.rewards.update(dt, { paused: rewardPaused, visible: this.hudPresent && !this.banner,

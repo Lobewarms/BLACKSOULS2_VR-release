@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.17
+BLACK SOULS II VR - community version 0.2.18
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,14 +7,14 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Weapon stun now applies the original Stun status instead of being converted
-  into extra stagger buildup. This fixes Great Sword and other stun weapons.
-- Successful stuns interrupt enemy attacks and prevent actions until they expire.
-- Enemy effect labels show Stun using the original game's icon.
-- Stun chances still respect enemy resistance, immunity and luck. Great Sword's
-  base chance is 80%; a landed hit is not a guaranteed stun.
+- Conversations stay visually stable between dialogue pages and choices.
+- The desktop HUD, minimap and held weapons no longer flash back into view
+  between messages from the same event.
+- The background dimming and mouse control stay consistent through dialogue.
+- Normal gameplay presentation returns when the conversation ends or a battle
+  starts. Scripted pauses and dialogue choices keep their original behavior.
 
-Normal stagger and Break mechanics remain available alongside weapon stun.
+The weapon stun and gameplay-effect fixes from previous updates are included.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

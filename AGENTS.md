@@ -1002,3 +1002,30 @@ verification used the installed Great Sword, Attack, Mow Down and Stun database
 records against synthetic battlers with no player-save access. Both attacks
 applied the real state, restricted actions, and expired after two seconds. Keep
 original data outside Git/releases; these checks are not a live headset playtest.
+
+## Dialogue transition presentation (0.2.18)
+
+The user reported flickering between normal HUD and dialogue. Map logic runs
+before UI input in a rendered frame. closeMessage cleared msg during UI.update,
+so HUD/minimap/backdrop/cursor could switch to gameplay before the next logic
+tick opened the following page. At high refresh rates several render frames can
+occur without an intervening logic tick. Desktop equipment has a separate earlier
+update and must follow the same presentation lifetime.
+
+Pass the source interpreter separately to showMessage. Track its root execution,
+map identity and map ID for presentation only; messageBusy must become false
+after an answer so that original event logic can proceed. Keep presentation
+stable through consecutive messages, choices, common-event children and scripted
+waits. Retain the acknowledged panel only until its source leaves the message
+wait, allowing the next page to replace it before rendering. Hide old text during
+explicit waits while preserving HUD suppression and backdrop. Release on root
+completion, reused interpreter setup, map/transfer changes, battle waits or death;
+explicitly clear held presentation on title/game-over transitions. Source-less
+UI prompts retain their existing immediate-close behavior. VR retains its wrist
+HUD and physical equipment presentation.
+
+Regression checks must reproduce map-logic-before-UI-input ordering, including
+frames with no logic tick. Assert real panel/HUD/minimap/backdrop/equipment and
+pointer state, original wait/choice effects, no opening-frame input reuse, and
+normal gameplay restoration. Use synthetic data and do not claim a physical
+headset or original-save playtest from these checks.

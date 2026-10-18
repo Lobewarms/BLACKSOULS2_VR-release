@@ -42,6 +42,7 @@ export class Interpreter {
   }
   setup(list, eventId = 0) {
     this.clear();
+    this.executionId = (this.executionId || 0) + 1;
     this.mapId = G.map.mapId;
     this.eventId = eventId;
     this.list = list;
@@ -154,7 +155,7 @@ export class Interpreter {
       case 103: this.index++; this.setupNumberInput(msg, this.list[this.index].parameters); break;
       default: break;
     }
-    G.ui.showMessage(msg);
+    G.ui.showMessage(msg, this);
     G.coop?.onSay?.(this, msg);            // (co-op: the guests in this world read it too - coop.js)
     this.index++;
     this.waitMode = 'message';
@@ -166,7 +167,7 @@ export class Interpreter {
     if (this.killMode && this.killChoice()) return true;
     const msg = { face: '', faceIndex: 0, background: 0, position: 2, lines: [], choices: null, at: this.index };
     this.setupChoices(msg);
-    G.ui.showMessage(msg);
+    G.ui.showMessage(msg, this);
     G.coop?.onSay?.(this, msg);
     this.index++;
     this.waitMode = 'message';
@@ -235,7 +236,7 @@ export class Interpreter {
     if (G.ui.messageBusy()) return false;
     const msg = { face: '', lines: [], position: 2 };
     this.setupNumberInput(msg, this.params);
-    G.ui.showMessage(msg);
+    G.ui.showMessage(msg, this);
     this.waitMode = 'message';
     this.index++;
     return false;
@@ -253,7 +254,7 @@ export class Interpreter {
     const lines = [], at = this.index;
     while (this.nextCode() === 405) { this.index++; lines.push(this.list[this.index].parameters[0]); }
     const msg = { face: '', lines, position: 1, scroll: true, at };
-    G.ui.showMessage(msg);
+    G.ui.showMessage(msg, this);
     G.coop?.onSay?.(this, msg);
     this.index++;
     this.waitMode = 'message';

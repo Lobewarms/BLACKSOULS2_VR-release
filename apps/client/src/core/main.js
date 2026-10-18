@@ -549,6 +549,7 @@ function enterWorld(state, overridePos) {
 G.enterWorld = enterWorld;
 // (what was going on in the game left goes with it: an event's run, the common events waiting - else a new game took them on)
 G.returnToTitle = () => {
+  G.ui.clearDialoguePresentation();
   G.coop.end('title', { stay: true }); G.combat.reset(); G.pictures?.clear(); clearMapView(); G.sky.clear(); G.audio.stopBgm(); G.audio.stopBgs();
   if (G.map) { G.map.interpreter.clear(); G.map.reservedCommon = []; }
   if (gameOverPanel) gameOverPanel.visible = false;
@@ -581,6 +582,7 @@ async function gameOverArt() {
 }
 G.gameOver = async () => {
   if (mode !== 'game') return;
+  G.ui.clearDialoguePresentation();
   mode = 'gameover';
   G.ui.navigation.hide();
   gameOverReady = false;

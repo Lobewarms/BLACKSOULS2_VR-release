@@ -43,7 +43,7 @@ export function desktopModel(model, { roll = 0, shield = false } = {}) {
 }
 
 export function desktopEquipmentHidden(ui, transferring = false) {
-  return !!(transferring || ui?.menuOpen || ui?.sceneOpen || ui?.msg || ui?.banner);
+  return !!(transferring || ui?.menuOpen || ui?.sceneOpen || ui?.msg || ui?.dialogueActive?.() || ui?.banner);
 }
 
 export function desktopRest(holder, hand = 'right', ranged = false, camera = null) {
