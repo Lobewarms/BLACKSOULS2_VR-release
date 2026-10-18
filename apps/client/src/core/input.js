@@ -15,6 +15,14 @@ export class Input {
     this.mousePresses = 0;                         // clicks completed between rendered frames still count once
     this.pointer = { x: 0, y: 0, seen: false };
     this.pointerLocked = false;
+    this.desktopLookWanted = false;
+    this.pointerUiPaused = false;
+    this.softLook = false;
+    this.lockPending = false;
+    this.scriptUnlockPending = false;
+    this.pageFocused = document.hasFocus?.() ?? true;
+    this.normalCursor = dom.style?.cursor || '';
+    if (dom.tabIndex < 0) dom.tabIndex = 0;
     this.lockFresh = 0;                              // movements right after the lock still to be checked
     this.lastMoves = [];                             // sizes of the last few movements taken
     this.dropNext = true;                            // (never two drops in a row: a fast flick is many big movements)
@@ -30,19 +38,25 @@ export class Input {
     addEventListener('keydown', e => {
       if (e.repeat || e.target instanceof HTMLInputElement) return;     // (typing a name: ui.js keyboard)
       this.keys.add(e.code);
+      if (e.code === 'Escape' && !this.pointerBusy() && !this.pointerLocked) this.stopDesktopLook();
+      else if (['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code) &&
+        this.desktopLookWanted && !this.pointerUiPaused && !this.pointerLocked && !this.pointerBusy()) this.lockPointer();
       if (['Tab', 'Space', 'ArrowUp', 'ArrowDown'].includes(e.code) || e.code === 'F1' && G.ui?.menuOpen) e.preventDefault();
     });
     addEventListener('keyup', e => this.keys.delete(e.code));
     addEventListener('blur', () => {
+      this.pageFocused = false;
+      this.stopDesktopLook();
       this.keys.clear(); this.keysPrev.clear();
       this.releaseMouse();
     });
+    addEventListener('focus', () => { this.pageFocused = true; });
     dom.addEventListener('mousedown', e => {
       this.trackPointer(e);
       const button = 1 << e.button;
       if (!(this.mouse.buttons & button)) this.mousePresses |= button;
       this.mouse.buttons |= button;
-      const busy = G.ui?.pointerBusy?.() ?? (G.ui?.sceneBusy?.() || G.ui?.messageBusy?.());
+      const busy = this.pointerBusy();
       if (!this.pointerLocked && !G.vr && !busy) this.lockPointer();
     });
     addEventListener('mouseup', e => { this.mouse.buttons &= ~(1 << e.button); });
@@ -50,11 +64,64 @@ export class Input {
     addEventListener('mousemove', e => this.onMouseMove(e));
     addEventListener('wheel', e => { this.mouse.wheel += Math.sign(e.deltaY); }, { passive: true });
     document.addEventListener('pointerlockchange', () => {
+      const hadLock = this.pointerLocked;
       this.pointerLocked = document.pointerLockElement === dom;
-      if (!this.pointerLocked) this.releaseMouse();
-      this.lockFresh = this.pointerLocked ? 2 : 0;
+      this.lockPending = false;
+      if (!this.pointerLocked) {
+        this.releaseMouse();
+        const scripted = this.scriptUnlockPending;
+        this.scriptUnlockPending = false;
+        if (!scripted && hadLock && this.pointerBusy() && this.pageFocused && document.hasFocus?.() !== false) {
+          this.desktopLookWanted = true; this.pointerUiPaused = true; this.softLook = false;
+        } else if (!scripted && hadLock) this.stopDesktopLook();
+        else if (scripted && this.desktopLookWanted && !this.pointerUiPaused && this.pageFocused && !this.pointerBusy()) this.lockPointer();
+      } else {
+        this.scriptUnlockPending = false;
+        this.desktopLookWanted = true; this.softLook = false;
+        if (this.pointerBusy()) this.suspendPointerForUi();
+      }
+      this.lockFresh = this.pointerLocked || this.softLook ? 2 : 0;
       this.lastMoves = []; this.dropNext = true;
+      this.updateCursor();
     });
+    document.addEventListener('pointerlockerror', () => { this.lockPending = false; this.enableSoftLook(); });
+    dom.addEventListener('mouseleave', () => { if (!this.pointerLocked) { this.mouse.dx = this.mouse.dy = 0; this.lockFresh = 2; } });
+  }
+
+  pointerBusy() { return !!(G.ui?.pointerBusy?.() ?? (G.ui?.sceneBusy?.() || G.ui?.messageBusy?.())); }
+  updateCursor() { if (this.dom?.style) this.dom.style.cursor = this.softLook && !this.pointerUiPaused ? 'none' : this.normalCursor || ''; }
+  stopDesktopLook() {
+    this.lockEpoch = (this.lockEpoch || 0) + 1;
+    this.desktopLookWanted = false; this.pointerUiPaused = false; this.softLook = false;
+    this.lockPending = false; this.scriptUnlockPending = false;
+    this.updateCursor();
+  }
+  enableSoftLook() {
+    this.softLook = !!(!G.vr && this.desktopLookWanted && !this.pointerUiPaused && this.pageFocused !== false && !this.pointerBusy());
+    this.updateCursor();
+  }
+  suspendPointerForUi() {
+    if (G.vr || !(this.pointerLocked || this.desktopLookWanted || this.softLook)) return;
+    if (!this.pointerUiPaused) this.releaseMouse();
+    this.desktopLookWanted = true; this.pointerUiPaused = true; this.softLook = false;
+    this.updateCursor();
+    if (this.pointerLocked && !this.scriptUnlockPending) {
+      this.scriptUnlockPending = true;
+      document.exitPointerLock?.();
+    }
+  }
+  // Resume once per UI transition. A denied lock keeps in-canvas mouse look
+  // available until a fresh movement-key gesture can obtain pointer lock.
+  syncPointerUi(busy) {
+    if (G.vr) { this.stopDesktopLook(); return; }
+    if (busy) { this.suspendPointerForUi(); return; }
+    if (!this.pointerUiPaused) return;
+    this.pointerUiPaused = false;
+    if (!this.desktopLookWanted || this.pageFocused === false || document.hasFocus?.() === false) return;
+    this.dom?.focus?.({ preventScroll: true });
+    this.enableSoftLook();
+    this.lockFresh = 2;
+    if (!this.scriptUnlockPending) this.lockPointer();
   }
 
   releaseMouse() {
@@ -69,18 +136,35 @@ export class Input {
   // movement comes as a jump of the cursor: the view whipped round. Where raw movement is not supported, the usual lock
   lockPointer() {
     const dom = this.dom;
-    const plain = () => { try { dom.requestPointerLock?.()?.catch?.(() => {}); } catch { /* not allowed here */ } };
-    try {
-      const p = dom.requestPointerLock?.({ unadjustedMovement: true });
-      if (p?.catch) p.catch(err => { if (err?.name === 'NotSupportedError') plain(); });
-    } catch { plain(); }
+    if (G.vr || this.lockPending || this.pageFocused === false || document.hasFocus?.() === false || !dom?.requestPointerLock) return;
+    this.desktopLookWanted = true; this.lockPending = true;
+    const epoch = this.lockEpoch = (this.lockEpoch || 0) + 1;
+    const failed = () => { if (epoch === this.lockEpoch) { this.lockPending = false; this.enableSoftLook(); } };
+    const request = raw => {
+      if (epoch !== this.lockEpoch || this.pageFocused === false || G.vr) return;
+      if (this.pointerUiPaused) { this.lockPending = false; return; }
+      this.lockPending = true;
+      try {
+        const p = raw ? dom.requestPointerLock({ unadjustedMovement: true }) : dom.requestPointerLock();
+        p?.then?.(() => { if (epoch === this.lockEpoch) this.lockPending = false; }, error => {
+          if (raw && error?.name === 'NotSupportedError') request(false); else failed();
+        });
+      } catch (error) { if (raw && error?.name === 'NotSupportedError') request(false); else failed(); }
+    };
+    request(true);
   }
   // and a movement that looks like the cursor jumping rather than the hand is dropped: a big one right after the lock,
   // or one far bigger than all of the last few (a jump comes alone between small ones; a fast flick grows over several
   // movements and goes on, so after one drop the next is always taken)
   onMouseMove(e) {
     this.trackPointer(e);
-    if (!this.pointerLocked) return;
+    if (!this.pointerLocked) {
+      if (!this.softLook || G.vr || this.pageFocused === false || document.hasFocus?.() === false || this.pointerBusy()) return;
+      const rect = this.dom?.getBoundingClientRect?.();
+      if (!rect || e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom ||
+        e.target && e.target !== this.dom) return;
+    }
+    if (!Number.isFinite(e.movementX) || !Number.isFinite(e.movementY)) return;
     const m = Math.max(Math.abs(e.movementX), Math.abs(e.movementY));
     const recent = this.lastMoves.length ? Math.max(...this.lastMoves) : 0;
     const fresh = this.lockFresh > 0;

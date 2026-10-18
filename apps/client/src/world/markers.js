@@ -4,6 +4,8 @@ import * as THREE from 'three';
 import { G } from '../core/globals.js';
 import { T } from './mapmesh.js';
 import { FONT } from '../ui/ui.js';
+import { transferOf } from './mapanalysis.js';
+import { exitEventPosition } from './exit-routes.js';
 
 function ringTexture() {
   const c = document.createElement('canvas');
@@ -70,12 +72,21 @@ export class TransferMarkers {
   clear() {
     for (const it of this.items) {
       this.group.remove(it.root);
-      it.label?.material.map.dispose();
+      it.root.traverse(object => {
+        if (object.isMesh) object.geometry.dispose();
+        if (!object.material) return;
+        for (const material of Array.isArray(object.material) ? object.material : [object.material]) {
+          if (material.map && material.map !== this.ringTex && material.map !== this.colTex) material.map.dispose();
+          material.dispose();
+        }
+      });
     }
     this.items = [];
   }
   build(exits) {
     this.clear();
+    this.mapId = G.map?.mapId;
+    this.group.visible = !G.arena?.active;
     const floor = (x, y) => (G.floorAt ? G.floorAt(x, y) : 0);
     // region exits: one glow per cell, one label per destination cluster
     const clusters = new Map();
@@ -90,7 +101,7 @@ export class TransferMarkers {
       ring.renderOrder = 900;
       root.add(ring);
       this.group.add(root);
-      const item = { ex, root, ring, column: null, label: null, phase: Math.random() * 6 };
+      const item = { ex: { ...ex }, root, ring, column: null, label: null, phase: Math.random() * 6 };
       this.items.push(item);
       if (ex.label) {
         const key = ex.kind === 'event' ? `e${ex.eventId}` : `r${ex.mapId}`;
@@ -119,27 +130,32 @@ export class TransferMarkers {
     }
   }
   update(dt, head) {
-    if (!this.items.length) return;
-    this.group.visible = !G.arena?.active;     // a closed boss arena: the ways out are fog, not exits
-    if (!this.group.visible) return;
+    if (!this.items.length) return false;
+    this.group.visible = !G.arena?.active && this.mapId === G.map?.mapId;     // closed arenas and the old map have no usable exits
+    if (!this.group.visible) return false;
     const t = G.time;
     const pc = G.map?.playerChar;
+    let changed = false;
     for (const it of this.items) {
       // hide exits whose event page no longer leads anywhere (e.g. a door that got locked)
       if (it.ex.kind === 'event') {
-        const ev = G.map.events[it.ex.eventId];
-        it.root.visible = !!ev && !!ev.page && !ev.erased;
+        const ev = G.map.events[it.ex.eventId], position = exitEventPosition(G.map, ev);
+        const route = ev && !ev.erased && ev.page?.trigger <= 2 ? transferOf(ev.page.list) : null;
+        it.root.visible = !!position && !!route && route.mapId === it.ex.mapId;
+        if (!it.root.visible || ev.page.trigger !== it.ex.trigger) changed = true;
+        if (position && (position.x !== it.ex.x || position.y !== it.ex.y)) {
+          it.ex.x = position.x; it.ex.y = position.y; changed = true;
+        }
+        if (!it.root.visible) continue;
       }
       const pulse = 0.6 + 0.4 * Math.sin(t * 2.2 + it.phase);
       it.ring.material.opacity = 0.7 + 0.3 * pulse;
       it.ring.rotation.z = t * 0.25;
       if (it.column) it.column.material.opacity = 0.45 + 0.25 * pulse;
-      // (a looping map: at its copy nearest to the player)
-      if (pc && (G.map.loopX || G.map.loopY)) {
-        const b = it.base || (it.base = it.root.position.clone());
-        it.root.position.x = b.x + (G.map.nearX(it.ex.x, pc.fx) - it.ex.x) * T;
-        it.root.position.z = b.z + (G.map.nearY(it.ex.y, pc.fy) - it.ex.y) * T;
-      }
+      // Runtime events can move without changing page. Follow their current cell
+      // and its floor; looping copies stay the nearest one to the player.
+      const x = pc ? G.map.nearX(it.ex.x, pc.fx) : it.ex.x, y = pc ? G.map.nearY(it.ex.y, pc.fy) : it.ex.y;
+      it.root.position.set((x + 0.5) * T, (G.floorAt?.(it.ex.x, it.ex.y) ?? 0) + 0.06, (y + 0.5) * T);
       if (it.label && pc) {
         const d = Math.hypot(G.map.nearX(it.ex.x, pc.fx) - pc.fx, G.map.nearY(it.ex.y, pc.fy) - pc.fy);
         it.label.visible = d < 4.5;
@@ -147,5 +163,6 @@ export class TransferMarkers {
       }
     }
     void head; void dt;
+    return changed;
   }
 }

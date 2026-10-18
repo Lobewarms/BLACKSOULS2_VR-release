@@ -67,6 +67,7 @@ export class GameMap {
     this.interpreter = new Interpreter(0, true);
     this.playerChar = new PlayerChar();
     this.needRefresh = false;
+    this.exitRevision = 0;
     this.transfer = null;          // pending {mapId, x, y, dir, fade}
     this.transferring = false;
     this.commonParallel = [];
@@ -91,6 +92,7 @@ export class GameMap {
 
   onEventPageChanged(ev) {
     if (this.loading) return;
+    this.exitRevision++;
     G.combat?.onEventPageChanged(ev);
     // (a tile it lays that opens the way where the map's own tiles shut it - a bridge a lever lays: the 3D view is built again
     // with it, or without it - mapbuild.js openingTiles)

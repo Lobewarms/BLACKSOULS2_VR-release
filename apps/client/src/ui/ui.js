@@ -262,6 +262,21 @@ class MenuScrollbar {
 }
 
 // ------------------------------------------------------------------ list panel
+function choiceTextLines(ctx, text, width) {
+  const lines = [];
+  for (const paragraph of String(text).replace(/\r\n?/g, '\n').split('\n')) {
+    let line = '';
+    for (const char of paragraph) {
+      if (line && ctx.measureText(line + char).width > width) {
+        const space = Math.max(line.lastIndexOf(' '), line.lastIndexOf('\t'));
+        if (space > 0) { lines.push(line.slice(0, space).trimEnd()); line = line.slice(space + 1).trimStart() + char; }
+        else { lines.push(line); line = char; }
+      } else line += char;
+    }
+    lines.push(line.trimEnd());
+  }
+  return lines;
+}
 class ListPanel {
   constructor(widthPx = 900, rows = 8, widthM = 0.9, { adaptive = false } = {}) {
     this.rows = rows;
@@ -313,16 +328,55 @@ class ListPanel {
     if (wide > room) ctx.font = `bold ${Math.max(18, Math.floor(30 * room / wide))}px ${FONT}`;
     ctx.fillText(a, 36, 32); ctx.fillText(b, 36, 72);
   }
-  draw() {
-    if (this.adaptive) {
-      const { widthPx, rows, widthM } = this.base;
-      this.rows = G.vr ? rows : Math.min(rows, Math.max(1, this.items.length));
-      this.rowTop = G.vr || this.title ? 100 : 24;
-      this.panel.ctx.font = `36px ${FONT}`;
-      const textWidth = Math.max(...this.items.map(it => this.panel.ctx.measureText(stripEscapes(it.text)).width + (it.right ? this.panel.ctx.measureText(it.right).width + 32 : 0)), 0);
-      const fittedWidth = G.vr || this.title || this.footer ? widthPx : Math.min(widthPx, Math.max(380, Math.ceil(textWidth + 116)));
-      this.panel.resize(fittedWidth, this.rowTop + this.rows * this.rowH + (G.vr ? 66 : 48), widthM * fittedWidth / widthPx);
+  adaptiveViewportKey() {
+    const v = desktopViewport(G.input, G.three?.renderer);
+    return `${G.vr}/${v.width}/${v.height}/${!!G.ui?.msg?.number}/${!!G.ui?.menuOpen}`;
+  }
+  fitAdaptive() {
+    const { widthPx, rows, widthM } = this.base, ctx = this.panel.ctx;
+    this.rowTop = G.vr || this.title || this.onCancel && G.ui?.menuOpen ? 100 : 24;
+    this.rowH = 64; this.choiceFont = 36; this.choiceLineHeight = 44; this.choiceLines = null;
+    this.rows = G.vr ? rows : Math.min(rows, Math.max(1, this.items.length));
+    ctx.font = `36px ${FONT}`;
+    const widest = () => Math.max(...this.items.map(it => ctx.measureText(stripEscapes(it.text)).width
+      + (it.right ? ctx.measureText(it.right).width + 32 : 0) + (it.icon ? 60 : 0)), 0);
+    let fittedWidth = G.vr || this.title || this.footer ? widthPx : Math.min(widthPx, Math.max(380, Math.ceil(widest() + 116)));
+    const wrap = !G.vr && !G.ui?.msg?.number;
+    if (wrap) {
+      const viewport = desktopViewport(G.input, G.three?.renderer), unit = widthM / widthPx;
+      fittedWidth = Math.min(1100, Math.max(this.title || this.footer ? widthPx : 380, Math.ceil(widest() + 116)));
+      const message = G.ui?.msgPanel?.mesh.visible ? G.ui.msgPanel : null;
+      const groupWidth = Math.max(message?.widthM || 0, fittedWidth * unit);
+      const pixelsPerMetre = Math.min(900, Math.min(1000, viewport.width - Math.min(64, viewport.width / 4)) / groupWidth);
+      const pixelScale = pixelsPerMetre * unit;
+      // On narrow desktop windows enlarge canvas text rather than allowing the
+      // fitted 3D group to turn answers into unreadable small print.
+      this.choiceFont = Math.max(36, Math.ceil(18.5 / pixelScale));
+      this.choiceLineHeight = this.choiceFont + 8;
+      ctx.font = `${this.choiceFont}px ${FONT}`;
+      fittedWidth = Math.min(1100, Math.max(this.title || this.footer ? widthPx : 380, Math.ceil(widest() + 116)));
+      // Always reserve a scrolling gutter: wrapping must stay stable when the
+      // number of visible answers changes with viewport height or selection.
+      this.choiceLines = this.items.map(it => choiceTextLines(ctx, stripEscapes(it.text), fittedWidth - 44 - 24 - 84
+        - (it.icon ? 60 : 0) - (it.right ? ctx.measureText(it.right).width + 24 : 0)));
+      const lineCount = Math.max(1, ...this.choiceLines.map(lines => lines.length));
+      this.rowH = Math.max(64, lineCount * this.choiceLineHeight + 20);
+      const name = G.ui?.namePanel;
+      const choiceLeft = message ? message.widthM / 2 - fittedWidth * unit : 0;
+      const overlapsName = message && name?.mesh.visible && choiceLeft < name.mesh.position.x + name.widthM / 2 + 0.01;
+      // A small amount of group fitting keeps more answers visible on normal
+      // desktops; narrow-window text retains its minimum readable CSS size.
+      const budgetScale = Math.min(1, Math.max(0.85, 18.5 / (this.choiceFont * pixelScale)));
+      const availableHeight = viewport.height - Math.min(80, viewport.height / 4)
+        - (message ? (message.heightM + 0.03 + (overlapsName ? name.heightM : 0)) * pixelsPerMetre * budgetScale : 0);
+      const rowBudget = Math.floor((availableHeight / (pixelScale * budgetScale) - this.rowTop - 48) / this.rowH);
+      this.rows = Math.min(this.rows, Math.max(1, rowBudget));
     }
+    this.layoutViewportKey = this.adaptiveViewportKey();
+    this.panel.resize(fittedWidth, this.rowTop + this.rows * this.rowH + (G.vr ? 66 : 48), widthM * fittedWidth / widthPx);
+  }
+  draw() {
+    if (this.adaptive) this.fitAdaptive();
     const { ctx, canvas } = this.panel;
     this.panel.clear();
     if ((this.adaptive || this.classic) && !G.vr) { ctx.fillStyle = 'rgba(5,6,9,0.12)'; ctx.fillRect(4, 4, canvas.width - 8, canvas.height - 8); }
@@ -358,7 +412,7 @@ class ListPanel {
         ctx.fillText(String(i + 1).padStart(2, '0'), 32, y + this.rowH / 2 - 2); x = 84;
       }
       if (it.icon) { drawIcon(ctx, it.icon, x, y + 6, 48); x += 60; }
-      ctx.font = `36px ${FONT}`;
+      ctx.font = `${this.choiceFont || 36}px ${FONT}`;
       ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : '#f0f0f0';
       let rightW = 0;
       if (it.right) {
@@ -368,8 +422,13 @@ class ListPanel {
         ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : 'rgba(235,225,195,0.95)';
         ctx.fillText(it.right, canvas.width - 44, y + this.rowH / 2 - 2);
         ctx.textAlign = 'left';
-        ctx.font = `36px ${FONT}`;
+        ctx.font = `${this.choiceFont || 36}px ${FONT}`;
         ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : '#f0f0f0';
+      }
+      if (this.choiceLines) {
+        const lines = this.choiceLines[i], first = y + (this.rowH - lines.length * this.choiceLineHeight) / 2 + this.choiceLineHeight / 2;
+        lines.forEach((line, index) => ctx.fillText(line, x, first + index * this.choiceLineHeight));
+        continue;
       }
       let name = stripEscapes(it.text);
       const maxW = canvas.width - 44 - rightW - x;
@@ -383,7 +442,10 @@ class ListPanel {
     if (this.items.length > this.rows && this.index >= 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = `28px ${FONT}`;
-      ctx.fillText(`${this.index + 1}/${this.items.length}`, canvas.width - (backButton ? 280 : 140), 52);
+      if (this.choiceLines) {
+        ctx.font = `20px ${FONT}`; ctx.textAlign = 'right';
+        ctx.fillText(`${this.index + 1}/${this.items.length}`, canvas.width - 32, canvas.height - 24); ctx.textAlign = 'left';
+      } else ctx.fillText(`${this.index + 1}/${this.items.length}`, canvas.width - (backButton ? 280 : 140), 52);
     }
     const desc = this.items[this.index]?.desc || this.footer;
     if (Array.isArray(desc)) {
@@ -401,12 +463,16 @@ class ListPanel {
       ctx.font = `20px ${FONT}`; ctx.fillText(fitLabel(ctx, tr(G.vr ? 'A: 결정 · B: 뒤로' : 'Enter: 결정 · Esc: 뒤로'), canvas.width - 48), 24, this.rowTop + this.rows * this.rowH + 24);
     } else if (this.adaptive && !G.vr && !this.footer) {
       ctx.font = `20px ${FONT}`;
-      ctx.fillText(fitLabel(ctx, tr('Enter: 결정 · Esc: 뒤로'), canvas.width - 64), 32, canvas.height - 24);
+      ctx.fillText(fitLabel(ctx, tr('Enter: 결정 · Esc: 뒤로'), canvas.width - 64 - (this.items.length > this.rows ? 100 : 0)), 32, canvas.height - 24);
     } else ctx.fillText(tr(G.vr ? '스틱: 선택 · A / 트리거: 결정 · B: 뒤로' : '클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로'), 36, 84);
     this.panel.commit();
   }
   update(raycaster) {
     const input = G.input;
+    if (this.adaptive && this.layoutViewportKey !== this.adaptiveViewportKey()) {
+      this.hover = -2; this.draw();
+      if (G.ui?.choice === this && (G.ui.msg || G.ui.remote?.shown)) G.ui.layoutPanels(G.ui.msg || G.ui.remote);
+    }
     if (input.cancel() || G.ui?.menuOpen && input.menu()) {
       this.scrollbar.reset(); G.audio?.playSystemSe(2); this.onCancel?.(); return true;
     }
@@ -977,7 +1043,16 @@ export class UI {
     const y = pos === 0 ? 0.22 : pos === 1 ? -0.05 : -0.32;
     this.msgPanel.mesh.position.set(0, y, 0);
     this.namePanel.mesh.position.set(-this.msgPanel.widthM / 2 + this.namePanel.widthM / 2 + 0.02, y + this.msgPanel.heightM / 2 + this.namePanel.heightM / 2 - 0.005, 0);
-    this.choice.panel.mesh.position.set(this.msgPanel.widthM / 2 - this.choice.panel.widthM / 2, y + this.msgPanel.heightM / 2 + this.choice.panel.heightM / 2 + 0.03, 0.01);
+    const choiceX = this.msgPanel.widthM / 2 - this.choice.panel.widthM / 2;
+    let choiceBottom = y + this.msgPanel.heightM / 2 + 0.03;
+    if (!G.vr && this.namePanel.mesh.visible) {
+      const left = choiceX - this.choice.panel.widthM / 2, right = choiceX + this.choice.panel.widthM / 2;
+      const nameLeft = this.namePanel.mesh.position.x - this.namePanel.widthM / 2, nameRight = this.namePanel.mesh.position.x + this.namePanel.widthM / 2;
+      if (left < nameRight + 0.01 && right > nameLeft - 0.01) {
+        choiceBottom = Math.max(choiceBottom, this.namePanel.mesh.position.y + this.namePanel.heightM / 2 + 0.02);
+      }
+    }
+    this.choice.panel.mesh.position.set(choiceX, choiceBottom + this.choice.panel.heightM / 2, 0.01);
     if (!this.msgPanel.mesh.visible) this.choice.panel.mesh.position.set(0, -0.05, 0);
   }
   closeMessage() {
@@ -1818,7 +1893,10 @@ export class UI {
   // ---------------------------------------------------------------- pointer
   unlockPointer() {
     // Scripted shops, dialogue choices and name entry also need a visible PC cursor.
-    if (!G.vr && G.input.pointerLocked) document.exitPointerLock?.();
+    if (!G.vr) {
+      if (G.input.suspendPointerForUi) G.input.suspendPointerForUi();
+      else if (G.input.pointerLocked) document.exitPointerLock?.();
+    }
   }
   pointerRay() {
     if (!G.vr) {
@@ -2779,6 +2857,7 @@ export class UI {
     this.rewardsHadPlayer = this.hudPresent;
     this.rewards.update(dt, { paused: rewardPaused, visible: this.hudPresent && !this.banner,
       vr: G.vr, viewport: desktopViewport(G.input, G.three?.renderer) });
+    G.input.syncPointerUi?.(this.pointerBusy() || !!this.prompt?.shown);
     this.updatePointerLine();
   }
   updateHudFollow() {

@@ -4,7 +4,7 @@ import { G } from './globals.js';
 import { tr, fmtDate } from '../ui/i18n.js';
 import { createVRButton, prepareXR } from '../vr/vrbutton.js';
 import { initAssets, loadFont, loadImage, fetchBinary, listFiles, hasFile } from '../data/assets.js';
-import { $data, loadDatabase, mapName } from '../data/data.js';
+import { $data, loadDatabase, mapName, loadMapNames, destinationName } from '../data/data.js';
 import { MarshalReader } from '../data/marshal.js';
 import { billboardUniforms, T } from '../world/mapmesh.js';
 import { GameState } from '../game/state.js';
@@ -28,6 +28,7 @@ import { loadScriptData } from '../data/scriptdata.js';
 import { buildMapView } from '../world/mapbuild.js';
 import { clearEdgeCache } from '../world/collision.js';
 import { TransferMarkers } from '../world/markers.js';
+import { collectCurrentExits } from '../world/exit-routes.js';
 import { Spectator } from '../vr/spectator.js';
 import { PictureLayer } from '../ui/pictures.js';
 import { Hands } from '../vr/hands.js';
@@ -219,6 +220,7 @@ function toneFromNote(note) {
 let presentToken = 0;
 async function presentMap(seeds = [], rebuild = false, open = null) {
   const token = ++presentToken;
+  const exitRevision = G.map.exitRevision;
   if (!rebuild) clearMapView();
   const grid = G.map.grid;
   view.seeds = seeds;
@@ -253,6 +255,7 @@ async function presentMap(seeds = [], rebuild = false, open = null) {
   G.floorAt = (fx, fy) => mesh.floorAt(G.map.wrapFX(fx), G.map.wrapFY(fy)) * T;
   G.solidTopAt = (x, y) => mesh.solidTopAt(G.map.wrapX(x), G.map.wrapY(y));
   markers.build(ana.exits);
+  view.exitRevision = exitRevision;
   // events
   const mapInfo = {
     isWall: (x, y) => mesh.isSolid(x, y), spotOnSolid: (x, y, lying, above) => mesh.spotOnSolid(x, y, lying, above),
@@ -271,6 +274,30 @@ async function presentMap(seeds = [], rebuild = false, open = null) {
   scene.fog.far = outdoor ? 70 : 36;
   G.sky.setMap(G.map.map);                 // (its background picture round the sky - sky.js)
   if (!rebuild) G.screen.startTone({ red: 0, green: 0, blue: 0, gray: 0 }, 0);
+}
+
+// Active event pages can unlock or remove a route after the map was built.
+// Refresh navigation immediately; translated labels may arrive independently.
+function refreshExitMarkers(force = false) {
+  const map = G.map;
+  if (!view.mesh || map.transferring || view.mapId !== map.mapId || !view.analysis ||
+      !force && view.exitRevision === map.exitRevision) return;
+  const exits = collectCurrentExits(map), revision = map.exitRevision, token = presentToken, mapId = map.mapId;
+  for (const exit of exits) if (exit.mapId > 0 && exit.mapId !== mapId) exit.label = destinationName(exit.mapId);
+  view.analysis = { ...view.analysis, exits };
+  view.exitRevision = revision;
+  markers.build(exits);
+  loadMapNames(exits.filter(exit => exit.mapId !== mapId).map(exit => exit.mapId)).then(() => {
+    if (!view.mesh || view.mapId !== mapId || G.map !== map || map.transferring || map.mapId !== mapId || map.exitRevision !== revision || presentToken !== token ||
+        view.analysis?.exits !== exits) return;
+    let changed = false;
+    for (const exit of exits) {
+      if (!(exit.mapId > 0) || exit.mapId === mapId) continue;
+      const label = destinationName(exit.mapId);
+      if (label !== exit.label) { exit.label = label; changed = true; }
+    }
+    if (changed) { view.analysis = { ...view.analysis, exits }; markers.build(exits); }
+  }).catch(error => console.warn('exit names unavailable', error));
 }
 
 // the view again with the dark round a boss fight opened up (or closed again: null) - arena.js
@@ -774,7 +801,8 @@ function frameBody() {
       G.poke.update(dt, view.sprites);       // (bare hands pressing / pulling people: after they are placed)
       G.sky.update();
       updatePlayerBalloon(head);
-      markers.update(dt, head);
+      refreshExitMarkers();
+      if (markers.update(dt, head)) refreshExitMarkers(true);
       view.mesh.update(G.time);
       torch.position.set(head.x, head.y + 0.2, head.z);
       G.coop.update(dt, head);               // (last: a visit that ends here sends the player elsewhere at once)

@@ -49,6 +49,28 @@ function hit(panel, x, y) {
 function click(input) { input.mouse.buttons = 1; input.mouse.prevButtons = 0; G.ui.pointerTarget = false; }
 function release(input) { input.mouse.buttons = 0; input.mouse.prevButtons = 0; G.ui.pointerTarget = false; }
 
+function captureEnvironment(t) {
+  const env = environment(t), listeners = new Map(), requests = [];
+  let focusCalls = 0, unlocks = 0;
+  const listen = (type, fn) => { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); };
+  for (const [key, value] of Object.entries({ addEventListener: listen, HTMLInputElement: class {} })) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, { configurable: true, value });
+    t.after(() => { if (previous) Object.defineProperty(globalThis, key, previous); else delete globalThis[key]; });
+  }
+  const dom = { style: {}, tabIndex: -1, addEventListener: listen,
+    focus() { focusCalls++; env.document.activeElement = dom; },
+    getBoundingClientRect: () => ({ left: 0, top: 0, right: 1280, bottom: 720, width: 1280, height: 720 }),
+    requestPointerLock(options) { requests.push(options); return Promise.reject(Object.assign(new Error('Escape cooldown'), { name: 'SecurityError' })); },
+  };
+  env.document.addEventListener = listen; env.document.hasFocus = () => true; env.document.pointerLockElement = null;
+  const input = G.input = new Input({}, dom);
+  const emit = (type, values = {}) => { for (const fn of listeners.get(type) || []) fn({ preventDefault() {}, ...values }); };
+  const lock = () => { env.document.pointerLockElement = dom; emit('pointerlockchange'); };
+  env.document.exitPointerLock = () => { unlocks++; env.document.pointerLockElement = null; emit('pointerlockchange'); };
+  return { ...env, input, dom, lock, emit, requests, get focusCalls() { return focusCalls; }, get unlocks() { return unlocks; } };
+}
+
 test('an explicit mouse click selects an initially unselected dialogue row without a hover jump', t => {
   const { ui, input } = environment(t), selected = [];
   ui.choice.open('Choose', [{ text: 'First' }, { text: 'Second' }], { index: -1, onSelect: i => selected.push(i) });
@@ -130,15 +152,54 @@ test('PC on-screen name keys, Backspace, Done and Cancel respond to their clicke
 });
 
 test('scripted scenes and dialogue release PC pointer lock through the real UI frame', t => {
-  const { ui, input, document } = environment(t); let unlocks = 0;
-  document.exitPointerLock = () => { unlocks++; input.pointerLocked = false; };
-  ui.sceneOpen = 'bonfire'; input.pointerLocked = true; ui.update(0.01);
-  assert.equal(unlocks, 1); assert.equal(input.pointerLocked, false);
-  ui.sceneOpen = null; input.pointerLocked = true;
+  const env = captureEnvironment(t), { ui, input } = env;
+  env.lock(); ui.sceneOpen = 'bonfire'; ui.update(0.01);
+  assert.equal(env.unlocks, 1); assert.equal(input.pointerLocked, false);
+  ui.sceneOpen = null;
+  env.document.pointerLockElement = env.dom; input.pointerLocked = true;
   ui.showMessage({ lines: ['A dialogue choice'], choices: [{ text: 'Yes' }] }); ui.update(0.01);
-  assert.equal(unlocks, 2, 'event dialogues must make the cursor available without pressing Escape');
+  assert.equal(env.unlocks, 2, 'event dialogues must make the cursor available without pressing Escape');
   ui.msg = null; G.vr = true; ui.sceneOpen = 'shop'; input.pointerLocked = true; ui.update(0.01);
-  assert.equal(unlocks, 2, 'headset menus must not alter desktop pointer lock');
+  assert.equal(env.unlocks, 2, 'headset menus must not alter desktop pointer lock');
+});
+
+for (const code of ['Escape', 'KeyX']) test(`NPC dialogue closed with ${code} restores gameplay look through the real UI frame`, async t => {
+  const env = captureEnvironment(t), { ui, input, dom, emit, requests } = env;
+  env.lock(); ui.showMessage({ lines: ['Hello, traveler.'] }); ui.msg.state = 'waitInput';
+  ui.update(0.01);
+  assert.equal(input.pointerLocked, false); assert.equal(requests.length, 0);
+  assert.equal(input.pointerUiPaused, true); assert.equal(dom.style.cursor, '');
+  input.endFrame(); emit('keydown', { code }); ui.update(0.01);
+  assert.equal(ui.msg, null); assert.equal(env.focusCalls, 1); assert.equal(requests.length, 1);
+  await Promise.resolve();
+  assert.equal(input.softLook, true, 'a browser refusal after Escape must not require an extra click for mouse look');
+  emit('mousemove', { target: dom, clientX: 640, clientY: 360, movementX: 5, movementY: 2 });
+  assert.deepEqual([input.mouse.dx, input.mouse.dy], [5, 2]);
+  input.endFrame(); emit('keyup', { code });
+  for (let i = 0; i < 5; i++) ui.update(0.01);
+  assert.equal(requests.length, 1, 'subsequent gameplay frames must not keep requesting browser capture');
+});
+
+for (const [code, selected] of [['Enter', 0], ['Escape', -1], ['KeyX', -1]]) test(`NPC choice ${code} restores gameplay control after its callback`, async t => {
+  const env = captureEnvironment(t), { ui, input, emit, requests } = env, choices = [];
+  env.lock(); ui.showMessage({ lines: [], choices: [{ text: 'Talk' }, { text: 'Leave' }], cancelable: true, onChoice: i => choices.push(i) });
+  ui.update(0.01); input.endFrame();
+  assert.equal(ui.msg.state, 'choice'); assert.equal(input.pointerUiPaused, true);
+  emit('keydown', { code }); ui.update(0.01); await Promise.resolve();
+  assert.deepEqual(choices, [selected]); assert.equal(ui.msg, null); assert.equal(ui.choice.visible, false);
+  assert.equal(input.pointerUiPaused, false); assert.equal(input.softLook, true); assert.equal(requests.length, 1);
+});
+
+test('menu cancellation resumes capture but nested UI transitions keep the cursor available', async t => {
+  const env = captureEnvironment(t), { ui, input, emit, requests } = env;
+  env.lock(); ui.menuOpen = true;
+  ui.list.open('Menu', [{ text: 'Resume' }], { onCancel: () => ui.closeMenu() }); ui.update(0.01);
+  assert.equal(input.pointerUiPaused, true); assert.equal(requests.length, 0);
+  ui.list.close(); ui.sceneOpen = 'shop'; ui.update(0.01);
+  assert.equal(input.pointerUiPaused, true); assert.equal(requests.length, 0, 'closing one panel cannot capture while another UI is active');
+  ui.sceneOpen = null; ui.list.open('Menu', [{ text: 'Resume' }], { onCancel: () => ui.closeMenu() });
+  input.endFrame(); emit('keydown', { code: 'Escape' }); ui.update(0.01); await Promise.resolve();
+  assert.equal(ui.menuOpen, false); assert.equal(input.pointerUiPaused, false); assert.equal(requests.length, 1); assert.equal(input.softLook, true);
 });
 
 test('clicking quantity Maximum and Zero edits the amount before explicit confirmation', t => {

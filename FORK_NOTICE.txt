@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.13
+BLACK SOULS II VR - community version 0.2.14
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,10 +7,10 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Fixed stretched or stale menu text when switching between Status, Equipment
-  and the original command menu.
-- Dialogue choices and speaker names stay sharp when their panels change size.
-- Keeps the translucent HUD, circular minimap and original menu arrangement.
+- Exit circles refresh when doors unlock or routes change during play.
+- Long dialogue choices wrap so their full text remains readable.
+- Mouse control returns after closing conversations and menus.
+- Keeps the original menus, translucent HUD and circular minimap.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

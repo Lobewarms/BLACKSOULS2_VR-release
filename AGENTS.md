@@ -814,3 +814,33 @@ the fix, then verified repeated Main > Status > Back > Equipment > Back > Status
 and dialogue on actual WebGL rendering with original game art. Test state remains
 synthetic and the fixture never reads or writes player saves. Preview fixtures and
 export helpers must stay outside production builds and release packages.
+
+## Live exits, complete choices and pointer handoff (0.2.14)
+
+Exit rings must follow the current usable event page, not only the pages present
+when the map mesh was built. GameMap.exitRevision invalidates route presentation
+after event page changes. collectCurrentExits reads live, non-erased event pages
+and runtime coordinates with the existing transfer-analysis rules. Update world
+markers and navigation analysis together, without rebuilding collision or geometry.
+Show rings immediately with cached/fallback destination names; asynchronous name
+loads must check the map, presentation token, revision and exit-array identity
+before refreshing labels. A moving event also invalidates its presented route.
+Preserve boss blocking, looping-map coordinates and integer tile-centre floor
+sampling. Dispose per-marker materials/geometries/label textures on rebuilds and
+retain the shared ring/column textures. Never synthesize a route from inactive
+pages, death common events, or unrelated cutscenes.
+
+PC dialogue answers must show their complete text, including long translations,
+instead of truncating consequential choices with ellipses. Wrap words and CJK
+characters, keep hit regions aligned with painted rows, and scroll excess options
+within a readable viewport budget. Wide choice boxes must clear the speaker tab.
+Number inputs and VR retain their established row dimensions and controls.
+
+Returning from pointer-driven UI must restore gameplay input without requiring an
+extra mouse click. Preserve intentional native Escape release from ordinary play,
+window blur, text entry and VR. Browser Escape may deny immediate pointer relock;
+use a bounded handoff and movement-key recovery rather than per-frame lock spam.
+Regression tests cover route page transitions, marker positions and disposal,
+wrapped choice text/hits/scrolling, and pointer pause/resume lifecycle. Private
+browser fixtures exercise the real renderer with original art and synthetic game
+state; remove them from the client before production builds.

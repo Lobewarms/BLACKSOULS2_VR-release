@@ -13,8 +13,11 @@ function environment(t, width = 1280, height = 720) {
   t.after(() => { Object.assign(G, saved); $data.system = data;
     if (descriptor) Object.defineProperty(globalThis, 'document', descriptor); else delete globalThis.document; });
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: () => {
-    const record = { texts: [] }, ctx = new Proxy({ measureText: s => ({ width: String(s).length * 18 }),
-      clearRect() { record.texts = []; }, fillText(text, x, y) { record.texts.push({ text, x, y }); },
+    const record = { texts: [] };
+    const measure = text => Array.from(String(text)).reduce((sum, c) => sum + (c.charCodeAt(0) > 255 ? 1 : 0.5), 0)
+      * (Number(ctx.font?.match?.(/([\d.]+)px/)?.[1]) || 36);
+    const ctx = new Proxy({ measureText: s => ({ width: measure(s) }),
+      clearRect() { record.texts = []; }, fillText(text, x, y) { record.texts.push({ text, x, y, width: measure(text), font: ctx.font }); },
       createLinearGradient: () => ({ addColorStop() {} }),
     }, { get: (o, k) => k in o ? o[k] : () => {} });
     return { width: 0, height: 0, record, getContext: () => ctx };
@@ -30,7 +33,8 @@ function environment(t, width = 1280, height = 720) {
   const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 100);
   scene.add(camera); camera.position.y = 1.6;
   const ui = G.ui = new UI(scene, camera, new THREE.Group()); ui.attachHud(null);
-  return { ui, input, camera, width, height };
+  return { ui, input, camera, get width() { return width; }, get height() { return height; },
+    resize(w, h) { width = w; height = h; camera.aspect = w / h; camera.updateProjectionMatrix(); } };
 }
 function box(panel, { camera, width, height }) {
   camera.updateWorldMatrix(true, false); panel.mesh.updateWorldMatrix(true, false);
@@ -81,4 +85,111 @@ test('dialogue background conventions survive polish and notices cannot move an 
   assert.deepEqual(box(ui.msgPanel, env), before, 'a peripheral notice must not rescale or recenter dialogue');
   assert.equal(ui.toastPanel.mesh.parent, ui.camera);
   assert.equal(ui.msg.background, 2, 'transparent scripted dialogue remains transparent');
+});
+
+const fullAnswers = [
+  "I'm going to Alice's home, where I will ask her about the story and decide whether to return to the library tonight.",
+  '図書館に戻る前にアリスの家を訪ねて、今日の出来事とこれから向かう場所について詳しく話したいです。もう少しここで待っていてください。',
+  '我想先去爱丽丝的家里询问今天发生的事情，然后再决定是否回到图书馆。请把完整的选项显示出来，让我能够知道这个选择的全部含义。',
+  'Leave now without asking another question, taking the northern path and returning only after the evening bell has sounded.',
+];
+const normal = text => String(text).replace(/\s+/gu, ' ').trim();
+
+test('full English and CJK options wrap without ellipsis or lost words and every painted line stays inside its row', t => {
+  const { ui } = environment(t);
+  ui.showMessage({ lines: ['Where are you going?'], choices: fullAnswers.map(text => ({ text })), position: 2 });
+  ui.msg.state = 'done-typing'; ui.update(0.01);
+  const choice = ui.choice;
+  assert.ok(choice.rowH > 64); assert.equal(choice.index, 0);
+  for (let index = 0; index < fullAnswers.length; index++) {
+    choice.index = index; choice.draw();
+    const row = index - choice.top, top = choice.rowTop + row * choice.rowH;
+    const lines = choice.panel.canvas.record.texts.filter(r => r.x === 84 && r.y >= top && r.y < top + choice.rowH);
+    const joined = lines.map(r => r.text).join(/\s/u.test(fullAnswers[index]) ? ' ' : '');
+    assert.equal(normal(joined), normal(fullAnswers[index]), `all of option ${index + 1} must be painted`);
+    assert.ok(lines.every(r => !r.text.includes('…')));
+    assert.ok(lines.every(r => r.x + r.width <= choice.panel.canvas.width - 44 - 24));
+    assert.ok(lines.every(r => r.y - choice.choiceFont / 2 >= top && r.y + choice.choiceFont / 2 < top + choice.rowH));
+  }
+});
+
+test('four long answers and a face dialogue remain within wide and narrow viewports at readable projected sizes', t => {
+  const env = environment(t), { ui } = env;
+  ui.showMessage({ lines: ['What will you do when you leave this place?'], choices: fullAnswers.map(text => ({ text })), position: 2 });
+  ui.msg.face = 'SyntheticFace'; ui.msg.faceCanvas = { width: 384, height: 192 };
+  ui.msg.state = 'done-typing'; ui.update(0.01);
+  for (const [w, h] of [[1280, 720], [1920, 1080], [480, 800], [900, 500], [360, 640]]) {
+    env.resize(w, h); ui.update(0.01);
+    const message = box(ui.msgPanel, env), choices = box(ui.choice.panel, env);
+    assert.ok(choices.left >= 30 && choices.right <= w - 30, JSON.stringify({ w, h, choices }));
+    assert.ok(choices.top >= 38 && choices.bottom < message.top, JSON.stringify({ w, h, choices, message }));
+    assert.ok(message.bottom <= h - 38);
+    const projectedFont = ui.choice.choiceFont * (choices.bottom - choices.top) / ui.choice.panel.canvas.height;
+    assert.ok(projectedFont >= 17.5, `option text at ${w}×${h} must remain readable (${projectedFont}px)`);
+    assert.ok(ui.choice.rows >= 1 && ui.choice.rows <= 4);
+    if (ui.choice.rows < fullAnswers.length) assert.ok(ui.choice.scrollbar.geometry, 'remaining full answers must stay reachable');
+  }
+});
+
+test('wrapped-row mouse targets cover every line and preserve disabled answers, initial focus, scrolling and Escape', t => {
+  const { ui, input } = environment(t, 900, 500), selected = []; let cancelled = 0;
+  ui.choice.open('', fullAnswers.map((text, i) => ({ text, enabled: i !== 1 })), {
+    index: -1, onSelect: i => selected.push(i), onCancel: () => cancelled++,
+  });
+  const choice = ui.choice;
+  const point = (index, click = true) => {
+    choice.scrollTo(index); choice.draw();
+    const row = index - choice.top;
+    choice.panel.hit = () => new THREE.Vector2(0.4,
+      1 - (choice.rowTop + row * choice.rowH + choice.rowH - 18) / choice.panel.canvas.height);
+    input.mousePresses = click ? 1 : 0; ui.pointerTarget = false; choice.update({}); input.endFrame();
+  };
+  point(0, false); assert.equal(choice.index, -1, 'initial passive hover cannot select an answer');
+  point(1); assert.deepEqual(selected, [], 'disabled multiline answers cannot run');
+  point(2); assert.deepEqual(selected, [2], 'clicking the last line selects its own complete row');
+  input.keys.add('Escape'); input.mouse.wheel = 3; choice.update(null); assert.equal(cancelled, 1);
+});
+
+test('number input and VR retain their original uniform rows after wrapped PC dialogue', t => {
+  const { ui } = environment(t);
+  ui.choice.open('', fullAnswers.map(text => ({ text }))); assert.ok(ui.choice.rowH > 64);
+  ui.msg = { lines: [], state: 'number', number: { digits: 3, value: 15, range: [0, 200] } };
+  ui.drawNumber(); assert.equal(ui.choice.rowH, 64); assert.equal(ui.choice.rowTop, 100); assert.equal(ui.choice.choiceLines, null);
+  ui.msg = null; ui.choice.open('', fullAnswers.map(text => ({ text })), { index: 2 });
+  G.vr = true; ui.attachHud(new THREE.Group());
+  assert.equal(ui.choice.rowH, 64); assert.equal(ui.choice.panel.canvas.width, 760); assert.equal(ui.choice.choiceLines, null);
+  assert.equal(ui.choice.index, 2);
+  G.vr = false; ui.attachHud(null); assert.ok(ui.choice.rowH > 64); assert.equal(ui.choice.index, 2);
+});
+
+test('wide wrapped answers clear a long speaker badge and retain three readable rows plus scrolling at 720p', t => {
+  const env = environment(t), { ui } = env;
+  const answers = [
+    "I'm going to Alice's house to ask about the strange events that happened this morning.",
+    'I want to visit the library and speak to the person who knows about this place.',
+    'Tell me everything you remember before I decide which path to take this evening.',
+    'I would rather stay here a little longer and ask you another question about Alice.',
+  ];
+  ui.nextName = 'Bunny Girl Mary';
+  ui.showMessage({ lines: ['Where are you going?'], choices: answers.map(text => ({ text })), position: 2 });
+  ui.msg.skip = true; ui.update(0.01); ui.update(0.01);
+  assert.equal(ui.choice.rows, 3); assert.ok(ui.choice.scrollbar.geometry);
+  for (const [w, h] of [[1280, 720], [480, 800]]) {
+    env.resize(w, h); ui.update(0.01);
+    const choices = box(ui.choice.panel, env), name = box(ui.namePanel, env), message = box(ui.msgPanel, env);
+    assert.ok(choices.left < name.right, 'the fixture must exercise horizontal badge overlap');
+    assert.ok(choices.bottom < name.top - 2, JSON.stringify({ choices, name }));
+    assert.ok(choices.top >= 38 && choices.right <= w - 30 && choices.left >= 30);
+    assert.ok(message.bottom <= h - 38);
+    const projectedFont = ui.choice.choiceFont * (choices.bottom - choices.top) / ui.choice.panel.canvas.height;
+    assert.ok(projectedFont >= 17.5);
+  }
+});
+
+test('explicit line breaks and unbroken translated tokens preserve every character without clipping', t => {
+  const { ui } = environment(t), text = 'A complete first line.\n' + '不思議な世界へのとても長い招待状'.repeat(8) + '🙂';
+  ui.choice.open('', [{ text }, { text: 'Return' }]);
+  const row = ui.choice.panel.canvas.record.texts.filter(r => r.x === 84 && r.y < ui.choice.rowTop + ui.choice.rowH);
+  assert.equal(row.map(r => r.text).join('').replace(/\s/gu, ''), text.replace(/\s/gu, ''));
+  assert.ok(row.every(r => !r.text.includes('…') && r.x + r.width <= ui.choice.panel.canvas.width - 68));
 });
