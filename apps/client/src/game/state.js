@@ -149,6 +149,8 @@ export class BattlerBase {
   stateRate(id) { return this.featuresPi(13, id); }
   stateResist(id) { return this.featuresSet(14).includes(id); }
   atkElements() { return this.featuresSet(31); }
+  atkStates() { return this.featuresSet(32); }
+  atkStatesRate(id) { return this.featuresSum(32, id); }
   isState(id) { return this.states.includes(id); }
   state(id) { return this.isState(id); }
   // <スキル無効:X[,Y]> (script 196): skill X used on this battler comes to nothing, Y% of the time (the rates of all

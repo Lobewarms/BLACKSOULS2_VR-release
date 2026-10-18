@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.15
+BLACK SOULS II VR - community version 0.2.16
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,18 +7,17 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Pick up nearby world items in VR by bringing your hand close and squeezing
-  the right grip, or the left grip with an empty hand. Successful grabs vibrate.
-- Quick grip squeezes register reliably, including between frames.
-- Right-stick interactions aim at the visible item, including items on tables.
-- Item messages, choices and collected state follow the original game.
-- Main-menu labels remain complete when you move between commands.
-- Run like Dodo's Fast setting now increases walking speed and is saved.
-- Torture racks lie horizontally with supports, and loose stationary props rest
-  on their visible base instead of floating above the floor.
+- Weapon instant-death effects and stacking on-hit effects now apply correctly.
+- High-hit-count weapon upgrades keep their full attack count.
+- Armor evasion, counterattack bonuses and enemy health regeneration now work.
+- Damage-reduction piercing effects honor their intended physical/magical type.
+- Extra-action bonuses shorten desktop attack and ranged-attack recovery.
+- Weapon accuracy penalties and critical evasion now affect real hit rolls.
+- Enemy instant-death spells respect your resistances and death-saving effects.
 
-Left grip still guards when you hold a shield. The right-stick-down interaction
-remains available for items, people and doors.
+AGI is a combat stat, separate from walking speed. Run like Dodo controls walking.
+In VR, melee still requires a physical swing; extra actions do not create hits
+while you hold the weapon still.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

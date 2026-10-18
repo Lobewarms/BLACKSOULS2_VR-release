@@ -22,6 +22,7 @@ import { FloorMarker, MARK } from './telegraph.js';
 import { buildIconModel, getAdjust, setAdjust, resetAdjust, defaultAdjust } from './weapons.js';
 import { WeaponFx, ELEMENT_FX } from './weaponfx.js';
 import { desktopRest, desktopSwing, desktopModel, desktopShield, desktopShieldGuardPoint, desktopEquipmentHidden } from './desktop-weapon.js';
+import { playerRecoveryRate } from './action-speed.js';
 import { battlerEffects, effectsKey, fitLabel } from '../ui/battler-status.js';
 import { openFights } from '../world/maphints.js';
 import { personalPage } from '../network/coopworld.js';
@@ -2503,7 +2504,7 @@ export class CombatSystem {
       const hpShort = actor.mp >= actor.skillMpCost(obj) && actor.tp >= (obj.tp_cost || 0);
       G.ui.toast(hpShort ? tr('{name}: HP가 부족합니다', { name }) : tr('{name}: MP가 부족합니다', { name }), obj.icon_index); this.cancelReady(); return;
     }
-    if (!G.vr) this.deskActUntil = G.time + DESK_ACT;          // (PC: the cast / throw keeps the hands a moment - handsBusy)
+    if (!G.vr) this.deskActUntil = G.time + DESK_ACT / playerRecoveryRate(actor); // recovery only; costs and skill turn cooldowns stay unchanged
     const aim = r.aim || this.readyAim();
     const from = new THREE.Vector3(); r.fx.getWorldPosition(from);
     // throwing knives stay in the hand - one throw per pull, no waiting - until they run out or X puts them away
@@ -2692,14 +2693,15 @@ export class CombatSystem {
   }
   // an item / skill landing on an enemy: damage formula, drain, added / removed states.
   // mult scales the damage (swing power, back stab, critical); 0 damage stays 0 like the original
-  applyUsableToEnemy(e, obj, sourcePos, { mult = 1, crit = false, knock = 0.1, weak = false, color = null, by = null, blow = null } = {}) {
+  applyUsableToEnemy(e, obj, sourcePos, { mult = 1, crit = false, knock = 0.1, weak = false, color = null, by = null, blow = null, canReflect = true } = {}) {
     if (!e.alive) return 0;
     if (this.heldBoss(e)) return -1;
     const actor = by || G.state.party.leader();          // (by: a companion using its skill)
     // what it always evades (script 220 - 흰 유니콘 유니스 and every sure hit): its evasion sound, nothing lands
     if (!this.certainHit(actor, obj) && e.b.certainty(1, obj.hit_type ?? 1)) { this.missOn(e, obj); return -1; }
     // a spell turned back (magic reflection - an enemy chanting, 영창): it lands on the one who cast it
-    if (!by && obj.hit_type === 2 && e.b.mrf > Math.random()) { this.reflectOntoPlayer(e, obj); return -1; }
+    if (canReflect && !by && obj.hit_type === 2 && e.b.mrf > Math.random()) { this.reflectOntoPlayer(e, obj); return -1; }
+    if (!this.hitLands(actor, obj)) { this.missOn(e, obj); return -1; }
     // slipped in a stance that answers it (리포스트, script 191): nothing lands
     const slip = this.slipsWithAnswer(e.b, obj, actor);
     if (slip) { this.enemySlips(e, slip, obj, sourcePos, by); return -1; }
@@ -2735,21 +2737,20 @@ export class CombatSystem {
           this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), String(-v), '#ffb0b0');
         } else if (v > 0) { e.b.hp = Math.min(e.b.mhp, e.b.hp + v); e.drawBar(); }
       } else if (ef.code === 21 && ef.data_id === 0) {   // "normal attack" states: the attacker's own (poison blades...)
-        for (const f of actor?.featuresWith(32) || []) {
-          if (f.data_id <= 1 || f.data_id === STUN || e.b.stateResist(f.data_id)) continue;   // (stun: the groggy gauge instead)
-          if (Math.random() < ef.value1 * f.value * e.b.stateRate(f.data_id)) this.addEnemyState(e, f.data_id);
+        for (const id of actor?.atkStates() || []) {
+          if (id === STUN) continue;                   // (stun: the groggy gauge instead)
+          if (Math.random() < this.stateEffectChance(actor, e.b, obj, id, ef.value1 * actor.atkStatesRate(id))) this.addEnemyState(e, id);
         }
         this.groggyHit(e, actor, obj, mult, blow);
       } else if (ef.code === 21 && ef.data_id === 1) {   // instant death (ouija board etc.)
-        if (!e.b.stateResist(1) && Math.random() < ef.value1 * e.b.stateRate(1)) e.b.hp = 0;
+        if (Math.random() < this.stateEffectChance(actor, e.b, obj, 1, ef.value1)) e.b.hp = 0;
       } else if (ef.code === 21 && ef.data_id > 1) {
         const id = ef.data_id;
         if (id === 7 || id === 8) {
           if (Math.random() < this.breakRoll(e, id, ef.value1)) this.breakEnemy(e, id);
           continue;
         }
-        if (e.b.stateResist(id)) continue;
-        if (Math.random() < ef.value1 * e.b.stateRate(id)) this.addEnemyState(e, id);
+        if (Math.random() < this.stateEffectChance(actor, e.b, obj, id, ef.value1)) this.addEnemyState(e, id);
       } else if (ef.code === 22) {
         e.b.removeState(ef.data_id);
         if (e.stateTimers) delete e.stateTimers[ef.data_id];
@@ -2769,6 +2770,22 @@ export class CombatSystem {
   }
   // script 220: an item / skill that lands whatever the target evades - <絶対命中> on it, or its user's features
   certainHit(user, obj) { return /<絶対命中>/.test(obj?.note || '') || !!user?.certainty?.(0, obj?.hit_type ?? 1); }
+  // The weapon must meet its target first; RPG accuracy still decides whether
+  // that contact lands. HIT applies only to physical attacks (VX Ace item_hit).
+  hitLands(user, skill) {
+    if (this.certainHit(user, skill)) return true;
+    const success = Number(skill?.success_rate ?? 100), hit = skill?.hit_type === 1 ? user?.hit ?? 1 : 1;
+    const chance = THREE.MathUtils.clamp(success / 100 * hit, 0, 1);
+    return Number.isFinite(chance) && Math.random() < chance;
+  }
+  // Script 185 can ignore LUK or state susceptibility, but never state immunity.
+  stateEffectChance(user, target, skill, id, base = 1) {
+    if (target.stateResist(id)) return 0;
+    const note = skill?.note || '', forced = /<強制付与>/.test(note);
+    const rate = forced || /<有効度無視ステート付与>/.test(note) ? 1 : target.stateRate(id);
+    const luck = forced || /<運無視ステート付与>/.test(note) ? 1 : Math.max(0, 1 + ((user?.luk ?? 0) - (target.luk ?? 0)) * 0.001);
+    return THREE.MathUtils.clamp(base * rate * luck, 0, 1);
+  }
   missOn(e, obj) {
     const p = e.worldPos(new THREE.Vector3());
     G.audio?.playSystemSe(obj?.hit_type === 2 ? 19 : 18);
@@ -2795,7 +2812,9 @@ export class CombatSystem {
       this.popupAtPlayer(`-${dmg}`, '#ffb0b0');
     }
     for (const ef of obj.effects || []) {
-      if (ef.code === 21 && ef.data_id > 1 && !actor.stateResist(ef.data_id) && Math.random() < ef.value1 * actor.stateRate(ef.data_id)) { actor.addState(ef.data_id); this.timeActorState(ef.data_id); }
+      if (ef.code === 21 && ef.data_id === 1) {
+        if (Math.random() < this.stateEffectChance(actor, actor, obj, 1, ef.value1)) actor.addState(1);
+      } else if (ef.code === 21 && ef.data_id > 1 && !actor.stateResist(ef.data_id) && Math.random() < ef.value1 * actor.stateRate(ef.data_id)) { actor.addState(ef.data_id); this.timeActorState(ef.data_id); }
     }
     this.applyBuffEffects(actor, obj, TURN_SECONDS);
     if (actor.hp <= 0) this.playerFalls(e.battle);
@@ -2815,7 +2834,9 @@ export class CombatSystem {
       this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.75, p.z), String(dmg), '#c8f0ff');
     }
     for (const ef of skill.effects || []) {
-      if (ef.code === 21 && ef.data_id > 1 && !e.b.stateResist(ef.data_id) && Math.random() < ef.value1 * e.b.stateRate(ef.data_id)) this.addEnemyState(e, ef.data_id);
+      if (ef.code === 21 && ef.data_id === 1) {
+        if (Math.random() < this.stateEffectChance(e.b, e.b, skill, 1, ef.value1)) e.b.hp = 0;
+      } else if (ef.code === 21 && ef.data_id > 1 && !e.b.stateResist(ef.data_id) && Math.random() < ef.value1 * e.b.stateRate(ef.data_id)) this.addEnemyState(e, ef.data_id);
     }
     this.applyBuffEffects(e.b, skill, ENEMY_TURN);
     this.checkEnemyDeath(e);
@@ -2928,9 +2949,9 @@ export class CombatSystem {
   tickEnemyStates(e, dt) {
     if (e.alive) e.b.tickBuffs(dt);
     const timers = e.stateTimers;
-    if (!timers || !e.alive) return;
+    if (!e.alive) return;
     let removed = false;
-    for (const k of Object.keys(timers)) {
+    for (const k of Object.keys(timers || {})) {
       timers[k] -= dt;
       if (timers[k] <= 0) {
         delete timers[k]; e.b.removeState(+k); removed = true;
@@ -2938,12 +2959,17 @@ export class CombatSystem {
       }
     }
     if (removed) this.checkEnemyDeath(e);
+    if (!e.alive || e.b.hp <= 0) return;
     e.slipT = (e.slipT || 0) + dt;
     if (e.slipT < 2) return;
-    e.slipT = 0;
+    e.slipT -= 2;
     if (e.b.mrg > 0 && e.b.mp < e.b.mmp) e.b.mp = Math.min(e.b.mmp, e.b.mp + Math.max(1, Math.floor(e.b.mmp * e.b.mrg)));
     const hrg = e.b.hrg;
-    if (hrg < 0) {
+    if (hrg > 0) {
+      const before = e.b.hp;
+      e.b.hp = Math.min(e.b.mhp, e.b.hp + Math.trunc(e.b.mhp * hrg));
+      if (e.b.hp !== before) e.drawBar();
+    } else if (hrg < 0) {
       const v = Math.max(1, Math.floor(e.b.mhp * -hrg));
       e.b.hp = Math.max(0, e.b.hp - v);
       if (e.bar) e.bar.visible = true; e.drawBar();
@@ -3051,13 +3077,28 @@ export class CombatSystem {
       const els = attacker.atkElements();
       if (els.length) v *= Math.max(...els.map(e => target.elementRate(e)));
     }
-    if (skill.hit_type === 1) v *= target.pdr;
-    if (skill.hit_type === 2) v *= target.mdr;
+    if (skill.hit_type === 1 || skill.hit_type === 2) v *= this.damageRate(attacker, target, skill);
     const variance = skill.damage.variance || 0;
     const amp = Math.floor(Math.max(Math.abs(v) * variance / 100, 0));
     v += Math.floor(Math.random() * (amp + 1)) + Math.floor(Math.random() * (amp + 1)) - amp;
     v = Math.round(v * mult);
     return Math.max(0, v);
+  }
+  // Script 193 combines the attacker's penetration traits with this skill's
+  // bonus. The game also uses the trait spelling on skills, so accept it there
+  // when the proper skill-bonus tag is absent. Count the two spellings once.
+  damageRate(attacker, target, skill) {
+    const type = skill.hit_type, rate = type === 1 ? target.pdr : type === 2 ? target.mdr : 1;
+    if (rate >= 1 || type !== 1 && type !== 2) return rate;
+    const tag = new RegExp(`<ダメージ率貫通[：:]\\s*${type}\\s*,\\s*([^>]+)>`);
+    let penetrate = 0;
+    for (const object of attacker.featureObjects?.() || []) {
+      const value = tag.exec(object?.note || '')?.[1];
+      if (value) penetrate += evalFormula(value, attacker, target);
+    }
+    const bonus = /<ダメージ率貫通追加[：:]\s*([^>]+)>/.exec(skill.note || '')?.[1] ?? tag.exec(skill.note || '')?.[1];
+    if (bonus) penetrate += evalFormula(bonus, attacker, target);
+    return THREE.MathUtils.clamp(1 - (1 - rate) * (1 - THREE.MathUtils.clamp(penetrate, 0, 100) / 100), 0, 1);
   }
   // 攻撃ID変更 (script 203): equipment / states can swap the normal attack (skill 1) for their own skill;
   // with several, the highest <攻撃ID優先度変更:n> on the skill wins, then the highest id
@@ -3080,8 +3121,16 @@ export class CombatSystem {
   }
   // hits per blow: the skill's repeats (+ attack-count features) times its random-target count
   attackHits(skill, actor) {
-    const n = (skill.repeats || 1) + Math.max(0, Math.round(actor?.featuresSum(34) || 0));
-    return THREE.MathUtils.clamp(n * ({ 3: 1, 4: 2, 5: 3, 6: 4 }[skill.scope] || 1), 1, 6);
+    const repeats = Number(skill.repeats), extra = Number(actor?.featuresSum(34));
+    const n = Math.max(1, Number.isFinite(repeats) ? Math.trunc(repeats) : 1) + Math.max(0, Number.isFinite(extra) ? Math.trunc(extra) : 0);
+    // Original upgraded machine guns reach twelve hits. Keep valid counts while
+    // bounding a malformed database value before it can enqueue a huge volley.
+    return THREE.MathUtils.clamp(n * ({ 3: 1, 4: 2, 5: 3, 6: 4 }[skill.scope] || 1), 1, 64);
+  }
+  criticalLands(target, skill) {
+    if (skill.damage?.critical === false) return false;
+    const avoid = THREE.MathUtils.clamp(target.cev || 0, 0, 1);
+    return avoid === 0 || Math.random() >= avoid;
   }
   // a weapon blow (VR swing, desktop click, arrow / bullet): the attack skill's formula, element, hits,
   // drain and states (Raiden's axes hit by the wielder's HP, the youtou drains, daggers hit twice...)
@@ -3105,7 +3154,7 @@ export class CombatSystem {
     if (melee && !art) { const r = this.rushMult(); if (r < 1) { mult *= r; weak = true; } }
     if (e.state === 'idle' || (e.alertTime > 0 && e.state === 'chase' && !e.battle)) mult *= 2;     // (a backstab)
     if (e.state === 'guard' && !this.ignoresGuard(actor, skill)) mult *= 0.3;
-    if (skill.damage?.critical === false) crit = false;
+    if (crit && !this.criticalLands(e.b, skill)) crit = false;
     if (crit) mult *= 2;
     const p = e.worldPos(new THREE.Vector3());
     const hits = one ? 1 : this.attackHits(skill, actor);
@@ -3207,6 +3256,43 @@ export class CombatSystem {
     let id = 0;
     for (const o of e.b.featureObjects()) { const m = /<\s*反撃スキル\s*(\d+)\s*>/.exec(o?.note || ''); if (m) id = Math.max(id, +m[1]); }
     this.startCounter(e, $data.skills[id] || $data.skills[1]);
+  }
+  playerCanCounter(actor, enemy) {
+    return !!actor && actor.hp > 0 && !actor.isState(1) && !!enemy?.alive && !enemy.hidden && !this.outOfFight(enemy)
+      && !this.playerDead && !this.spectating && !this.disarmed && !this.restrained && !this.gripAdjust && !this.held && !this.ready
+      && !actor.states.some(id => ($data.states[id]?.restriction || 0) >= 4);
+  }
+  playerCounterSkill(enemy, incoming, actor = G.state.party.leader()) {
+    if (!this.playerCanCounter(actor, enemy) || !incoming || /<反撃不可>/.test(incoming.note || '')
+      || incoming.hit_type !== 1 && !/<反撃可能>/.test(incoming.note || '') || !(actor.cnt > 0) || Math.random() >= actor.cnt) return null;
+    let id = 0;
+    for (const obj of actor.featureObjects()) {
+      const match = /<\s*反撃スキル\s*(\d+)\s*>/.exec(obj?.note || '');
+      if (match) id = Math.max(id, +match[1]);
+    }
+    return $data.skills[id] || this.playerAttackSkill(actor);
+  }
+  queuePlayerCounter(enemy, skill) {
+    const actor = G.state.party.leader();
+    if (!skill || !this.playerCanCounter(actor, enemy)) return;
+    // Original script 173 applies the incoming attack before the counter. Its
+    // automatic response spends no skill cost and targets only the attacker.
+    this.later(150, () => {
+      if (G.state.party.leader() !== actor || !this.playerCanCounter(actor, enemy)) return;
+      const strike = () => {
+        if (G.state.party.leader() !== actor || !this.playerCanCounter(actor, enemy)) return;
+        this.applyUsableToEnemy(enemy, skill, this.castOrigin(), { canReflect: false });
+      };
+      strike();
+      const normalAttack = this.playerAttackSkill(actor)?.id === skill.id;
+      const repeats = Number(skill.repeats);
+      const hits = normalAttack ? this.attackHits({ ...skill, scope: 1 }, actor)
+        : THREE.MathUtils.clamp(Number.isFinite(repeats) ? Math.trunc(repeats) : 1, 1, 64);
+      for (let i = 1; i < hits; i++) this.later(i * 120, strike);
+      const position = enemy.worldPos(new THREE.Vector3()); position.y += enemy.h * 0.5;
+      if (skill.animation_id > 0) G.screen.playAnimationOn(position, skill.animation_id, { rate: 3, height: enemy.h });
+      G.audio?.playSystemSe(10); G.input.haptic('right', 0.6, 60);
+    });
   }
   // a counter (反撃) or an answer to a slipped blow (回避時スキル): a quick blow at the player, 0.35 s to see it
   // coming; not a turn of the enemy's own (as in the original, it comes inside the player's action)
@@ -3392,20 +3478,34 @@ export class CombatSystem {
       G.input.haptic('left', 0.2, 30); G.input.haptic('right', 0.2, 30);
       return;
     }
-    // what the player always evades (script 220) - and a spell turned back (magic reflection: 거울의 대방패)
-    if (e && skill && !this.certainHit(e.b, skill) && actor.certainty(1, skill.hit_type ?? 1)) { G.audio?.playSystemSe(18); return; }
-    if (e && skill?.hit_type === 2 && actor.mrf > Math.random()) { this.reflectOntoEnemy(e, skill); return; }
-    // slipped in a stance that answers it (the player's own 리포스트, script 191): nothing lands, it is answered
+    // VX invocation chooses counter before reflection. Script 173 then applies
+    // this attack normally before the selected counter is allowed to answer.
+    const counter = e && this.playerCounterSkill(e, skill, actor);
+    // a spell turned back (magic reflection: 거울의 대방패)
+    if (!counter && e && skill?.hit_type === 2 && actor.mrf > Math.random()) { this.reflectOntoEnemy(e, skill); return; }
+    if (e && skill && !this.hitLands(e.b, skill)) {
+      G.audio?.playSystemSe(17); this.queuePlayerCounter(e, counter); return;
+    }
+    // what the player always evades (script 220)
+    if (e && skill && !this.certainHit(e.b, skill) && actor.certainty(1, skill.hit_type ?? 1)) {
+      G.audio?.playSystemSe(18); this.queuePlayerCounter(e, counter); return;
+    }
+    // Passive armor evasion also applies without a special riposte-note skill.
     const slip = e && this.slipsWithAnswer(actor, skill, e.b);
-    if (slip) { this.playerSlips(e, slip, skill); return; }
+    if (slip) { this.playerSlips(e, slip, skill); this.queuePlayerCounter(e, counter); return; }
     if (!delayed && e && skill && !e.puppet) this.scheduleDelayed(e, skill);
     // near death, a companion who stands in for others (身代わり) takes a blow that is not a sure hit, as the
     // original's substitute does
     if (!certain && actor.hp < actor.mhp / 4) {
       const sub = this.allies.substitute();
-      if (sub) { sub.takeHit(e, skill); return; }
+      if (sub) { sub.takeHit(e, skill); this.queuePlayerCounter(e, counter); return; }
     }
-    let dmg = this.withGuardBuff(actor, () => this.computeDamage(e ? e.b : actor, actor, skill, mult));
+    // Original item_cri is the attacker's CRI reduced by the target's CEV.
+    // Effect-only skills and zero chances must not create a critical roll.
+    const criticalChance = skill?.damage?.type > 0 && skill.damage.critical === true
+      ? THREE.MathUtils.clamp((e?.b.cri || 0) * (1 - THREE.MathUtils.clamp(actor.cev || 0, 0, 1)), 0, 1) : 0;
+    const damageMult = criticalChance > 0 && Math.random() < criticalChance ? mult * 2 : mult;
+    let dmg = this.withGuardBuff(actor, () => this.computeDamage(e ? e.b : actor, actor, skill, damageMult));
     dmg = Math.round(dmg * G.settings.difficulty);
     // a share of the HP / MP the skill takes away besides (HP / MP recovery with a minus - 조커 -100%, 하얀 충격
     // -99%, 황산 -25%, 톱니바퀴 MP -8%: VX Ace's item_effect_recover_hp, by the target's recovery rate); no guard
@@ -3442,7 +3542,7 @@ export class CombatSystem {
       G.audio?.playSystemSe(14);
       this.reportStruck(e, 0);
     }
-    if (perfect) return;                              // (nothing got through)
+    if (perfect) { this.queuePlayerCounter(e, counter); return; } // (nothing got through)
     dmg += share;
     if (mpShare > 0) actor.mp = Math.max(0, actor.mp - Math.floor(mpShare * G.settings.difficulty));
     if (dmg > 0) {
@@ -3453,16 +3553,21 @@ export class CombatSystem {
     }
     // the rest of it lands with no damage too (a sleep spell, a curse - the states only came with damage before)
     for (const ef of skill?.effects || []) {
-      if (ef.code !== 21 || ef.data_id <= 1 || actor.stateResist(ef.data_id)) continue;
+      if (ef.code !== 21 || ef.data_id <= 0 || actor.stateResist(ef.data_id)) continue;
+      if (ef.data_id === 1) {
+        if (Math.random() < this.stateEffectChance(e?.b, actor, skill, 1, ef.value1)) actor.addState(1);
+        continue;
+      }
       // (blown up by the wind: always, as in the original, and up into the sky it goes - bossmoves.js liftInfo)
       const lift = !delayed && this.liftInfo().states.has(ef.data_id);
-      if (lift || Math.random() < ef.value1 * 0.6 * actor.stateRate(ef.data_id)) {
+      if (lift || Math.random() < this.stateEffectChance(e?.b, actor, skill, ef.data_id, ef.value1 * 0.6)) {
         actor.addState(ef.data_id); this.timeActorState(ef.data_id);
         if (lift) this.liftPlayer(e);
       }
     }
     this.applyBuffEffects(actor, skill, TURN_SECONDS, 0.6);
     if (actor.hp <= 0) this.playerFalls(e?.battle);
+    else this.queuePlayerCounter(e, counter);
   }
   // (a co-op guest struck by the host's enemy: how it went - 0 it landed, 1 guarded, 2 a perfect guard - is shown on
   // this player as the host sees it)
@@ -6541,7 +6646,7 @@ export class CombatSystem {
         const charge = THREE.MathUtils.clamp((G.time - this.deskCharge - 0.15) / 1.0, 0, 1);
         this.deskCharge = null;
         if (!this.swing && this.stamina > 0.05) {
-          this.swing = { t: 0, hit: new Set(), charge };
+          this.swing = { t: 0, hit: new Set(), charge, duration: 0.32 / playerRecoveryRate(G.state.party.leader()) };
           this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.12)); this.staminaDelay = 0.7;
           G.audio?.playSe(G.seAt('Wind7', 60, charge >= 0.35 ? 100 : 140));
         }
@@ -6549,10 +6654,12 @@ export class CombatSystem {
       if (G.input.breakPressed()) this.pressBreak();
       if (this.swing) {
         const s = this.swing;
+        const duration = s.duration || 0.32, before = Math.min(1, s.t / duration);
         s.t += dt;
-        const k = Math.min(1, s.t / 0.32);
+        const k = Math.min(1, s.t / duration);
         desktopSwing(this.weapon, k, G.three.camera);
-        if (k > 0.25 && k < 0.7) {
+        // A short recovery can cross the whole hit window in one rendered frame.
+        if (before < 0.7 && k > 0.25) {
           const head = G.player.headWorld(new THREE.Vector3());
           const f = G.player.forwardVec();
           const reach = this.weaponLength() + 0.9;
@@ -6570,7 +6677,7 @@ export class CombatSystem {
             }
           }
         }
-        if (k > 0.3 && k < 0.6 && !s.npcDone) {
+        if (before < 0.6 && k > 0.3 && !s.npcDone) {
           s.npcDone = true;
           const head = G.player.headWorld(new THREE.Vector3());
           const f = G.player.forwardVec();
@@ -6774,9 +6881,8 @@ export class CombatSystem {
   // Script 191 回避時発動スキル: <全回避時スキル:n[,p]> (or 物理- / 魔法- / 必中-, by the attack's hit type) on a battler's
   // states, equipment or self - an attack it slips, it answers with skill n (p % of the time): 흰 유니콘 유니스's
   // 리포스트 (a stance of evasion +100% for two of its actions, every slipped blow answered by a lunge, 판트), and the
-  // player's own with 유니스의 자검. The port has no evasion roll of its own (the player dodges), so a battler slips
-  // a blow only while it has such an answer: by its evasion (physical) or magic evasion (magical); a sure hit
-  // (hit type 0) is never slipped
+  // player's own with 유니스의 자검. Passive armor/state evasion uses the same
+  // roll even without an answer skill; a sure hit (hit type 0) is never slipped.
   evadeAnswers(b, hitType) {
     const out = [];
     for (const o of b?.featureObjects?.() || []) {
@@ -6794,7 +6900,6 @@ export class CombatSystem {
     const ht = skill?.hit_type ?? 1;
     if (!b || ht === 0 || this.certainHit(user, skill)) return null;
     const answers = this.evadeAnswers(b, ht);
-    if (!answers.length) return null;
     return Math.random() < (ht === 1 ? b.eva : b.mev) ? answers : null;
   }
   // (the stance shows while it lasts)
@@ -7283,11 +7388,12 @@ export class CombatSystem {
   // instead (gunShotSkill - 거룩한 총검)
   fireRanged() {
     const kind = this.shotKind, actor = G.state.party.leader();
+    const pace = playerRecoveryRate(actor);
     const shot = kind === 'gun' && actor ? this.gunShotSkill(actor) : null;
-    if (shot) { if (!G.vr) this.deskActUntil = G.time + DESK_ACT + 0.6; this.fireSkillShot(actor, shot); return; }
+    if (shot) { if (!G.vr) this.deskActUntil = G.time + (DESK_ACT + 0.6) / pace; this.fireSkillShot(actor, shot); return; }
     const n = kind !== 'gun' || !actor ? 1 : this.attackHits(this.skillByState(actor, this.playerAttackSkill(actor)), actor);
-    if (!G.vr) this.deskActUntil = G.time + DESK_ACT + (n - 1) * BURST_GAP;     // (PC: the hands busy while it goes - handsBusy)
-    this.rangedCooldown = kind === 'magic' ? 0.9 : 0.6 + (n - 1) * BURST_GAP;
+    if (!G.vr) this.deskActUntil = G.time + DESK_ACT / pace + (n - 1) * BURST_GAP; // keep the hands busy through the unchanged burst
+    this.rangedCooldown = (kind === 'magic' ? 0.9 : 0.6) / pace + (n - 1) * BURST_GAP;
     const brk = this.breakArmed();                 // (fired with Break held: the first shot carries the Break)
     this.fireShot(kind, n > 1, brk);
     for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot(kind, true, null));
@@ -7316,7 +7422,9 @@ export class CombatSystem {
     this.actorPays(actor, s);
     this.skillCD[s.id] = G.time + this.coolSeconds(s);
     const n = THREE.MathUtils.clamp((s.repeats || 1) * ({ 4: 2, 5: 3, 6: 4 }[s.scope] || 1), 1, 8);
-    this.rangedCooldown = 0.6 + (n - 1) * BURST_GAP;
+    const pace = playerRecoveryRate(actor), tail = (n - 1) * BURST_GAP;
+    if (!G.vr) this.deskActUntil = Math.max(this.deskActUntil ?? -Infinity, G.time + DESK_ACT / pace + tail);
+    this.rangedCooldown = 0.6 / pace + tail;
     const volley = { shown: false };
     this.fireShot('gun', true, null, { skill: s, volley });
     for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot('gun', true, null, { skill: s, volley }));

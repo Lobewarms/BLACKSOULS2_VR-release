@@ -916,3 +916,63 @@ grounding is limited to verified stationary Map1_b/wooden-horse props; preserve
 wall attachments and actual top surfaces. Tests cover geometry, support height,
 source-frame selection, page changes and resource disposal. Private N-API canvas
 inspection used actual local art without computer control or saves access.
+
+## Gameplay effect audit (0.2.16)
+
+Keep walking speed, AGI, attack-count traits and extra-action traits separate.
+Original Game_Action.speed adds AGI, random order, item.speed and normal-attack
+feature 33 to choose turn order. It does not define walking or animation speed.
+AGI equipment/state multipliers already change real stats and formulas such as
+Triple Shot/Thousand Arrows. Enemy windups and companion movement/actions use AGI.
+Do not claim manual player actions reproduce the original turn-order scheduler.
+
+Feature 61 extra actions adapt to shorter player recovery using the same expected
+action-count idea as enemy actionPace: 1 plus the extra-action probabilities.
+Snapshot per action, shorten desktop swings and PC/VR ranged base recovery, and
+preserve burst spacing, hit counts, costs, deliberate charge time and turn-based
+skill cooldowns. A short desktop swing crossing its active interval during a
+slow frame must still hit once. Physical VR melee keeps its gesture thresholds
+and per-target debounce; do not turn one held pose into repeated free attacks.
+
+Weapon/state effects must use actual attack and damage paths. Normal attack state
+traits include death state 1, combine rates for a given state before rolling and
+apply original resistance/rate/LUK rules. Preserve the groggy replacement for stun.
+Keep full legitimate attack counts (upgraded Hans' Machine Gun reaches 12 hits),
+with bounded validation for malformed values. Accuracy penalties, skill success
+rates and target critical evasion must participate in real hit/critical rolls.
+The original normal-game critical multiplier is 2; do not silently replace it.
+
+Script 193 reads damage-rate piercing tags from feature objects and a differently
+spelled additional tag from skills, while the installed data puts the former tag
+on many skills (including weapon 445's attack skill 591). Accepting both spellings
+on the skill is an intentional compatibility repair of that original data/script
+mismatch. Preserve physical/magical type and original feature-object tags.
+
+Passive EVA/MEV must work without a counter-on-evasion note. Original active script
+173 changes ordinary counters to apply the incoming hit first, then counter if
+the target can act. Select CNT before MRF, preserve evasion and miss application,
+and do not negate the incoming hit because CNT won. Normal counters use weapon
+attack-count traits for consistency with this port's normal attacks; original
+Ruby invokes item_apply directly, so this is a port adaptation rather than exact
+original counter repetition. Incoming criticals roll enemy CRI times (1-CEV)
+after hit/evasion/substitution and apply the original normal-game multiplier 2.
+Zero/absent CRI, full immunity, effect-only and noncritical skills do not consume
+an extra RNG roll. Guards and attack-first counters keep their existing order.
+Critical multiplication applies only to formula damage, not independent
+percentage HP effects attached to the same skill. Preserve the separate incoming
+damage multiplier for those percentage effects.
+Death-only enemy skills (e.g. skill 310) must
+use the existing death/save/revive flow after a real hit, respecting resistance
+and perfect guards. Existing nonfatal hostile-state scaling remains a separate
+real-time adaptation. Enemy regeneration must not depend on having state timers;
+positive HRG heals to maximum HP and never revives a dead enemy.
+Reflected death also targets the original spell caster, using that caster as both
+user and target for susceptibility/LUK. Preserve player death saves and enemy
+revival through the existing fall/death handlers; never invoke reflection again.
+
+Use synthetic database fixtures for shipped regressions. Read-only inspection of
+the installed original scripts/database stays private. These checks establish
+specific effect behavior, not exhaustive compatibility for every story event.
+The user chose gameplay effects first while the game was closed. The stationary
+skeleton screenshot remains unidentified and needs a later live inspection; do
+not claim this release fixes that particular object.
