@@ -1466,3 +1466,16 @@ saves isolated. This is not a physical headset or complete story playthrough.
 passed locally. New regressions cover palette preservation, malformed bounds,
 real map/common-event/child execution, wait duration, cinematic map reset,
 battle ownership and real co-op screen transport.
+
+## Public project presentation
+
+The user requested the original fan-mod notice, free-distribution/streaming terms
+and original gameplay video on the main README, followed by an upstream PR with
+sample screenshots. Keep original-author credit and the actual LICENSE intact;
+the original video must not be presented as footage of every fork improvement.
+Only the five selected, labelled application renders in docs/screenshots were
+authorized for public documentation. They are excluded by the release allowlist.
+Do not publish private audit reports, review controls, original asset files,
+game data or saves. Screenshot character values are test scene state, not proof
+of normal progression. Keep detailed developer change inventories in PRs or this
+file; the main README remains player-focused.

@@ -1,15 +1,43 @@
 # BLACK SOULS II VR
 
-Play BLACK SOULS II in first person on your Windows PC or with a PC VR headset.
+Unofficial fan mod for playing BLACKSOULS II in first person on your Windows PC
+or with a PC VR headset. Not affiliated with the original developer or publisher.
+No game files included - you need the original game.
+
+This is a **modified community version** by dimasma0305, based on
+[the original mod by Lobewarms](https://github.com/Lobewarms/BLACKSOULS2_VR-release).
 Meta Quest 3 connects through Quest Link, Air Link or Virtual Desktop.
-You need your own copy of the original BLACK SOULS II game.
 
 ## Download
 
 **[Download for Windows](https://github.com/dimasma0305/BLACKSOULS2_VR-release/releases/latest)**
 
+Prefer a ZIP? Download the **portable ZIP** from the same release page.
+Setup and controls are in the README / CONTROLS files inside the ZIP
+(English, Japanese, Korean and Simplified Chinese).
+
 Run the installer, then open **BLACK SOULS II VR** from the Start menu.
 A desktop shortcut is optional during setup.
+
+## Gameplay video
+
+[![Watch the original BLACK SOULS II VR gameplay video](https://img.youtube.com/vi/J8WaV70g5cc/maxresdefault.jpg)](https://www.youtube.com/watch?v=J8WaV70g5cc)
+
+[Watch on YouTube](https://www.youtube.com/watch?v=J8WaV70g5cc).
+This video is from the original mod's page; it does not demonstrate every
+change in this community version.
+
+## Community version highlights
+
+- A Windows installer, automatic game-folder discovery and updates from this project's releases.
+- Separate PC and VR layouts, clearer translucent HUD panels and a circular area minimap.
+- Familiar original-style menus, readable dialogue choices and the game's own status icons.
+- Gameplay fixes for equipment effects, consumables, pickups and dialogue.
+- Corrections to terrain, floating scenery, area skies and environmental colours.
+- Earned Steam achievement support when playing a compatible Steam copy.
+
+See the [sample screenshots](docs/screenshots/README.md) for the launcher,
+PC interface and environmental colour comparison.
 
 ## Play on your PC
 
@@ -69,3 +97,20 @@ For more help, see the [full setup guide](docs/upstream/README_en.txt) or [repor
 This is a modified community version by dimasma0305 of the original
 [BLACK SOULS II VR mod by Lobewarms](https://github.com/Lobewarms/BLACKSOULS2_VR-release).
 Free distribution only, under the original [license](LICENSE). No original game files are included.
+
+## Terms
+
+- Free to download and play.
+- Videos and streams of play are welcome, monetized ones included. For the
+  original game's own streaming rules, follow its developer's guidelines.
+- Modified versions may be shared for free if they credit
+  [the original mod's page](https://github.com/Lobewarms/BLACKSOULS2_VR-release)
+  and clearly state that they are modified, not the original. Please also
+  credit this community page when sharing a version based on this fork.
+- To share the original, share
+  [its page's link](https://github.com/Lobewarms/BLACKSOULS2_VR-release)
+  rather than the file.
+- No selling, and no distribution bundled with the original game's files.
+
+These terms summarize the original mod's [LICENSE](LICENSE). BLACKSOULS II
+and its assets belong to their respective rights holders.
