@@ -7,6 +7,7 @@ import { runRuby, evalRuby } from './rubyexpr.js';
 import { commonEventList } from '../entities/character.js';
 import { itemData } from './state.js';
 import { steamAchievementName } from './steam-achievements.js';
+import { ambientMapTone, isMapAmbientTone } from '../world/ambient-tone.js';
 
 // the interpreter running a command right now (the innermost): what kind of run made a change to the world
 // (coopworld.js writeSyncs)
@@ -617,7 +618,13 @@ export class Interpreter {
   c223() {
     const troop = (this.root || this).troop;
     const battle = troop ? G.combat?.battleOf?.(this) : null;
-    if (!troop || battle && !battle.done) G.screen.startTone(this.params[0], this.params[1], battle);
+    // The original random BGM/weather common event also selects a persistent
+    // environmental grade. Exact map-note restores after cutscenes do too.
+    // Identify the actual common-event list, never a similar-looking cutscene.
+    const environment = !troop && ((!!this.list && this.list === $data.commonEvents[290]?.list)
+      || isMapAmbientTone(this.params[0], G.map?.map?.note));
+    const tone = environment ? ambientMapTone(this.params[0]) : this.params[0];
+    if (!troop || battle && !battle.done) G.screen.startTone(tone, this.params[1], battle);
     if (this.params[2]) this.wait(this.params[1]);
     return true;
   }

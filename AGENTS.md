@@ -1099,7 +1099,8 @@ This is a shared presentation repair, not a claim of manually remodeling 410 map
 
 MapAtmosphere owns diffuse support, a restrained neutral local light and visibility
 distances. Original painted shadows should remain legible without a universal
-brown torch or black dungeon fog. Apply authored tones once on entry; geometry
+brown torch or black dungeon fog. Apply map tones through the natural-colour
+policy below once on entry; geometry
 rebuilds must retain scripted tone/weather changes. Missing tone/weather notes
 reset to neutral/none, like original automatic scripts 133/134. Title/game-over
 teardown clears generated weather/effects and the previous map's tone.
@@ -1420,3 +1421,48 @@ steps; Winterbell's steep front flights have continuous shared endpoints. The
 Map309 roof flag is unreachable decorative art from both original arrivals.
 This is a source/geometry and movement audit, not every story-switch configuration
 or a physical headset playthrough. Preserve that distinction in release claims.
+
+## Natural environmental colours (0.2.25)
+
+The user now explicitly prefers natural source-art colours across every region,
+including green forest grass rather than the original heavy red/desaturated 2D
+screen grade. This supersedes the earlier instruction to reproduce complete
+automatic environmental tones. Do not recolour the original game files or turn
+authored autumn leaves, fire, blood or fantasy artwork into generic green art.
+
+The red forest was caused by the original Map161/44/162 note
+(34,-34,-34,170): weighted grayscale removes two thirds of source saturation,
+then channel offsets overpower the remaining green. Neutral lights and the
+pinned sRGB rendering path were verified; do not add compensating lamp tints,
+gamma changes or a second tone pass.
+
+ambientMapTone bounds environmental RGB spread to12, gray to12, and the common
+negative brightness to-24; positive common brightness is discarded. Preserve a
+small regional hint and darker nights without washing out source textures.
+MapAtmosphere adapts notes once on entry. Interpreter223 adapts the actual
+CommonEvent290 random weather/BGM list and exact restores of the current raw
+map-note tone. Troop-owned commands always retain original strength and lifetime.
+Unrelated scripted flashes, fades, blackouts and weather rules remain exact.
+Geometry rebuilds retain current scripted state.
+
+Adapt before the existing ScreenFx command. Its stored/networked tone is already
+display-ready; co-op must not normalize it again. No new screen channels, save
+fields or protocol metadata were introduced. WorldTone keeps its exact low-level
+math and original overlay exclusions.
+
+Private read-only post-policy audit reparsed all410 original maps:144 tones
+adapted,266 unchanged; all235 neutral maps and all29 snow maps unchanged.
+All4 CE290 candidates adapt. Across414 map/common-event tones,0 bounds violations
+and0 green-palette failures. Actual Map161 grass RGB(37,121,67) went from
+old(106,66,48) to new(36,104,53) in the original-source swatch calculation.
+Night surfaces retain a restrained cool cue. Raw reports/art stay outside Git.
+
+Browser visual QA used original Map161 before/after at the same camera plus
+Spore Forest38, Fuming Forest126, Snowy Road331 and night Town5. Green ground,
+source leaf colours, mushroom colours, neutral snow and readable night buildings
+were inspected; captures are private ignored previews. Actors were paused and
+saves isolated. This is not a physical headset or complete story playthrough.
+555 JavaScript regressions, ESLint, production build, Ruff and8 packaging tests
+passed locally. New regressions cover palette preservation, malformed bounds,
+real map/common-event/child execution, wait duration, cinematic map reset,
+battle ownership and real co-op screen transport.

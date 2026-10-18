@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.24
+BLACK SOULS II VR - community version 0.2.25
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,19 +7,16 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Returning from VR restores the desktop view to the current window without
-  stretching. Your position, facing direction and open menus carry across.
-- VR entry prepares the monitor view earlier. Leaving a healthy VR session no
-  longer restarts the headset connection before you can enter VR again.
-- Held controls are cleared when changing modes, so switching does not become
-  an attack, movement or menu selection. The VR HUD also works without a left
-  controller connected yet.
-- Corrected the raised route at Abandoned Station Hanover, the split floor
-  in Stomach, the broken metal staircase in the graveyard, and related wooden
-  stair and ladder joins in the sewers and Chaos Dungeon.
+- Areas retain the natural colours of the original artwork. Green forest
+  floors no longer turn red or orange under a strong screen-wide filter.
+- Environmental colour casts and desaturation are gentler throughout the
+  world. Nights remain darker with a subtle cool tint; snow stays neutral.
+- Weather-driven colour changes and returns from cutscenes use the same
+  readable colours. Battle flashes, blinding effects and fades keep their
+  original strength and duration.
 
-The Steam achievements, university stairs, clock-tower blinding effect, river,
-scenery, atmosphere, dialogue and gameplay fixes from previous updates are included.
+The VR/desktop switching, terrain, Steam achievements, clock-tower blinding,
+river, scenery, dialogue and gameplay fixes from previous updates are included.
 
 Close the game and previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

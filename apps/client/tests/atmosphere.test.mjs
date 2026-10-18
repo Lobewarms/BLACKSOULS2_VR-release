@@ -4,8 +4,9 @@ import * as THREE from 'three';
 import { G } from '../src/core/globals.js';
 import { MapAtmosphere, mapAtmosphereNotes } from '../src/world/atmosphere.js';
 import { Sky } from '../src/world/sky.js';
+import { ambientMapTone } from '../src/world/ambient-tone.js';
 
-test('map entry retains full authored tone and weather, bounds bad values, and resets absent tags', () => {
+test('map-note parser retains raw authored tone and weather, bounds bad values, and resets absent tags', () => {
   assert.deepEqual(mapAtmosphereNotes('<色調 -68, -68, 0, 68>\n<天候 snow,3>'), {
     tone: { red: -68, green: -68, blue: 0, gray: 68 }, weather: { type: 'snow', power: 3 },
   });
@@ -28,13 +29,13 @@ function environment(t) {
   return { scene, atmosphere, tones, weather, skies, maps, screen, effects, set };
 }
 
-test('real map presentation uses distinct area visibility and neutral fill without doubling negative tones', t => {
+test('real map presentation uses distinct area visibility and a restrained environmental grade with neutral fill', t => {
   const e = environment(t), map = { tileset_id: 25, note: '<色調 -68,-68,0,68>' };
   const p = e.set(map, { mapId: 5 });
   assert.equal(p.outdoor, true); assert.ok(e.scene.fog.far > 100);
   assert.equal(e.atmosphere.ambient.intensity, p.ambient);
   assert.equal(e.atmosphere.hemi.intensity, p.hemi, 'negative authored tone must not dim hemi again');
-  assert.deepEqual(e.tones[0], [{ red: -68, green: -68, blue: 0, gray: 68 }, 0]);
+  assert.deepEqual(e.tones[0], [ambientMapTone({ red: -68, green: -68, blue: 0, gray: 68 }), 0]);
   assert.deepEqual(e.skies[0], [map, { background: p.background, fogColor: p.fogColor, fallbackSky: p.fallbackSky }]);
   assert.equal(e.atmosphere.headlight.color.getHex(), 0xffffff);
   const cave = e.set({ tileset_id: 5, note: '' }, { mapId: 215 });

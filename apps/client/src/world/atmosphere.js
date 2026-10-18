@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { areaProfile } from './area-profiles.js';
+import { ambientMapTone, mapNoteTone } from './ambient-tone.js';
 
 const bound = (n, low, high) => Math.max(low, Math.min(high, Number(n) || 0));
 
@@ -7,11 +8,9 @@ const bound = (n, low, high) => Math.max(low, Math.min(high, Number(n) || 0));
 // Keep these separate from lighting: an authored blue night is not a request
 // to darken the lamps a second time.
 export function mapAtmosphereNotes(note = '') {
-  const tone = /<色調\s+(-?\d+)\s*,\s*(-?\d+)\s*,\s*(-?\d+)(?:\s*,\s*(-?\d+))?\s*>/i.exec(note);
   const weather = /<天候\s+(none|rain|storm|snow)\s*,\s*(\d+)\s*>/i.exec(note);
   return {
-    tone: { red: bound(tone?.[1], -255, 255), green: bound(tone?.[2], -255, 255),
-      blue: bound(tone?.[3], -255, 255), gray: bound(tone?.[4], 0, 255) },
+    tone: mapNoteTone(note),
     weather: { type: weather?.[1].toLowerCase() || 'none', power: bound(weather?.[2], 0, 9) },
   };
 }
@@ -41,7 +40,7 @@ export class MapAtmosphere {
     this.scene.background = new THREE.Color(p.background);
     if (!rebuild) {
       const notes = mapAtmosphereNotes(map?.note);
-      screen?.startTone(notes.tone, 0);
+      screen?.startTone(ambientMapTone(notes.tone), 0);
       screen?.setWeather(notes.weather.type, notes.weather.power, 0);
       Promise.resolve(environment?.setMap(map)).catch(error => console.warn('Map environment unavailable', error));
     }
