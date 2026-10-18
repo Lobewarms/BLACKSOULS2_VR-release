@@ -1338,3 +1338,85 @@ with real Player.update/resolve and GameMap.playerEdgePassable. They preserve
 the original side-wall block and do not trigger falls on the ramp. Rendered
 review checked the approach, halfway point and gallery. Private source maps and
 art stay outside Git; dev previews disable saves and achievement submissions.
+
+## Desktop / headset handoff (0.2.24)
+
+The pinned Three r170 WebXRManager overwrites the shared application camera's
+projection, FOV and zoom with headset values. Its native-session end listener
+restores the entry framebuffer size/DPR but leaves that lens in place. Restore
+the saved desktop lens and projection inverse with the CURRENT window size/DPR
+only after manager sessionend; raw XRSession end runs before Three's cleanup.
+Use the first valid XR viewer pose to preserve world heading and authoritative
+current-map XZ. No delayed recenter may run after exit or capture an old map.
+On exit retain physical XZ/look, normalize rig yaw and camera roll, and preserve
+floor/jump/fall state. Title artwork uses entry-head coordinates even when an
+old G.map remains retained after returning to title.
+
+Input boundaries flush stale desktop and controller actions and require release
+of initially held XR controls. Desktop soft look resumes only when it was wanted,
+the page is focused and gameplay owns input. Menus/dialogue/name and number edits
+retain state and repaint before their first render in the new mode. Without a
+left controller, VR uses the small head-relative HUD until a wrist is available.
+Failed/late session grants, rejected exits and uncancellable setSession promises
+must not orphan a live session or clobber a newer attempt. Healthy exits do not
+restart the browser XR process; actual failed granted starts retain recovery.
+
+Spectator.prepare schedules the second WebGL context, compileAsync and hidden
+geometry/texture warmup after PC map presentation. sessionstart and the first
+unprepared XR render do not synchronously create/compile that monitor renderer.
+Keep its context and uploaded resources across sessions, guard superseded map
+preparations and restore frustum-culling flags after the hidden upload draw.
+
+Regressions execute the real pinned WebXRManager/camera lifecycle with synthetic
+platform frames and test input/UI ownership separately. Private rendered QA uses
+original maps with simulated headset lens changes; no physical Quest timing or
+headset playthrough was measured. Keep review controls/data outside releases.
+
+## Terrain continuity and source floor semantics (0.2.24)
+
+Private read-only height/edge analysis covers all410 original maps with the
+direct-transfer arrival union from maps and CommonEvents. A height difference alone is
+not a defect: ladders, side-facing stairs, authored terraces and genuine fall
+endpoints must retain their rules. Original images/data and generated audit
+reports remain outside Git/releases; shipped regressions use synthetic layouts.
+
+Hanover Map161's winding passage widens enough to become artificial flat rooms
+in the fall solver. It compressed an11-tile endpoint rise into one row. Only
+excessive inferred, unprofiled, non-ladder ramps can extend through unanchored
+degree-two passage groups. Bound the chain, require north/south endpoint rooms,
+reject side exits/protected cells/overlap, and distribute the same endpoint rise
+over its complete corridor. Preserve original fall rooms, shafts, explicit
+profiles, walls and passage flags. The real passage now spans12rows with rise
+11/12 per row; its original10-row cliff fall still drops10tiles.
+
+Stomach Map42's A4 source sheet 食肉園 (3) uses autotile kind123 as a passable
+checkerboard floor. That exact source/kind is excluded from wall-side inference
+per layer; a different lower wall layer must still count. No other source slot,
+kind or collision flag changes. The private real-map passable seam count drops
+from18 to0. The graveyard Map313 metal stair has a transfer door rather than an
+upper flat room; a bounded profile joins its original0/-2 endpoints through the
+flat middle landing at-1. Real-map seams drop3to0; adjacent walls remain solid.
+
+Unresolved narrow fall-map pockets inherit a level only when every placed,
+originally two-way-walkable boundary agrees on one flat height. Mixed/sloping,
+protected, blocked and unknown-room boundaries remain untouched. This completes
+Hanover's eight sideways grass/hay seams, including the10to0 default-height
+error at30,6to31,6, without altering its15 established fall edges or132 shaft cells.
+
+Continued ladder/fall runs join the neighboring facing surface, not a sloping
+cell's midpoint. Original Map56's0.5-tile ladder gap is gone; synthetic tests
+cover both endpoints and retain a genuine fall. Chaos Maps217/282 explicitly
+opt into passageLevels so blocked painted roof/lip contacts cannot merge separate
+floors. Only those opted-in maps prefer a fully two-way-walkable climb over a
+contradictory decorative wall between the same components; one blocked rung
+cannot qualify. Original passage/solid/pit/empty classifications are unchanged.
+Map217's wooden staircase and Map282's3to0 ladder each lose their one bad seam.
+
+The final common-transfer-aware410-map comparison has0 errors:92 candidate
+edges become60, exactly32 removed, with no new or increased gaps. Two false
+Hanover single-row steep ramps also disappear. Remaining candidate edges were
+checked against source art: stair/ladder side borders or authored side-facing
+steps; Winterbell's steep front flights have continuous shared endpoints. The
+Map309 roof flag is unreachable decorative art from both original arrivals.
+This is a source/geometry and movement audit, not every story-switch configuration
+or a physical headset playthrough. Preserve that distinction in release claims.

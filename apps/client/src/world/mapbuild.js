@@ -14,7 +14,7 @@ export function meshHintOptions(mapId) {
     cabinets: H.cabinetHints(mapId), parallaxWalls: H.parallaxWalls(mapId), caps: H.capHints(mapId), tops: H.topHints(mapId),
     solids: H.solidHints(mapId), wallFloors: H.wallFloorHints(mapId), mounds: H.moundHints(mapId), overlaps: H.overlapHints(mapId),
     massBackdrop: H.massBackdrop(mapId), openSky: H.openSky(mapId), wallCap: H.wallCap(mapId), doorTops: H.doorTops(mapId),
-    highGround: H.highGround(mapId),
+    highGround: H.highGround(mapId), passageLevels: H.passageLevelHints(mapId),
   };
 }
 

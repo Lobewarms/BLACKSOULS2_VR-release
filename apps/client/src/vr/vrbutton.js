@@ -12,8 +12,9 @@
 // Leaving VR and coming back: Chrome on Windows starts only the first session after the browser started
 // reliably on an OpenXR runtime (crbug.com/40859047: later ones end at once, flicker, or stop being shown -
 // "hidden" for good). Chrome runs WebXR in a process of its own and starts a new one at once when it ends, so
-// after every session the local server (opts.resetXr) ends that process: the next ENTER VR is a first session
-// again. The button waits for the new process to find the headset.
+// a failed granted start asks the local server (opts.resetXr) to end that process, then waits for the new
+// process to find the headset. Healthy exits keep the runtime ready for immediate, user-clicked reentry;
+// a brief session or hidden dashboard alone is not evidence of a broken runtime.
 const SESSION_INIT = { optionalFeatures: ['local-floor', 'bounded-floor', 'layers', 'hand-tracking'] };
 
 const log = (...a) => console.info('[xr]', ...a);
@@ -88,7 +89,8 @@ export async function prepareXR(renderer, maxWait = 6000) {
   clearTimeout(t);
 }
 
-// opts.restoreView(): puts the desktop canvas back after a start that failed half way
+// opts.restoreView(): restores a failed start after the session's end listeners
+// finish. Normal exits restore the desktop in renderer.xr's sessionend listener.
 export function createVRButton(renderer, opts = {}) {
   const sessionInit = opts.sessionInit || SESSION_INIT;
   const button = document.createElement('button');
@@ -104,7 +106,7 @@ export function createVRButton(renderer, opts = {}) {
     return button;
   }
   let state = 'off';       // off (no headset) | idle | starting | running | ending | resetting
-  let session = null;
+  let current = null;
 
   async function refresh() {
     let ok = false, err = null;
@@ -115,74 +117,141 @@ export function createVRButton(renderer, opts = {}) {
     else { state = 'off'; show('VR NOT SUPPORTED', false); }
   }
 
-  // after a session: a fresh XR process for the next one (see the top of this file)
-  let resetting = null;
-  function afterSession() {
-    if (resetting) return resetting;
+  // Recover a failed granted start; a healthy session keeps its ready runtime.
+  async function afterSession(attempt) {
+    if (current !== attempt) return;
     state = 'resetting';
     show('VR ...', false);
-    resetting = (async () => {
-      let done = false;
-      if (opts.resetXr) {
-        try { done = !!(await timeout(Promise.resolve(opts.resetXr()), 10000, 'XR reset')); } catch (e) { warn('XR reset failed:', errText(e)); }
+    let done = false;
+    if (attempt.failed && opts.resetXr) {
+      try { done = !!(await timeout(Promise.resolve(opts.resetXr()), 10000, 'XR reset')); } catch (e) { warn('XR reset failed:', errText(e)); }
+    }
+    if (current !== attempt) return;
+    if (done) {
+      // the browser starts the new process at once; wait until it has found the headset (at most 15 s)
+      const t0 = performance.now();
+      let ok = false;
+      while (!ok && performance.now() - t0 < 15000) {
+        await new Promise(r => setTimeout(r, 400));
+        if (current !== attempt) return;
+        try { ok = await navigator.xr.isSessionSupported('immersive-vr'); } catch { /* */ }
       }
-      if (done) {
-        // the browser starts the new process at once; wait until it has found the headset (at most 15 s)
-        const t0 = performance.now();
-        let ok = false;
-        while (!ok && performance.now() - t0 < 15000) {
-          await new Promise(r => setTimeout(r, 400));
-          try { ok = await navigator.xr.isSessionSupported('immersive-vr'); } catch { /* */ }
-        }
-        log(`fresh XR process ${ok ? 'ready' : 'has no headset yet'} after ${Math.round(performance.now() - t0)} ms`);
-      } else log('XR process not reset (the next session may not show)');
-      resetting = null;
-      state = 'idle';
-      show('ENTER VR', true);
-      refresh();
-    })();
-    return resetting;
+      log(`fresh XR process ${ok ? 'ready' : 'has no headset yet'} after ${Math.round(performance.now() - t0)} ms`);
+    } else if (attempt.failed) log('XR process not reset (the next session may not show)');
+    if (current !== attempt) return;
+    current = null;
+    state = 'idle';
+    show('ENTER VR', true);
+    refresh();
+  }
+
+  function finishEnded(attempt) {
+    if (current !== attempt || !attempt.ended || !attempt.attachSettled || attempt.finished || renderer.xr.isPresenting) return;
+    attempt.finished = true;
+    attempt.session.removeEventListener('end', attempt.onEnd);
+    attempt.session.removeEventListener('visibilitychange', attempt.onVisibility);
+    if (attempt.failed) opts.restoreView?.();
+    void afterSession(attempt);
+  }
+  renderer.xr.addEventListener?.('sessionend', () => {
+    // Raw XRSession.end runs our listener before Three's listener. A microtask
+    // lets Three restore its saved renderer size before any failed-start fit.
+    const attempt = current;
+    if (attempt?.ended) queueMicrotask(() => finishEnded(attempt));
+  });
+
+  async function endAttempt(attempt) {
+    if (current !== attempt || attempt.ended || attempt.endPending) return;
+    attempt.endPending = true;
+    state = 'ending';
+    show('EXITING...', false);
+    try { await attempt.session.end(); }
+    catch (e) {
+      if (current !== attempt || attempt.ended) return;
+      warn('could not end the session:', errText(e));
+      // A rejected end does not mean the headset session ended. Retain it so
+      // EXIT VR can retry instead of offering a competing requestSession.
+      state = 'running';
+      show('EXIT VR', true);
+    } finally { attempt.endPending = false; }
+  }
+
+  function endDetached(session) {
+    // requestSession may resolve after its timeout. Never attach that session
+    // or let its eventual events change the currently owned attempt.
+    try { Promise.resolve(session.end()).catch(e => warn('could not end a late session:', errText(e))); }
+    catch (e) { warn('could not end a late session:', errText(e)); }
   }
 
   async function start() {
+    if (state !== 'idle' || renderer.xr.isPresenting) return;
+    const attempt = { session: null, ended: false, failed: false, attachSettled: true, finished: false, endPending: false };
+    current = attempt;
     state = 'starting';
     show('STARTING...', false);
     log('ENTER VR');
     const t0 = performance.now();
-    let s = null, ended = false;
     try {
       await timeout(makeCompatible(renderer, 'ENTER VR'), 20000, 'makeXRCompatible');
-      s = await navigator.xr.requestSession('immersive-vr', sessionInit);
+      if (current !== attempt) return;
+      const request = Promise.resolve().then(() => navigator.xr.requestSession('immersive-vr', sessionInit));
+      request.then(s => {
+        attempt.granted = s;
+        if (current !== attempt || attempt.failed) endDetached(s);
+      }, () => {});
+      const s = await timeout(request, 20000, 'requestSession');
+      if (current !== attempt || attempt.failed) return;
+      attempt.session = s;
       log(`session granted (${(s.enabledFeatures || []).join(', ') || 'no feature list'}), visibility ${s.visibilityState}`);
-      s.addEventListener('end', () => {
-        ended = true;
+      attempt.onEnd = () => {
+        if (current !== attempt || attempt.ended) return;
+        attempt.ended = true;
+        state = 'ending';
+        show('EXITING...', false);
         log(`session ended after ${((performance.now() - t0) / 1000).toFixed(1)} s, ${renderer.info?.render?.frame ?? '?'} frames drawn`);
-        if (session === s) session = null;
         opts.onVisibility?.('ended');
-        afterSession();
-      });
-      s.addEventListener('visibilitychange', () => {
+        queueMicrotask(() => finishEnded(attempt));
+      };
+      attempt.onVisibility = () => {
+        if (current !== attempt || attempt.ended) return;
         log(`visibility ${s.visibilityState} (${((performance.now() - t0) / 1000).toFixed(1)} s in, ${renderer.info?.render?.frame ?? '?'} frames drawn)`);
         opts.onVisibility?.(s.visibilityState);
-      });
-      await timeout(renderer.xr.setSession(s), 20000, 'setSession');
-      if (ended) throw new Error('the session ended while it was starting');
-      session = s;
+      };
+      s.addEventListener('end', attempt.onEnd);
+      s.addEventListener('visibilitychange', attempt.onVisibility);
+      attempt.attachSettled = false;
+      const attaching = Promise.resolve().then(() => renderer.xr.setSession(s));
+      const settled = () => {
+        attempt.attachSettled = true;
+        if (current !== attempt) return;
+        if (attempt.ended) queueMicrotask(() => finishEnded(attempt));
+        else if (attempt.endAfterAttach) { attempt.endAfterAttach = false; void endAttempt(attempt); }
+      };
+      attaching.then(settled, () => { attempt.failed = true; settled(); });
+      await timeout(attaching, 20000, 'setSession');
+      if (current !== attempt || attempt.ended || attempt.failed) return;
       state = 'running';
       show('EXIT VR', true);
       const layer = renderer.xr.getBaseLayer?.();
       log(!layer ? 'in VR' : 'textureWidth' in layer ? `in VR, drawing into a projection layer ${layer.textureWidth}x${layer.textureHeight}`
         : `in VR, drawing into an XRWebGLLayer ${layer.framebufferWidth}x${layer.framebufferHeight}`);
     } catch (e) {
+      if (current !== attempt || attempt.finished) return;
+      attempt.failed = true;
       warn('could not enter VR:', errText(e));
-      if (!renderer.xr.isPresenting) opts.restoreView?.();
-      session = null;
-      if (s) {
-        // a session was granted: its end brings the button back, after a fresh XR process
-        if (!ended) s.end().catch(() => afterSession());
-        setTimeout(() => { if (state === 'starting') afterSession(); }, 5000);
+      if (attempt.session) {
+        state = 'ending'; show('EXITING...', false);
+        // Three's pending setSession cannot be cancelled. Wait for it to
+        // settle before ending/resetting, so it cannot attach after cleanup.
+        if (attempt.attachSettled) {
+          if (attempt.ended) queueMicrotask(() => finishEnded(attempt));
+          else void endAttempt(attempt);
+        } else attempt.endAfterAttach = true;
         return;
       }
+      if (attempt.granted) endDetached(attempt.granted);
+      if (!renderer.xr.isPresenting) opts.restoreView?.();
+      current = null;
       state = 'idle';
       show('ENTER VR', true);
       refresh();
@@ -190,10 +259,7 @@ export function createVRButton(renderer, opts = {}) {
   }
 
   function stop() {
-    if (!session) return;
-    state = 'ending';
-    show('EXITING...', false);
-    session.end().catch(e => { warn('could not end the session:', errText(e)); session = null; state = 'idle'; show('ENTER VR', true); });
+    if (current?.session) void endAttempt(current);
   }
 
   button.addEventListener('click', () => {

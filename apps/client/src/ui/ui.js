@@ -894,6 +894,9 @@ export class UI {
     this.numberRange = null;
     this.consumedConfirm = false;
     this.anchorYaw = null;
+    this.vrHudFallback = new THREE.Object3D();
+    this.vrHudFallback.position.set(-0.34, -0.3, -0.7);
+    this.camera.add(this.vrHudFallback);
     this.hudDirty = true;
     this.lastHud = '';
   }
@@ -933,6 +936,39 @@ export class UI {
     const a = this.anchorYaw;
     this.root.position.set(head.x - Math.sin(a) * dist, head.y, head.z - Math.cos(a) * dist);
     this.root.rotation.set(0, a, 0);
+  }
+
+  transitionViewMode(vr) {
+    this.anchorYaw = null;
+    this.lastHud = ''; this.hudDirty = true;
+    this.attachHud(vr ? G.input?.controllers?.left?.grip || this.vrHudFallback : null);
+    if (this.list.visible) { this.list.hover = -2; this.list.draw(); }
+    if (this.grid.visible) { this.grid.hover = undefined; this.grid.draw(); }
+    if (this.keyboard.visible) { this.keyboard.draw(); this.keyboard.field(!vr); }
+    const message = this.msg || this.heldMessage?.message || (this.remote?.shown ? this.remote : null);
+    if (message) this.drawMessage(message);
+    if (this.msg?.state === 'number') this.drawNumber();
+    this.drawHud();
+    if (this.menuOverview.mesh.visible) { this.lastMainOverview = ''; this.paintMainOverview(); }
+    this.updateBackdrop();
+    this.navigation.update(0, this.hudPresent && !G.combat?.playerDead && !this.dialogueActive() && !this.banner?.blocking,
+      !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
+    const rewardsAllowed = this.rewards.place({ vr, viewport: desktopViewport(G.input, G.three?.renderer) });
+    const rewardsPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || this.remote?.shown || this.prompt?.shown || G.combat?.playerDead;
+    this.rewards.mesh.visible = !!(rewardsAllowed && !rewardsPaused && this.hudPresent && !this.banner && this.rewards.rows.length);
+    this.rewards.draw();
+    this.placeRoot(true);
+    this.updateHudFollow();
+    this.updatePointerLine();
+  }
+
+  updateBackdrop() {
+    this.backdrop.visible = !G.vr && !!(this.sceneBusy() || this.dialogueActive() || this.remote?.shown || this.prompt?.shown);
+    if (this.backdrop.visible) {
+      const height = 1.1 * Math.tan(THREE.MathUtils.degToRad(this.camera.getEffectiveFOV()) / 2);
+      this.backdrop.scale.set(height * this.camera.aspect, height, 1); this.backdrop.position.set(0, 0, -1.1);
+      this.backdrop.material.opacity = this.sceneBusy() ? 0.16 : 0.08;
+    }
   }
 
   attachHud(target) {
@@ -2895,12 +2931,7 @@ export class UI {
       if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
     }
     this.drawHud();
-    this.backdrop.visible = !G.vr && !!(this.sceneBusy() || this.dialogueActive() || this.remote?.shown || this.prompt?.shown);
-    if (this.backdrop.visible) {
-      const height = 1.1 * Math.tan(THREE.MathUtils.degToRad(this.camera.getEffectiveFOV()) / 2);
-      this.backdrop.scale.set(height * this.camera.aspect, height, 1); this.backdrop.position.set(0, 0, -1.1);
-      this.backdrop.material.opacity = this.sceneBusy() ? 0.16 : 0.08;
-    }
+    this.updateBackdrop();
     this.menuOverview.mesh.visible = !!this.menuOpen && this.menuSection === 'main' && this.list.visible && this.list.classic;
     if (this.menuOverview.mesh.visible) this.paintMainOverview();
     this.updateHudFollow();

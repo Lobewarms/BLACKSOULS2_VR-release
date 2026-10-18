@@ -19,6 +19,8 @@ import { voxelGeometryOf, SLAB_THICKNESS } from '../combat/weapons.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { FoliageTileDrawer, isFoliageTile } from './foliage.js';
 import { isBridgeDeckTile } from './bridges.js';
+import { isAuthoredFloorAutotile } from './floor-autotiles.js';
+import { completePassagePockets, gradePassageChains } from './passage-grades.js';
 
 export const T = 1.5; // meters per tile
 
@@ -851,13 +853,15 @@ export async function buildMapMesh(grid, opts = {}) {
     // Treating its walkable boards as stairs invents a descent at every bank
     // and progressively sinks connected islands, water and ferry landings.
     const bridge = !solid[i] && !pit[i] && grid.anyPassable(x, y) && isBridgeDeckTile(grid.tile(x, y, 2), grid.tileset.tileset_names);
-    if ((isWallSide(t0) || isWallSide(t1)) && !bridge) sideCell[i] = 1;
+    const side = (isWallSide(t0) && !isAuthoredFloorAutotile(t0, grid.tileset.tileset_names))
+      || (isWallSide(t1) && !isAuthoredFloorAutotile(t1, grid.tileset.tileset_names));
+    if (side && !bridge) sideCell[i] = 1;
     else if (!solid[i] && !pit[i] && onStairTile(x, y)) stairCell[i] = 1;
   }
   // (and there one level is only what you can walk across: a roof's edge stops you, so the street behind the
   // roof is not the roof's level)
   const walkAcross = (j, k) => {
-    if (!opts.terraces) return true;
+    if (!opts.terraces && !opts.passageLevels) return true;
     const x = j % w, y = (j / w) | 0, nx = k % w, ny = (k / w) | 0;
     const d = nx > x ? 6 : nx < x ? 4 : ny > y ? 2 : 8;
     return grid.passable(x, y, d) && grid.passable(nx, ny, 10 - d);
@@ -1041,11 +1045,28 @@ export async function buildMapMesh(grid, opts = {}) {
       constrained[a] = adj[a].length ? 1 : 0;
     }
   } else {
+    // On passage-aware maps, a complete original walk up a stair/ladder is
+    // stronger height evidence than a decorative wall behind the same gallery.
+    // Require every vertical edge, including both landings: a partial opening
+    // or blocked rung must not override the ordinary wall constraints.
+    const climbBands = new Set(), climbPairs = new Set();
+    const pairOf = (a, b) => Math.min(a, b) + ':' + Math.max(a, b);
+    if (opts.passageLevels) for (const b of bands) {
+      if (!b.stairs || !b.lowFloor || b.fall || b.rim.length) continue;
+      const A = comp[b.uI], B = comp[b.lI];
+      if (A < 0 || B < 0 || A === B) continue;
+      let complete = true;
+      for (let y = Math.floor(b.uI / w); y < Math.floor(b.lI / w); y++) {
+        if (solid[idx(b.x, y)] || solid[idx(b.x, y + 1)] || !grid.passable(b.x, y, 2) || !grid.passable(b.x, y + 1, 8)) { complete = false; break; }
+      }
+      if (complete) { climbBands.add(b); climbPairs.add(pairOf(A, B)); }
+    }
     const edges = new Map(); // "A>B" -> ks (A above B)
     for (const b of bands) {
       if (!b.lowFloor) continue;
       const A = comp[b.uI], B = comp[b.lI];
       if (A < 0 || B < 0 || A === B) continue;
+      if (climbPairs.has(pairOf(A, B)) && !climbBands.has(b)) continue;
       // a plain wall between two places is only a cliff when stairs / a fall lip prove it,
       // or when both sides are real areas (not a decorative strip on top of a wall)
       if (!b.stairs && !b.fall && (areaOf(A) < BIG_AREA || areaOf(B) < BIG_AREA)) continue;
@@ -1056,7 +1077,7 @@ export async function buildMapMesh(grid, opts = {}) {
     const adj = compCells.map(() => []);
     for (const [key, ks] of edges) {
       const [A, B] = key.split('>').map(Number);
-      if (ks.length < 2 && compCells[A].length > 2 && compCells[B].length > 2) continue; // too weak
+      if (ks.length < 2 && compCells[A].length > 2 && compCells[B].length > 2 && !climbPairs.has(pairOf(A, B))) continue; // too weak without a proven climb
       const tally = {};
       for (const k of ks) tally[k] = (tally[k] || 0) + 1;
       const k = +Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
@@ -1561,7 +1582,9 @@ export async function buildMapMesh(grid, opts = {}) {
         const L = r.y1 - r.y0 + 1;
         if (dt !== undefined && db !== undefined) {
           // between two placed areas: a ramp from the one to the other (a ladder down to a lower floor)
-          const hT = floorE[idx(r.x, r.y0 - 1)], hB = floorE[idx(r.x, r.y1 + 1)];
+          // A broad landing can already contain the first sloping ladder row.
+          // Join its facing edge; its center sits halfway up the previous step.
+          const hT = surfSArr[idx(r.x, r.y0 - 1)], hB = surfNArr[idx(r.x, r.y1 + 1)];
           for (let k = 0; k < L; k++) {
             const j = idx(r.x, r.y0 + k);
             surfNArr[j] = hT + (hB - hT) * k / L;
@@ -1574,7 +1597,7 @@ export async function buildMapMesh(grid, opts = {}) {
         if (r.rise !== null) {
           // A mapped flight with only one landing still climbs its verified
           // rise, including an upper exit whose original wall stops walking.
-          const end = dt !== undefined ? floorE[idx(r.x, r.y0 - 1)] : floorE[idx(r.x, r.y1 + 1)];
+          const end = dt !== undefined ? surfSArr[idx(r.x, r.y0 - 1)] : surfNArr[idx(r.x, r.y1 + 1)];
           for (let k = 0; k < L; k++) {
             const j = idx(r.x, r.y0 + k);
             surfNArr[j] = end + r.rise * (dt !== undefined ? -k : L - k) / L;
@@ -1586,7 +1609,7 @@ export async function buildMapMesh(grid, opts = {}) {
         if (r.ladder) {
           // a ladder off one area's edge (to an exit at the map's edge): it climbs from that area
           const L1 = r.y1 - r.y0 + 1;
-          const end = dt !== undefined ? floorE[idx(r.x, r.y0 - 1)] : floorE[idx(r.x, r.y1 + 1)];
+          const end = dt !== undefined ? surfSArr[idx(r.x, r.y0 - 1)] : surfNArr[idx(r.x, r.y1 + 1)];
           for (let k = 0; k < L1; k++) {
             const j = idx(r.x, r.y0 + k);
             if (dt !== undefined) { surfNArr[j] = end - k; surfSArr[j] = end - k - 1; }
@@ -1606,6 +1629,16 @@ export async function buildMapMesh(grid, opts = {}) {
           if (Math.abs(surfNArr[j] - surfSArr[j]) > 0.01) slope[j] = 1;
         }
       }
+      const authoredFloors = new Set(hinted.map(hint => hint[0]));
+      gradePassageChains({ w, h, node, runs, anchored: new Set(edges.flatMap(edge => edge.slice(0, 2))), walk, link,
+        protectedCell: i => profiledStair(i) || authoredFloors.has(i),
+        floor: floorE, north: surfNArr, south: surfSArr, slope });
+      const resolved = Uint8Array.from(slope, (value, i) => value || node[i] >= 0 && delta.has(node[i]) || authoredFloors.has(i) ? 1 : 0);
+      for (const run of runs) if (delta.has(run.top) || delta.has(run.bot)) {
+        for (let y = run.y0; y <= run.y1; y++) resolved[idx(run.x, y)] = 1;
+      }
+      completePassagePockets({ w, h, node, resolved, walk, link,
+        protectedCell: i => profiledStair(i) || authoredFloors.has(i), floor: floorE, north: surfNArr, south: surfSArr, slope });
       // floor that cannot be walked on (under furniture, behind counters) moves with what is beside it
       {
         const moved = new Uint8Array(w * h), q = [];

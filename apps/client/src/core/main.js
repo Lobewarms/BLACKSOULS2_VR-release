@@ -36,6 +36,7 @@ import { clearEdgeCache } from '../world/collision.js';
 import { TransferMarkers } from '../world/markers.js';
 import { collectCurrentExits } from '../world/exit-routes.js';
 import { Spectator } from '../vr/spectator.js';
+import { ViewMode } from '../vr/viewmode.js';
 import { PictureLayer } from '../ui/pictures.js';
 import { Hands } from '../vr/hands.js';
 import { loadUserHints } from '../world/maphints.js';
@@ -70,12 +71,10 @@ G.three = { renderer, scene, camera, rig };
 G.worldTone = new WorldTone(scene);
 const spectator = new Spectator(renderer, scene);
 G.spectator = spectator;
+const viewMode = new ViewMode(renderer, camera, rig, { spectator, releaseTarget: freeXrTarget, isGameplay: () => mode === 'game' });
 
 function fitView() {
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setSize(innerWidth, innerHeight);
-  camera.aspect = innerWidth / innerHeight;
-  camera.updateProjectionMatrix();
+  viewMode.fitDesktop();
 }
 addEventListener('resize', () => {
   if (renderer.xr.isPresenting) return;
@@ -146,19 +145,11 @@ G.sky = new Sky(scene);
 G.environment = new EnvironmentEffects(scene);
 G.onControllerConnected = (hand, ctrl, grip) => {
   G.hands.attach(hand, ctrl);
-  if (hand === 'left') G.ui.attachHud(grip);
+  if (hand === 'left' && G.vr) G.ui.attachHud(grip);
   G.combat.equipKey = null;
 };
 renderer.xr.addEventListener('sessionstart', () => {
-  G.vr = true;
-  G.xrAway = false;
-  spectator.start();
-  camera.position.set(0, 0, 0); camera.rotation.set(0, 0, 0);
-  G.combat.equipKey = null;
-  G.audio.resumeAll();
-  // keep the user standing where the desktop camera was
-  const pc = G.map?.playerChar;
-  setTimeout(() => { if (pc && G.map.grid) G.player.teleportTo(pc.fx, pc.fy); G.ui.placeRoot(true); }, 300);
+  viewMode.enter();
 });
 // three r170 lets go of its headset render target when a session ends without freeing it: with projection layers
 // (Chrome on PC) its multisampled colour and depth buffers - headset sized, 4x MSAA, hundreds of MB - stayed on the
@@ -179,21 +170,15 @@ function freeXrTarget() {
   } catch (e) { console.warn('[xr] could not free the headset render target', e); }
 }
 renderer.xr.addEventListener('sessionend', () => {
-  G.vr = false;
-  G.xrAway = false;
-  freeXrTarget();
-  spectator.stop();
-  camera.position.set(0, G.settings.eyeHeight, 0);
-  G.ui.attachHud(null);
-  G.combat.equipKey = null;
+  viewMode.restoreDesktop();
 });
 document.getElementById('vrbtn').appendChild(createVRButton(renderer, {
-  restoreView: fitView,
+  restoreView: () => viewMode.restoreDesktop(),
   // the headset shows something else (the SteamVR dashboard or desktop, the system menu, the headset is off):
   // the game waits, as it does behind a menu
   onVisibility: v => { G.xrAway = v === 'visible-blurred' || v === 'hidden'; },
-  // after a session the local server ends this browser's WebXR process, so the next ENTER VR starts a fresh one
-  // (src/vrbutton.js); true when it did
+  // Only a failed granted start requests browser-runtime recovery (src/vrbutton.js).
+  // Healthy session exits keep the current runtime ready for immediate reentry.
   resetXr: async () => {
     const r = await fetch('/api/xr-reset', { method: 'POST' });
     if (!r.ok) return false;
@@ -273,6 +258,7 @@ async function presentMap(seeds = [], rebuild = false, open = null) {
   // lighting / atmosphere per map
   atmosphere.setMap(G.map.map, { mapId: G.map.mapId, tileset: grid.tileset, rebuild,
     screen: G.screen, sky: G.sky, environment: G.environment });
+  if (!G.vr) void spectator.prepare();
 }
 
 // Active event pages can unlock or remove a route after the map was built.
@@ -675,8 +661,8 @@ function updatePlayerBalloon(head) {
   b.over.update(b.emote ? pc.balloonId : 0, pc.balloonTime, 0);
 }
 let lastFrameError = '';
-function frame() {
-  try { frameBody(); } catch (e) {
+function frame(_time, xrFrame) {
+  try { viewMode.beforeFrame(xrFrame); frameBody(); } catch (e) {
     const msg = String(e?.message || e);
     if (msg !== lastFrameError) {
       lastFrameError = msg;
@@ -737,7 +723,7 @@ function frameBody() {
     const m = G.map;
     if (m.transferring && !transferBusy) performTransfer();
     // the headset shows something else (SteamVR dashboard, desktop, system menu): the map and the fights wait
-    const away = G.vr && G.xrAway;
+    const away = G.vr && (G.xrAway || viewMode.awaitingPose);
     if (m.grid && view.mesh) {
       if (!away) acc += dt;
       let steps = 0;

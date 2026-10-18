@@ -39,6 +39,13 @@ export class Input {
     this.grabSession = null;
     this.runToggle = false;
     this.snapReady = true;
+    this.viewVr = !!G.vr;
+    this.desktopLookBeforeVr = false;
+    this.modeUnlockPending = false;
+    this.viewInputGuard = false;
+    this.viewXrSources = { left: null, right: null };
+    this.viewButtonBlocks = { left: [], right: [] };
+    this.viewAxisBlocks = { left: false, right: false };
 
     addEventListener('keydown', e => {
       if (e.repeat || e.target instanceof HTMLInputElement) return;     // (typing a name: ui.js keyboard)
@@ -75,8 +82,10 @@ export class Input {
       this.lockPending = false;
       if (!this.pointerLocked) {
         this.releaseMouse();
-        const scripted = this.scriptUnlockPending;
+        const modeUnlock = this.modeUnlockPending;
+        const scripted = this.scriptUnlockPending || modeUnlock;
         this.scriptUnlockPending = false;
+        this.modeUnlockPending = false;
         // Escape can unlock the browser without a keyboard event. Original
         // picture-view autoruns still need their B condition to run its own
         // switch/Erase Picture commands. Keep this until logic advances, not
@@ -88,11 +97,18 @@ export class Input {
         if (!scripted && hadLock && this.pointerBusy() && this.pageFocused && document.hasFocus?.() !== false) {
           this.desktopLookWanted = true; this.pointerUiPaused = true; this.softLook = false;
         } else if (!scripted && hadLock) this.stopDesktopLook();
-        else if (scripted && this.desktopLookWanted && !this.pointerUiPaused && this.pageFocused && !this.pointerBusy()) this.lockPointer();
+        else if (scripted && !modeUnlock && this.desktopLookWanted && !this.pointerUiPaused && this.pageFocused && !this.pointerBusy()) this.lockPointer();
       } else {
         this.scriptUnlockPending = false;
-        this.desktopLookWanted = true; this.softLook = false;
-        if (this.pointerBusy()) this.suspendPointerForUi();
+        if (G.vr) {
+          // A desktop capture request can complete after XR has started.
+          // Release that late lock without manufacturing original event B.
+          this.stopDesktopLook(); this.modeUnlockPending = true;
+          document.exitPointerLock?.();
+        } else {
+          this.desktopLookWanted = true; this.softLook = false;
+          if (this.pointerBusy()) this.suspendPointerForUi();
+        }
       }
       this.lockFresh = this.pointerLocked || this.softLook ? 2 : 0;
       this.lastMoves = []; this.dropNext = true;
@@ -103,6 +119,7 @@ export class Input {
   }
 
   pointerBusy() { return !!(G.ui?.pointerBusy?.() ?? (G.ui?.sceneBusy?.() || G.ui?.messageBusy?.())); }
+  textInputFocused() { const active = document.activeElement; return !!active?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active?.tagName || ''); }
   updateCursor() { if (this.dom?.style) this.dom.style.cursor = this.softLook && !this.pointerUiPaused ? 'none' : this.normalCursor || ''; }
   stopDesktopLook() {
     this.lockEpoch = (this.lockEpoch || 0) + 1;
@@ -111,7 +128,7 @@ export class Input {
     this.updateCursor();
   }
   enableSoftLook() {
-    this.softLook = !!(!G.vr && this.desktopLookWanted && !this.pointerUiPaused && this.pageFocused !== false && !this.pointerBusy());
+    this.softLook = !!(!G.vr && this.desktopLookWanted && !this.pointerUiPaused && this.pageFocused !== false && !this.pointerBusy() && !this.textInputFocused());
     this.updateCursor();
   }
   suspendPointerForUi() {
@@ -128,7 +145,7 @@ export class Input {
   // available until a fresh movement-key gesture can obtain pointer lock.
   syncPointerUi(busy) {
     if (G.vr) { this.stopDesktopLook(); return; }
-    if (busy) { this.suspendPointerForUi(); return; }
+    if (busy || this.textInputFocused()) { this.suspendPointerForUi(); return; }
     if (!this.pointerUiPaused) return;
     this.pointerUiPaused = false;
     if (!this.desktopLookWanted || this.pageFocused === false || document.hasFocus?.() === false) return;
@@ -143,6 +160,44 @@ export class Input {
     this.mousePresses = 0;
     this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0;
     this.lockFresh = 0; this.lastMoves = []; this.dropNext = true;
+  }
+  // Called once after G.vr changes on a genuine XR session boundary. A view
+  // switch is not an action, and an already-held controller needs a fresh pull.
+  transitionViewMode(vr) {
+    vr = !!vr;
+    if (vr === this.viewVr) return;
+    if (vr) this.desktopLookBeforeVr = !!(this.pointerLocked || this.desktopLookWanted || this.softLook || this.pointerUiPaused);
+    this.viewVr = vr;
+    this.stopDesktopLook();
+    this.keys.clear(); this.keysPrev.clear(); this.releaseMouse();
+    this.rmCancelFrame = null; this.rmXUntil = 0;
+    this.btn = { left: [], right: [] }; this.btnPrev = { left: [], right: [] };
+    this.axes = { left: [0, 0], right: [0, 0] };
+    this.rFlick = 0; this.rFlickReady = false; this.navReady = false; this.navReadyX = false; this.runToggle = false;
+    const session = vr ? this.renderer.xr?.getSession?.() : null;
+    this.grabSession = session;
+    for (const hand of ['left', 'right']) {
+      const source = this.hands[hand]?.source;
+      this.grabs[hand] = grabState(hasGrabSource(session, source) ? source : null);
+    }
+    this.viewInputGuard = vr;
+    this.viewXrSources = { left: null, right: null };
+    this.viewButtonBlocks = { left: [], right: [] }; this.viewAxisBlocks = { left: false, right: false };
+    this.pointer.seen = false;
+    if (vr) {
+      if (this.pointerLocked || document.pointerLockElement === this.dom) {
+        this.modeUnlockPending = true;
+        document.exitPointerLock?.();
+      }
+      return;
+    }
+    const wanted = this.desktopLookBeforeVr;
+    this.desktopLookBeforeVr = false;
+    if (!wanted || this.pageFocused === false || document.hasFocus?.() === false) return;
+    this.desktopLookWanted = true;
+    this.pointerUiPaused = this.pointerBusy() || this.textInputFocused();
+    this.enableSoftLook();
+    this.lockFresh = 2;
   }
   // PC mouse look: raw movement where the browser gives it (unadjustedMovement - the mouse's own counts, no Windows
   // pointer acceleration). Chrome on Windows otherwise works the movement out from its hidden cursor, which it keeps
@@ -297,12 +352,21 @@ export class Input {
       for (const src of session.inputSources) {
         if (!src.gamepad || !src.handedness || src.handedness === 'none') continue;
         const hand = src.handedness;
+        if (hand !== 'left' && hand !== 'right') continue;
         const gp = src.gamepad;
-        this.btn[hand] = gp.buttons.map(b => b.pressed);
-        this.btn[hand].values = gp.buttons.map(b => b.value);
-        this.btn[hand].touched = gp.buttons.map(b => !!b.touched);
         const ax = gp.axes.length >= 4 ? [gp.axes[2], gp.axes[3]] : [gp.axes[0] || 0, gp.axes[1] || 0];
-        this.axes[hand] = [dz(ax[0]), dz(ax[1])];
+        if (this.viewInputGuard && this.viewXrSources[hand] !== src) {
+          this.viewXrSources[hand] = src;
+          this.viewButtonBlocks[hand] = gp.buttons.map(b => !!b.pressed);
+          this.viewAxisBlocks[hand] = ax.some(v => Math.abs(v) > DEAD);
+        }
+        const blocked = this.viewInputGuard ? this.viewButtonBlocks[hand] : [];
+        for (let i = 0; i < gp.buttons.length; i++) if (!gp.buttons[i].pressed) blocked[i] = false;
+        this.btn[hand] = gp.buttons.map((b, i) => !!b.pressed && !blocked[i]);
+        this.btn[hand].values = gp.buttons.map((b, i) => blocked[i] ? 0 : b.value);
+        this.btn[hand].touched = gp.buttons.map(b => !!b.touched);
+        if (ax.every(v => Math.abs(v) <= DEAD)) this.viewAxisBlocks[hand] = false;
+        this.axes[hand] = this.viewInputGuard && this.viewAxisBlocks[hand] ? [0, 0] : ax.map(dz);
         if (this.hands[hand]) this.hands[hand].gamepad = gp;
       }
     }

@@ -55,6 +55,7 @@ export class NavigationMap {
     this.attach(false);
   }
   attach(wrist) {
+    this.dirty = true;
     const mesh = this.mini.mesh;
     (wrist ? this.hud : this.camera).add(mesh);
     mesh.rotation.set(0, 0, 0); mesh.scale.setScalar(1);

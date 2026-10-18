@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.23
+BLACK SOULS II VR - community version 0.2.24
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,21 +7,21 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Steam achievements earned through the original game's events can now count
-  while playing on PC or in VR. Use your installed Steam copy and stay signed
-  in to Steam. The launcher log shows when achievements are connected.
-  Unconfirmed earned requests are kept with your mod save for a later retry.
-  Loading older progress does not automatically award every past milestone.
-- The clock-tower monster's blinding effect now clears when its fight ends,
-  including victories before the monster's scheduled fade.
-- The university's central staircase now connects the hall and gallery instead
-  of becoming an upright wall. Its upper and side stairs also have connected
-  landings, while the original blocked passages and fall routes are preserved.
+- Returning from VR restores the desktop view to the current window without
+  stretching. Your position, facing direction and open menus carry across.
+- VR entry prepares the monitor view earlier. Leaving a healthy VR session no
+  longer restarts the headset connection before you can enter VR again.
+- Held controls are cleared when changing modes, so switching does not become
+  an attack, movement or menu selection. The VR HUD also works without a left
+  controller connected yet.
+- Corrected the raised route at Abandoned Station Hanover, the split floor
+  in Stomach, the broken metal staircase in the graveyard, and related wooden
+  stair and ladder joins in the sewers and Chaos Dungeon.
 
-The river, scenery, atmosphere, dialogue and gameplay fixes from previous
-updates are included.
+The Steam achievements, university stairs, clock-tower blinding effect, river,
+scenery, atmosphere, dialogue and gameplay fixes from previous updates are included.
 
-Close the previous launcher before installing, then reopen BLACK SOULS II VR
+Close the game and previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.
 
 This is a modified version by dimasma0305 of the original mod by Lobewarms.

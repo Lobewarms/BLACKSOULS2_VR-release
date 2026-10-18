@@ -19,6 +19,8 @@
 //            climbs, not floor, and places only join into one level where the original lets you walk between
 //            them (a roof's edge stops you): each roof / terrace is its own level, as high above the street as the
 //            wall drawn under it (mapmesh.js)
+//  passageLevels: infer ordinary floor components only across original two-way passage edges,
+//            where floors touch in the drawing across a blocked roof/lip but meet only via stairs
 //  hideArt:  upper-layer pieces left out of the 3D view [x0, y0, x1, y1, [tile ids]] - the foot of a staircase drawn up a
 //            wall, sticking out in front of it: stood up, it was planks hanging in the air (the rest stays on the wall;
 //            what can be walked on is as in the original)
@@ -159,6 +161,17 @@ export const MAP_HINTS = {
   155: { fallStairs: [[30, 14, 32, 21, 7], [30, 5, 32, 11, 7]],
     floors: [[54, 9, 54, 11, 3, 0], [54, 8, 54, 8, 3, 3]],
     caps: [[26, 14, 56, 21, 7.5]], tops: [[26, 0, 56, 11, 19]], wallCap: 14 },
+  // Crimean Nursing Graveyard: the metal stair under the transfer doorway has
+  // no upper floor cell for cliff inference. Keep its upper/lower levels (0/-2)
+  // joined through both flights and the original flat middle landing.
+  313: { floors: [[81, 28, 83, 29, 0, -1], [81, 30, 83, 30, -1, -1], [81, 31, 83, 31, -1, -2]] },
+  // Chaos Dungeon's wooden stair crosses two stacked building faces. Its upper
+  // and lower floors touch elsewhere only across blocked roof edges: merging
+  // those cells invents contradictory heights and a wall across the lower step.
+  217: { passageLevels: true },
+  // Chaos Dungeon's brick gallery reaches the ground only by its metal ladder;
+  // adjoining roof/lower-floor pixels across blocked edges are different levels.
+  282: { passageLevels: true },
   372: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, massBackdrop: true },
   373: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT },
   // 하얀 성시 ７－１１ BOSS ２ (그랑・기뇰's theatre): the stage (rows 6-10) stands 0.9 m above the house; its front
@@ -211,6 +224,7 @@ export async function loadUserHints() {
 }
 
 export function floorHints(mapId) { return MAP_HINTS[mapId]?.floors || null; }
+export function passageLevelHints(mapId) { return MAP_HINTS[mapId]?.passageLevels === true; }
 export function fallStairHints(mapId) { return MAP_HINTS[mapId]?.fallStairs || null; }
 export function lipHints(mapId) { return MAP_HINTS[mapId]?.lips || null; }
 export function abyssHints(mapId) { return MAP_HINTS[mapId]?.abyss || null; }

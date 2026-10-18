@@ -10,11 +10,14 @@ const { UI } = await import('../src/ui/ui.js');
 const { $data } = await import('../src/data/data.js');
 
 function canvas() {
+  const texts = [];
   const ctx = new Proxy({
+    clearRect() { texts.length = 0; },
+    fillText(text, x, y) { texts.push({ text: String(text), x, y }); },
     measureText: text => ({ width: String(text).length * 12 }),
     createLinearGradient: () => ({ addColorStop() {} }),
   }, { get: (object, key) => key in object ? object[key] : () => {} });
-  return { width: 0, height: 0, getContext: () => ctx };
+  return { width: 0, height: 0, texts, getContext: () => ctx };
 }
 function environment(t, width = 1280, height = 720) {
   const saved = { ...G }, data = { system: $data.system, states: $data.states };
@@ -163,6 +166,115 @@ test('switching PC to VR restores unit-scale wrist panels and VR menus, then res
   assert.equal(ui.hud.mesh.parent, ui.camera); assert.equal(ui.navigation.mini.mesh.parent, ui.camera);
   near(project(ui.hud, ui.camera, viewport, ui.hudPaintHeight).width, 320);
   near(project(ui.navigation.mini, ui.camera, viewport).width, 220);
+});
+
+test('actual UI mode transitions retain an open menu and redraw its original commands before the next render', t => {
+  const { ui, viewport } = environment(t);
+  ui.openMenu(); ui.list.index = 3; ui.update(0);
+  const items = ui.list.items, select = ui.list.onSelect, cancel = ui.list.onCancel;
+  const pcTextureVersion = ui.list.panel.tex.version, pcOverviewVersion = ui.menuOverview.tex.version;
+  assert.equal(ui.backdrop.visible, true);
+  ui.camera.position.set(2, 1.7, 3); ui.camera.rotation.set(0.2, 0.8, 0, 'YXZ');
+  G.vr = true; ui.transitionViewMode(true);
+  assert.equal(ui.menuOpen, true); assert.equal(ui.menuSection, 'main'); assert.equal(ui.list.index, 3);
+  assert.equal(ui.list.items, items); assert.equal(ui.list.onSelect, select); assert.equal(ui.list.onCancel, cancel);
+  assert.equal(ui.list.panel.mesh.visible, true); assert.equal(ui.menuOverview.mesh.visible, true);
+  assert.ok(ui.list.panel.tex.version > pcTextureVersion); assert.ok(ui.menuOverview.tex.version > pcOverviewVersion);
+  assert.ok(ui.list.panel.canvas.texts.some(row => /A:|A\//.test(row.text)), 'the command canvas now explains VR confirmation');
+  assert.equal(ui.backdrop.visible, false, 'the PC dimmer cannot cover the first headset render');
+  assert.deepEqual(ui.root.scale.toArray(), [1, 1, 1]); near(ui.root.rotation.y, 0.8);
+  const head = ui.camera.getWorldPosition(new THREE.Vector3());
+  near(ui.root.position.x, head.x - Math.sin(0.8) * 1.35); near(ui.root.position.y, head.y); near(ui.root.position.z, head.z - Math.cos(0.8) * 1.35);
+  assert.equal(ui.navigation.mini.mesh.visible, false, 'menu ownership remains intact');
+  G.vr = false; ui.transitionViewMode(false);
+  assert.equal(ui.menuOpen, true); assert.equal(ui.list.index, 3); assert.equal(ui.backdrop.visible, true);
+  assert.ok(ui.list.panel.canvas.texts.some(row => row.text.includes('Enter:')));
+  assert.equal(ui.hud.mesh.visible, false); assert.equal(ui.hudFollow, null);
+  inViewport(project(ui.list.panel, ui.camera, viewport), viewport); inViewport(project(ui.menuOverview, ui.camera, viewport), viewport);
+});
+
+test('no-left-controller XR transition immediately uses small head-relative HUD, minimap and reward treatments', t => {
+  const { ui, viewport } = environment(t);
+  ui.rewards.gold(17, { name: 'souls' }); ui.update(0.1);
+  const clock = ui.rewards.clock, age = ui.rewards.rows[0].age, miniVersion = ui.navigation.mini.tex.version;
+  near(project(ui.hud, ui.camera, viewport, ui.hudPaintHeight).width, 320);
+  G.vr = true; ui.transitionViewMode(true);
+  assert.equal(ui.hudFollow, ui.vrHudFallback); assert.equal(ui.vrHudFallback.parent, ui.camera);
+  assert.equal(ui.hud.mesh.parent, ui.scene); assert.deepEqual(ui.hud.mesh.scale.toArray(), [1, 1, 1]);
+  assert.equal(ui.hud.widthM, 0.24); assert.equal(ui.navigation.mini.mesh.parent, ui.hud.mesh);
+  assert.deepEqual(ui.navigation.mini.mesh.scale.toArray(), [1, 1, 1]); assert.equal(ui.navigation.mini.mesh.visible, true);
+  assert.ok(ui.navigation.mini.tex.version > miniVersion, 'mode change repaints without waiting 100 ms');
+  assert.equal(ui.rewards.mesh.parent, ui.hud.mesh); assert.deepEqual(ui.rewards.mesh.scale.toArray(), [0.8, 0.8, 0.8]);
+  assert.equal(ui.rewards.mesh.visible, true); assert.equal(ui.rewards.clock, clock); assert.equal(ui.rewards.rows[0].age, age);
+  const expected = ui.vrHudFallback.getWorldPosition(new THREE.Vector3()); expected.y += 0.11;
+  assert.ok(ui.hud.mesh.position.distanceTo(expected) < 1e-9);
+  ui.camera.position.add(new THREE.Vector3(1, 0.2, -0.5)); ui.camera.rotation.set(-0.3, 0.9, 0, 'YXZ'); ui.updateHudFollow();
+  ui.vrHudFallback.getWorldPosition(expected); expected.y += 0.11;
+  assert.ok(ui.hud.mesh.position.distanceTo(expected) < 1e-9, 'fallback follows the current head pose rather than the previous PC anchor');
+  G.vr = false; ui.transitionViewMode(false);
+  assert.equal(ui.hud.mesh.parent, ui.camera); assert.equal(ui.navigation.mini.mesh.parent, ui.camera); assert.equal(ui.rewards.mesh.parent, ui.camera);
+  near(project(ui.hud, ui.camera, viewport, ui.hudPaintHeight).width, 320); near(project(ui.navigation.mini, ui.camera, viewport).width, 220);
+  assert.equal(ui.rewards.clock, clock); assert.equal(ui.rewards.rows[0].age, age);
+  near(project(ui.rewards.panel, ui.camera, viewport, ui.rewards.paintedHeight).width, 300);
+});
+
+test('an available left wrist wins over fallback and can reattach after fallback without moving gameplay or menu state', t => {
+  const { ui } = environment(t), grip = new THREE.Group(); ui.scene.add(grip); grip.position.set(-0.3, 1.2, -0.4);
+  ui.openMenu(); ui.update(0); const index = ui.list.index;
+  G.input.controllers.left = { grip }; G.vr = true; ui.transitionViewMode(true);
+  assert.equal(ui.hudFollow, grip); near(ui.hud.mesh.position.y, 1.31); assert.equal(ui.menuOpen, true); assert.equal(ui.list.index, index);
+  delete G.input.controllers.left; ui.transitionViewMode(true); assert.equal(ui.hudFollow, ui.vrHudFallback);
+  G.input.controllers.left = { grip }; ui.attachHud(grip); ui.updateHudFollow();
+  assert.equal(ui.hudFollow, grip); near(ui.hud.mesh.position.y, 1.31);
+  G.vr = false; ui.transitionViewMode(false); assert.equal(ui.hudFollow, null); assert.equal(ui.hud.mesh.parent, ui.camera);
+  assert.equal(ui.menuOpen, true); assert.equal(ui.list.index, index);
+});
+
+test('dialogue transition redraws full answers and speaker layout immediately without revealing or accepting text', t => {
+  const { ui, viewport } = environment(t);
+  let selected = null;
+  ui.nextName = 'University Guide';
+  ui.showMessage({ lines: ['A message with a speaker and answers.'], position: 2,
+    choices: [{ text: "I am going to Alice's garden beyond the university." }, { text: 'Stay here.' }],
+    onChoice: index => { selected = index; } });
+  ui.msg.reveal = ui.msg.total; ui.msg.state = 'done-typing'; ui.update(0);
+  assert.equal(ui.choice.visible, true);
+  const message = ui.msg, reveal = message.reveal, textVersion = ui.msgPanel.tex.version, answerTexture = ui.choice.panel.tex, answerVersion = answerTexture.version;
+  G.vr = true; ui.transitionViewMode(true);
+  assert.equal(ui.msg, message); assert.equal(ui.msg.reveal, reveal); assert.equal(selected, null); assert.equal(ui.choice.index, 0);
+  assert.ok(ui.msgPanel.tex.version > textVersion); assert.ok(ui.choice.panel.tex !== answerTexture || ui.choice.panel.tex.version > answerVersion);
+  assert.equal(ui.namePanel.canvas.width, 512);
+  assert.equal(ui.choice.choiceLines, null, 'the original VR row layout is selected immediately');
+  G.vr = false; ui.transitionViewMode(false);
+  assert.ok(ui.choice.choiceLines[0].join(' ').includes("Alice's garden"));
+  assert.equal(ui.msg.reveal, reveal); assert.equal(selected, null); assert.equal(ui.choice.index, 0);
+  assert.ok(ui.namePanel.canvas.width < 512);
+  inViewport(project(ui.msgPanel, ui.camera, viewport), viewport); inViewport(project(ui.choice.panel, ui.camera, viewport), viewport);
+});
+
+test('number and name input survive view transitions without committing or losing their current edits', t => {
+  const { ui } = environment(t); let finished = false;
+  const number = { digits: 4, value: 237, cursor: 1, range: [0, 9999], onDone: () => { finished = true; } };
+  ui.showMessage({ lines: [], position: 2, number }); ui.msg.state = 'number'; ui.drawNumber();
+  ui.choice.index = 2;
+  G.vr = true; ui.transitionViewMode(true);
+  assert.deepEqual([number.value, number.cursor, ui.choice.index], [237, 1, 2]); assert.equal(finished, false);
+  assert.match(ui.choice.footer, /A.*trigger/i);
+  G.vr = false; ui.transitionViewMode(false);
+  assert.deepEqual([number.value, number.cursor, ui.choice.index], [237, 1, 2]); assert.equal(finished, false);
+  assert.ok(ui.choice.footer.includes('Home'));
+  ui.closeMessage();
+  const makeCanvas = document.createElement; let appends = 0;
+  document.body = { appendChild(element) { element.parentNode = this; appends++; } };
+  document.createElement = tag => tag === 'input' ? { style: {}, focus() { document.activeElement = this; }, blur() { if (document.activeElement === this) document.activeElement = null; } } : makeCanvas(tag);
+  ui.keyboard.open('Player name', 'Alice', 12, { onDone: () => { finished = true; } });
+  const field = ui.keyboard.input;
+  assert.equal(document.activeElement, field);
+  G.vr = true; ui.transitionViewMode(true);
+  assert.equal(ui.keyboard.text, 'Alice'); assert.equal(ui.keyboard.visible, true); assert.equal(document.activeElement, null); assert.equal(finished, false);
+  G.vr = false; ui.transitionViewMode(false);
+  assert.equal(ui.keyboard.input, field); assert.equal(ui.keyboard.text, 'Alice'); assert.equal(document.activeElement, field);
+  assert.equal(field.value, 'Alice'); assert.equal(appends, 1); assert.equal(finished, false);
 });
 
 test('PC title menu clicks keep the cursor free and activate the pointed row through real input', t => {
