@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: 0e28fe69adf5e1e9201241d4d164db226a73413e (committed source)
+# Fork: 5788b62647c5e51a8397b7e87780afac293b5441 (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -325,23 +325,25 @@
      this.cueRing?.geometry.dispose(); this.cueRing?.material.dispose();
      for (const gh of this.ghosts || []) gh.g.material.dispose();
      this.balloon?.dispose();
-@@ -653,6 +689,7 @@
+@@ -653,6 +689,8 @@
    // ---- lifecycle -------------------------------------------------------------
    // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
    reset({ keepState = false, carry = false } = {}) {
 +    G.screen?.clearBattleTones?.();
++    G.screen?.clearBattlePictures?.();
      // (carry - a map change: an event's run that is past its fight, in its win or lose branch, goes on on the new map as
      // the original's map interpreter would - 혼돈 던전 / 시공 던전's defeat, CE269, takes the party out and then lets the
      // menu and saving back; dropped with the old map, saving stayed shut until 고왕의 뼛가루. One still in its fight
-@@ -1184,6 +1221,7 @@
+@@ -1184,6 +1222,8 @@
      if (result === 0 && m.played) G.audio?.playMe(G.state.system.battleEndMe || $data.system.battle_end_me);
    }
    onBattleEnd(battle) {
 +    G.screen?.endBattleTone?.(battle);
++    G.screen?.endBattlePictures?.(battle);
      G.player.floatDown?.();                         // (blown up by the wind when it ended: let down gently)
      if (battle.result === 0 && battle.private) G.coop?.hallucinationBeaten?.(battle.hallKey);
      if (battle.result === 0) {
-@@ -1205,7 +1243,7 @@
+@@ -1205,7 +1245,7 @@
          }
        }
        if (gold && party.partyAbility(4)) gold *= 2;
@@ -350,7 +352,15 @@
        if (exp) for (const a of party.members()) a.changeExp(a.currentExp + Math.floor(exp * a.exr));
        G.state.system.winCount++;
        if (battle.event) this.defeated.set(battle.event, G.time);
-@@ -1377,9 +1415,10 @@
+@@ -1245,6 +1285,7 @@
+   // the battle a troop event belongs to (several fights can run at once)
+   battleOf(interp) {
+     const root = interp ? (interp.root || interp) : null;
++    if (root && root.battleOwner !== undefined) return root.battleOwner && !root.battleOwner.done && this.battles.includes(root.battleOwner) ? root.battleOwner : null;
+     return (root && this.battles.find(x => x.troopInterp === root)) || this.battles.find(x => !x.done);
+   }
+   enemyCondition(index, sub, stateId, interp) {
+@@ -1377,9 +1418,10 @@
      if (this.gripAdjust) return;                     // the items are being moved by hand
      const { weapon: ws, offhand: os } = this.heldSpecs();
      const wtype = ws?.wtype || WTYPE.SWORD;
@@ -362,7 +372,7 @@
      this.wtype = wtype;
      if (this.weapon) this.weapon.parent?.remove(this.weapon);
      if (this.shield) this.shield.parent?.remove(this.shield);
-@@ -1398,17 +1437,14 @@
+@@ -1398,17 +1440,14 @@
        obj.position.fromArray(g.p); obj.quaternion.fromArray(g.q);
        return true;
      };
@@ -383,7 +393,7 @@
        this.weapon.userData.ranged = !!this.shotKind;
      } else {
        // bare hands: nothing to draw (VR shows the hand), the fist is what hits
-@@ -1424,8 +1460,7 @@
+@@ -1424,8 +1463,7 @@
        if (this.shotKind === 'gun') this.addLaser(this.weapon);
      } else {
        G.three.camera.add(this.weapon);
@@ -393,7 +403,7 @@
      }
      this.shield = null;
      this.offGun = null;
-@@ -1435,17 +1470,19 @@
+@@ -1435,17 +1473,19 @@
        if (os.gun) {
          // pistol in the left hand: held like a weapon (cannot guard with it)
          const gunModel = sModel || makeWeaponMesh(WTYPE.GUN);
@@ -416,7 +426,7 @@
          if (G.vr && ctrl.left) {
            // the holder's +Z (shield front) turns to -X = the back of the left hand
            ctrl.left.grip.add(this.shield);
-@@ -1454,8 +1491,7 @@
+@@ -1454,8 +1494,7 @@
            handPose(this.shield, os);
          } else {
            G.three.camera.add(this.shield);
@@ -426,7 +436,7 @@
          }
        }
      }
-@@ -1467,17 +1503,23 @@
+@@ -1467,17 +1506,23 @@
    // (PC: a shield only comes into view while the guard is up - updateDeskShield; held low all the time it hid the
    // status window and part of the view)
    showArms() {
@@ -455,7 +465,7 @@
    }
    // 무장해제 (VR: right stick click, PC: H): the weapon and shield go away with the sound of gear coming off,
    // the bare hands show, and nothing the hands do hits - no swing, Break, shot or weapon art, so no one is cut
-@@ -1487,7 +1529,7 @@
+@@ -1487,7 +1532,7 @@
      this.disarmed = on;
      // what the hands were doing with them ends (a weapon art is paid only when it lands: nothing is lost)
      this.hasPrev = false; this.charge = null; this.deskCharge = null; this.breakArm = null;
@@ -464,7 +474,7 @@
      if (on) this.skillArm = null;
      if (this.breakGlow) this.breakGlow.visible = false;
      this.showArms();
-@@ -2184,7 +2226,7 @@
+@@ -2184,7 +2229,7 @@
      if (!this.weapon || !this.weapon.visible || !this.weapon.parent) return null;
      const base = new THREE.Vector3(), tip = new THREE.Vector3();
      if (!this.weaponSegment(base, tip)) return null;
@@ -473,7 +483,7 @@
      return { base, tip };
    }
    // A state an event gives the party during a fight (Change State, 313 - a boss's rules: 그랑・기뇰's 악랄영역 that
-@@ -2470,7 +2512,7 @@
+@@ -2470,7 +2515,7 @@
        const hpShort = actor.mp >= actor.skillMpCost(obj) && actor.tp >= (obj.tp_cost || 0);
        G.ui.toast(hpShort ? tr('{name}: HP가 부족합니다', { name }) : tr('{name}: MP가 부족합니다', { name }), obj.icon_index); this.cancelReady(); return;
      }
@@ -482,7 +492,7 @@
      const aim = r.aim || this.readyAim();
      const from = new THREE.Vector3(); r.fx.getWorldPosition(from);
      // throwing knives stay in the hand - one throw per pull, no waiting - until they run out or X puts them away
-@@ -2659,14 +2701,15 @@
+@@ -2659,14 +2704,15 @@
    }
    // an item / skill landing on an enemy: damage formula, drain, added / removed states.
    // mult scales the damage (swing power, back stab, critical); 0 damage stays 0 like the original
@@ -500,7 +510,7 @@
      // slipped in a stance that answers it (리포스트, script 191): nothing lands
      const slip = this.slipsWithAnswer(e.b, obj, actor);
      if (slip) { this.enemySlips(e, slip, obj, sourcePos, by); return -1; }
-@@ -2677,21 +2720,25 @@
+@@ -2677,21 +2723,25 @@
      }
      const type = obj.damage?.type || 0;
      let dmg = 0;
@@ -533,7 +543,7 @@
      }
      for (const ef of obj.effects || []) {
        if (ef.code === 11) {                              // HP by a share of max HP (negative: a cut), by its recovery rate
-@@ -2702,21 +2749,19 @@
+@@ -2702,28 +2752,26 @@
            this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), String(-v), '#ffb0b0');
          } else if (v > 0) { e.b.hp = Math.min(e.b.mhp, e.b.hp + v); e.drawBar(); }
        } else if (ef.code === 21 && ef.data_id === 0) {   // "normal attack" states: the attacker's own (poison blades...)
@@ -559,7 +569,15 @@
        } else if (ef.code === 22) {
          e.b.removeState(ef.data_id);
          if (e.stateTimers) delete e.stateTimers[ef.data_id];
-@@ -2736,6 +2781,22 @@
+       } else if (ef.code === 12) {                       // MP by a share (a minus: taken away)
+         const v = Math.floor((e.b.mmp * ef.value1 + ef.value2) * e.b.rec);
+         e.b.mp = Math.max(0, Math.min(e.b.mmp, e.b.mp + v));
+-      } else if (ef.code === 44) this.fightCommonEvent(ef.data_id);
++      } else if (ef.code === 44) this.fightCommonEvent(ef.data_id, e.battle);
+     }
+     // buffs / debuffs (a curse on its weapon, its legs shot): a cold glow as it goes down, a warm one up
+     const before = e.b.buffs.reduce((a, v) => a + v, 0);
+@@ -2736,6 +2784,22 @@
    }
    // script 220: an item / skill that lands whatever the target evades - <絶対命中> on it, or its user's features
    certainHit(user, obj) { return /<絶対命中>/.test(obj?.note || '') || !!user?.certainty?.(0, obj?.hit_type ?? 1); }
@@ -582,7 +600,7 @@
    missOn(e, obj) {
      const p = e.worldPos(new THREE.Vector3());
      G.audio?.playSystemSe(obj?.hit_type === 2 ? 19 : 18);
-@@ -2754,15 +2815,17 @@
+@@ -2754,15 +2818,17 @@
      this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), { color: 0xc8f0ff, size: e.h * 0.9, life: 0.35, grow: 1.5 });
      if (!actor || this.playerDead) return;
      const t = obj.damage?.type || 0;
@@ -604,7 +622,7 @@
      }
      this.applyBuffEffects(actor, obj, TURN_SECONDS);
      if (actor.hp <= 0) this.playerFalls(e.battle);
-@@ -2775,14 +2838,16 @@
+@@ -2775,21 +2841,23 @@
      if (!e?.alive) return;
      const p = e.worldPos(new THREE.Vector3());
      const t = skill.damage?.type || 0;
@@ -625,7 +643,23 @@
      }
      this.applyBuffEffects(e.b, skill, ENEMY_TURN);
      this.checkEnemyDeath(e);
-@@ -2895,9 +2960,9 @@
+   }
+   // a common event a skill that strikes calls (effect 44) runs at once beside the fight, as VX Ace runs it in the
+   // battle - 비전・귀섬 calls 最期の太刀, and 귀신 무사's last stand ends in 할복 (once a use, however many it hits)
+-  fightCommonEvent(id) {
++  fightCommonEvent(id, battle = null) {
+     if (G.coop?.phantom) return;                   // (another player's world: its events are run there)
+     const list = commonEventList(id);
+     if (!list) return;
+@@ -2797,6 +2865,7 @@
+     (this.ceAt ||= {})[id] = G.time;
+     const it = new Interpreter(1);
+     it.troop = true;
++    it.battleOwner = battle;
+     it.setup(list, 0);
+     this.sideInterps.push(it);
+   }
+@@ -2895,9 +2964,9 @@
    tickEnemyStates(e, dt) {
      if (e.alive) e.b.tickBuffs(dt);
      const timers = e.stateTimers;
@@ -637,7 +671,7 @@
        timers[k] -= dt;
        if (timers[k] <= 0) {
          delete timers[k]; e.b.removeState(+k); removed = true;
-@@ -2905,12 +2970,17 @@
+@@ -2905,12 +2974,17 @@
        }
      }
      if (removed) this.checkEnemyDeath(e);
@@ -657,7 +691,7 @@
        const v = Math.max(1, Math.floor(e.b.mhp * -hrg));
        e.b.hp = Math.max(0, e.b.hp - v);
        if (e.bar) e.bar.visible = true; e.drawBar();
-@@ -3008,6 +3078,21 @@
+@@ -3008,6 +3082,21 @@
    }
  
    // ---- damage --------------------------------------------------------------------------
@@ -679,7 +713,7 @@
    computeDamage(attacker, target, skill, mult = 1) {
      if (!skill?.damage || skill.damage.type === 0) return 0;
      let v = evalFormula(skill.damage.formula, attacker.solo ? attacker.solo() : attacker, target);
-@@ -3018,13 +3103,28 @@
+@@ -3018,13 +3107,28 @@
        const els = attacker.atkElements();
        if (els.length) v *= Math.max(...els.map(e => target.elementRate(e)));
      }
@@ -710,7 +744,7 @@
    }
    // 攻撃ID変更 (script 203): equipment / states can swap the normal attack (skill 1) for their own skill;
    // with several, the highest <攻撃ID優先度変更:n> on the skill wins, then the highest id
-@@ -3047,8 +3147,16 @@
+@@ -3047,8 +3151,16 @@
    }
    // hits per blow: the skill's repeats (+ attack-count features) times its random-target count
    attackHits(skill, actor) {
@@ -729,7 +763,7 @@
    }
    // a weapon blow (VR swing, desktop click, arrow / bullet): the attack skill's formula, element, hits,
    // drain and states (Raiden's axes hit by the wielder's HP, the youtou drains, daggers hit twice...)
-@@ -3072,7 +3180,7 @@
+@@ -3072,7 +3184,7 @@
      if (melee && !art) { const r = this.rushMult(); if (r < 1) { mult *= r; weak = true; } }
      if (e.state === 'idle' || (e.alertTime > 0 && e.state === 'chase' && !e.battle)) mult *= 2;     // (a backstab)
      if (e.state === 'guard' && !this.ignoresGuard(actor, skill)) mult *= 0.3;
@@ -738,7 +772,7 @@
      if (crit) mult *= 2;
      const p = e.worldPos(new THREE.Vector3());
      const hits = one ? 1 : this.attackHits(skill, actor);
-@@ -3175,6 +3283,43 @@
+@@ -3175,6 +3287,43 @@
      for (const o of e.b.featureObjects()) { const m = /<\s*反撃スキル\s*(\d+)\s*>/.exec(o?.note || ''); if (m) id = Math.max(id, +m[1]); }
      this.startCounter(e, $data.skills[id] || $data.skills[1]);
    }
@@ -782,7 +816,7 @@
    // a counter (反撃) or an answer to a slipped blow (回避時スキル): a quick blow at the player, 0.35 s to see it
    // coming; not a turn of the enemy's own (as in the original, it comes inside the player's action)
    startCounter(e, s) {
-@@ -3251,8 +3396,7 @@
+@@ -3251,8 +3400,7 @@
    groggyHit(e, actor, obj, mult, blow) {
      const max = this.groggyMax(e);
      if (!max || !actor || !e.alive || e.state === 'stagger' || e.grogDown || this.inDuel(e)) return;     // (her duel: no groggy)
@@ -792,7 +826,7 @@
      const used = blow?.grog?.get(e) || 0;
      g = Math.min(g, GROGGY.cap * max - used);
      if (!(g > 0)) return;
-@@ -3359,20 +3503,34 @@
+@@ -3359,20 +3507,34 @@
        G.input.haptic('left', 0.2, 30); G.input.haptic('right', 0.2, 30);
        return;
      }
@@ -835,7 +869,7 @@
      dmg = Math.round(dmg * G.settings.difficulty);
      // a share of the HP / MP the skill takes away besides (HP / MP recovery with a minus - 조커 -100%, 하얀 충격
      // -99%, 황산 -25%, 톱니바퀴 MP -8%: VX Ace's item_effect_recover_hp, by the target's recovery rate); no guard
-@@ -3409,27 +3567,40 @@
+@@ -3409,27 +3571,40 @@
        G.audio?.playSystemSe(14);
        this.reportStruck(e, 0);
      }
@@ -887,7 +921,15 @@
    }
    // (a co-op guest struck by the host's enemy: how it went - 0 it landed, 1 guarded, 2 a perfect guard - is shown on
    // this player as the host sees it)
-@@ -3791,6 +3962,7 @@
+@@ -3762,6 +3937,7 @@
+       b.pageDone.add(key);
+       b.troopInterp = new Interpreter(1);
+       b.troopInterp.troop = true;                  // its music changes play even during battle music
++      b.troopInterp.battleOwner = b;
+       b.troopInterp.setup(page.list, 0);
+       b.troopInterp.update();                      // at once, like the original processing it right away
+       return;
+@@ -3791,6 +3967,7 @@
      this.rangedCooldown = Math.max(0, this.rangedCooldown - dt);
      this.updateGuard();
      this.updateDeskShield(dt);
@@ -895,7 +937,7 @@
      // drinking takes a moment (quick slot potions)
      if (this.healing) {
        this.healing.t -= dt;
-@@ -3997,6 +4169,7 @@
+@@ -3997,6 +4174,7 @@
        const wp = e.worldPos(tmpA);
        e.group.position.copy(wp);
        e.group.position.y += e.hover || 0;
@@ -903,7 +945,42 @@
        e.mesh.rotation.y = Math.atan2(head.x - wp.x, head.z - wp.z);
        e.mesh.rotation.z = 0; e.mesh.position.x = 0; e.mesh.position.z = 0;
        // (one hanging high over the player - the stage machine in the flies - leans its face down toward them)
-@@ -6130,7 +6303,8 @@
+@@ -4788,14 +4966,14 @@
+       // before it: let down gently)
+       if (d.skill && this.liftInfo().falls.has(d.skill.id)) {
+         if (this.playerDead || !d.e.alive) { G.player.floatDown?.(); continue; }
+-        this.runSkillCommonEvents(d.skill);
++        this.runSkillCommonEvents(d.skill, b);
+         this.liftFall(d);
+         continue;
+       }
+       if (this.playerDead || !d.skill || !d.e.alive) continue;
+       const head = G.player.headWorld(new THREE.Vector3());
+       if (d.skill.animation_id > 0) G.screen.playAnimationOn(head.clone().add(new THREE.Vector3(0, -0.5, 0)), d.skill.animation_id, { world: true, size: 2.2 });
+-      this.runSkillCommonEvents(d.skill);
++      this.runSkillCommonEvents(d.skill, b);
+       this.enemyStrikePlayer(d.e, d.skill, { blockable: false, certain: true, delayed: true });
+     }
+   }
+@@ -4964,7 +5142,7 @@
+     const plan = e.plan, s = e.skill, fam = e.move;
+     if (!plan) { this.endMove(e, 0.5); return; }
+     G.coop?.onBossMove?.(e);                       // (its co-op guests see it go off as well - coop.js)
+-    if (!e.puppet) this.runSkillCommonEvents(s);
++    if (!e.puppet) this.runSkillCommonEvents(s, e.battle);
+     const ep = e.worldPos(new THREE.Vector3());
+     if (this.releaseNewMove(e, fam, plan, s, ep)) return;          // (bossmoves.js)
+     const anim = s.animation_id > 0 ? s.animation_id : 0;
+@@ -5964,7 +6142,7 @@
+     const skill = e.skill;
+     G.coop?.onEnemyAct?.(e, skill);
+     // (a co-op guest's copy of the host's enemy only shows its move: what it does is done on the host's side)
+-    if (!e.puppet && !(e.move === 'flurry' && e.comboStep > 0)) this.runSkillCommonEvents(skill);     // (a flurry is one use of it)
++    if (!e.puppet && !(e.move === 'flurry' && e.comboStep > 0)) this.runSkillCommonEvents(skill, e.battle);     // (a flurry is one use of it)
+     const plan = e.plan || this.planAttack(e, skill, e.style);
+     // (from where its area was laid down)
+     const ep = plan?.ox !== undefined ? new THREE.Vector3(plan.ox, plan.oy, plan.oz) : e.worldPos(new THREE.Vector3());
+@@ -6130,7 +6308,8 @@
          // a shot is stopped only where it actually meets the shield (one that goes through a guard passes it)
          let shielded = false;
          if (this.shield && this.hasShield && (G.vr || this.shield.visible) && (!p.pierce || (this.guardUp && !this.disarmed && G.time - (this.guardRaisedAt ?? -99) <= PERFECT_GUARD))) {
@@ -913,7 +990,7 @@
            if (pos.distanceTo(tmpA) < 0.32) shielded = true;
          }
          // (the shots of a fan hit no more times than their skill does)
-@@ -6289,6 +6463,7 @@
+@@ -6289,6 +6468,7 @@
        e.outOfFight = !!(n.flags & 128);
        e.noTarget = !!(n.flags & 4) || (!!(n.flags & 64) && !G.coop?.rules?.guestStartsBoss) || e.outOfFight;
        e.boss = !!(n.flags & 32);
@@ -921,7 +998,7 @@
        // (a boss made stronger for its co-op fight - coop.js scaleBosses: its HP, MP and groggy gauge as big as there)
        if ((e.b.coopK || 1) !== n.k) { e.b.coopK = n.k; e.grogId = null; }
        const fresh = G.time - (e.netReported ?? -9) < 0.6;
-@@ -6310,6 +6485,9 @@
+@@ -6310,6 +6490,9 @@
          // (a plain shot winding up turns after its target there: its line here too)
          if (n.aim !== null && e.state === 'windup' && e.plan?.shot && !e.move && e.plan.ox !== undefined) this.aimShot(e, n.aim);
          e.b.hp = fresh ? Math.min(e.b.hp, n.hp) : n.hp;
@@ -931,7 +1008,7 @@
          if (!fresh) e.b.states = n.states.slice();
          const gmax = this.groggyMax(e);
          if (gmax && !fresh) e.grog = gmax * n.grog / 100;
-@@ -6320,9 +6498,9 @@
+@@ -6320,9 +6503,9 @@
      }
      for (const [id, e] of this.puppets) if ((e.src || null) === src && !seen.has(id)) { e.remove(); this.puppets.delete(id); }
    }
@@ -943,7 +1020,7 @@
    // big attack that ends one }]
    puppetReports() {
      const out = [];
-@@ -6336,8 +6514,9 @@
+@@ -6336,8 +6519,9 @@
        const add = now.states.filter(id => !b.states.includes(id) && !skip(id));
        const rm = b.states.filter(id => !now.states.includes(id) && !skip(id));
        const d = Math.round(b.hp - now.hp), g = Math.round(Math.max(0, b.grog - now.grog));
@@ -955,7 +1032,7 @@
          e.netReported = G.time;
        }
        e.netBase = now;
-@@ -6347,6 +6526,7 @@
+@@ -6347,6 +6531,7 @@
    // (host) a guest's blow on one of this world's enemies: taken as if it had struck here - its numbers in the friend's
    // colour, the fight started if it was roaming, a Break, the groggy gauge, states, the fall
    applyGuestHit(r, from = null) {
@@ -963,7 +1040,7 @@
      const e = this.netEnemies().find(x => x.netId === r.id) || this.hallEnemyFor(r.id, from);
      if (!e || !e.alive || e.hidden) return false;
      // (a boss fight that guest did not join, or watches fallen)
-@@ -6368,6 +6548,12 @@
+@@ -6368,6 +6553,12 @@
          G.audio?.playSe(G.seAt('Slash1', 70, 100), new THREE.Vector3(p.x, p.y + e.h * 0.5, p.z));
          this.damageRemovesStates(e);
        }
@@ -976,7 +1053,7 @@
      }
      for (const id of r.add) if ($data.states[id] && !e.b.stateResist(id)) this.addEnemyState(e, id, true);
      for (const id of r.rm) { e.b.removeState(id); if (e.stateTimers) delete e.stateTimers[id]; }
-@@ -6504,7 +6690,7 @@
+@@ -6504,7 +6695,7 @@
          const charge = THREE.MathUtils.clamp((G.time - this.deskCharge - 0.15) / 1.0, 0, 1);
          this.deskCharge = null;
          if (!this.swing && this.stamina > 0.05) {
@@ -985,7 +1062,7 @@
            this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.12)); this.staminaDelay = 0.7;
            G.audio?.playSe(G.seAt('Wind7', 60, charge >= 0.35 ? 100 : 140));
          }
-@@ -6512,10 +6698,12 @@
+@@ -6512,10 +6703,12 @@
        if (G.input.breakPressed()) this.pressBreak();
        if (this.swing) {
          const s = this.swing;
@@ -1001,7 +1078,7 @@
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
            const reach = this.weaponLength() + 0.9;
-@@ -6533,7 +6721,7 @@
+@@ -6533,7 +6726,7 @@
              }
            }
          }
@@ -1010,7 +1087,7 @@
            s.npcDone = true;
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
-@@ -6549,7 +6737,7 @@
+@@ -6549,7 +6742,7 @@
              return d < reach && to.normalize().dot(f) > 0.5;
            }, { power: this.stamina > 0.1 ? 1 : 0.5, charge: s.charge || 0 });
          }
@@ -1019,7 +1096,23 @@
        }
      }
    }
-@@ -6737,9 +6925,8 @@
+@@ -6705,13 +6898,14 @@
+     if (e.ring) e.ring.material.opacity = 0;
+     G.audio?.playSystemSe(8);
+   }
+-  runSkillCommonEvents(skill) {
++  runSkillCommonEvents(skill, battle = null) {
+     for (const ef of skill?.effects || []) {
+       if (ef.code !== 44) continue;
+       const list = commonEventList(ef.data_id);
+       if (!list) continue;
+       const it = new Interpreter(1);
+       it.troop = true;
++      it.battleOwner = battle;
+       it.setup(list, 0);
+       this.sideInterps.push(it);
+     }
+@@ -6737,9 +6931,8 @@
    // Script 191 回避時発動スキル: <全回避時スキル:n[,p]> (or 物理- / 魔法- / 必中-, by the attack's hit type) on a battler's
    // states, equipment or self - an attack it slips, it answers with skill n (p % of the time): 흰 유니콘 유니스's
    // 리포스트 (a stance of evasion +100% for two of its actions, every slipped blow answered by a lunge, 판트), and the
@@ -1031,7 +1124,7 @@
    evadeAnswers(b, hitType) {
      const out = [];
      for (const o of b?.featureObjects?.() || []) {
-@@ -6757,7 +6944,6 @@
+@@ -6757,7 +6950,6 @@
      const ht = skill?.hit_type ?? 1;
      if (!b || ht === 0 || this.certainHit(user, skill)) return null;
      const answers = this.evadeAnswers(b, ht);
@@ -1039,7 +1132,7 @@
      return Math.random() < (ht === 1 ? b.eva : b.mev) ? answers : null;
    }
    // (the stance shows while it lasts)
-@@ -6912,7 +7098,7 @@
+@@ -6912,7 +7104,7 @@
      let from = null, dir;
      if (gun) {
        gun.updateWorldMatrix(true, true);
@@ -1048,7 +1141,7 @@
      }
      // the shot leaves along where the left controller points, however the gun model is turned in the hand
      const ray = this.aimRay('left');
-@@ -7246,11 +7432,12 @@
+@@ -7246,11 +7438,12 @@
    // instead (gunShotSkill - 거룩한 총검)
    fireRanged() {
      const kind = this.shotKind, actor = G.state.party.leader();
@@ -1064,7 +1157,7 @@
      const brk = this.breakArmed();                 // (fired with Break held: the first shot carries the Break)
      this.fireShot(kind, n > 1, brk);
      for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot(kind, true, null));
-@@ -7279,7 +7466,9 @@
+@@ -7279,7 +7472,9 @@
      this.actorPays(actor, s);
      this.skillCD[s.id] = G.time + this.coolSeconds(s);
      const n = THREE.MathUtils.clamp((s.repeats || 1) * ({ 4: 2, 5: 3, 6: 4 }[s.scope] || 1), 1, 8);
@@ -1075,7 +1168,7 @@
      const volley = { shown: false };
      this.fireShot('gun', true, null, { skill: s, volley });
      for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot('gun', true, null, { skill: s, volley }));
-@@ -7299,7 +7488,7 @@
+@@ -7299,7 +7494,7 @@
    // where what the right hand holds shoots from: its tip
    muzzle() {
      this.weapon.updateWorldMatrix(true, false);
@@ -2004,7 +2097,25 @@
      G.coop?.onSay?.(this, msg);
      this.index++;
      this.waitMode = 'message';
-@@ -235,7 +240,7 @@
+@@ -212,6 +217,9 @@
+       }
+       this.choiceGroup.results = results;
+       this.branch[indent] = results.get(groupIdx[0]);
++      // The first block resumes directly after this callback. Only later
++      // merged blocks still need their answer; a label loop must ask anew.
++      results.delete(groupIdx[0]);
+     };
+   }
+   choiceCond(cond) {
+@@ -222,6 +230,7 @@
+     const g = this.choiceGroup;
+     if (!g || !g.results || !g.results.has(this.index)) return false;
+     this.branch[this.indent] = g.results.get(this.index);
++    g.results.delete(this.index);
+     return true;
+   }
+   c402() { if (this.branch[this.indent] !== this.params[0]) this.skipBranch(); return true; }
+@@ -235,7 +244,7 @@
      if (G.ui.messageBusy()) return false;
      const msg = { face: '', lines: [], position: 2 };
      this.setupNumberInput(msg, this.params);
@@ -2013,7 +2124,7 @@
      this.waitMode = 'message';
      this.index++;
      return false;
-@@ -253,7 +258,7 @@
+@@ -253,7 +262,7 @@
      const lines = [], at = this.index;
      while (this.nextCode() === 405) { this.index++; lines.push(this.list[this.index].parameters[0]); }
      const msg = { face: '', lines, position: 1, scroll: true, at };
@@ -2022,7 +2133,7 @@
      G.coop?.onSay?.(this, msg);
      this.index++;
      this.waitMode = 'message';
-@@ -611,7 +616,15 @@
+@@ -611,7 +620,15 @@
      return false;
    }
    c223() {
@@ -2039,7 +2150,40 @@
      if (this.params[2]) this.wait(this.params[1]);
      return true;
    }
-@@ -829,7 +842,18 @@
+@@ -628,17 +645,27 @@
+     return true;
+   }
+   c230() { this.wait(this.params[0]); return true; }
+-  // (co-op: the guests in this world see the pictures too - coop.js onPicture)
+-  c231() { G.screen.showPicture?.(this.params); G.coop?.onPicture?.(this, 231, this.params); return true; }
++  // Co-op's existing picture transport owns map IDs only.
++  pictureCommand(code) {
++    const troop = (this.root || this).troop;
++    const battle = troop ? G.combat?.battleOf?.(this) : null;
++    // VX Ace gives the troop its own Game_Screen. Common-event children share
++    // that owner; an ended troop must never write into the map's picture IDs.
++    if (troop && (!battle || battle.done)) return;
++    if (code === 231) G.screen.showPicture?.(this.params, battle);
++    else if (code === 232) G.screen.movePicture?.(this.params, battle);
++    else G.screen.erasePicture?.(this.params[0], battle);
++    if (!troop) G.coop?.onPicture?.(this, code, this.params);
++  }
++  c231() { this.pictureCommand(231); return true; }
+   c232() {
+-    G.screen.movePicture?.(this.params);
+-    G.coop?.onPicture?.(this, 232, this.params);
++    this.pictureCommand(232);
+     if (this.params[11]) this.wait(this.params[10]);
+     return true;
+   }
+   c233() { return true; }
+   c234() { if (this.params[3]) this.wait(this.params[2]); return true; }
+-  c235() { G.screen.erasePicture?.(this.params[0]); G.coop?.onPicture?.(this, 235, this.params); return true; }
++  c235() { this.pictureCommand(235); return true; }
+   c236() {
+     G.screen.setWeather?.(this.params[0], this.params[1], this.params[2]);
+     if (this.params[3]) this.wait(this.params[2]);
+@@ -829,7 +856,18 @@
      this.waitMode = 'scene';
      return true;
    }
@@ -2059,7 +2203,7 @@
    // Game Over: the game ends there and goes to the title (main.js G.gameOver) - its run stops here. A co-op guest falls by the
    // server's rules instead
    c353() {
-@@ -839,8 +863,14 @@
+@@ -839,8 +877,14 @@
    }
    c354() { G.ui.returnToTitle?.(); return true; }
    c355() {
@@ -3290,11 +3434,46 @@
  
  const SW = 640, SH = 480;
  const WIDTH = 2.6;                 // metres; about 57 degrees wide at the viewing distance
-@@ -63,13 +63,16 @@
+@@ -33,6 +33,8 @@
+   constructor(ui, camera) {
+     this.ui = ui;
+     this.pics = new Map();           // picture number -> state
++    this.battlePics = new Map();     // each original troop Game_Screen owns its picture numbers
++    this.endedBattles = new WeakSet();
+     this.canvas = document.createElement('canvas');
+     this.canvas.width = SW; this.canvas.height = SH;
+     this.ctx = this.canvas.getContext('2d');
+@@ -59,33 +61,102 @@
+   }
+ 
+   // ---- event commands ----
+-  show(p) {
++  picturesFor(battle = null, create = false) {
++    if (!battle) return this.pics;
++    if (battle.done || this.endedBattles.has(battle)) return null;
++    let pictures = this.battlePics.get(battle);
++    if (!pictures && create) { pictures = new Map(); this.battlePics.set(battle, pictures); this.dirty = true; }
++    return pictures;
++  }
++  displayedPictures() {
++    let pictures = this.pics;
++    for (const [battle, owned] of this.battlePics) {
++      if (battle.done) { owned.clear(); this.endedBattles.add(battle); this.battlePics.delete(battle); this.dirty = true; }
++      else pictures = owned;
++    }
++    return pictures;
++  }
++  show(p, battle = null) {
++    const pictures = this.picturesFor(battle, true);
++    if (!pictures) return;
      // (a stage play's curtain is hung on the stage instead - src/theater.js)
-     if (G.theater?.takePicture(p)) { if (this.pics.delete(p[0])) this.dirty = true; return; }
+-    if (G.theater?.takePicture(p)) { if (this.pics.delete(p[0])) this.dirty = true; return; }
++    if ((!battle || G.theater?.battle === battle) && G.theater?.takePicture(p)) {
++      if (pictures.delete(p[0])) this.dirty = true;
++      return;
++    }
      const [n, name, origin, designation, px, py, zx, zy, opacity, blend] = p;
-+    const previous = this.pics.get(n);
++    const previous = pictures.get(n);
      const pic = {
        name, origin, blend,
        x: designation ? G.state.v(px) : px, y: designation ? G.state.v(py) : py,
@@ -3303,23 +3482,55 @@
 +      // that loaded art for this frame; a cached promise resolves after render.
 +      zx, zy, opacity, angle: 0, img: previous?.name === name ? previous.img : null, d: 0, target: null,
      };
-     this.pics.set(n, pic);
+-    this.pics.set(n, pic);
 -    if (name) loadImage('Graphics/Pictures', name).then(img => { if (this.pics.get(n) === pic) { pic.img = img; this.dirty = true; } });
-+    if (name && !pic.img) loadImage('Graphics/Pictures', name).then(img => { if (this.pics.get(n) === pic) { pic.img = img; this.dirty = true; } });
++    pictures.set(n, pic);
++    if (name && !pic.img) loadImage('Graphics/Pictures', name).then(img => {
++      if (this.picturesFor(battle) === pictures && pictures.get(n) === pic) { pic.img = img; this.dirty = true; }
++    });
      this.dirty = true;
    }
-   move(p) {
-@@ -82,6 +85,29 @@
+-  move(p) {
++  move(p, battle = null) {
+     const [n, , origin, designation, px, py, zx, zy, opacity, blend, duration] = p;
+-    const pic = this.pics.get(n);
++    const pic = this.picturesFor(battle)?.get(n);
+     if (!pic) return;
+     pic.origin = origin; pic.blend = blend;
+     pic.target = { x: designation ? G.state.v(px) : px, y: designation ? G.state.v(py) : py, zx, zy, opacity };
+     pic.d = duration | 0;            // Game_Picture: a 0-frame move does nothing
    }
-   erase(n) { G.theater?.erasePicture(n); if (this.pics.delete(n)) this.dirty = true; }
-   clear() { this.pics.clear(); this.dirty = true; }
+-  erase(n) { G.theater?.erasePicture(n); if (this.pics.delete(n)) this.dirty = true; }
+-  clear() { this.pics.clear(); this.dirty = true; }
++  erase(n, battle = null) {
++    if (battle && (battle.done || this.endedBattles.has(battle))) return;
++    if (!battle || G.theater?.battle === battle) G.theater?.erasePicture(n);
++    if (this.picturesFor(battle)?.delete(n)) this.dirty = true;
++  }
++  endBattle(battle) {
++    if (battle) this.endedBattles.add(battle);
++    const pictures = this.battlePics.get(battle);
++    if (!pictures && !this.dirty) return;
++    pictures?.clear(); this.battlePics.delete(battle); this.dirty = true;
++    this.render(); // do not leave the final meter/backdrop visible until another logic tick
++  }
++  clearBattlePictures() {
++    if (!this.battlePics.size && !this.dirty) return;
++    for (const [battle, pictures] of this.battlePics) { pictures.clear(); this.endedBattles.add(battle); }
++    this.battlePics.clear(); this.dirty = true; this.render();
++  }
++  clear() {
++    this.pics.clear();
++    for (const [battle, pictures] of this.battlePics) { pictures.clear(); this.endedBattles.add(battle); }
++    this.battlePics.clear(); this.dirty = true;
++  }
 +
 +  // Port menu/map shortcuts differ from RPG Maker's B button. An active original
 +  // viewer may intentionally leave its picture to a separate autorun that checks
 +  // B and erases it. Ask that controller to close itself; never erase arbitrary
 +  // persistent pictures or change its switches here.
 +  requestViewerCancel() {
-+    if (!this.pics.size || !G.input?.requestRmCancel) return false;
++    if (this.displayedPictures() !== this.pics || !this.pics.size || !G.input?.requestRmCancel) return false;
 +    for (const event of G.map?.eventList || []) {
 +      if (event.erased || !event.page || ![3, 4].includes(event.trigger)) continue;
 +      const list = event.list || [];
@@ -3339,6 +3550,33 @@
  
    // 60 Hz: moves (Game_Picture#update_move)
    update() {
+-    for (const pic of this.pics.values()) {
++    this.displayedPictures(); // release finished scopes even if the end hook was bypassed
++    for (const pictures of [this.pics, ...this.battlePics.values()]) for (const pic of pictures.values()) {
+       if (pic.d <= 0 || !pic.target) continue;
+       const d = pic.d, t = pic.target;
+       pic.x = (pic.x * (d - 1) + t.x) / d;
+@@ -100,7 +171,8 @@
+ 
+   // per rendered frame: redraw when something changed, keep the screen in front of the player
+   render() {
+-    const any = this.pics.size > 0;
++    const pictures = this.displayedPictures();
++    const any = pictures.size > 0;
+     if (any) {
+       if (this.wasEmpty) this.ui.placeRoot(true);      // a new picture scene starts where the player looks
+       else this.ui.placeRoot();
+@@ -112,8 +184,8 @@
+     const ctx = this.ctx;
+     ctx.clearRect(0, 0, SW, SH);
+     let drawn = 0, dim = 0;
+-    for (const n of [...this.pics.keys()].sort((a, b) => a - b)) {
+-      const pic = this.pics.get(n);
++    for (const n of [...pictures.keys()].sort((a, b) => a - b)) {
++      const pic = pictures.get(n);
+       const img = pic.img;
+       if (!img || pic.opacity <= 0) continue;
+       const sx = pic.zx / 100, sy = pic.zy / 100;
 --- upstream/app/src/player.js
 +++ fork/apps/client/src/entities/player.js
 @@ -1,7 +1,9 @@
@@ -3575,12 +3813,20 @@
    }
    // whole-view flashes hurt the eyes most in a headset: a bright one follows the brightness setting squared; a dark
    // one (a black flash - the moment of darkness as 그랑・기뇰's acts come on) is no glare and keeps its strength
-@@ -197,8 +220,13 @@
-   showPicture(params) { G.pictures?.show(params); }
-   movePicture(params) { G.pictures?.move(params); }
-   erasePicture(n) { G.pictures?.erase(n); }
+@@ -194,11 +217,18 @@
+     this.flash = { r: color.red / 255, g: color.green / 255, b: color.blue / 255, a: color.alpha / 255 * THREE.MathUtils.lerp(1, k * k, glare), dur: frames, t: frames };
+   }
+   startShake() { G.input?.haptic('left', 0.3, 120); G.input?.haptic('right', 0.3, 120); }
+-  showPicture(params) { G.pictures?.show(params); }
+-  movePicture(params) { G.pictures?.move(params); }
+-  erasePicture(n) { G.pictures?.erase(n); }
 -  setWeather() {}
 -  effectHook() {}
++  showPicture(params, battle = null) { G.pictures?.show(params, battle); }
++  movePicture(params, battle = null) { G.pictures?.move(params, battle); }
++  erasePicture(n, battle = null) { G.pictures?.erase(n, battle); }
++  endBattlePictures(battle) { G.pictures?.endBattle(battle); }
++  clearBattlePictures() { G.pictures?.clearBattlePictures(); }
 +  setWeather(type, power = 0, frames = 0) {
 +    this.weather ||= new WorldWeather(G.three?.scene);
 +    this.weather.set(type, power, frames);
@@ -3591,7 +3837,7 @@
    // being hit: the edges of the view flush red (setting 피격 붉은 테두리)
    hurtFlash(strength = 1) {
      if (G.settings.hitFlash === false) return;
-@@ -247,15 +275,16 @@
+@@ -247,15 +277,16 @@
  
    // 60 Hz logic tick
    updateLogic() {
@@ -3612,7 +3858,7 @@
      }
      if (this.flash && --this.flash.t <= 0) this.flash = null;
      this.hurtLevel = Math.max(0, this.hurtLevel - 0.025);
-@@ -266,21 +295,32 @@
+@@ -266,21 +297,32 @@
  
    // per rendered frame: push values into overlay materials
    apply() {
