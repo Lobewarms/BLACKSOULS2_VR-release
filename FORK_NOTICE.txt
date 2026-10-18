@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.8
+BLACK SOULS II VR - community version 0.2.9
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,10 +7,10 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Get community updates directly from the launcher, with download progress.
-- Update downloads are checked before setup opens; saves are kept.
-- Includes the original author's latest bonfire travel and launcher folder fixes.
-- Keeps the community fixes for books, furniture, remains, weapons and soul items.
+- Save slots and load screens use translated location names from your game.
+- Existing saves also show the translated names without needing to save again.
+- Saved dates follow the language selected in the launcher.
+- Keeps the community updater and earlier gameplay fixes.
 
 Close the previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

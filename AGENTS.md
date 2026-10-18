@@ -496,3 +496,26 @@ Native update tests cover version comparison, preview/downgrade behavior, fork U
 selection, missing checksums, download/verification failures and real engine hosting.
 Packaging tests build under an alternate GITHUB_REPOSITORY to prevent accidentally
 pinning future forks to this owner. No automated result claims a headset playtest.
+
+## Save location language (0.2.9)
+
+VR save metadata formerly used mapName(), which reads RPG Maker editor labels
+from MapInfos. The user's existing saves had Japanese editor labels even though
+the corresponding game maps had English display_name values. Save/load/overwrite,
+title Continue and co-op save lists echoed those stored labels indefinitely.
+
+savepresentation.js preloads names for slot map IDs and resolves player-facing
+titles through the existing destinationName/translated parent fallback. The
+current map's parent chain is also loaded during map-view preparation, so new
+save metadata can use that name synchronously without adding any await between
+the state snapshot and POST serialization. Existing save metadata is only read,
+never migrated or rewritten by listing. Old saves without map IDs retain their
+original label. A title lookup failure uses the localized Area ID fallback and
+does not imply an empty save slot. New metadata date strings use fmtDate() rather
+than the browser default locale; numeric timestamps remain compatible.
+
+Tests cover stale editor labels, unnamed-room parent titles, duplicate slots,
+read failures, unchanged saved metadata and the actual co-op menu wiring. Save
+menu/notification translations are checked in all four supported languages with
+a Chinese browser locale. Original game data and player save files remain private
+and are never included in repository fixtures. No headset playtest is claimed.

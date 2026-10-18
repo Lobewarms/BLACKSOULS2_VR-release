@@ -1217,12 +1217,12 @@ export class UI {
     if (kind === 'world') {
       for (const s of ((await G.listSaves?.('world')) || []).sort((a, b) => a.slot - b.slot)) {
         const m = G.saveMeta(s.meta);
-        items.push({ text: `${s.slot === 0 ? tr('오토') : tr('슬롯 {n}', { n: s.slot })}  ${s.meta?.map || ''}`, right: m.date, desc: m.desc, slot: s.slot, kind: 'world' });
+        items.push({ text: `${s.slot === 0 ? tr('오토') : tr('슬롯 {n}', { n: s.slot })}  ${m.map}`, right: m.date, desc: m.desc, slot: s.slot, kind: 'world' });
       }
     } else {
       for (const s of ((await G.listSaves?.('vr')) || []).sort((a, b) => a.slot - b.slot)) {
         const m = G.saveMeta(s.meta);
-        items.push({ text: `VR ${s.slot === 0 ? tr('오토') : tr('슬롯 {n}', { n: s.slot })}  ${s.meta?.map || ''}`, right: m.date, desc: m.desc, slot: s.slot, kind: 'vr' });
+        items.push({ text: `VR ${s.slot === 0 ? tr('오토') : tr('슬롯 {n}', { n: s.slot })}  ${m.map}`, right: m.date, desc: m.desc, slot: s.slot, kind: 'vr' });
       }
       for (const s of (await G.listRmSaves?.()) || []) items.push({ text: `${tr('원작')} ${s.label}  ${s.map}`, right: String(s.time), rm: s });
     }

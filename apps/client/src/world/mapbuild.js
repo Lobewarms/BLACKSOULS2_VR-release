@@ -92,7 +92,7 @@ export async function buildMapView({ map, grid, mapId, events, pageOf, seeds = [
   const meshGrid = viewGrid(laid, mapId, events, open);
   map.__id = mapId;
   const ana = pageOf ? analyzeMap(map, grid, pageOf) : analyzeMap(map, grid);
-  await loadMapNames(ana.exits.filter(e => e.mapId !== mapId).map(e => e.mapId));
+  await loadMapNames([mapId, ...ana.exits.filter(e => e.mapId !== mapId).map(e => e.mapId)]);
   for (const exit of ana.exits) if (exit.mapId > 0 && exit.mapId !== mapId) exit.label = destinationName(exit.mapId);
   const walk = seeds.length ? reachableCells(map, laid, ana, [...seeds, ...H.walkedTo(mapId)]) : null;
   // how tall each door picture stands: a doorway with a door opens up to its top (the wall goes on above it)
