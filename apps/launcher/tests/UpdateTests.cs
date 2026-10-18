@@ -115,6 +115,61 @@ internal static class UpdateTests
         foreach (Control child in parent.Controls) Layout(child);
     }
 
+    private static void ScrollChecks()
+    {
+        using (var bar = new ThemedScrollBar { Size = new Size(14, 200) })
+        {
+            bar.SetMetrics(1000, 200, 0);
+            Check(bar.Maximum == 800 && bar.ThumbBounds.Height >= 24 && bar.ThumbBounds.Bottom <= bar.Height, "Custom scrollbar computes a bounded proportional thumb");
+            bar.ScrollWheel(-240);
+            Check(bar.Value == 80, "Custom scrollbar wheel moves by the requested steps");
+            bar.ScrollWheel(60); bar.ScrollWheel(60);
+            Check(bar.Value == 40, "High-resolution wheel deltas accumulate without lost movement");
+            bar.SetValue(0);
+            typeof(ThemedScrollBar).GetMethod("OnMouseDown", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(bar, new object[] { new MouseEventArgs(MouseButtons.Left, 1, 6, 190, 0) });
+            Check(bar.Value == 200, "Clicking below the thumb advances one viewport");
+            Rectangle thumb = bar.ThumbBounds;
+            typeof(ThemedScrollBar).GetMethod("OnMouseDown", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(bar, new object[] { new MouseEventArgs(MouseButtons.Left, 1, 6, thumb.Top + 2, 0) });
+            typeof(ThemedScrollBar).GetMethod("OnMouseMove", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(bar, new object[] { new MouseEventArgs(MouseButtons.Left, 0, 6, 1000, 0) });
+            typeof(ThemedScrollBar).GetMethod("OnMouseUp", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(bar, new object[] { new MouseEventArgs(MouseButtons.Left, 1, 6, 1000, 0) });
+            Check(bar.Value == 800 && bar.ThumbBounds.Bottom <= bar.Height - 2, "Dragging beyond the end clamps to the last content position");
+            typeof(ThemedScrollBar).GetMethod("OnKeyDown", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(bar, new object[] { new KeyEventArgs(Keys.Home) });
+            Check(bar.Value == 0, "Scrollbar Home keyboard navigation returns to the beginning");
+            typeof(ThemedScrollBar).GetMethod("OnKeyDown", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(bar, new object[] { new KeyEventArgs(Keys.End) });
+            Check(bar.Value == 800, "Scrollbar End keyboard navigation reaches the end");
+            bar.SetMetrics(100, 200, 800);
+            Check(!bar.HasOverflow && bar.Value == 0 && bar.Maximum == 0, "Content shrink clears an obsolete scroll position");
+        }
+        using (var surface = new ThemedScrollPanel { Size = new Size(500, 300), Padding = new Padding(8) })
+        {
+            var content = new Panel { MinimumSize = new Size(0, 900) };
+            surface.SetContent(content); Layout(surface);
+            Check(surface.ScrollMaximum > 600 && surface.ScrollBar.HasOverflow && !surface.AutoScroll, "Launcher overflow uses the custom scroll surface without a native bar");
+            var wheel = new HandledMouseEventArgs(MouseButtons.None, 0, 20, 20, -120);
+            typeof(ThemedScrollPanel).GetMethod("OnMouseWheel", BindingFlags.Instance | BindingFlags.NonPublic).Invoke(surface, new object[] { wheel });
+            Check(wheel.Handled && surface.ScrollPosition > 0 && content.Top == -surface.ScrollPosition, "Mouse wheel routed through the launcher surface scrolls its actual content");
+            surface.ScrollBar.SetValue(surface.ScrollMaximum);
+            Check(content.Top == -surface.ScrollMaximum, "Custom thumb movement changes the real content viewport");
+            surface.Height = 500; Layout(surface);
+            Check(surface.ScrollPosition <= surface.ScrollMaximum && content.Top == -surface.ScrollPosition, "Resizing clamps the content to the new viewport");
+            surface.Scale(new SizeF(1.4f, 1.4f)); Layout(surface);
+            Check(content.Width <= surface.ViewportBounds.Width && surface.ScrollBar.ThumbBounds.Bottom <= surface.ScrollBar.Height, "Custom scroll layout keeps content and thumb inside the viewport at 140 percent scaling");
+            content.MinimumSize = new Size(0, 50); Layout(surface);
+            Check(!surface.ScrollBar.HasOverflow && surface.ScrollPosition == 0 && content.Top == 0, "Collapsing content hides the scrollbar and restores its top position");
+        }
+        var log = new TextBox { Multiline = true, ReadOnly = true, Text = String.Join(Environment.NewLine, Enumerable.Range(1, 200).Select(i => "Log line " + i)) };
+        using (var host = new ThemedLogScroll(log) { Size = new Size(500, 160) })
+        {
+            host.CreateControl(); Layout(host);
+            Check(log.ReadOnly && log.ScrollBars == ScrollBars.None && host.ScrollBar.HasOverflow, "Original read-only log uses a custom scrollbar without a white native bar");
+            log.Select(0, 8);
+            host.ScrollBar.SetValue(20);
+            Check(host.ScrollBar.Value == 20 && log.SelectionLength == 8 && log.SelectedText == "Log line", "Custom log scrolling reaches the requested native line and preserves text selection");
+            log.Text = "Short log"; Layout(host);
+            Check(!host.ScrollBar.HasOverflow && host.ScrollBar.Value == 0, "Short log hides its scrollbar and clears the old range");
+        }
+    }
+
     private static void PresentationChecks(Form form)
     {
         var pc = Named<Button>(form, "playPcMode");
@@ -152,7 +207,7 @@ internal static class UpdateTests
         Check(content.GetRowHeights()[content.GetRow(advanced)] > 100, "Advanced options reveal the original RTP browser port and Steam controls");
         Check(Object.ReferenceEquals(((Control)EngineHost.Field(form, "rtpBox")).Parent, advanced) && Object.ReferenceEquals(((Control)EngineHost.Field(form, "steamBtn")).Parent, advanced), "Advanced settings retain the original engine event-bound controls");
         Click(advancedToggle); Click(detailsToggle); Layout(form);
-        Check(content.GetRowHeights()[content.GetRow(details)] >= 156 && ((TextBox)EngineHost.Field(form, "logBox")).Parent == details, "Details reveal the original read-only launcher log");
+        Check(content.GetRowHeights()[content.GetRow(details)] >= 156 && ((TextBox)EngineHost.Field(form, "logBox")).Parent is ThemedLogScroll && ((Control)EngineHost.Field(form, "logBox")).Parent.Parent == details, "Details reveal the original read-only launcher log");
         Click(detailsToggle);
         ((TextBox)EngineHost.Field(form, "logBox")).AppendText(Environment.NewLine + "[13:00:19] Test update service response" + Environment.NewLine);
         Check(Named<Label>(form, "launcherSessionStatus").Text == "Test update service response", "New launcher messages remain visible when details are collapsed");
@@ -195,10 +250,22 @@ internal static class UpdateTests
         };
         Check(edges.All(edge => LauncherWindowChrome.ResizeHitTest(edge.Point, new Size(1000, 700), 8) == edge.Expected), "Borderless hit testing supports all eight resize directions and leaves center controls interactive");
         form.Scale(new SizeF(1.5f, 1.5f)); Layout(form);
-        Check(launch.Height >= 80 && pc.Width > 350 && Named<TableLayoutPanel>(form, "launcherSidebar").Right <= Named<TableLayoutPanel>(form, "launcherMain").ClientSize.Width,
-            "Launcher controls retain their separation and usable sizes at simulated 150 percent scaling");
+        var scaledMain = Named<TableLayoutPanel>(form, "launcherMain");
+        var scaledSide = Named<TableLayoutPanel>(form, "launcherSidebar");
+        string[] modeLines = pc.Text.Split('\n').Concat(vr.Text.Split('\n')).ToArray();
+        int modeText = modeLines.Max(line => TextRenderer.MeasureText(line, pc.Font).Width);
+        bool readable = Math.Min(pc.Width, vr.Width) >= modeText + pc.Padding.Horizontal && pc.Height >= 2 * pc.Font.Height + pc.Padding.Vertical &&
+            launch.Height >= Math.Max(48, launch.Font.Height * 2) && scaledSide.Right <= scaledMain.ClientSize.Width;
+        Check(readable, "Launcher controls retain readable text and separation at simulated 150 percent scaling (screen=" + Screen.FromControl(form).WorkingArea +
+            ", form=" + form.Bounds + ", main=" + scaledMain.Bounds + ", sidebar=" + scaledSide.Bounds + ", PC=" + pc.Bounds + ", VR=" + vr.Bounds +
+            ", measured mode text=" + modeText + ", launch=" + launch.Bounds + ", font height=" + pc.Font.Height + ")");
+        LauncherWindowChrome.FitToWorkArea(form, new Rectangle(0, 0, 1024, 728)); Layout(form);
+        Check(Math.Min(pc.Width, vr.Width) >= modeText + pc.Padding.Horizontal && pc.Height >= 2 * pc.Font.Height + pc.Padding.Vertical &&
+            scaledSide.Right <= scaledMain.ClientSize.Width && Named<ThemedScrollPanel>(form, "launcherViewport").ScrollMaximum > 0,
+            "At 150 percent scaling on a 1024x728 work area, mode text fits and overflow remains scrollable (form=" + form.Bounds + ", main=" + scaledMain.Bounds +
+            ", sidebar=" + scaledSide.Bounds + ", PC=" + pc.Bounds + ", VR=" + vr.Bounds + ", text=" + modeText + ", padding=" + pc.Padding + ")");
         LauncherWindowChrome.FitToWorkArea(form, new Rectangle(0, 0, 1200, 700));
-        Check(form.Width <= 1200 && form.Height <= 700 && form.MinimumSize.Width <= 1200 && form.MinimumSize.Height <= 700 && Named<Panel>(form, "launcherViewport").AutoScroll,
+        Check(form.Width <= 1200 && form.Height <= 700 && form.MinimumSize.Width <= 1200 && form.MinimumSize.Height <= 700 && Named<ThemedScrollPanel>(form, "launcherViewport").ViewportBounds.Height > 0,
             "Scaled launcher fits a laptop work area while retaining scrolling access to every setting");
     }
 
@@ -296,6 +363,7 @@ internal static class UpdateTests
             Check(ReleaseIdentity.Load(directory).Version == identity.Version, "Load CI release metadata");
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
+            ScrollChecks();
             using (Form form = EngineHost.Create(directory, new[] { "--lang", "en", "--update-url", "https://should-never-be-requested.invalid" }, false))
             {
                 Check(form.GetType().GetField("UpdateCheck").GetValue(form) == null, "Legacy network update check is disabled before construction");

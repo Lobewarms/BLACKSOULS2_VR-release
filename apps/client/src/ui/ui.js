@@ -194,6 +194,53 @@ function drawOps(ctx, ops, count) {
   }
 }
 
+// The original window/cursor artwork also frames long lists. The narrow gutter
+// belongs to scrolling, so dragging it never activates the item beside it.
+class MenuScrollbar {
+  constructor(panel) { this.panel = panel; this.geometry = null; this.drag = null; }
+  reset() { this.drag = null; }
+  draw(y, height, top, visible, total) {
+    if (total <= visible) { this.geometry = null; this.reset(); return; }
+    const x = this.panel.canvas.width - 36, width = 24;
+    const thumbHeight = Math.max(28, height * visible / total), travel = height - thumbHeight;
+    const thumbY = y + travel * top / (total - visible);
+    this.geometry = { x, y, width, height, thumbY, thumbHeight, travel, max: total - visible };
+    const ctx = this.panel.ctx;
+    if (!drawGameWindow(ctx, x, y, width, height, 0.7)) {
+      ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(x, y, width, height);
+      ctx.strokeStyle = textColor(8); ctx.lineWidth = 1; ctx.strokeRect(x, y, width, height);
+    }
+    if (!drawGameCursor(ctx, x + 2, thumbY, width - 4, thumbHeight)) {
+      ctx.fillStyle = textColor(16); roundRect(ctx, x + 3, thumbY, width - 6, thumbHeight, 5); ctx.fill();
+    }
+  }
+  update(raycaster, scrollTo) {
+    const input = G.input, bar = this.geometry;
+    if (!bar) { this.reset(); return { handled: false, over: false, changed: false }; }
+    const uv = raycaster && this.panel.hit(raycaster);
+    const px = uv && uv.x * this.panel.canvas.width, py = uv && (1 - uv.y) * this.panel.canvas.height;
+    const over = !!uv && px >= bar.x && px <= bar.x + bar.width && py >= bar.y && py <= bar.y + bar.height;
+    if (G.vr) { this.reset(); return { handled: false, over, changed: false }; }
+    const wheel = Number.isFinite(input.mouse?.wheel) ? Math.trunc(input.mouse.wheel) : 0;
+    if (wheel) {
+      input.mouse.wheel = 0;
+      return { handled: true, over: false, changed: scrollTo(bar.max * (bar.thumbY - bar.y) / bar.travel + wheel) };
+    }
+    let changed = false, handled = false;
+    if (over && input.mousePressed?.(0)) {
+      this.drag = py >= bar.thumbY && py <= bar.thumbY + bar.thumbHeight ? py - bar.thumbY : bar.thumbHeight / 2;
+      handled = true;
+    }
+    if (this.drag !== null) {
+      handled = true;
+      if (uv) changed = scrollTo(Math.round((py - bar.y - this.drag) / bar.travel * bar.max));
+      if (!input.mouseHeld?.(0)) this.reset();
+    }
+    if (over || handled) G.ui.pointerTarget = true;
+    return { handled, over, changed };
+  }
+}
+
 // ------------------------------------------------------------------ list panel
 class ListPanel {
   constructor(widthPx = 900, rows = 8, widthM = 0.9) {
@@ -201,17 +248,27 @@ class ListPanel {
     this.rowH = 64;
     this.panel = new Panel(widthPx, 110 + rows * this.rowH + 56, widthM);
     this.items = []; this.index = 0; this.top = 0; this.title = '';
+    this.scrollbar = new MenuScrollbar(this.panel);
   }
   open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '' } = {}) {
     this.title = title; this.items = items; this.onSelect = onSelect; this.onCancel = onCancel; this.onAdjust = onAdjust;
     // Explicit index -1 leaves a list unselected; normal dialogue starts at its first row.
     this.index = index < 0 ? -1 : Math.min(index, Math.max(0, items.length - 1)); this.top = 0; this.footer = footer;
     this.hover = -2;          // the row under the laser right now does not count as a move
+    this.scrollbar.reset();
     this.panel.mesh.visible = true;
     this.draw();
   }
-  close() { this.panel.mesh.visible = false; }
+  close() { this.panel.mesh.visible = false; this.scrollbar.reset(); }
   get visible() { return this.panel.mesh.visible; }
+  scrollTo(top) {
+    const next = Math.max(0, Math.min(Math.round(top), Math.max(0, this.items.length - this.rows)));
+    if (next === this.top) return false;
+    this.top = next;
+    this.hover = -2;
+    if (this.index >= 0) this.index = Math.max(next, Math.min(this.index, next + this.rows - 1));
+    return true;
+  }
   // the title on one line - a long one (a co-op question with names in it) smaller, or on two lines at a sentence's end
   drawTitle(ctx, room) {
     const t = this.title || '';
@@ -245,14 +302,16 @@ class ListPanel {
     }
     if (this.index >= 0 && this.index < this.top) this.top = this.index;
     if (this.index >= this.top + this.rows) this.top = this.index - this.rows + 1;
+    this.top = Math.max(0, Math.min(this.top, Math.max(0, this.items.length - this.rows)));
+    const gutter = this.items.length > this.rows ? 24 : 0;
     for (let r = 0; r < this.rows; r++) {
       const i = this.top + r;
       const it = this.items[i];
       if (!it) break;
       const y = 100 + r * this.rowH;
       if (i === this.index) {
-        if (!drawGameCursor(ctx, 20, y, canvas.width - 40, this.rowH - 6)) {
-          roundRect(ctx, 20, y, canvas.width - 40, this.rowH - 6, 8);
+        if (!drawGameCursor(ctx, 20, y, canvas.width - 40 - gutter, this.rowH - 6)) {
+          roundRect(ctx, 20, y, canvas.width - 40 - gutter, this.rowH - 6, 8);
           ctx.fillStyle = 'rgba(200,170,110,0.28)'; ctx.fill();
         }
       }
@@ -279,6 +338,7 @@ class ListPanel {
       }
       ctx.fillText(name, x, y + this.rowH / 2 - 2);
     }
+    this.scrollbar.draw(100, this.rows * this.rowH - 6, this.top, this.rows, this.items.length);
     if (this.items.length > this.rows && this.index >= 0) {
       ctx.fillStyle = 'rgba(255,255,255,0.4)';
       ctx.font = `28px ${FONT}`;
@@ -301,6 +361,12 @@ class ListPanel {
   }
   update(raycaster) {
     const input = G.input;
+    if (input.cancel() || G.ui?.menuOpen && input.menu()) {
+      this.scrollbar.reset(); G.audio?.playSystemSe(2); this.onCancel?.(); return true;
+    }
+    const scroll = this.scrollbar.update(raycaster, top => this.scrollTo(top));
+    if (scroll.changed) { this.draw(); G.audio?.playSystemSe(0); }
+    if (scroll.handled) return true;
     let changed = false;
     const ny = input.navY();
     // (from no row: down picks the first, up the last - 誤選択防止 1.01)
@@ -315,8 +381,8 @@ class ListPanel {
         const back = this.onCancel && G.ui?.menuOpen && uv.x * this.panel.canvas.width >= this.panel.canvas.width - 180 && py >= 16 && py <= 80;
         const r = Math.floor((py - 100) / this.rowH);
         const i = this.top + r;
-        if (r >= 0 && r < this.rows && this.items[i]) hover = i;
-        G.ui.pointerTarget = hover >= 0 || !!back;
+        if (!scroll.over && r >= 0 && r < this.rows && this.items[i]) hover = i;
+        G.ui.pointerTarget = !G.vr && scroll.over || hover >= 0 || !!back;
         if (back && input.confirm()) { G.audio?.playSystemSe(2); this.onCancel(); return true; }
       }
       if (this.hover === -2) this.hover = hover;      // just opened: remember, don't jump
@@ -334,7 +400,6 @@ class ListPanel {
       else G.audio?.playSystemSe(3);
       return true;
     }
-    if (input.cancel() || G.ui?.menuOpen && input.menu()) { G.audio?.playSystemSe(2); this.onCancel?.(); return true; }
     return false;
   }
 }
@@ -356,18 +421,31 @@ class GridPanel {
     this.gridTop = 150;
     this.panel = new Panel(widthPx, this.gridTop + rows * this.cellH + 120, widthM);
     this.tabs = []; this.tab = 0; this.index = 0; this.top = 0; this.focusTabs = false;
+    this.scrollbar = new MenuScrollbar(this.panel);
   }
   get visible() { return this.panel.mesh.visible; }
   get items() { return this.tabs[this.tab]?.items || []; }
+  get cellWidth() { return (this.panel.canvas.width - 60 - (Math.ceil(this.items.length / this.cols) > this.rows ? 28 : 0)) / this.cols; }
   open(title, tabs, { onSelect, onCancel, tab = this.tab, index = 0 } = {}) {
     this.title = title; this.tabs = tabs; this.onSelect = onSelect; this.onCancel = onCancel;
     this.tab = Math.min(tab, tabs.length - 1); this.index = Math.min(index, Math.max(0, this.items.length - 1));
     this.focusTabs = false;
     this.hover = undefined;
+    this.scrollbar.reset();
     this.panel.mesh.visible = true;
     this.draw();
   }
-  close() { this.panel.mesh.visible = false; }
+  close() { this.panel.mesh.visible = false; this.scrollbar.reset(); }
+  scrollTo(top) {
+    const next = Math.max(0, Math.min(Math.round(top), Math.max(0, Math.ceil(this.items.length / this.cols) - this.rows)));
+    if (next === this.top) return false;
+    this.top = next;
+    this.hover = undefined;
+    const row = Math.max(next, Math.min(Math.floor(this.index / this.cols), next + this.rows - 1));
+    this.index = Math.min(this.items.length - 1, row * this.cols + this.index % this.cols);
+    this.focusTabs = false;
+    return true;
+  }
   setItems(tabIndex, items) { this.tabs[tabIndex].items = items; this.index = Math.min(this.index, Math.max(0, items.length - 1)); this.draw(); }
   draw() {
     const { ctx, canvas } = this.panel;
@@ -391,7 +469,8 @@ class GridPanel {
     const row = Math.floor(this.index / this.cols);
     if (row < this.top) this.top = row;
     if (row >= this.top + this.rows) this.top = row - this.rows + 1;
-    const cw = (canvas.width - 60) / this.cols;
+    this.top = Math.max(0, Math.min(this.top, Math.max(0, Math.ceil(items.length / this.cols) - this.rows)));
+    const cw = this.cellWidth;
     for (let r = 0; r < this.rows; r++) for (let c = 0; c < this.cols; c++) {
       const i = (this.top + r) * this.cols + c;
       const it = items[i];
@@ -418,6 +497,7 @@ class GridPanel {
       }
     }
     const totalRows = Math.ceil(items.length / this.cols);
+    this.scrollbar.draw(this.gridTop, this.rows * this.cellH - 6, this.top, this.rows, totalRows);
     if (totalRows > this.rows) {
       ctx.font = `26px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.45)';
       ctx.textAlign = 'right'; ctx.fillText(`${row + 1}/${totalRows}`, canvas.width - 36, 50); ctx.textAlign = 'left';
@@ -438,6 +518,12 @@ class GridPanel {
   }
   update(raycaster) {
     const input = G.input;
+    if (input.cancel() || G.ui?.menuOpen && input.menu()) {
+      this.scrollbar.reset(); G.audio?.playSystemSe(2); this.onCancel?.(); return true;
+    }
+    const scroll = this.scrollbar.update(raycaster, top => this.scrollTo(top));
+    if (scroll.changed) { this.draw(); G.audio?.playSystemSe(0); }
+    if (scroll.handled) return true;
     let changed = false;
     const items = this.items;
     const dx = input.navX(), dy = input.navY();
@@ -454,17 +540,17 @@ class GridPanel {
       let hover = null;                          // 't3' = tab 3, 'c12' = cell 12
       if (uv) {
         const px = uv.x * this.panel.canvas.width, py = (1 - uv.y) * this.panel.canvas.height;
-        const cw = (this.panel.canvas.width - 60) / this.cols;
+        const cw = this.cellWidth;
         if (py >= 82 && py <= 132) {
           const tw = (this.panel.canvas.width - 60) / Math.max(1, this.tabs.length);
           const t = Math.floor((px - 30) / tw);
           if (t >= 0 && t < this.tabs.length) hover = 't' + t;
-        } else if (py >= this.gridTop) {
+        } else if (!scroll.over && py >= this.gridTop) {
           const r = Math.floor((py - this.gridTop) / this.cellH), c = Math.floor((px - 30) / cw);
           const i = (this.top + r) * this.cols + c;
           if (r >= 0 && r < this.rows && c >= 0 && c < this.cols && this.items[i]) hover = 'c' + i;
         }
-        G.ui.pointerTarget = !!hover;
+        G.ui.pointerTarget = !G.vr && scroll.over || !!hover;
       }
       const apply = h => {
         if (h[0] === 't') { const t = +h.slice(1); if (t !== this.tab || !this.focusTabs) { this.tab = t; this.focusTabs = true; this.index = 0; this.top = 0; changed = true; } }
@@ -484,7 +570,6 @@ class GridPanel {
       else G.audio?.playSystemSe(3);
       return true;
     }
-    if (input.cancel() || G.ui?.menuOpen && input.menu()) { G.audio?.playSystemSe(2); this.onCancel?.(); return true; }
     return false;
   }
 }

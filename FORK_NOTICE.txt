@@ -12,6 +12,7 @@ WHAT'S NEW
 - Main menu fits one screen, with Character, Save / Load and Settings groups.
 - PC menus and HUD stay readable on screen; VR keeps its wrist HUD and spatial menus.
 - The launcher has a borderless game-style window, PC / VR choices and new storybook artwork.
+- Custom scrollbars match the launcher and game menus, with mouse wheel and dragging support.
 - HUD resources have clear labels, matching bars and grouped status icons.
 - Click menus and Back on PC, or use the controller pointer in VR.
 - Menus use the game's window skin; status effects use the game's own icons.

@@ -700,3 +700,27 @@ when player name or level changes. Use the game's Window palette for resource
 colors (HP20/21, MP22/23, stamina28/29) and retain real numeric values. Desktop
 bottom anchoring follows actual painted height; the VR minimap must clear the
 resized HUD geometry. Avoid new decorative status artwork or overlapping labels.
+
+## Themed scrolling (0.2.11)
+
+The launcher uses a dark track and ivory/gold thumb for its scroll surface and
+expanded log, retaining the original read-only TextBox and its selection/copy
+behavior. Preserve mouse wheel, drag, page clicks, keyboard navigation, focus
+visibility and clamping when resized or disclosures close. The DPI gate measures
+text fit and separation within the actual monitor work area; a fixed pixel width
+after 150 percent scaling incorrectly assumed a monitor larger than the CI runner.
+Include measured geometry in failures and exercise a small work area explicitly.
+
+Long in-game ListPanel/GridPanel menus reserve a right gutter and reuse the
+original Window frame/cursor artwork for track/thumb. Hide the bar when all rows
+fit. Mouse wheel, track clicks and dragging move the viewport without activating
+items, preserving the inventory column and explicitly unselected choices. VR
+retains stick navigation and cannot trigger an item through the bar. Regressions
+cover first/middle/last positions, partial rows, clamping, disabled items,
+unselected choices, stale hover, wheel routing and cancellation during scrolling.
+Esc/menu cancellation must take priority over wheel inertia or an active drag so
+that a scroll handler cannot consume and lose the cancel key edge.
+A private browser preview with
+the installed game's original skin/icons confirmed wheel and drag behavior and
+clear counts/text in long lists and inventories. Do not ship preview fixtures or
+the original game artwork used during this check.

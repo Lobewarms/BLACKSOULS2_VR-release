@@ -76,12 +76,12 @@ namespace BlacksoulsCommunity
             foreach (Control old in form.Controls) old.Visible = false;
             form.Controls.Add(hidden);
 
-            var scroll = new Panel { Name = "launcherViewport", Dock = DockStyle.Fill, AutoScroll = true, BackColor = Background, Padding = new Padding(24, 18, 24, 18), TabIndex = 0 };
+            var scroll = new ThemedScrollPanel { Name = "launcherViewport", Dock = DockStyle.Fill, BackColor = Background, Padding = new Padding(24, 18, 24, 18), TabIndex = 0 };
             var content = Table("launcherContent", 1);
             content.Dock = DockStyle.Top;
             content.Margin = Padding.Empty;
             content.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            scroll.Controls.Add(content);
+            scroll.SetContent(content);
             form.Controls.Add(scroll);
             scroll.BringToFront();
 
@@ -185,7 +185,7 @@ namespace BlacksoulsCommunity
             details = new Panel { Name = "launcherDetails", AutoSize = false, Height = 156, Dock = DockStyle.Fill, Margin = new Padding(0, 0, 0, 10) };
             var log = Field<TextBox>("logBox"); log.Dock = DockStyle.Fill; log.Margin = Padding.Empty; log.Font = new Font("Consolas", 9);
             log.BackColor = Inset; log.ForeColor = Muted; log.AccessibleName = "Launcher details";
-            details.Controls.Add(log); content.Controls.Add(details, 0, 5);
+            details.Controls.Add(new ThemedLogScroll(log)); content.Controls.Add(details, 0, 5);
             log.TextChanged += delegate { RefreshStatus(log); };
             var note = Field<Label>("subLabel"); StyleLabel(note, false); note.Font = new Font("Segoe UI", 8.5f);
             note.Margin = new Padding(0, 7, 0, 0); note.MaximumSize = Size.Empty;
@@ -330,6 +330,7 @@ namespace BlacksoulsCommunity
                 "在普通游戏窗口中游玩，无需VR头显。两种模式可共用存档。");
             statusHeading.Text = Text("Status", "状態", "상태", "状态");
             Field<TextBox>("logBox").AccessibleName = Text("Launcher details", "ランチャーの詳細", "런처 상세 정보", "启动器详细信息");
+            foreach (ThemedScrollBar bar in FindScrollBars(form)) bar.AccessibleName = Text("Scroll", "スクロール", "스크롤", "滚动");
             if (!hasActivity) status.Text = Text("Choose a mode, then launch.", "モードを選択して起動してください。", "모드를 선택한 후 실행하세요.", "选择模式后启动。");
             tips.SetToolTip(Field<TextBox>("gameBox"), Text("Choose the BLACK SOULS II folder containing Game.exe.", "Game.exeがあるBLACK SOULS IIフォルダーを選択してください。", "Game.exe가 있는 BLACK SOULS II 폴더를 선택하세요.", "选择包含Game.exe的BLACK SOULS II文件夹。"));
             pc.FlatAppearance.BorderColor = autoVr.Checked ? Edge : Gold;
@@ -365,6 +366,15 @@ namespace BlacksoulsCommunity
         {
             using (Stream stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("BlacksoulsCommunity.AppIcon.ico"))
                 if (stream != null) using (var icon = new Icon(stream)) form.Icon = (Icon)icon.Clone();
+        }
+
+        private static System.Collections.Generic.IEnumerable<ThemedScrollBar> FindScrollBars(Control parent)
+        {
+            foreach (Control child in parent.Controls)
+            {
+                var bar = child as ThemedScrollBar; if (bar != null) yield return bar;
+                foreach (ThemedScrollBar nested in FindScrollBars(child)) yield return nested;
+            }
         }
 
         private sealed class BannerSurface : Panel
