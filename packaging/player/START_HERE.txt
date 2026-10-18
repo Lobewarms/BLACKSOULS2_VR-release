@@ -46,6 +46,14 @@ saves are not changed. Setup keeps mod saves during upgrades and uninstall.
 Click Check for updates in the launcher. When a new version is available, click
 Download update, then open setup when prompted. Your saves are kept.
 
+STEAM ACHIEVEMENTS
+Use your installed Steam copy of BLACK SOULS II and keep Steam signed in while
+playing. The launcher log shows "Steam achievements connected" when ready.
+Achievements follow the original game's event conditions in both PC and VR play.
+Unconfirmed earned achievements are kept with your mod save for a later retry.
+Earlier progress counts when the original game checks its achievement condition
+again; loading an old save does not automatically unlock every past milestone.
+
 CREDITS
 Modified community version by dimasma0305. Original VR mod by Lobewarms:
 https://github.com/Lobewarms/BLACKSOULS2_VR-release

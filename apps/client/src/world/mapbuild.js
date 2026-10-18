@@ -9,7 +9,7 @@ import { loadMapNames, destinationName } from '../data/data.js';
 // what the map hints tell buildMapMesh for a map
 export function meshHintOptions(mapId) {
   return {
-    floorHints: H.floorHints(mapId), lips: H.lipHints(mapId), abyss: H.abyssHints(mapId), sideView: H.isSideView(mapId),
+    floorHints: H.floorHints(mapId), fallStairs: H.fallStairHints(mapId), lips: H.lipHints(mapId), abyss: H.abyssHints(mapId), sideView: H.isSideView(mapId),
     flatPictures: H.flatPictures(mapId), terraces: H.terraceHints(mapId), props: H.propHints(mapId), whole: H.wholeHints(mapId),
     cabinets: H.cabinetHints(mapId), parallaxWalls: H.parallaxWalls(mapId), caps: H.capHints(mapId), tops: H.topHints(mapId),
     solids: H.solidHints(mapId), wallFloors: H.wallFloorHints(mapId), mounds: H.moundHints(mapId), overlaps: H.overlapHints(mapId),

@@ -17,13 +17,24 @@ VERSION = json.loads((ROOT / 'package.json').read_text(encoding='utf-8'))['versi
 
 
 class PackagingTests(unittest.TestCase):
+    def test_steam_worker_is_x86_and_private_runtime_files_are_excluded(self):
+        payload = package.collect()
+        worker = payload[package.PREFIX + 'SteamAchievements.exe']
+        self.assertEqual(worker[:2], b'MZ')
+        pe = int.from_bytes(worker[60:64], 'little')
+        self.assertEqual(worker[pe:pe + 4], b'PE\0\0')
+        self.assertEqual(int.from_bytes(worker[pe + 4:pe + 6], 'little'), 0x14c)
+        self.assertFalse(any(Path(name).name.lower() in {'steam-session.json', 'steam_appid.txt',
+                                                       'steam_api.dll', 'steam_api64.dll'}
+                             for name in payload))
+
     def test_release_is_reproducible_and_contains_runtime_and_attribution(self):
         with tempfile.TemporaryDirectory() as directory:
             first = package.build(VERSION, Path(directory) / 'a.zip')
             second = package.build(VERSION, Path(directory) / 'b.zip')
             self.assertEqual(first.read_bytes(), second.read_bytes())
             manifest = package.verify(first)
-            for name in ['BlacksoulsVR.exe', 'BlacksoulsVR.Engine.exe', 'coop_server.py', 'app/index.html', 'LICENSE',
+            for name in ['BlacksoulsVR.exe', 'BlacksoulsVR.Engine.exe', 'SteamAchievements.exe', 'coop_server.py', 'app/index.html', 'LICENSE',
                          'FORK_NOTICE.txt', 'AGENTS.md', 'START_HERE.txt', 'release.json', 'app/licenses/three.LICENSE',
                          'app/licenses/webxr-input-profiles-assets.LICENSE.md',
                          'server/blacksouls_vr_coop/server.py', 'app/models/hands/left.glb']:

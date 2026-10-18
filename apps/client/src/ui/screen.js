@@ -171,6 +171,7 @@ export class ScreenFx {
     for (const m of [this.fadeSphere, this.toneMul, this.toneAdd, this.flashSphere, this.hurt]) camera.add(m);
     this.brightness = 255; this.fadeTarget = 255; this.fadeDur = 0;
     this.tone = { r: 0, g: 0, b: 0, gray: 0 }; this.toneTarget = null; this.toneDur = 0;
+    this.battleTones = new Map();
     this.flash = null;
     this.hurtLevel = 0;
     this.pictures = {};
@@ -182,10 +183,31 @@ export class ScreenFx {
   fadeOut(frames) { this.fadeTarget = 0; this.fadeDur = frames; }
   fadeIn(frames) { this.fadeTarget = 255; this.fadeDur = frames; }
   setBrightness(v) { this.brightness = v; this.fadeTarget = v; this.fadeDur = 0; }
-  startTone(tone, frames) {
+  startTone(tone, frames, battle = null) {
+    let channel = this;
+    if (battle) {
+      if (battle.done) return;
+      channel = this.battleTones.get(battle);
+      if (!channel) {
+        channel = { tone: { r: 0, g: 0, b: 0, gray: 0 }, toneTarget: null, toneDur: 0 };
+        this.battleTones.set(battle, channel);
+      }
+    }
     const t = { r: tone.red, g: tone.green, b: tone.blue, gray: tone.gray };
-    if (frames <= 0) { this.tone = t; this.toneTarget = null; }
-    else { this.toneTarget = t; this.toneDur = frames; }
+    if (frames <= 0) { channel.tone = t; channel.toneTarget = null; channel.toneDur = 0; }
+    else { channel.toneTarget = t; channel.toneDur = frames; }
+  }
+  // VX Ace gives the map and troop separate Game_Screen instances. A troop's
+  // sustained blind/tint must disappear with its fight, including an early win.
+  endBattleTone(battle) { this.battleTones.delete(battle); }
+  clearBattleTones() { this.battleTones.clear(); }
+  displayTone() {
+    let tone = this.tone;
+    for (const [battle, channel] of this.battleTones) {
+      if (battle.done) this.battleTones.delete(battle);
+      else tone = channel.tone;
+    }
+    return tone;
   }
   // whole-view flashes hurt the eyes most in a headset: a bright one follows the brightness setting squared; a dark
   // one (a black flash - the moment of darkness as 그랑・기뇰's acts come on) is no glare and keeps its strength
@@ -259,10 +281,10 @@ export class ScreenFx {
       this.brightness = (this.brightness * (d - 1) + this.fadeTarget) / d;
       this.fadeDur--;
     }
-    if (this.toneTarget) {
-      const d = this.toneDur;
-      for (const k of ['r', 'g', 'b', 'gray']) this.tone[k] = (this.tone[k] * (d - 1) + this.toneTarget[k]) / d;
-      if (--this.toneDur <= 0) { this.tone = { ...this.toneTarget }; this.toneTarget = null; }
+    for (const channel of [this, ...this.battleTones.values()]) if (channel.toneTarget) {
+      const d = channel.toneDur;
+      for (const k of ['r', 'g', 'b', 'gray']) channel.tone[k] = (channel.tone[k] * (d - 1) + channel.toneTarget[k]) / d;
+      if (--channel.toneDur <= 0) { channel.tone = { ...channel.toneTarget }; channel.toneTarget = null; }
     }
     if (this.flash && --this.flash.t <= 0) this.flash = null;
     this.hurtLevel = Math.max(0, this.hurtLevel - 0.025);
@@ -281,7 +303,7 @@ export class ScreenFx {
     const fadeA = 1 - this.brightness / 255;
     this.fadeSphere.visible = fadeA > 0.003;
     this.fadeSphere.material.opacity = fadeA;
-    const t = this.tone;
+    const t = this.displayTone();
     if (G.worldTone) {
       G.worldTone.apply(t);
       this.toneMul.visible = false;

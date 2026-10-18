@@ -1316,6 +1316,15 @@ export async function buildMapMesh(grid, opts = {}) {
   if (opts.falls?.some(f => f.dir === 1)) {
     const tower = !!opts.sideView;
     const walk = i => !solid[i] && !empty[i] && !pit[i] && grid.anyPassable(i % w, (i / w) | 0);
+    // A verified wide stair must separate the rooms at its ends. Width alone
+    // otherwise merges it into a flat room, carrying the upper room's fall
+    // height straight into the lower one and leaving a wall across the route.
+    const stairRise = new Float32Array(w * h).fill(NaN);
+    for (const [x0, y0, x1, y1, rise] of opts.fallStairs || []) {
+      if (!Number.isFinite(rise) || rise <= 0) continue;
+      for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (valid(x, y)) stairRise[idx(x, y)] = rise;
+    }
+    const profiledStair = i => !Number.isNaN(stairRise[i]);
     // the player can step between the two cells (each passable toward the other, as in the original)
     const OPP_DIR = { 2: 8, 4: 6, 6: 4, 8: 2 };
     const link = (x, y, dx, dy, d) => {
@@ -1334,7 +1343,7 @@ export async function buildMapMesh(grid, opts = {}) {
         x = x1;
       }
     }
-    const flat = i => walk(i) && runLen[i] >= 3;
+    const flat = i => walk(i) && runLen[i] >= 3 && !profiledStair(i);
     const node = new Int32Array(w * h).fill(-1);
     const nodeSize = [], nodeRows = [];
     for (let s0 = 0; s0 < w * h; s0++) {
@@ -1498,16 +1507,18 @@ export async function buildMapMesh(grid, opts = {}) {
       for (let x = 0; x < w; x++) {
         let y = 0;
         while (y < h) {
-          if (!walk(idx(x, y)) || runLen[idx(x, y)] >= 3) { y++; continue; }
+          if (!walk(idx(x, y)) || runLen[idx(x, y)] >= 3 && !profiledStair(idx(x, y))) { y++; continue; }
           const y0 = y;
           y++;
-          while (y < h && walk(idx(x, y)) && runLen[idx(x, y)] < 3 && link(x, y - 1, 0, 1, 2)) y++;
+          while (y < h && walk(idx(x, y)) && (runLen[idx(x, y)] < 3 || profiledStair(idx(x, y))) && link(x, y - 1, 0, 1, 2)) y++;
           const y1 = y - 1;
           const top = link(x, y0 - 1, 0, 1, 2) ? node[idx(x, y0 - 1)] : -1;
           const bot = link(x, y1, 0, 1, 2) ? node[idx(x, y1 + 1)] : -1;
           let ladder = false;
           for (let yy = y0; yy <= y1 && !ladder; yy++) ladder = grid.isLadder(x, yy);
-          runs.push({ x, y0, y1, top, bot, ladder });
+          let rise = null;
+          for (let yy = y0; yy <= y1; yy++) if (profiledStair(idx(x, yy))) rise = Math.max(rise ?? 0, stairRise[idx(x, yy)]);
+          runs.push({ x, y0, y1, top, bot, ladder, rise });
         }
       }
       // the falls first: each group of falls tied together keeps its biggest landing area where it is
@@ -1533,7 +1544,7 @@ export async function buildMapMesh(grid, opts = {}) {
         for (const r of runs) {
           if (r.top < 0 || r.bot < 0 || r.y1 - r.y0 + 1 > maxLen) continue;
           const tc = idx(r.x, r.y0 - 1), bc = idx(r.x, r.y1 + 1);
-          const rise = r.ladder && floorE0[tc] - floorE0[bc] < 0.9 ? r.y1 - r.y0 + 1 : 0;
+          const rise = r.rise ?? (r.ladder && floorE0[tc] - floorE0[bc] < 0.9 ? r.y1 - r.y0 + 1 : 0);
           const tb = rise ? floorE0[bc] + rise - floorE0[tc] : 0;     // delta(top) - delta(bottom)
           if (delta.has(r.top) && !delta.has(r.bot)) { delta.set(r.bot, delta.get(r.top) - tb); changed = true; }
           else if (delta.has(r.bot) && !delta.has(r.top)) { delta.set(r.top, delta.get(r.bot) + tb); changed = true; }
@@ -1557,6 +1568,18 @@ export async function buildMapMesh(grid, opts = {}) {
             surfSArr[j] = hT + (hB - hT) * (k + 1) / L;
             floorE[j] = (surfNArr[j] + surfSArr[j]) / 2;
             slope[j] = Math.abs(hT - hB) > 0.01 ? 1 : 0;
+          }
+          continue;
+        }
+        if (r.rise !== null) {
+          // A mapped flight with only one landing still climbs its verified
+          // rise, including an upper exit whose original wall stops walking.
+          const end = dt !== undefined ? floorE[idx(r.x, r.y0 - 1)] : floorE[idx(r.x, r.y1 + 1)];
+          for (let k = 0; k < L; k++) {
+            const j = idx(r.x, r.y0 + k);
+            surfNArr[j] = end + r.rise * (dt !== undefined ? -k : L - k) / L;
+            surfSArr[j] = end + r.rise * (dt !== undefined ? -k - 1 : L - k - 1) / L;
+            floorE[j] = (surfNArr[j] + surfSArr[j]) / 2; slope[j] = 1;
           }
           continue;
         }

@@ -39,6 +39,7 @@ namespace BlacksoulsCommunity
             screenshot.SetValue(options, requestedScreenshot);
             var updates = new UpdateController(form, identity, directory, checkOnShow);
             LauncherPresentation.Apply(form, updates.UpdateButton, identity);
+            SteamAchievementHost.Attach(form, directory);
             return form;
         }
 

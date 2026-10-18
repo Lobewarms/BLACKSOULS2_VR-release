@@ -12,8 +12,18 @@ foreach ($asset in @($icon, $banner)) {
 }
 $branding = @("/win32icon:$icon", "/resource:$icon,BlacksoulsCommunity.AppIcon.ico", "/resource:$banner,BlacksoulsCommunity.LauncherBanner.png")
 $sources = @(Get-ChildItem -LiteralPath $source -Filter '*.cs' | ForEach-Object FullName)
-& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:winexe "/out:$output/BlacksoulsVR.exe" $references $branding $sources
+& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:winexe /main:BlacksoulsCommunity.Program "/out:$output/BlacksoulsVR.exe" $references $branding $sources
 if ($LASTEXITCODE -ne 0) { throw 'Launcher build failed' }
+& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /platform:x86 /target:exe /main:BlacksoulsCommunity.SteamAchievementWorker "/out:$output/SteamAchievements.exe" $references (Join-Path $source 'SteamAchievementWorker.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Steam achievement helper build failed' }
+& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /platform:x86 /target:exe /main:SteamAchievementTests "/out:$output/SteamAchievementTests.exe" $references (Join-Path $source 'SteamAchievementWorker.cs') (Join-Path $source 'tests/SteamAchievementTests.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Steam achievement tests build failed' }
+& (Join-Path $output 'SteamAchievementTests.exe')
+if ($LASTEXITCODE -ne 0) { throw 'Steam achievement tests failed' }
+& $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:exe /main:SteamAchievementHostTests "/out:$output/SteamAchievementHostTests.exe" $references $branding $sources (Join-Path $source 'tests/SteamAchievementHostTests.cs')
+if ($LASTEXITCODE -ne 0) { throw 'Steam bridge tests build failed' }
+& (Join-Path $output 'SteamAchievementHostTests.exe')
+if ($LASTEXITCODE -ne 0) { throw 'Steam bridge tests failed' }
 & $compiler /nologo /codepage:65001 /warnaserror /optimize+ /target:exe /main:BrandingTests "/out:$output/BrandingTests.exe" $references $branding (Join-Path $source 'tests/BrandingTests.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Branding test build failed' }
 & (Join-Path $output 'BrandingTests.exe') (Join-Path $output 'BlacksoulsVR.exe') $icon $banner

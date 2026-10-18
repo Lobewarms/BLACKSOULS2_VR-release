@@ -5,6 +5,8 @@
 //  floors:   hand-made heights, rectangles of walkable cells [x0, y0, x1, y1, heightAtNorthEdge,
 //            heightAtSouthEdge] in tiles, sloping north to south between the two. Later ones win. With 'x' after
 //            them [x0, y0, x1, y1, heightAtWestEnd, heightAtEastEnd, 'x']: a flight drawn side-on, a flat step a cell
+//  fallStairs: verified wide flights [x0, y0, x1, y1, rise in tiles] separating rooms placed by original fall
+//            events. Keep these cells out of flat-room grouping and slope between the resulting landings.
 //  tops:     solids' tops set by hand [x0, y0, x1, y1, top in tiles] (raised or lowered): a block between floors raised by
 //            hand (a castle front up to the balcony behind it)
 //  flatPictures: tile ids of small upright pictures that keep their 2D facing (one plane across the cell, seen
@@ -150,6 +152,13 @@ export const MAP_HINTS = {
   // stairs at x13-15 and x28-30 - all of it lay flat, the stairs drawn on the floor, the white door up there
   101: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, massBackdrop: true },
   154: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, massBackdrop: true },
+  // Ox Ward University's first hall: original seven-row falls off the west
+  // gallery establish its height. The two three-wide evilcastle_A5 flights
+  // are stairs, not flat rooms that should all rise with that gallery. The
+  // upper seven-row flight climbs its twelve-row book wall to the next door.
+  155: { fallStairs: [[30, 14, 32, 21, 7], [30, 5, 32, 11, 7]],
+    floors: [[54, 9, 54, 11, 3, 0], [54, 8, 54, 8, 3, 3]],
+    caps: [[26, 14, 56, 21, 7.5]], tops: [[26, 0, 56, 11, 19]], wallCap: 14 },
   372: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, massBackdrop: true },
   373: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT },
   // 하얀 성시 ７－１１ BOSS ２ (그랑・기뇰's theatre): the stage (rows 6-10) stands 0.9 m above the house; its front
@@ -202,6 +211,7 @@ export async function loadUserHints() {
 }
 
 export function floorHints(mapId) { return MAP_HINTS[mapId]?.floors || null; }
+export function fallStairHints(mapId) { return MAP_HINTS[mapId]?.fallStairs || null; }
 export function lipHints(mapId) { return MAP_HINTS[mapId]?.lips || null; }
 export function abyssHints(mapId) { return MAP_HINTS[mapId]?.abyss || null; }
 export function openFights(mapId) { return !!MAP_HINTS[mapId]?.openFights; }

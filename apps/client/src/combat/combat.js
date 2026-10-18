@@ -683,6 +683,7 @@ export class CombatSystem {
   // ---- lifecycle -------------------------------------------------------------
   // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
   reset({ keepState = false, carry = false } = {}) {
+    G.screen?.clearBattleTones?.();
     // (carry - a map change: an event's run that is past its fight, in its win or lose branch, goes on on the new map as
     // the original's map interpreter would - 혼돈 던전 / 시공 던전's defeat, CE269, takes the party out and then lets the
     // menu and saving back; dropped with the old map, saving stayed shut until 고왕의 뼛가루. One still in its fight
@@ -1214,6 +1215,7 @@ export class CombatSystem {
     if (result === 0 && m.played) G.audio?.playMe(G.state.system.battleEndMe || $data.system.battle_end_me);
   }
   onBattleEnd(battle) {
+    G.screen?.endBattleTone?.(battle);
     G.player.floatDown?.();                         // (blown up by the wind when it ended: let down gently)
     if (battle.result === 0 && battle.private) G.coop?.hallucinationBeaten?.(battle.hallKey);
     if (battle.result === 0) {

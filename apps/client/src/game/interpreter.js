@@ -6,6 +6,7 @@ import { $data } from '../data/data.js';
 import { runRuby, evalRuby } from './rubyexpr.js';
 import { commonEventList } from '../entities/character.js';
 import { itemData } from './state.js';
+import { steamAchievementName } from './steam-achievements.js';
 
 // the interpreter running a command right now (the innermost): what kind of run made a change to the world
 // (coopworld.js writeSyncs)
@@ -614,7 +615,9 @@ export class Interpreter {
     return false;
   }
   c223() {
-    G.screen.startTone(this.params[0], this.params[1]);
+    const troop = (this.root || this).troop;
+    const battle = troop ? G.combat?.battleOf?.(this) : null;
+    if (!troop || battle && !battle.done) G.screen.startTone(this.params[0], this.params[1], battle);
     if (this.params[2]) this.wait(this.params[1]);
     return true;
   }
@@ -853,8 +856,14 @@ export class Interpreter {
   }
   c354() { G.ui.returnToTitle?.(); return true; }
   c355() {
+    const commandIndex = this.index;
     let src = this.params[0];
     while (this.nextCode() === 655) { this.index++; src += '\n' + this.list[this.index].parameters[0]; }
+    const achievement = steamAchievementName(src);
+    if (achievement !== null) {
+      G.steamAchievements?.record(achievement, { interpreter: this, commandIndex, source: src });
+      return true;
+    }
     const before = SCENE_REQUESTS.length;
     runRuby(src, { self: this.event(), interpreter: this });
     if (SCENE_REQUESTS.length > before) {

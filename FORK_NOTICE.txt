@@ -1,4 +1,4 @@
-BLACK SOULS II VR - community version 0.2.22
+BLACK SOULS II VR - community version 0.2.23
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,12 +7,16 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- The university's sky has stars overhead instead of a large plain blue cap.
-  Other verified horizon panoramas also extend their original sky artwork
-  overhead while keeping their horizon, buildings and terrain in place.
-- Opening the menu or map while viewing the moon now closes the telescope
-  picture correctly, including Tab, M and VR menu controls.
-- Repeated event pictures stay visible without flickering between frames.
+- Steam achievements earned through the original game's events can now count
+  while playing on PC or in VR. Use your installed Steam copy and stay signed
+  in to Steam. The launcher log shows when achievements are connected.
+  Unconfirmed earned requests are kept with your mod save for a later retry.
+  Loading older progress does not automatically award every past milestone.
+- The clock-tower monster's blinding effect now clears when its fight ends,
+  including victories before the monster's scheduled fade.
+- The university's central staircase now connects the hall and gallery instead
+  of becoming an upright wall. Its upper and side stairs also have connected
+  landings, while the original blocked passages and fall routes are preserved.
 
 The river, scenery, atmosphere, dialogue and gameplay fixes from previous
 updates are included.

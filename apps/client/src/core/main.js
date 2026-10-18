@@ -41,6 +41,7 @@ import { Hands } from '../vr/hands.js';
 import { loadUserHints } from '../world/maphints.js';
 import { adjustStore, replaceAdjustStore, onAdjustChange } from '../combat/weapons.js';
 import { Coop } from '../network/coop.js';
+import { SteamAchievements } from '../game/steam-achievements.js';
 
 const statusEl = document.getElementById('status');
 const setStatus = t => { if (statusEl) statusEl.textContent = t; };
@@ -86,6 +87,8 @@ addEventListener('resize', () => {
 // browser shares them; localStorage is only a fallback. Debug launches (?save= / ?map= / ?timer) never write.
 const DEV_LAUNCH = ['save', 'map', 'timer', 'vrsave'].some(k => new URLSearchParams(location.search).has(k));
 G.devLaunch = DEV_LAUNCH;
+G.steamAchievements = new SteamAchievements();
+void G.steamAchievements.begin();
 let localSettings = {};
 try { localSettings = JSON.parse(localStorage.getItem('bsvr.settings') || '{}'); } catch { /* */ }
 Object.assign(G.settings, localSettings);
@@ -490,6 +493,7 @@ async function startGame(state, overridePos) {
 // the game goes on in this state, from its saved place or pos (also co-op's way into another player's world and back)
 function enterWorld(state, overridePos) {
   G.state = state;
+  void G.steamAchievements.flush();
   G.pictures?.clear();
   G.map = G.map || new GameMap();
   G.combat.reset({ keepState: true });

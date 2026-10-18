@@ -1253,3 +1253,88 @@ Reuse ready artwork only for the same picture ID and name; reset the other
 Show Picture fields normally. Preserve identity checks for pending replacements
 and erasures. Regressions must render synchronously after each repeated show,
 and confirm a delayed image cannot resurrect a viewer cancelled from the menu.
+
+## Steam achievements from earned events (0.2.23)
+
+The104 distinct installed achievement snippets at140 event locations use an
+exact three-line SteamUserStatsLite singleton/set/update block. They previously
+failed Ruby compilation. Interpreter355 recognizes only that block, preserving
+the exact case, whitespace and UTF8 of its quoted API ID; general Ruby, formulas
+and previews do not gain a Steam helper. Record only an actually executing355/655
+block in an owned local game. Deny dev/map/save/timer launches, phantom/replay,
+spectator and developer-world sessions. Keep pending earned IDs in
+GameState.system.steamAchievements (bounded256, deduplicated) so ordinary mod
+saves retain them. Native confirmation alone removes a request. Capture its save
+identity across asynchronous requests; loading another save must not redirect an
+old response. Do not infer historical awards from boss switches or inventory.
+
+The launcher creates app/steam-session.json for its current session and serves
+a token-authenticated endpoint bound exclusively to127.0.0.1 on an ephemeral
+port. Accept only the selected game's localhost/127.0.0.1 origin and exact bridge
+Host; do not enable arbitrary CORS or bind to LAN. Limit concurrent requests,
+header/body sizes and total reading time. Delete only this launcher's own config
+on close. Do not block the UI on an in-flight Steam callback. A terminal native
+failure disposes the worker so a later attempt can reconnect after Steam starts.
+Keep credentials and connection details out of player screens and release files.
+
+SteamAchievements.exe is a separately source-built x86 child because the owned
+game's steam_api.dll is32-bit. Load that DLL by its full selected-game path, use
+only process-local app context3855540, verify Steam login/app/ownership/account,
+and shut down on launcher exit or stdin EOF. Never ship/copy the game DLL or
+create steam_appid.txt. The native API exposes only status and earned-name batches,
+with no clear/reset/stat editing. Enumerate published achievement names at runtime
+and reject any unknown name before a mutation. The current installed schema has
+102 achievements; script IDs absent from that schema cannot award.
+
+Manual dispatch waits for matching successful stats callbacks. On Windows,
+UserStatsReceived_t is24bytes but its packed CSteamID begins at offset12; a
+sequential managed ulong at16 silently rejects the correct account. Preserve the
+raw-byte ABI regression. SetAchievement/StoreStats returning true does not prove
+server persistence. Keep dirty IDs separate from initial downloaded/confirmed
+achievements; acknowledge only a matching successful UserStatsStored_t callback.
+Do not overlap stores or mistake a late callback for a newer batch. Preserve
+pending work on rejection, timeout or disconnection, with bounded quiet retries.
+
+Tests use fake native APIs and synthetic events, including Unicode IDs, offline
+recovery, failed stores, late callbacks, save identity, lifecycle and HTTP origin
+authorization. The private read-only probe against the installed game confirmed
+ready/102 names, including a Unicode identifier; a real process/HTTP bridge test
+and original server metadata routing also passed. No real achievement was set or
+stored during verification. Keep all original scripts/maps and private reports
+outside Git and release packages. CI builds/tests/promotes both launcher binaries;
+package checks require the x86 worker and exclude Steam DLLs/session credentials.
+
+## Battle tone lifetime (0.2.23)
+
+The clock-tower Troop187 turns the view white on turn1+20n and resets it on
+turn10+20n. Winning early left the global ScreenFx tone permanently white. VX Ace
+uses separate Game_Screen instances for map and troop, so bind interpreter223
+tone changes to their active battle (including common-event children), retain
+independent map tones, and drop battle channels on finish/reset. Stale troop
+continuations cannot repaint a map. Keep the authored blind/reset timing while
+the battle remains active; do not globally erase ordinary flashes or pictures.
+Private original-page replay reproduced white after victory before the fix and
+normal tone afterward. Synthetic regressions cover early victory, scheduled
+fade, common children, stale continuations, overlap and PC/VR owner cleanup.
+
+## University wide stairs and original falls (0.2.23)
+
+Map155 uses three-wide evilcastle_A5 stair flights. The fall-height solver's
+width>=3 flat-room rule merged those stairs with both landings, carrying the
+gallery's height into the hall and leaving an upright wall across the route.
+Original seven-row fall routes establish the gallery's height more reliably
+than the decorative wall-row count. Only this map supplies fallStairs rectangles
+with verified seven-tile rises. Exclude those cells from flat-room merging and
+propagate their rise between placed areas or from their single known landing.
+Do not globally reinterpret wide corridors or change original passage flags.
+
+The real original build retains all13 fall routes and78 shaft cells: hall31,23
+is0, gallery31,12 is7, the central eight-row flight rises smoothly0to7, the upper
+flight rises7to14, and the small side exit rises7to10. Original blocked31,3 stays
+solid; existing arrival/door logic retains authority. Wall caps/tops are local
+Map155 metadata. Synthetic regressions use the actual command analyzer and
+buildMapView, check wall triangles and both landings, and walk uphill/downhill
+with real Player.update/resolve and GameMap.playerEdgePassable. They preserve
+the original side-wall block and do not trigger falls on the ramp. Rendered
+review checked the approach, halfway point and gallery. Private source maps and
+art stay outside Git; dev previews disable saves and achievement submissions.

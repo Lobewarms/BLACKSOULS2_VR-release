@@ -66,7 +66,8 @@ def collect(root=ROOT):
             raise ValueError(f'Non-local distribution file: {name}')
         if any(p.lower() in {'saves', 'data', 'graphics', 'audio'} for p in PurePosixPath(name).parts):
             raise ValueError(f'Game data or save directory in distribution: {name}')
-        if source.name.lower() in {'game.exe', 'game.rgss3a', 'coop_server.json'}:
+        if source.name.lower() in {'game.exe', 'game.rgss3a', 'coop_server.json', 'steam-session.json',
+                                   'steam_appid.txt', 'steam_api.dll', 'steam_api64.dll'}:
             raise ValueError(f'Game or local configuration file in distribution: {name}')
         payload[name] = source.read_bytes()
     launcher = PREFIX + 'BlacksoulsVR.Engine.exe'
