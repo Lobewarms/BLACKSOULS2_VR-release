@@ -2287,3 +2287,57 @@ Current source comparison: runtime bf980de2289fe6de7dd63cadb1e2764ce5d5c3fd (0.2
 48 original modules retained, 15 unchanged after import moves, 33 modified,
 43 new and 0 missing; 3,759 added/908 removed lines in modified originals after
 import normalization. Historical screenshot captions and image pins are unchanged.
+
+
+## Immediate menu skills, R shortcut and dialogue ownership (0.2.38)
+
+The user clarified that menu skills should execute immediately, and changed the
+requested shortcut from E to R. Keep E/Enter/Z Examine/Talk. R opens the original
+Skills grid directly, toggles it closed on a fresh press, and switches into it
+from an ordinary menu. Ignore typing, unfocused/VR keyboard input, dialogue,
+scripted waits, transfers, disabled menus, death and unrelated modals. Preserve
+native battle-wait access and consume the opening frame so R+confirm cannot select
+or cast inadvertently. Do not change original RPG Maker input mappings for R.
+
+Menu use passes an explicit direct option through shared skill validation into
+performUsable. Ordinary spells launch their original projectile immediately;
+weapon arts apply the original skill immediately with authored target animation
+(including equipped-weapon animation for -1). Native projectile travel, repeats,
+all/random scopes, global effects and costs remain intact. Validate the existing
+gaze/range/grid-line-of-sight target before any charge, cooldown, disarm or pending
+preparation cleanup. Reject hidden/dead/held/unjoined/nonfinite targets. Failure
+keeps the menu and resources intact. Quick slots still arm/ready normally; Dodge
+and manual Break/GunBreak retain dedicated native actions. No global directUse
+flag is needed; its narrow test adapter now uses the explicit option.
+
+A read-only original-event audit matched the screenshot's poem to Map99/event2:
+a normal acknowledged text page, then a recognized title banner, then transfer
+to Map1 Crash Chamber. showMessage discarded heldMessage before its banner early
+return, losing the only handle that hid the previous shared panel. Hide the held
+page before replacing its owner. Reconcile ownerless panels and cancel an active
+message only when its actual execution/map/transfer ownership invalidates. Do not
+answer a choice, terminate a new execution, or discard authored defeat dialogue
+merely because playerDead or battle presentation changed. No auto-dismiss timer.
+
+Plain message pointer hits now feed the existing confirm path. A first click can
+reveal text and a fresh click acknowledges it; outside clicks do nothing. Choices
+and number input keep their exclusive controllers. The VR pointer line is visible
+for a current plain message so aiming and triggering works as on choices.
+
+Local gates: 977 JavaScript tests pass (44 additional: 24 direct-skill, 13 shortcut,
+7 message-lifecycle), ESLint, production build, Ruff, 8 packaging and 7 Python
+tests. New tests use real Combat/UI/Input/Interpreter and synthetic metadata.
+Direct skill tests cover actual projectile collision and immediate physical hits,
+PC/VR gaze/range/real-LOS refusal, hidden/untargetable/dead/held/unjoined/nonfinite
+targets, single payment/global dispatch, repeats/all/random scopes, quick-slot
+preservation and native animations. Dialogue cases include the text/banner/
+transfer sequence, execution replacement, death dialogue preservation, input
+hit-testing and exclusive choices. An in-memory unchanged-HEAD regression probe
+fails five new dialogue cases without rolling back checkout files. No original
+event text/data or private helpers are copied into the repository. Original game
+files and player saves remain read-only; no headset playtest is claimed.
+
+Current source comparison: runtime 91f884d1051f3f821ae86ad172c63fe1c062df5b (0.2.38),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,816 added/917 removed lines in modified originals after
+import normalization. Historical screenshot captions and image pins are unchanged.

@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: bf980de2289fe6de7dd63cadb1e2764ce5d5c3fd (committed source)
+# Fork: 91f884d1051f3f821ae86ad172c63fe1c062df5b (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -986,11 +986,11 @@
 +    }
 +    return { ok: true, skill: effective, reason: '' };
 +  }
-+  useQuickEntry(entry, from = 'quick') {
++  useQuickEntry(entry, from = 'quick', { direct = false } = {}) {
      let obj = entryData(entry);
      const actor = G.state.party.leader();
      if (!obj || !actor || this.playerDead) return false;
-@@ -1854,16 +2064,9 @@
+@@ -1854,23 +2064,16 @@
        if (this.inCombat && actor.itemSealed()) return fail(tr('봉인되어 있습니다'));
        if (G.state.party.itemCount('item', obj.id) <= 0) return fail(tr('남은 것이 없습니다'));
      } else {
@@ -1010,16 +1010,28 @@
        // the original battle commands that already have their own button here
        if (obj.id === 12) {
          if (G.player.dodge.cooldown > 0) return fail(tr('잠시 후에 다시'));
-@@ -1881,7 +2084,7 @@
+         G.player.wantDodge = true; return true;
+       }
+       // a weapon's own move takes the weapons up again (무장해제 ends)
+-      if (this.disarmed && (this.isBreakSkill(obj) || this.isWeaponArt(obj))) this.toggleDisarm(false);
++      if (this.disarmed && (this.isBreakSkill(obj) || !direct && this.isWeaponArt(obj))) this.toggleDisarm(false);
+       if (this.isBreakSkill(obj)) {
+         if (/건 ?브레이크|ガン ?ブレイク|枪械?破防|\bgun ?break/i.test(obj.name || '')) { if ((this.breakCooldown || 0) <= G.time) this.fireGunBreak(obj); return true; }
+         this.breakArm = { skill: obj, until: G.time + 3 };          // the next swing that lands within 3 s
+@@ -1879,9 +2082,9 @@
+       }
+       // a physical blow on one enemy (일섬, 참수, 삼단 베기...): it goes onto the weapon, which glows red, and
        // comes out with the next blow that lands - MP and cool-down are paid then. X puts it away
-       if (this.isWeaponArt(obj)) { this.armSkill(obj); return true; }
-     }
+-      if (this.isWeaponArt(obj)) { this.armSkill(obj); return true; }
+-    }
 -    return this.performUsable(obj, entry.kind);
-+    return this.performUsable(obj, entry.kind, from);
++      if (!direct && this.isWeaponArt(obj)) { this.armSkill(obj); return true; }
++    }
++    return this.performUsable(obj, entry.kind, from, { direct });
    }
    // HP damage on one enemy that is not a spell: RPG Maker's 물리 공격 (일섬, 참수...), or 필중 (sure hit) when it
    // hits by attack power / defence (혈도 찌르기, 거합베기, 월광도, 다리 쏘기, 피의 시련...) or comes with a weapon
-@@ -1907,47 +2110,43 @@
+@@ -1907,47 +2110,44 @@
    }
    // the blow that lands with a weapon art on: that skill, paid for now (with too little MP left by then: a
    // plain blow, and the art is gone)
@@ -1042,7 +1054,8 @@
    }
 -  // skills used from the menu (heals, buffs, common events)
 +  // Menu skills use the real field action without needing a registered slot.
-+  // Friendly skills stay in the menu; aimed/battle actions return to gameplay.
++  // Friendly skills stay in the menu; offensive skills acquire a valid target
++  // and execute immediately. Quick slots retain their manual preparation.
    useSkillFromMenu(skill) {
 -    const actor = G.state.party.leader();
 -    if (!actor || !skill || this.spectating) return false;
@@ -1058,7 +1071,7 @@
 -    this.actorUserEffect(skill);
 +    if (!skill) return false;
 +    const effective = this.skillByState(G.state.party.leader(), $data.skills[skill.id] || skill);
-+    const used = this.useQuickEntry({ kind: 'skill', id: skill.id }, 'menu');
++    const used = this.useQuickEntry({ kind: 'skill', id: skill.id }, 'menu', { direct: true });
 +    if (used && G.ui.menuOpen && (effective.occasion === 1 || effective.scope >= 1 && effective.scope <= 6)) G.ui.closeMenu();
      return used;
    }
@@ -1082,7 +1095,7 @@
      }
    }
    // a skill of mine paid for: MP, TP and the HP it costs (script 128 - shown as it goes, like a blow taken)
-@@ -1963,11 +2162,12 @@
+@@ -1963,28 +2163,38 @@
    }
    // a skill of mine with <使用者効果 n> (script 113): skill n's effects on me as well, once the skill has done its
    // work (the next cut's mark of 삼단 베기, a bullet loaded, a guard)
@@ -1095,28 +1108,42 @@
 -  performUsable(obj, kind) {
 +    if (self) this.later(60, () => { if (!this.playerDead) this.applyUsableToActor(self, 'self', { battle }); });
 +  }
-+  performUsable(obj, kind, from = 'quick') {
++  performUsable(obj, kind, from = 'quick', { direct = false } = {}) {
      const scope = obj.scope || 0;
      const name = stripEscapes(obj.name);
      // things aimed at enemies go into the right hand first; the attack button lets them go
-@@ -1975,14 +2175,14 @@
+-    if (scope >= 1 && scope <= 6 && !this.directUse) return this.readyUsable(obj, kind);
++    if (scope >= 1 && scope <= 6 && !direct) return this.readyUsable(obj, kind);
      if (scope >= 1 && scope <= 6) {
        const targets = this.pickTargets(obj, kind);
        if (!targets.length) { G.ui.toast(tr('{name}: 대상이 없습니다', { name }), obj.icon_index); G.audio?.playSystemSe(3); return false; }
 -      this.payUsable(obj, kind);
++      this.cancelReady(); this.cancelHeld(); this.skillArm = null;
++      if (kind === 'skill' && this.disarmed && this.isWeaponArt(obj)) this.toggleDisarm(false);
 +      this.payUsable(obj, kind, targets[0]?.battle);
        const from = this.castOrigin();
        // thrown items and magic fly to the target; physical / sure-hit skills land at once
        const flies = kind === 'item' || obj.hit_type === 2;
        targets.forEach((e, i) => {
-         if (flies) this.later(i * 140, () => { if (e.alive) this.launchUsable(obj, kind, from, e); });
+-        if (flies) this.later(i * 140, () => { if (e.alive) this.launchUsable(obj, kind, from, e); });
++        if (flies) {
++          const launch = () => { if (e.alive) this.launchUsable(obj, kind, from, e); };
++          if (i) this.later(i * 140, launch); else launch();
++        }
          else {
 -          this.applyUsableToEnemy(e, obj, from);
-+          for (let r = 0; r < usableRepeats(obj); r++) this.later(r * 120, () => { if (e.alive) this.applyUsableToEnemy(e, obj, from); });
++          for (let r = 0; r < usableRepeats(obj); r++) {
++            const hit = () => { if (e.alive) this.applyUsableToEnemy(e, obj, from); };
++            if (r) this.later(r * 120, hit); else hit();
++          }
            const wp = e.worldPos(new THREE.Vector3()); wp.y += e.h * 0.5;
-           if (obj.animation_id > 0) G.screen.playAnimationOn(wp, obj.animation_id, { rate: 3, height: e.h });
+-          if (obj.animation_id > 0) G.screen.playAnimationOn(wp, obj.animation_id, { rate: 3, height: e.h });
++          const anim = obj.animation_id < 0 ? G.state.party.leader()?.weapons()[0]?.animation_id || 0 : obj.animation_id;
++          if (anim > 0) G.screen.playAnimationOn(wp, anim, { rate: 3, height: e.h });
            else G.audio?.playSe(G.seAt('Slash1', 90, 100), wp);
-@@ -1993,7 +2193,8 @@
+         }
+       });
+@@ -1993,7 +2203,8 @@
        G.input.haptic('left', 0.5, 60);
        return true;
      }
@@ -1126,7 +1153,7 @@
      const how = kind === 'item' && this.handUse(obj);
      if (how) return this.holdConsumable(obj, how);
      if (kind === 'item' && this.isDrink(obj)) {
-@@ -2002,7 +2203,7 @@
+@@ -2002,7 +2213,7 @@
        return true;
      }
      if (kind === 'skill') { this.payUsable(obj, kind); this.playerFollowUp(obj, null, null); }
@@ -1135,7 +1162,7 @@
      if (kind === 'item' && used && obj.consumable) G.state.party.gainItem('item', obj.id, -1);
      if (obj.animation_id > 0) G.screen.playAnimationOn(G.map.playerChar, obj.animation_id, { rate: 3 });
      else if (used) G.audio?.playSystemSe(22);
-@@ -2184,7 +2385,7 @@
+@@ -2184,7 +2395,7 @@
      if (!this.weapon || !this.weapon.visible || !this.weapon.parent) return null;
      const base = new THREE.Vector3(), tip = new THREE.Vector3();
      if (!this.weaponSegment(base, tip)) return null;
@@ -1144,7 +1171,7 @@
      return { base, tip };
    }
    // A state an event gives the party during a fight (Change State, 313 - a boss's rules: 그랑・기뇰's 악랄영역 that
-@@ -2470,13 +2671,16 @@
+@@ -2470,13 +2681,16 @@
        const hpShort = actor.mp >= actor.skillMpCost(obj) && actor.tp >= (obj.tp_cost || 0);
        G.ui.toast(hpShort ? tr('{name}: HP가 부족합니다', { name }) : tr('{name}: MP가 부족합니다', { name }), obj.icon_index); this.cancelReady(); return;
      }
@@ -1163,7 +1190,7 @@
      if (kind === 'skill') this.playerFollowUp(obj, aim.enemy || null, from);
      if (knife && G.state.party.itemCount('item', obj.id) <= 0) this.cancelReady();
      G.input.haptic('right', 0.8, 70);
-@@ -2497,7 +2701,7 @@
+@@ -2497,7 +2711,7 @@
        this.spawnProjectile(from, to.clone().sub(from), { ...opts, aoe: 2.5, dest: to, mesh: kind === 'item' ? this.iconSprite(obj.icon_index) : null, color: this.skillColor(obj) });
        return;
      }
@@ -1172,7 +1199,7 @@
      for (let k = 0; k < n; k++) {
        this.later(k * 130, () => {
          const dir = aim.dir.clone();
-@@ -2551,13 +2755,13 @@
+@@ -2551,13 +2765,13 @@
      const pt = (G.coop?.pvpTargets?.() || []).find(c => Math.hypot(c.x - at.x, c.z - at.z) - c.r < THROWN_SPLASH);
      if (pt) this.strikePlayerWith(pt, p.usable);
      if (!best) return;
@@ -1188,7 +1215,19 @@
      for (const e of this.allTargets()) {
        const wp = e.worldPos(tmpB);
        if (Math.hypot(wp.x - at.x, wp.z - at.z) > radius + e.hr * T) continue;
-@@ -2624,7 +2828,7 @@
+@@ -2616,15 +2830,17 @@
+       const wp = e.worldPos(new THREE.Vector3());
+       const to = new THREE.Vector3(wp.x - head.x, 0, wp.z - head.z);
+       const d = to.length();
+-      if (d - e.hr * T > range) continue;
++      if (![wp.x, wp.y, wp.z, e.fx, e.fy, d, e.hr].every(Number.isFinite) || d - e.hr * T > range) continue;
+       if (!lineOfSight(pc.fx, pc.fy, e.fx, e.fy)) continue;
+-      cands.push({ e, d, ang: d > 1e-3 ? to.normalize().angleTo(look) : 0 });
++      const ang = d > 1e-3 ? to.normalize().angleTo(look) : 0;
++      if (!Number.isFinite(ang) || (obj.scope === 2 ? !(ang < 1.7 || d < 3) : ang >= 0.6) || this.heldBoss(e)) continue;
++      cands.push({ e, d, ang });
+     }
+     if (obj.scope === 2) return cands.filter(c => c.ang < 1.7 || c.d < 3).map(c => c.e);
      const front = cands.filter(c => c.ang < 0.6).sort((a, b) => (a.ang * 4 + a.d * 0.08) - (b.ang * 4 + b.d * 0.08));
      if (!front.length) return [];
      if (obj.scope === 1) return [front[0].e];
@@ -1197,7 +1236,7 @@
      const pool = front.slice(0, 4).map(c => c.e);
      return Array.from({ length: n }, () => pool[Math.floor(Math.random() * pool.length)]);
    }
-@@ -2659,14 +2863,16 @@
+@@ -2659,14 +2875,16 @@
    }
    // an item / skill landing on an enemy: damage formula, drain, added / removed states.
    // mult scales the damage (swing power, back stab, critical); 0 damage stays 0 like the original
@@ -1216,7 +1255,7 @@
      // slipped in a stance that answers it (리포스트, script 191): nothing lands
      const slip = this.slipsWithAnswer(e.b, obj, actor);
      if (slip) { this.enemySlips(e, slip, obj, sourcePos, by); return -1; }
-@@ -2677,65 +2883,89 @@
+@@ -2677,65 +2895,89 @@
      }
      const type = obj.damage?.type || 0;
      let dmg = 0;
@@ -1324,7 +1363,7 @@
    missOn(e, obj) {
      const p = e.worldPos(new THREE.Vector3());
      G.audio?.playSystemSe(obj?.hit_type === 2 ? 19 : 18);
-@@ -2753,19 +2983,14 @@
+@@ -2753,19 +2995,14 @@
      G.audio?.playSystemSe(20);
      this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), { color: 0xc8f0ff, size: e.h * 0.9, life: 0.35, grow: 1.5 });
      if (!actor || this.playerDead) return;
@@ -1350,7 +1389,7 @@
    }
    // an enemy's spell turned back by the player (magic reflection - 거울의 대방패): it lands on that enemy
    reflectOntoEnemy(e, skill) {
-@@ -2773,32 +2998,35 @@
+@@ -2773,32 +3010,35 @@
      G.audio?.playSystemSe(20);
      this.spawnGlow(head.clone().add(new THREE.Vector3(0, -0.3, 0)), { color: 0xc8f0ff, size: 0.8, life: 0.35, grow: 1.6 });
      if (!e?.alive) return;
@@ -1400,7 +1439,7 @@
    }
    // 変換攻撃 (script 199): <変換攻撃判定:chance> on the skill, then <HP変換攻撃:percent,chance> on it or on
    // the attacker's equipment / states turns that share of the damage dealt into HP (the youtou's drain)
-@@ -2814,6 +3042,15 @@
+@@ -2814,6 +3054,15 @@
        if (parseFloat(b) > Math.floor(Math.random() * 100)) pct += parseFloat(a) || 0;
      }
      return Math.floor(dmg * pct / 100);
@@ -1416,7 +1455,7 @@
    }
    // VX Ace: at 0 HP an enemy gets the death state unless it resists it (불사신 and other gimmicks); then
    // it stays standing at 0 HP until the gimmick takes the resistance away
-@@ -2895,9 +3132,9 @@
+@@ -2895,9 +3144,9 @@
    tickEnemyStates(e, dt) {
      if (e.alive) e.b.tickBuffs(dt);
      const timers = e.stateTimers;
@@ -1428,7 +1467,7 @@
        timers[k] -= dt;
        if (timers[k] <= 0) {
          delete timers[k]; e.b.removeState(+k); removed = true;
-@@ -2905,12 +3142,17 @@
+@@ -2905,12 +3154,17 @@
        }
      }
      if (removed) this.checkEnemyDeath(e);
@@ -1448,7 +1487,7 @@
        const v = Math.max(1, Math.floor(e.b.mhp * -hrg));
        e.b.hp = Math.max(0, e.b.hp - v);
        if (e.bar) e.bar.visible = true; e.drawBar();
-@@ -3008,6 +3250,29 @@
+@@ -3008,6 +3262,29 @@
    }
  
    // ---- damage --------------------------------------------------------------------------
@@ -1478,7 +1517,7 @@
    computeDamage(attacker, target, skill, mult = 1) {
      if (!skill?.damage || skill.damage.type === 0) return 0;
      let v = evalFormula(skill.damage.formula, attacker.solo ? attacker.solo() : attacker, target);
-@@ -3018,13 +3283,36 @@
+@@ -3018,13 +3295,36 @@
        const els = attacker.atkElements();
        if (els.length) v *= Math.max(...els.map(e => target.elementRate(e)));
      }
@@ -1518,7 +1557,7 @@
    }
    // 攻撃ID変更 (script 203): equipment / states can swap the normal attack (skill 1) for their own skill;
    // with several, the highest <攻撃ID優先度変更:n> on the skill wins, then the highest id
-@@ -3047,8 +3335,18 @@
+@@ -3047,8 +3347,18 @@
    }
    // hits per blow: the skill's repeats (+ attack-count features) times its random-target count
    attackHits(skill, actor) {
@@ -1539,7 +1578,7 @@
    }
    // a weapon blow (VR swing, desktop click, arrow / bullet): the attack skill's formula, element, hits,
    // drain and states (Raiden's axes hit by the wielder's HP, the youtou drains, daggers hit twice...)
-@@ -3058,7 +3356,7 @@
+@@ -3058,7 +3368,7 @@
      const actor = G.state.party.leader();
      // a weapon art on the weapon (red): this blow is that skill - its formula, hits, element and animation -
      // at least at full strength, and not weakened by flailing
@@ -1548,7 +1587,7 @@
      const skill = art || this.skillByState(actor, this.playerAttackSkill(actor));
      let mult = (art ? Math.max(1, power) : power) * this.buffMult();
      // a charged blow hits up to twice as hard; a hard or charged blow on a broken enemy is the big attack
-@@ -3071,8 +3369,8 @@
+@@ -3071,8 +3381,8 @@
      let weak = false;
      if (melee && !art) { const r = this.rushMult(); if (r < 1) { mult *= r; weak = true; } }
      if (e.state === 'idle' || (e.alertTime > 0 && e.state === 'chase' && !e.battle)) mult *= 2;     // (a backstab)
@@ -1559,7 +1598,7 @@
      if (crit) mult *= 2;
      const p = e.worldPos(new THREE.Vector3());
      const hits = one ? 1 : this.attackHits(skill, actor);
-@@ -3117,7 +3415,7 @@
+@@ -3117,7 +3427,7 @@
    afterPlayerAction(s, e, from, art) {
      if (this.lastAct?.s === s && G.time - this.lastAct.t < 0.12) return;
      this.lastAct = { s, t: G.time };
@@ -1568,7 +1607,7 @@
      this.playerFollowUp(s, e, from);
    }
    // a skill of mine that goes on with another (script 189 使用後追加行動 - 거룩한 총검's cut or thrust and then its gun
-@@ -3132,7 +3430,7 @@
+@@ -3132,7 +3442,7 @@
        const next = a.id > 0 ? this.skillByState(actor, $data.skills[a.id]) : null;
        if (!next) continue;
        this.later(320, () => {
@@ -1577,7 +1616,7 @@
          let targets = [];
          if (next.scope >= 1 && next.scope <= 6) {
            const head = G.player.headWorld(new THREE.Vector3()), op = new THREE.Vector3();
-@@ -3143,7 +3441,7 @@
+@@ -3143,7 +3453,7 @@
          this.actorPays(actor, next);
          this.skillCD[next.id] = G.time + this.coolSeconds(next);
          const at = from || this.castOrigin();
@@ -1586,7 +1625,7 @@
          for (const t of targets) {
            const wp = t.worldPos(new THREE.Vector3()); wp.y += t.h * 0.5;
            if (next.animation_id > 0) { G.screen.playAnimationOn(wp, next.animation_id, { rate: 3, height: t.h }); G.coop?.shareAnim?.(wp, next.animation_id, t.h); }
-@@ -3157,7 +3455,7 @@
+@@ -3157,7 +3467,7 @@
            });
          }
          if (!targets.length) this.applyUsableToActor(next, 'self');
@@ -1595,7 +1634,7 @@
          this.playerFollowUp(next, targets[0] || e, from, depth + 1);
        });
        return;
-@@ -3174,6 +3472,43 @@
+@@ -3174,6 +3484,43 @@
      let id = 0;
      for (const o of e.b.featureObjects()) { const m = /<\s*反撃スキル\s*(\d+)\s*>/.exec(o?.note || ''); if (m) id = Math.max(id, +m[1]); }
      this.startCounter(e, $data.skills[id] || $data.skills[1]);
@@ -1639,7 +1678,7 @@
    }
    // a counter (反撃) or an answer to a slipped blow (回避時スキル): a quick blow at the player, 0.35 s to see it
    // coming; not a turn of the enemy's own (as in the original, it comes inside the player's action)
-@@ -3251,8 +3586,7 @@
+@@ -3251,8 +3598,7 @@
    groggyHit(e, actor, obj, mult, blow) {
      const max = this.groggyMax(e);
      if (!max || !actor || !e.alive || e.state === 'stagger' || e.grogDown || this.inDuel(e)) return;     // (her duel: no groggy)
@@ -1649,7 +1688,7 @@
      const used = blow?.grog?.get(e) || 0;
      g = Math.min(g, GROGGY.cap * max - used);
      if (!(g > 0)) return;
-@@ -3359,20 +3693,37 @@
+@@ -3359,20 +3705,37 @@
        G.input.haptic('left', 0.2, 30); G.input.haptic('right', 0.2, 30);
        return;
      }
@@ -1695,7 +1734,7 @@
      dmg = Math.round(dmg * G.settings.difficulty);
      // a share of the HP / MP the skill takes away besides (HP / MP recovery with a minus - 조커 -100%, 하얀 충격
      // -99%, 황산 -25%, 톱니바퀴 MP -8%: VX Ace's item_effect_recover_hp, by the target's recovery rate); no guard
-@@ -3396,7 +3747,7 @@
+@@ -3396,7 +3759,7 @@
        this.reportStruck(e, 2);
      } else if (guarded && (shieldHit || blockable)) {
        blocked = true;
@@ -1704,7 +1743,7 @@
        this.stamina = Math.max(0, this.stamina - 0.22); this.staminaDelay = 1;
        this.guardTing(ep);
        this.reportStruck(e, 1);
-@@ -3409,27 +3760,50 @@
+@@ -3409,27 +3772,50 @@
        G.audio?.playSystemSe(14);
        this.reportStruck(e, 0);
      }
@@ -1769,7 +1808,7 @@
    }
    // (a co-op guest struck by the host's enemy: how it went - 0 it landed, 1 guarded, 2 a perfect guard - is shown on
    // this player as the host sees it)
-@@ -3762,6 +4136,7 @@
+@@ -3762,6 +4148,7 @@
        b.pageDone.add(key);
        b.troopInterp = new Interpreter(1);
        b.troopInterp.troop = true;                  // its music changes play even during battle music
@@ -1777,7 +1816,7 @@
        b.troopInterp.setup(page.list, 0);
        b.troopInterp.update();                      // at once, like the original processing it right away
        return;
-@@ -3791,6 +4166,7 @@
+@@ -3791,6 +4178,7 @@
      this.rangedCooldown = Math.max(0, this.rangedCooldown - dt);
      this.updateGuard();
      this.updateDeskShield(dt);
@@ -1785,7 +1824,7 @@
      // drinking takes a moment (quick slot potions)
      if (this.healing) {
        this.healing.t -= dt;
-@@ -3810,6 +4186,7 @@
+@@ -3810,6 +4198,7 @@
      // (PC: whatever took the hands this frame - a blow, a cast, a drink - has the guard down before any blow lands)
      if (this.guardUp && this.handsBusy()) this.updateGuard();
      this.updateWeaponGlow();
@@ -1793,7 +1832,7 @@
      this.updateActorStates(dt, paused);
      this.updateGhost();
      this.updateWeaponFx(dt);
-@@ -3997,6 +4374,7 @@
+@@ -3997,6 +4386,7 @@
        const wp = e.worldPos(tmpA);
        e.group.position.copy(wp);
        e.group.position.y += e.hover || 0;
@@ -1801,7 +1840,7 @@
        e.mesh.rotation.y = Math.atan2(head.x - wp.x, head.z - wp.z);
        e.mesh.rotation.z = 0; e.mesh.position.x = 0; e.mesh.position.z = 0;
        // (one hanging high over the player - the stage machine in the flies - leans its face down toward them)
-@@ -4433,7 +4811,7 @@
+@@ -4433,7 +4823,7 @@
      }
      return false;
    }
@@ -1810,7 +1849,7 @@
    bossFamily(s) {
      if (s._bossFam !== undefined) return s._bossFam;
      // (흑기사 린다메아's own moves; a leap over the player in a cloak - bossmoves.js)
-@@ -4729,7 +5107,7 @@
+@@ -4729,7 +5119,7 @@
      e.move = fam; e.act = null; e.comboStep = 0;
      e.style = this.skillStyle(s);
      e.aim = Math.atan2(dy, dx);
@@ -1819,7 +1858,7 @@
      e.state = 'windup';
      e.glinted = false;
      e.timer0 = e.timer = this.windupTime(e, s, e.style);
-@@ -4788,14 +5166,14 @@
+@@ -4788,14 +5178,14 @@
        // before it: let down gently)
        if (d.skill && this.liftInfo().falls.has(d.skill.id)) {
          if (this.playerDead || !d.e.alive) { G.player.floatDown?.(); continue; }
@@ -1836,7 +1875,7 @@
        this.enemyStrikePlayer(d.e, d.skill, { blockable: false, certain: true, delayed: true });
      }
    }
-@@ -4964,7 +5342,7 @@
+@@ -4964,7 +5354,7 @@
      const plan = e.plan, s = e.skill, fam = e.move;
      if (!plan) { this.endMove(e, 0.5); return; }
      G.coop?.onBossMove?.(e);                       // (its co-op guests see it go off as well - coop.js)
@@ -1845,7 +1884,7 @@
      const ep = e.worldPos(new THREE.Vector3());
      if (this.releaseNewMove(e, fam, plan, s, ep)) return;          // (bossmoves.js)
      const anim = s.animation_id > 0 ? s.animation_id : 0;
-@@ -5964,7 +6342,7 @@
+@@ -5964,7 +6354,7 @@
      const skill = e.skill;
      G.coop?.onEnemyAct?.(e, skill);
      // (a co-op guest's copy of the host's enemy only shows its move: what it does is done on the host's side)
@@ -1854,7 +1893,7 @@
      const plan = e.plan || this.planAttack(e, skill, e.style);
      // (from where its area was laid down)
      const ep = plan?.ox !== undefined ? new THREE.Vector3(plan.ox, plan.oy, plan.oz) : e.worldPos(new THREE.Vector3());
-@@ -6130,7 +6508,8 @@
+@@ -6130,7 +6520,8 @@
          // a shot is stopped only where it actually meets the shield (one that goes through a guard passes it)
          let shielded = false;
          if (this.shield && this.hasShield && (G.vr || this.shield.visible) && (!p.pierce || (this.guardUp && !this.disarmed && G.time - (this.guardRaisedAt ?? -99) <= PERFECT_GUARD))) {
@@ -1864,7 +1903,7 @@
            if (pos.distanceTo(tmpA) < 0.32) shielded = true;
          }
          // (the shots of a fan hit no more times than their skill does)
-@@ -6192,7 +6571,7 @@
+@@ -6192,7 +6583,7 @@
              if (p.aoe) break;                         // area spells burst below
              if (p.usable) {
                // (a round of a skill's shot is one hit of it, and the skill's animation comes once for all its rounds)
@@ -1873,7 +1912,7 @@
                for (let r = 0; r < n; r++) this.later(r * 120, () => this.applyUsableToEnemy(e, p.usable, pos));
                if (p.usable.animation_id > 0 && !p.volley?.shown) G.screen.playAnimationOn(new THREE.Vector3(wp.x, wp.y + e.h * 0.5, wp.z), p.usable.animation_id, { rate: 3, height: e.h });
                if (p.volley) p.volley.shown = true;
-@@ -6273,10 +6652,15 @@
+@@ -6273,10 +6664,15 @@
        const inPlay = !!(n.flags & 8);
        if (e && (!!e.inPlay !== inPlay || (inPlay && e.memberIndex !== n.mi))) { e.remove(); e = null; }
        if (!e) {
@@ -1890,7 +1929,7 @@
        }
        if (src) e.hallKey = n.hallKey;
        e.netFlags = n.flags;
-@@ -6289,6 +6673,7 @@
+@@ -6289,6 +6685,7 @@
        e.outOfFight = !!(n.flags & 128);
        e.noTarget = !!(n.flags & 4) || (!!(n.flags & 64) && !G.coop?.rules?.guestStartsBoss) || e.outOfFight;
        e.boss = !!(n.flags & 32);
@@ -1898,7 +1937,7 @@
        // (a boss made stronger for its co-op fight - coop.js scaleBosses: its HP, MP and groggy gauge as big as there)
        if ((e.b.coopK || 1) !== n.k) { e.b.coopK = n.k; e.grogId = null; }
        const fresh = G.time - (e.netReported ?? -9) < 0.6;
-@@ -6310,6 +6695,9 @@
+@@ -6310,6 +6707,9 @@
          // (a plain shot winding up turns after its target there: its line here too)
          if (n.aim !== null && e.state === 'windup' && e.plan?.shot && !e.move && e.plan.ox !== undefined) this.aimShot(e, n.aim);
          e.b.hp = fresh ? Math.min(e.b.hp, n.hp) : n.hp;
@@ -1908,7 +1947,7 @@
          if (!fresh) e.b.states = n.states.slice();
          const gmax = this.groggyMax(e);
          if (gmax && !fresh) e.grog = gmax * n.grog / 100;
-@@ -6320,9 +6708,9 @@
+@@ -6320,9 +6720,9 @@
      }
      for (const [id, e] of this.puppets) if ((e.src || null) === src && !seen.has(id)) { e.remove(); this.puppets.delete(id); }
    }
@@ -1920,7 +1959,7 @@
    // big attack that ends one }]
    puppetReports() {
      const out = [];
-@@ -6336,8 +6724,9 @@
+@@ -6336,8 +6736,9 @@
        const add = now.states.filter(id => !b.states.includes(id) && !skip(id));
        const rm = b.states.filter(id => !now.states.includes(id) && !skip(id));
        const d = Math.round(b.hp - now.hp), g = Math.round(Math.max(0, b.grog - now.grog));
@@ -1932,7 +1971,7 @@
          e.netReported = G.time;
        }
        e.netBase = now;
-@@ -6347,6 +6736,7 @@
+@@ -6347,6 +6748,7 @@
    // (host) a guest's blow on one of this world's enemies: taken as if it had struck here - its numbers in the friend's
    // colour, the fight started if it was roaming, a Break, the groggy gauge, states, the fall
    applyGuestHit(r, from = null) {
@@ -1940,7 +1979,7 @@
      const e = this.netEnemies().find(x => x.netId === r.id) || this.hallEnemyFor(r.id, from);
      if (!e || !e.alive || e.hidden) return false;
      // (a boss fight that guest did not join, or watches fallen)
-@@ -6368,6 +6758,12 @@
+@@ -6368,6 +6770,12 @@
          G.audio?.playSe(G.seAt('Slash1', 70, 100), new THREE.Vector3(p.x, p.y + e.h * 0.5, p.z));
          this.damageRemovesStates(e);
        }
@@ -1953,7 +1992,7 @@
      }
      for (const id of r.add) if ($data.states[id] && !e.b.stateResist(id)) this.addEnemyState(e, id, true);
      for (const id of r.rm) { e.b.removeState(id); if (e.stateTimers) delete e.stateTimers[id]; }
-@@ -6492,7 +6888,6 @@
+@@ -6492,7 +6900,6 @@
        }
        this.prevBase.copy(base); this.prevTip.copy(tip); this.prevRel.copy(rel); this.hasPrev = true;
        if (G.input.breakPressed() && !G.ui.consumedConfirm) this.pressBreak();
@@ -1961,7 +2000,7 @@
        if (ranged && G.input.xrPressed('right', 0) && this.rangedCooldown <= 0 && !G.ui.pointerTarget) this.fireRanged();
      } else {
        // desktop: click to swing - hold the click to charge, the swing comes on letting go (ranged weapons shoot)
-@@ -6504,7 +6899,7 @@
+@@ -6504,7 +6911,7 @@
          const charge = THREE.MathUtils.clamp((G.time - this.deskCharge - 0.15) / 1.0, 0, 1);
          this.deskCharge = null;
          if (!this.swing && this.stamina > 0.05) {
@@ -1970,7 +2009,7 @@
            this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.12)); this.staminaDelay = 0.7;
            G.audio?.playSe(G.seAt('Wind7', 60, charge >= 0.35 ? 100 : 140));
          }
-@@ -6512,10 +6907,12 @@
+@@ -6512,10 +6919,12 @@
        if (G.input.breakPressed()) this.pressBreak();
        if (this.swing) {
          const s = this.swing;
@@ -1986,7 +2025,7 @@
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
            const reach = this.weaponLength() + 0.9;
-@@ -6533,7 +6930,7 @@
+@@ -6533,7 +6942,7 @@
              }
            }
          }
@@ -1995,7 +2034,7 @@
            s.npcDone = true;
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
-@@ -6549,7 +6946,7 @@
+@@ -6549,7 +6958,7 @@
              return d < reach && to.normalize().dot(f) > 0.5;
            }, { power: this.stamina > 0.1 ? 1 : 0.5, charge: s.charge || 0 });
          }
@@ -2004,7 +2043,7 @@
        }
      }
    }
-@@ -6667,27 +7064,74 @@
+@@ -6667,27 +7076,74 @@
    // of its own that never wears off stays (귀신 무사's 할복, the marks its patterns count) - the 8 turns are for
    // what the player puts on it
    applySkillToSelf(e, skill) {
@@ -2098,7 +2137,7 @@
      }
    }
    // VX Ace's escape (a skill's escape effect: 도망친다 - the rabbits, 암흑 물질, 라스, 교활한 원숭이 low on HP, 하얀
-@@ -6705,13 +7149,14 @@
+@@ -6705,13 +7161,14 @@
      if (e.ring) e.ring.material.opacity = 0;
      G.audio?.playSystemSe(8);
    }
@@ -2114,7 +2153,7 @@
        it.setup(list, 0);
        this.sideInterps.push(it);
      }
-@@ -6737,9 +7182,8 @@
+@@ -6737,9 +7194,8 @@
    // Script 191 回避時発動スキル: <全回避時スキル:n[,p]> (or 物理- / 魔法- / 必中-, by the attack's hit type) on a battler's
    // states, equipment or self - an attack it slips, it answers with skill n (p % of the time): 흰 유니콘 유니스's
    // 리포스트 (a stance of evasion +100% for two of its actions, every slipped blow answered by a lunge, 판트), and the
@@ -2126,7 +2165,7 @@
    evadeAnswers(b, hitType) {
      const out = [];
      for (const o of b?.featureObjects?.() || []) {
-@@ -6757,7 +7201,6 @@
+@@ -6757,7 +7213,6 @@
      const ht = skill?.hit_type ?? 1;
      if (!b || ht === 0 || this.certainHit(user, skill)) return null;
      const answers = this.evadeAnswers(b, ht);
@@ -2134,7 +2173,7 @@
      return Math.random() < (ht === 1 ? b.eva : b.mev) ? answers : null;
    }
    // (the stance shows while it lasts)
-@@ -6796,7 +7239,7 @@
+@@ -6796,7 +7251,7 @@
      G.audio?.playSystemSe(skill?.hit_type === 2 ? 19 : 18);
      G.input.haptic('left', 0.25, 40); G.input.haptic('right', 0.25, 40);
      if (!e || G.time - (this.answeredAt ?? -1) < 0.15) return;
@@ -2143,7 +2182,7 @@
      if (!ans) return;
      this.answeredAt = G.time;
      const s = $data.skills[ans.id];
-@@ -6884,9 +7327,15 @@
+@@ -6884,9 +7339,15 @@
        G.input.haptic('right', 1, 160);
      } else G.audio?.playSystemSe(17);
    }
@@ -2161,7 +2200,7 @@
      if (!this.breakGlow) {
        if (!on) return;
        this.breakGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTexture(), color: 0xffc040, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-@@ -6898,7 +7347,7 @@
+@@ -6898,7 +7359,7 @@
      if (this.breakGlow.parent !== this.root) this.root.add(this.breakGlow);
      this.breakGlow.position.copy(tip);
      const k = 0.75 + 0.25 * Math.sin(G.time * 12), b = Math.max(0.7, fxk());
@@ -2170,7 +2209,7 @@
      this.breakGlow.material.color.setRGB(b, 0.75 * b, 0.25 * b);
    }
    // fire the shield-slot gun: its own shot sounds (the skill's animation), muzzle flash, tracer;
-@@ -6912,7 +7361,7 @@
+@@ -6912,7 +7373,7 @@
      let from = null, dir;
      if (gun) {
        gun.updateWorldMatrix(true, true);
@@ -2179,7 +2218,7 @@
      }
      // the shot leaves along where the left controller points, however the gun model is turned in the hand
      const ray = this.aimRay('left');
-@@ -7124,7 +7573,7 @@
+@@ -7124,7 +7585,7 @@
      hits.set(t.id, G.time);
      const actor = G.state.party.leader();
      if (!actor) return false;
@@ -2188,7 +2227,7 @@
      for (let r = 0; r < n; r++) this.later(r * 120, () => G.coop?.sendPvp(t.id, obj.id, mult, false, actor, item));
      if (obj.animation_id > 0) G.screen.playAnimationOn(new THREE.Vector3(t.x, t.y + 0.9, t.z), obj.animation_id, { rate: 3, height: t.h });
      G.input.haptic('left', 0.5, 50);
-@@ -7246,11 +7695,12 @@
+@@ -7246,11 +7707,12 @@
    // instead (gunShotSkill - 거룩한 총검)
    fireRanged() {
      const kind = this.shotKind, actor = G.state.party.leader();
@@ -2204,7 +2243,7 @@
      const brk = this.breakArmed();                 // (fired with Break held: the first shot carries the Break)
      this.fireShot(kind, n > 1, brk);
      for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot(kind, true, null));
-@@ -7270,7 +7720,7 @@
+@@ -7270,7 +7732,7 @@
    // does - its damage, its Break / Hard Break, its animation once; paid and cooling as the skill is (Ⅱ, Ⅲ: 3 turns). Cooling
    // (or unpaid), nothing fires: the original's stab goes on without its shot then
    fireSkillShot(actor, s) {
@@ -2213,7 +2252,7 @@
        this.rangedCooldown = 0.25;
        G.audio?.playSystemSe(3);
        G.input.haptic('right', 0.25, 30);
-@@ -7278,8 +7728,11 @@
+@@ -7278,8 +7740,11 @@
      }
      this.actorPays(actor, s);
      this.skillCD[s.id] = G.time + this.coolSeconds(s);
@@ -2227,7 +2266,7 @@
      const volley = { shown: false };
      this.fireShot('gun', true, null, { skill: s, volley });
      for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot('gun', true, null, { skill: s, volley }));
-@@ -7299,7 +7752,7 @@
+@@ -7299,7 +7764,7 @@
    // where what the right hand holds shoots from: its tip
    muzzle() {
      this.weapon.updateWorldMatrix(true, false);
@@ -2713,15 +2752,16 @@
    ['무기·방패 모양 조정', 'Adjust weapon / shield', '武器・盾の持ち方調整', '调整武器 / 盾牌'],
    ['VR 세이브', 'VR save', 'VRセーブ', 'VR 存档'],
    ['VR 로드', 'VR load', 'VRロード', 'VR 读档'],
-@@ -282,6 +350,7 @@
+@@ -282,6 +350,8 @@
    ["{name}: 장비는 '장비' 메뉴에서", "{name}: equip it from the 'Equipment' menu", '{name}: 装備は「装備」メニューから', '{name}：请在「装备」菜单中装备'],
    ['사용', 'Use', '使う', '使用'],
    ['필드에서 퀵슬롯으로 사용합니다', 'Use it from the quick slots in the field', 'フィールドでクイックスロットから使います', '在场景中通过快捷栏使用'],
 +  ['메뉴를 닫고 스킬을 준비합니다. 겨누거나 무기를 휘둘러 사용합니다', 'Close the menu and ready this skill. Aim or strike to use it.', 'メニューを閉じてスキルを準備します。狙うか武器を振って使います。', '关闭菜单并准备技能。瞄准或挥动武器后使用。'],
++  ['가까이 보이는 적에게 바로 사용합니다. 대상이 없으면 소모하지 않습니다', 'Use immediately on a nearby visible enemy. No target means no cost.', '近くの見える敵にすぐ使います。対象がいなければ消費しません。', '立即对附近可见的敌人使用。没有目标时不会消耗。'],
    ['퀵슬롯 ({n}번에 등록됨)', 'Quick slot (in slot {n})', 'クイックスロット ({n}番に登録済み)', '快捷栏 (已登记在 {n} 号)'],
    ['퀵슬롯에 등록', 'Add to the quick slots', 'クイックスロットに登録', '登记到快捷栏'],
    ['퀵슬롯 버튼(VR: X, PC: Q)을 누른 채 손을 옮기고 떼면 사용', 'Hold the quick slot button (VR: X, PC: Q), move onto the slot and release to use', 'クイックスロットボタン (VR: X, PC: Q) を押したまま手を動かし、離すと使用', '按住快捷栏按钮 (VR: X, PC: Q) 移到格子上，松开即使用'],
-@@ -296,7 +365,7 @@
+@@ -296,7 +366,7 @@
    ['몸|equip', 'Body', '体', '身体'],
    ['장신구|equip', 'Accessory', '装飾品', '饰品'],
    ['장비  ({name})', 'Equipment  ({name})', '装備  ({name})', '装备  ({name})'],
@@ -2730,7 +2770,7 @@
    ['서약  ({name})', 'Oath  ({name})', '誓約  ({name})', '誓约  ({name})'],
    ['(서약 해제)', '(no oath)', '(誓約を解く)', '(解除誓约)'],
    ['{name} 구입', 'Buy {name}', '{name} を購入', '购买 {name}'],
-@@ -396,6 +465,9 @@
+@@ -396,6 +466,9 @@
    ['이동할 수 있는 화톳불이 없습니다', 'No bonfire to travel to', '移動できる篝火がありません', '没有可以传送的篝火'],
    ['화톳불 전송', 'Bonfire travel', '篝火転送', '篝火传送'],
    ['상점  (소지: {gold} {unit})', 'Shop  (you have: {gold} {unit})', 'ショップ  (所持: {gold} {unit})', '商店  (持有：{gold} {unit})'],
@@ -3206,15 +3246,16 @@
    }
    // world interaction (talk / examine): VR = right stick down
    interact() {
-@@ -233,6 +531,7 @@
+@@ -233,6 +531,8 @@
    }
    // quick slots: VR = X (left) held, PC = Q held; PC number keys 1-8 use a slot directly
    quickHeld() { return G.vr ? this.xrHeld('left', 4) : this.key('KeyQ'); }
 +  mapPressed() { return !G.vr && this.keyPressed('KeyN'); }
++  skillMenuPressed() { return !G.vr && this.pageFocused !== false && !this.textInputFocused() && this.keyPressed('KeyR'); }
    quickPressed() { return G.vr ? this.xrPressed('left', 4) : this.keyPressed('KeyQ'); }
    // emotes (src/emotes.js): VR = B (right) held - the cancel button, nothing outside menus and messages, nor
    // any of the game's events but three scenes (which an emote never opens in); PC = T held
-@@ -260,7 +559,14 @@
+@@ -260,7 +560,14 @@
    attackPressed() { return !G.vr && this.mousePressed(0); }
    // RPG Maker's own buttons, held down (events check them with "Button is being pressed"): the
    // opening's "press down to get out of bed", "B closes the picture", the date talk on X...
@@ -7114,7 +7155,7 @@
      const head = new THREE.Vector3();
      this.camera.getWorldPosition(head);
      const q = new THREE.Quaternion();
-@@ -677,30 +957,119 @@
+@@ -677,30 +957,132 @@
      this.root.rotation.set(0, a, 0);
    }
  
@@ -7211,11 +7252,22 @@
 +    if (!this.msg && !this.sceneBusy() && !this.remote?.shown && !this.prompt?.shown) this.backdrop.visible = false;
 +  }
 +  updateDialoguePresentation() {
-+    if (this.dialogue && !this.dialogueContinuing()) this.clearDialoguePresentation();
++    const dialogue = this.dialogue;
++    if (dialogue && !this.dialogueContinuing()) {
++      const invalidSource = dialogue.map !== G.map || dialogue.mapId !== G.map?.mapId || G.map?.transferring
++        || dialogue.owner.executionId !== dialogue.executionId || !dialogue.owner.running();
++      if (this.msg) {
++        if (invalidSource) this.closeMessage();
++      } else this.clearDialoguePresentation();
++    }
 +    const held = this.heldMessage;
 +    // Retain the acknowledged page only until logic processes the answer. The
 +    // next page replaces it before rendering; deliberate waits can hide it.
 +    if (held && (held.source.executionId !== held.executionId || !held.source.running() || held.source.waitMode !== 'message')) this.hideHeldMessage();
++    if (!this.msg && !this.heldMessage && !this.remote?.shown) {
++      this.msgPanel.mesh.visible = false;
++      this.namePanel.mesh.visible = false;
++    }
 +  }
    sceneBusy() { return !!this.sceneOpen || this.menuOpen; }
 +  pointerBusy() {
@@ -7224,7 +7276,9 @@
  
 -  showMessage(msg) {
 +  showMessage(msg, source = null) {
-+    this.heldMessage = null;
++    // An acknowledged page may still occupy the shared panel. A banner does
++    // not redraw that panel, so hide its previous owner before replacing it.
++    this.hideHeldMessage();
 +    const owner = source?.root || source;
 +    const previous = this.dialogue;
 +    const continuing = this.dialogueContinuing() && previous?.owner === owner && previous?.executionId === owner?.executionId;
@@ -7237,7 +7291,7 @@
      msg.reveal = 0; msg.wait = 0; msg.fast = false; msg.state = 'typing';
      msg.ops = null;
      this.placeRoot(true);
-@@ -710,13 +1079,13 @@
+@@ -710,13 +1092,13 @@
      if (msg.lines.length === 0) msg.state = 'done-typing';
    }
    speakerName(msg) {
@@ -7254,7 +7308,7 @@
    }
    // The message box keeps the original window's proportions (BLACKSOULS II: a 640 px wide window, 12 px padding,
    // a 19 px font on 24 px lines, the face 96 px with the text 112 px in): every line takes the same share of the
-@@ -734,7 +1103,9 @@
+@@ -734,7 +1116,9 @@
      const L = this.messageLayout();
      msg.ops = layoutText(msg.lines, msg.face ? L.textX : L.left, L.top, L.k, ctx, L.font, L.right);
      msg.total = msg.ops.filter(o => o.k === 'ch' || o.k === 'icon').length;
@@ -7265,7 +7319,7 @@
      if (msg.face) loadCanvas('Graphics/Faces', msg.face).then(c => { msg.faceCanvas = c; if (this.msg === msg || (this.remote === msg && msg.shown)) this.drawMessage(msg); });
    }
    drawMessage(msg = this.msg) {
-@@ -742,13 +1113,23 @@
+@@ -742,13 +1126,23 @@
      const p = this.msgPanel;
      const { ctx, canvas } = p;
      p.clear();
@@ -7290,7 +7344,7 @@
      if (msg.state === 'waitInput' || msg.state === 'pause') {
        ctx.fillStyle = 'rgba(230,210,160,' + (0.5 + 0.5 * Math.sin(G.time * 6)) + ')';
        ctx.beginPath(); ctx.moveTo(canvas.width - 50, canvas.height - 40); ctx.lineTo(canvas.width - 30, canvas.height - 40);
-@@ -757,11 +1138,14 @@
+@@ -757,11 +1151,14 @@
      p.commit();
      // name tab
      const np = this.namePanel;
@@ -7307,7 +7361,7 @@
        np.commit();
        np.mesh.visible = this.msgPanel.mesh.visible;
      } else np.mesh.visible = false;
-@@ -772,13 +1156,28 @@
+@@ -772,13 +1169,28 @@
      const y = pos === 0 ? 0.22 : pos === 1 ? -0.05 : -0.32;
      this.msgPanel.mesh.position.set(0, y, 0);
      this.namePanel.mesh.position.set(-this.msgPanel.widthM / 2 + this.namePanel.widthM / 2 + 0.02, y + this.msgPanel.heightM / 2 + this.namePanel.heightM / 2 - 0.005, 0);
@@ -7339,7 +7393,7 @@
      this.choice.close();
      this.consumedConfirm = true;
      this.actionLockUntil = G.time + 0.25;
-@@ -803,7 +1202,7 @@
+@@ -803,7 +1215,7 @@
    updateBossPrompt(dt) {
      const p = this.prompt;
      if (!p) return;
@@ -7348,7 +7402,7 @@
      if ((p.left -= dt) <= 0) { this.closeBossPrompt(); p.answer(false); return; }
      if (!p.shown) {
        p.shown = true;
-@@ -836,7 +1235,7 @@
+@@ -836,7 +1248,7 @@
    updateRemote() {
      const r = this.remote;
      if (!r) return;
@@ -7357,7 +7411,7 @@
        if (r.shown) {
          if (!this.msg) { this.msgPanel.mesh.visible = false; this.namePanel.mesh.visible = false; }
          if (r.choiceUp && this.msg?.state !== 'choice' && !this.prompt?.shown) this.choice.close();
-@@ -854,7 +1253,7 @@
+@@ -854,7 +1266,7 @@
      if (r.reveal < r.total) { r.reveal = Math.min(r.total, r.reveal + 2); this.drawMessage(r); }
      else if (r.choices && !r.choiceUp) {
        r.choiceUp = true;
@@ -7366,7 +7420,18 @@
        this.choice.panel.mesh.visible = true;
        this.layoutPanels(r);
      }
-@@ -893,7 +1292,7 @@
+@@ -862,6 +1274,10 @@
+   updateMessage() {
+     const msg = this.msg;
+     const input = G.input;
++    if (msg.state !== 'choice' && msg.state !== 'number' && this.msgPanel.mesh.visible) {
++      const pointer = this.pointerRay();
++      this.pointerTarget = !!pointer && !!this.msgPanel.hit(pointer);
++    }
+     if (msg.state === 'typing') {
+       if (input.advance()) { this.consumedConfirm = true; msg.skip = true; msg.wait = 0; }
+       if (msg.wait > 0) { msg.wait--; return; }
+@@ -893,7 +1309,7 @@
        if (msg.choices) {
          msg.state = 'choice';
          this.choice.open('', msg.choices.map(c => ({ text: c.text, enabled: c.enabled })), {
@@ -7375,7 +7440,7 @@
            onSelect: i => { msg.onChoice?.(i); this.closeMessage(); },
            onCancel: () => { if (msg.cancelable) { msg.onChoice?.(-1); this.closeMessage(); } },
          });
-@@ -985,11 +1384,11 @@
+@@ -985,11 +1401,11 @@
      if (ray) {
        const uv = this.choice.panel.hit(ray);
        if (uv) {
@@ -7390,7 +7455,7 @@
          }
        }
      }
-@@ -1151,13 +1550,19 @@
+@@ -1151,13 +1567,19 @@
    coopMembersRow() { return { text: tr('멤버 ({n}명)', { n: G.coop.members().length }), id: 'members', desc: tr('고르면 모두의 위치를 봅니다') }; }
    showCoopMembers(index = 0) {
      const c = G.coop;
@@ -7412,7 +7477,7 @@
      });
    }
    // (the developer's world) what of this bag may be given to that one: its things (not the key items), weapons and
-@@ -1213,12 +1618,12 @@
+@@ -1213,12 +1635,12 @@
      if (kind === 'world') {
        for (const s of ((await G.listSaves?.('world')) || []).sort((a, b) => a.slot - b.slot)) {
          const m = G.saveMeta(s.meta);
@@ -7427,7 +7492,7 @@
        }
        for (const s of (await G.listRmSaves?.()) || []) items.push({ text: `${tr('원작')} ${s.label}  ${s.map}`, right: String(s.time), rm: s });
      }
-@@ -1227,7 +1632,7 @@
+@@ -1227,7 +1649,7 @@
      this.list.open(kind === 'world' ? tr('서버 세이브 불러오기') : tr('세이브 불러오기'), items, {
        onSelect: async (i, it) => {
          const st = it.rm ? G.stateOfRm(it.rm.contents, it.rm.label) : await G.loadSave(it.slot, it.kind);
@@ -7436,7 +7501,7 @@
          this.closeMenu();
          c.worldLoad(st);
        },
-@@ -1451,9 +1856,9 @@
+@@ -1451,9 +1873,9 @@
    notifyGain(kind, id, n) {
      const d = itemData(kind, id);
      if (!d) return;
@@ -7449,7 +7514,7 @@
    // SEN went up or down (BLACKSOULS II's SEN reminder, from its own script): its strip and its sound
    notifySen(delta) {
      const sen = G.scripts?.sen;
-@@ -1492,7 +1897,7 @@
+@@ -1492,7 +1914,7 @@
        ctx.globalAlpha = a;
        const y = 10 + i * 72;
        if (t.sen) { this.drawSenStrip(ctx, p.canvas.width, y, t); ctx.globalAlpha = 1; return; }
@@ -7458,7 +7523,7 @@
        let x = 24;
        if (t.icon) { drawIcon(ctx, t.icon, x, y + 8, 48); x += 60; }
        ctx.font = `34px ${FONT}`; ctx.fillStyle = t.color; ctx.textBaseline = 'middle';
-@@ -1503,66 +1908,130 @@
+@@ -1503,66 +1925,130 @@
      });
      p.commit();
      p.mesh.visible = this.toasts.length > 0;
@@ -7631,8 +7696,26 @@
      const c = G.input.controllers.right;
      if (!G.vr || !c) return null;
      const m = c.ray.matrixWorld;
-@@ -1574,68 +2043,137 @@
+@@ -1572,70 +2058,155 @@
+   }
+ 
    // ---------------------------------------------------------------- menus
++  toggleSkillsMenu() {
++    const interpreter = G.map?.interpreter;
++    if (!G.map || G.map.transferring || !G.state?.party.leader() || G.state.system.menuDisabled
++      || G.combat?.playerDead || this.sceneOpen || this.keyboard.visible || this.prompt?.shown || this.remote?.shown
++      || this.messageBusy() || this.dialogueActive()
++      || interpreter?.running() && interpreter.waitMode !== 'battle') return false;
++    if (this.menuOpen && this.menuSection === 'skills') { this.closeMenu(); return true; }
++    if (!this.menuOpen) {
++      G.pictures?.requestViewerCancel?.();
++      this.menuOpen = true; this.menuIndex = 1;
++      this.unlockPointer(); this.placeRoot(true);
++    }
++    this.onMenu('skills');
++    this.consumedConfirm = true;
++    return true;
++  }
    openMenu() {
      if (this.menuOpen) return;
 +    G.pictures?.requestViewerCancel?.();
@@ -7795,7 +7878,7 @@
        case 'coop': this.showCoopMenu(); break;
        case 'turn':
          if (s.snapTurn && s.snapAngle === 30) s.snapAngle = 45;
-@@ -1650,8 +2188,42 @@
+@@ -1650,8 +2221,42 @@
        case 'diff':
          s.difficulty = s.difficulty >= 1.5 ? 0.5 : +(s.difficulty + 0.25).toFixed(2);
          G.saveSettings?.(); this.reopenMain('diff'); break;
@@ -7839,7 +7922,7 @@
      }
    }
    // an item / skill does something (effects or a damage formula)
-@@ -1760,11 +2332,14 @@
+@@ -1760,11 +2365,14 @@
      const back = () => { if (this.menuOpen) this.showSkills(keep); };
      const entry = { kind: 'skill', id: s.id };
      const slot = quickSlotOf(entry);
@@ -7853,11 +7936,11 @@
 -      { text: tr('사용'), id: 'use', enabled: canUse, desc: this.menuUsable(s) ? s.description : tr('필드에서 퀵슬롯으로 사용합니다') },
 +      { text: tr('사용'), id: 'use', enabled: !!status?.ok,
 +        desc: !status?.ok ? status?.reason || tr('사용할 수 없습니다') : aimed
-+          ? tr('메뉴를 닫고 스킬을 준비합니다. 겨누거나 무기를 휘둘러 사용합니다') : s.description },
++          ? tr('가까이 보이는 적에게 바로 사용합니다. 대상이 없으면 소모하지 않습니다') : s.description },
        { text: slot >= 0 ? tr('퀵슬롯 ({n}번에 등록됨)', { n: slot + 1 }) : tr('퀵슬롯에 등록'), id: 'quick', enabled: s.occasion !== 3,
          desc: tr('퀵슬롯 버튼(VR: X, PC: Q)을 누른 채 손을 옮기고 떼면 사용') },
        { text: tr('취소'), id: 'back' },
-@@ -1779,23 +2354,27 @@
+@@ -1779,23 +2387,27 @@
    }
  
    // ---- equipment ----
@@ -7893,7 +7976,7 @@
      const P = $data.system.terms.params;
      const parts = [0, 2, 3, 4, 5, 6, 7].filter(i => after[i] !== before[i])
        .map(i => `${P[i]} ${after[i] > before[i] ? '+' : '−'}${Math.abs(after[i] - before[i])}`);
-@@ -1807,7 +2386,8 @@
+@@ -1807,7 +2419,8 @@
      this.grid.close();
      const slots = a.equips.map((e, slot) => {
        const d = itemData(e.kind, e.id);
@@ -7903,7 +7986,7 @@
      });
      this.list.open(tr('장비  ({name})', { name: a.name || '' }), slots, {
        index,
-@@ -1819,7 +2399,8 @@
+@@ -1819,7 +2432,8 @@
    // pointed at - what it changes, then what it is
    showEquipChoices(slot) {
      const a = G.state.party.leader();
@@ -7913,7 +7996,7 @@
      const party = G.state.party;
      const cands = [{ text: tr('(장비 해제)'), id: 0, desc: this.paramDelta(a, slot, kind, 0) }];
      for (const [id, n] of party.container(kind)) {
-@@ -1832,7 +2413,10 @@
+@@ -1832,7 +2446,10 @@
      this.grid.open(tr('{slot} 변경', { slot: this.slotName(slot) }), [{ label: this.slotName(slot), items: cands }], {
        tab: 0,
        onSelect: (it) => {
@@ -7925,7 +8008,7 @@
          G.combat.equipKey = null;
          G.audio?.playSystemSe(4);
          this.showEquipSlots(slot);
-@@ -1892,6 +2476,7 @@
+@@ -1892,6 +2509,7 @@
      const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
      const items = [
        { text: tr('VR 이동 속도'), id: 'vrSpeed', right: `×${s.vrSpeed ?? 2}`, desc: tr('스틱으로 걷는 속도 배율 (VR에서만)') },
@@ -7933,7 +8016,7 @@
        { text: tr('휘두르기 판정'), id: 'swing', right: SWING[s.swingLevel ?? 2], desc: tr('이 정도 세기로 휘둘러야 공격이 들어갑니다 (VR)') },
        { text: tr('이펙트 밝기'), id: 'fx', right: `${Math.round((s.fxBrightness ?? 0.5) * 100)}%`, desc: tr('번쩍임·빛·스킬 애니메이션의 밝기') },
        { text: tr('스킬 애니메이션'), id: 'anims', right: ANIMS[s.skillAnims || 'all'], desc: tr('원작 스킬·공격 애니메이션을 대상 위치에 재생합니다') },
-@@ -1909,6 +2494,7 @@
+@@ -1909,6 +2527,7 @@
        index,
        onSelect: (i, it) => {
          if (it.id === 'vrSpeed') s.vrSpeed = cycle([1, 1.5, 2, 2.5, 3], s.vrSpeed ?? 2);
@@ -7941,7 +8024,7 @@
          if (it.id === 'swing') s.swingLevel = ((s.swingLevel ?? 2) + 1) % 4;
          if (it.id === 'fx') s.fxBrightness = cycle([0.25, 0.5, 0.75, 1], s.fxBrightness ?? 0.5);
          if (it.id === 'anims') s.skillAnims = cycle(['all', 'skills', 'off'], s.skillAnims || 'all');
-@@ -1996,11 +2582,13 @@
+@@ -1996,11 +2615,13 @@
      const items = [
        { text: `${a.name || '???'}  Lv ${a.level}`, right: $data.classes[a.classId]?.name || '' },
        { text: `HP ${a.hp}/${a.mhp}`, right: `MP ${a.mp}/${a.mmp}` },
@@ -7956,7 +8039,7 @@
    }
    returnToTitle() { G.returnToTitle?.(); }
  
-@@ -2013,14 +2601,9 @@
+@@ -2013,14 +2634,9 @@
      this.toast(tr('{label}: VR판에서는 아직 지원하지 않습니다', { label }));
    }
    openBonfireWarp() {
@@ -7972,7 +8055,7 @@
      this.sceneOpen = 'bonfire';
      this.placeRoot(true);
      this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, desc: b.desc[0], enabled: bonfirePickable(b, sw) })), {
-@@ -2212,9 +2795,8 @@
+@@ -2212,9 +2828,8 @@
    }
    closeShop() { this.list.close(); this.sceneOpen = null; this.shopKeep = false; }
    showShopCommand(entries, index = 0) {
@@ -7984,7 +8067,7 @@
      ], {
        index,
        onSelect: (i, it) => {
-@@ -2236,17 +2818,51 @@
+@@ -2236,17 +2851,51 @@
      const msg = this.shopKeep ? K.toKeep : K.toBag;
      if (msg) this.toast(msg);
    }
@@ -8041,7 +8124,7 @@
        index: at,
        onSelect: (i, it) => {
          at = i;
-@@ -2321,36 +2937,52 @@
+@@ -2321,36 +2970,52 @@
        onCancel: back,
      });
    }
@@ -8105,7 +8188,7 @@
          this.showShopQuantity(e, back, it.step === 'max' ? max : n + it.step, i);
        },
        onAdjust: dx => { this.showShopQuantity(e, back, n + dx, this.list.index); return true; },
-@@ -2362,8 +2994,10 @@
+@@ -2362,8 +3027,10 @@
    update(dt) {
      this.consumedConfirm = false;
      this.pointerTarget = false;
@@ -8117,9 +8200,13 @@
      if (anyPanel) this.placeRoot();
      if (this.banner) {
        this.banner.t += dt;
-@@ -2376,13 +3010,16 @@
+@@ -2374,15 +3041,19 @@
+       }
+       this.drawBanner();
      }
-     if (this.msg) this.updateMessage();
+-    if (this.msg) this.updateMessage();
++    if (G.input.skillMenuPressed?.() && this.toggleSkillsMenu()) this.consumedConfirm = true;
++    else if (this.msg) this.updateMessage();
      else if (this.menuOpen || this.sceneOpen) {
 -      if (this.keyboard.visible) this.keyboard.update(this.pointerRay());
 +      if (this.navigation.open) this.updateMap();
@@ -8138,7 +8225,7 @@
      }
      this.updateBossPrompt(dt);
      this.updateRemote();
-@@ -2393,7 +3030,20 @@
+@@ -2393,7 +3064,20 @@
        if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
      }
      this.drawHud();
@@ -8159,11 +8246,10 @@
      this.updatePointerLine();
    }
    updateHudFollow() {
-@@ -2405,6 +3055,18 @@
-     const head = new THREE.Vector3();
+@@ -2406,11 +3090,23 @@
      this.camera.getWorldPosition(head);
      this.hud.mesh.lookAt(head);
-+  }
+   }
 +  updateDungeonStatus() {
 +    const allowed = this.hudPresent && !G.map?.transferring && !G.combat?.playerDead && !this.sceneBusy()
 +      && !this.dialogueActive() && !this.remote?.shown && !this.prompt?.shown && !this.banner?.blocking;
@@ -8175,9 +8261,16 @@
 +      this.dungeonStatus.mesh.position.set((this.hud.widthM + p.widthM) / 2 + 0.012,
 +        this.hud.heightM / 2 - p.heightM / 2, 0.001);
 +    }
-   }
++  }
    // snap turning stays off while a menu / choice uses the right stick
    blocksTurning() { return this.menuOpen || !!this.sceneOpen || this.msg?.state === 'choice' || this.msg?.state === 'number' || !!this.prompt?.shown; }
+   updatePointerLine() {
+     const c = G.input.controllers.right;
+-    const need = G.vr && c && (this.msg?.state === 'choice' || this.menuOpen || this.sceneOpen || this.prompt?.shown);
++    const need = G.vr && c && (this.msg || this.menuOpen || this.sceneOpen || this.prompt?.shown);
+     if (!this.pointerLine && c) {
+       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -3)]);
+       this.pointerLine = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xe8d8a8, transparent: true, opacity: 0.6 }));
 --- upstream/app/src/vrbutton.js
 +++ fork/apps/client/src/vr/vrbutton.js
 @@ -5,15 +5,16 @@
