@@ -2227,7 +2227,7 @@ handles larger dialogs. Max selects a quantity without purchasing; the first row
 confirms. All paths revalidate balances/capacity before any debit or award, including
 an inventory change after the dialog opened. Selling and crafting are unchanged.
 
-Local gates: 905 JavaScript tests pass (9 additional bulk transaction cases),
+Bulk-only checkpoint: 905 JavaScript tests pass (9 additional transaction cases),
 ESLint, production build, Ruff, 8 packaging and 7 Python tests. The real UI/party
 regressions cover paid/free purchases above 99, all exchange material kinds,
 exact currency costs, bag/storage/custom limits, stored exchange isolation,
@@ -2235,8 +2235,55 @@ stale confirmation without partial mutation, larger steps/Max/cancel, and party
 save roundtrip. Existing small-dialog and ordinary exchange regressions still pass.
 No original game files or player saves were changed.
 
-Current source comparison: runtime 7d424de950f8f5899215bd982911e69cf95e2f48 (0.2.37),
+Bulk-only source checkpoint: runtime 7d424de950f8f5899215bd982911e69cf95e2f48 (0.2.37),
 48 original modules retained, 15 unchanged after import moves, 33 modified,
 43 new and 0 missing; 3,720 added/878 removed lines in modified originals after
 import normalization. Paired screenshots remain 0.2.25 and initialized gameplay
 previews remain 0.2.33; no new gameplay screenshots are claimed.
+
+
+## Direct skill menu activation (0.2.37)
+
+The user additionally requested using skills normally from the Skills menu before
+0.2.37 was tagged. The old UI and useSkillFromMenu independently rejected all
+opponent scopes and battle-only skills, leaving most of the list quick-slot-only.
+A private read-only installed database audit found 990 named skills, including
+966 battle-only entries and 16 native menu-compatible friendly entries. The latter
+already passed hasEffect. Actual utility common-event skills also worked through
+the old path, so do not claim a notes-only filtering/common-event repair.
+
+Menu Use now invokes the same validated action as a quick slot without assigning
+or changing slots. Aimed spells prepare through readyUsable, weapon arts arm the
+existing next-hit path, and Dodge/Break retain their original special handling.
+An accepted opponent/battle action closes the menu so the next field frame can
+use it. Friendly heals stay in the menu; from='menu' is carried through the shared
+support path so common events close it and return to their original interpreter.
+No opponent skill is applied to the player as a friendly effect. Preparation does
+not pay early; actual attack/cast paths retain their existing payment/cancellation.
+
+skillUseStatus shares known/granted membership, dead/spectating/restrained/healing,
+occasion, seal, category/weapon, costs and cooldown checks between menu and quick
+entry. Both root and state-selected stage are checked. A dead actor cannot cast
+before the death flag catches up; a zero-HP death-state-immune actor retains the
+port's native deathless behavior. Occasion3 stays unavailable and occasion2 is
+blocked in combat. Occasion1 retains the port's existing field quick-action
+adaptation; this is not a claim of a native turn-based battle menu implementation.
+The action page shows blocked reasons or a translated aim/strike instruction.
+
+All four control guides explain direct menu use and larger purchases. Public
+regressions use real UI/GameState/Combat, real readiness/arming and common-event
+Interpreter paths with synthetic metadata. 28 new cases cover direct multi-repeat
+heals and exact HP/MP/TP payment, common-event ownership, battle support, offensive
+preparation/next-hit payment, unchanged slots, refusal and stale affordability,
+source/transformed requirements, revival eligibility, granted skills and death
+immunity. Existing support fixtures explicitly register their known skills.
+
+Final local gates: 933 JavaScript tests pass (37 additional across both requests),
+ESLint, production build, Ruff, 8 packaging and 7 Python tests. Focused menu/support/
+Break coverage totals 51 tests. This is runtime regression verification, not a
+physical-headset playtest. Original game files and player saves remain read-only.
+
+Current source comparison: runtime bf980de2289fe6de7dd63cadb1e2764ce5d5c3fd (0.2.37),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,759 added/908 removed lines in modified originals after
+import normalization. Historical screenshot captions and image pins are unchanged.
