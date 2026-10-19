@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: 32bd81b1dd6d81416a0f2858dbd78a8f0edac82b (committed source)
+# Fork: f88b455f9bb3fb2b5d746c82ec408ba05b0ecec7 (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -2576,7 +2576,32 @@
    ['지금은 저장할 수 없습니다', "You can't save right now", '今はセーブできません', '现在无法保存'],
    ['슬롯 {n}', 'Slot {n}', 'スロット {n}', '存档位 {n}'],
    ['(비어 있음)', '(empty)', '(空き)', '(空)'],
-@@ -259,11 +293,23 @@
+@@ -50,6 +84,24 @@
+   ['오토', 'Auto', 'オート', '自动'],
+   ['오류: {msg}', 'Error: {msg}', 'エラー: {msg}', '错误：{msg}'],
+   ['VR 장치 준비 중...', 'Preparing the VR device...', 'VR機器を準備中...', '正在准备 VR 设备...'],
++  // Browser footer while a requested headset session starts or ends.
++  ['VR 헤드셋 확인 중...', 'Checking for a VR headset...', 'VRヘッドセットを確認中...', '正在检测 VR 头显...'],
++  ['헤드셋 확인 시간이 초과되었습니다. 연결을 확인한 뒤 CHECK VR AGAIN을 눌러 주세요', 'Headset detection timed out. Check the connection, then click CHECK VR AGAIN.', 'ヘッドセットの確認がタイムアウトしました。接続を確認し、「CHECK VR AGAIN」を押してください。', '头显检测超时。请检查连接，然后点击 CHECK VR AGAIN。'],
++  ['헤드셋이나 브라우저에서 VR 요청을 허용해 주세요', 'Allow the VR request in your headset or browser.', 'ヘッドセットまたはブラウザーでVRの開始を許可してください。', '请在头显或浏览器中允许 VR 请求。'],
++  ['VR 화면 준비 중...', 'Preparing VR graphics...', 'VR画面を準備中...', '正在准备 VR 画面...'],
++  ['플레이 공간 준비 중...', 'Preparing your play area...', 'プレイエリアを準備中...', '正在准备游玩区域...'],
++  ['게임을 헤드셋에 연결하는 중...', 'Connecting the game to your headset...', 'ゲームをヘッドセットに接続中...', '正在将游戏连接到头显...'],
++  ['헤드셋 추적을 기다리는 중...', 'Waiting for headset tracking...', 'ヘッドセットのトラッキングを待っています...', '正在等待头显追踪...'],
++  ['추적이 지연되고 있습니다. 헤드셋을 착용하고 연결을 확인해 주세요', 'Tracking is taking longer. Put on your headset and check its connection.', 'トラッキングに時間がかかっています。ヘッドセットを装着し、接続を確認してください。', '追踪等待时间较长。请戴上头显并检查连接。'],
++  ['VR에서 나가는 중...', 'Leaving VR...', 'VRを終了中...', '正在退出 VR...'],
++  ['헤드셋의 VR 종료를 기다리는 중...', 'Waiting for the headset to finish leaving VR...', 'ヘッドセットがVRを終了するのを待っています...', '正在等待头显完成退出 VR...'],
++  ['VR 연결을 복구하는 중...', 'Restoring the VR connection...', 'VR接続を復旧中...', '正在恢复 VR 连接...'],
++  ['VR을 시작하지 못했습니다. 헤드셋을 확인하고 다시 시도해 주세요', "VR couldn't start. Check your headset and try again.", 'VRを開始できませんでした。ヘッドセットを確認して、もう一度お試しください。', '无法启动 VR。请检查头显并重试。'],
++  ['VR 시작을 취소했습니다', 'VR entry cancelled.', 'VRの開始をキャンセルしました。', '已取消进入 VR。'],
++  ['VR 시작을 취소하는 중...', 'Cancelling VR entry...', 'VRの開始をキャンセル中...', '正在取消进入 VR...'],
++  ['VR 연결이 완료되지 않고 있습니다', 'VR entry is taking too long to finish.', 'VR接続が完了しません。', 'VR 连接迟迟未能完成。'],
++  ['가능하면 먼저 저장한 뒤 게임 창을 닫고 다시 여세요', 'Save your progress if possible, then close and reopen this game window.', '可能なら先にセーブしてから、このゲームウィンドウを閉じて開き直してください。', '如可操作，请先保存进度，再关闭并重新打开此游戏窗口。'],
++  ['VR 시작 취소', 'Cancel VR entry', 'VRの開始をキャンセル', '取消进入 VR'],
+   ['게임 파일 확인 중...', 'Checking the game files...', 'ゲームファイルを確認中...', '正在检查游戏文件...'],
+   ['Data/System.rvdata2를 찾을 수 없습니다. 게임 폴더 설정을 확인하세요', 'Data/System.rvdata2 not found. Check the game folder setting.', 'Data/System.rvdata2 が見つかりません。ゲームフォルダの設定を確認してください', '找不到 Data/System.rvdata2。请检查游戏文件夹设置'],
+   ['데이터베이스 로딩 중...', 'Loading the database...', 'データベース読み込み中...', '正在加载数据库...'],
+@@ -259,11 +311,23 @@
    ['스틱 좌우: 자릿수 · 상하: 값 · A/트리거: 결정', 'Stick left/right: digit · up/down: value · A / trigger: OK', 'スティック左右: 桁 · 上下: 値 · A/トリガー: 決定', '摇杆左右：位数 · 上下：数值 · A/扳机：确定'],
    ['←→ 자릿수 · ↑↓ 값 · Home 최대 · End 0 · Enter 결정', '←→ digit · ↑↓ value · Home max · End 0 · Enter OK', '←→ 桁 · ↑↓ 値 · Home 最大 · End 0 · Enter 決定', '←→ 位数 · ↑↓ 数值 · Home 最大 · End 0 · Enter 确定'],
    ['{name} 획득', 'Got {name}', '{name} を入手', '获得 {name}'],
@@ -2600,7 +2625,7 @@
    ['무기·방패 모양 조정', 'Adjust weapon / shield', '武器・盾の持ち方調整', '调整武器 / 盾牌'],
    ['VR 세이브', 'VR save', 'VRセーブ', 'VR 存档'],
    ['VR 로드', 'VR load', 'VRロード', 'VR 读档'],
-@@ -296,7 +342,7 @@
+@@ -296,7 +360,7 @@
    ['몸|equip', 'Body', '体', '身体'],
    ['장신구|equip', 'Accessory', '装飾品', '饰品'],
    ['장비  ({name})', 'Equipment  ({name})', '装備  ({name})', '装备  ({name})'],
@@ -2609,7 +2634,7 @@
    ['서약  ({name})', 'Oath  ({name})', '誓約  ({name})', '誓约  ({name})'],
    ['(서약 해제)', '(no oath)', '(誓約を解く)', '(解除誓约)'],
    ['{name} 구입', 'Buy {name}', '{name} を購入', '购买 {name}'],
-@@ -396,6 +442,9 @@
+@@ -396,6 +460,9 @@
    ['이동할 수 있는 화톳불이 없습니다', 'No bonfire to travel to', '移動できる篝火がありません', '没有可以传送的篝火'],
    ['화톳불 전송', 'Bonfire travel', '篝火転送', '篝火传送'],
    ['상점  (소지: {gold} {unit})', 'Shop  (you have: {gold} {unit})', 'ショップ  (所持: {gold} {unit})', '商店  (持有：{gold} {unit})'],
@@ -3336,7 +3361,7 @@
 +}
 --- upstream/app/src/main.js
 +++ fork/apps/client/src/core/main.js
-@@ -1,37 +1,48 @@
+@@ -1,37 +1,50 @@
  // BLACKSOULS VR - boot, title, map transfers and the frame loop.
  import * as THREE from 'three';
  import { G } from './globals.js';
@@ -3351,6 +3376,8 @@
 -import { Player } from './player.js';
 +import { tr, fmtDate } from '../ui/i18n.js';
 +import { createVRButton, prepareXR } from '../vr/vrbutton.js';
++import { renderWithXrStatus } from '../vr/frame-status.js';
++import { createXrStatus } from '../ui/xr-status.js';
 +import { initAssets, loadFont, loadImage, fetchBinary, listFiles, hasFile } from '../data/assets.js';
 +import { $data, loadDatabase, loadMapNames, destinationName } from '../data/data.js';
 +import { MarshalReader } from '../data/marshal.js';
@@ -3415,7 +3442,7 @@
  
  const statusEl = document.getElementById('status');
  const setStatus = t => { if (statusEl) statusEl.textContent = t; };
-@@ -55,19 +66,15 @@
+@@ -55,19 +68,15 @@
  const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.08, 300);
  camera.position.set(0, G.settings.eyeHeight, 0);
  rig.add(camera);
@@ -3439,7 +3466,7 @@
  }
  addEventListener('resize', () => {
    if (renderer.xr.isPresenting) return;
-@@ -79,6 +86,8 @@
+@@ -79,6 +88,8 @@
  // browser shares them; localStorage is only a fallback. Debug launches (?save= / ?map= / ?timer) never write.
  const DEV_LAUNCH = ['save', 'map', 'timer', 'vrsave'].some(k => new URLSearchParams(location.search).has(k));
  G.devLaunch = DEV_LAUNCH;
@@ -3448,7 +3475,7 @@
  let localSettings = {};
  try { localSettings = JSON.parse(localStorage.getItem('bsvr.settings') || '{}'); } catch { /* */ }
  Object.assign(G.settings, localSettings);
-@@ -126,27 +135,21 @@
+@@ -126,27 +137,21 @@
  G.coop = new Coop(scene);                // (co-op: another player in this world, or this one in theirs - coop.js)
  G.emotes = new Emotes();                 // (co-op: a balloon put up over this player's head - emotes.js)
  const markers = new TransferMarkers(scene);
@@ -3480,7 +3507,7 @@
  });
  // three r170 lets go of its headset render target when a session ends without freeing it: with projection layers
  // (Chrome on PC) its multisampled colour and depth buffers - headset sized, 4x MSAA, hundreds of MB - stayed on the
-@@ -167,21 +170,15 @@
+@@ -167,21 +172,20 @@
    } catch (e) { console.warn('[xr] could not free the headset render target', e); }
  }
  renderer.xr.addEventListener('sessionend', () => {
@@ -3493,8 +3520,14 @@
 -  G.combat.equipKey = null;
 +  viewMode.restoreDesktop();
  });
- document.getElementById('vrbtn').appendChild(createVRButton(renderer, {
+-document.getElementById('vrbtn').appendChild(createVRButton(renderer, {
 -  restoreView: fitView,
++const vrContainer = document.getElementById('vrbtn');
++const vrStatus = createXrStatus(vrContainer, { onCancel: () => vrButton.cancelStartup() });
++const vrButton = createVRButton(renderer, {
++  waitForPose: true,
++  referenceSpaceType: 'local-floor',
++  onStatus: status => vrStatus.update(status),
 +  restoreView: () => viewMode.restoreDesktop(),
    // the headset shows something else (the SteamVR dashboard or desktop, the system menu, the headset is off):
    // the game waits, as it does behind a menu
@@ -3506,7 +3539,17 @@
    resetXr: async () => {
      const r = await fetch('/api/xr-reset', { method: 'POST' });
      if (!r.ok) return false;
-@@ -198,15 +195,14 @@
+@@ -189,7 +193,8 @@
+     console.info('[xr] XR process reset:', JSON.stringify(j));
+     return (j.ended || 0) > 0;
+   },
+-}));
++});
++vrContainer.prepend(vrButton);
+ 
+ // ------------------------------------------------------------------ map presentation
+ const view = { mesh: null, sprites: [], mapId: 0 };
+@@ -198,15 +203,14 @@
    markers.clear();
    G.floorAt = () => 0;
    if (view.mesh) { scene.remove(view.mesh.group); view.mesh.dispose(); view.mesh = null; }
@@ -3526,7 +3569,7 @@
  }
  // seeds: where the player arrives (the cells walkable from there decide which wall tops are solid);
  // rebuild: the same map again, the old view kept until the new one is ready (and dropped if a transfer
-@@ -214,6 +210,7 @@
+@@ -214,6 +218,7 @@
  let presentToken = 0;
  async function presentMap(seeds = [], rebuild = false, open = null) {
    const token = ++presentToken;
@@ -3534,7 +3577,7 @@
    if (!rebuild) clearMapView();
    const grid = G.map.grid;
    view.seeds = seeds;
-@@ -248,23 +245,44 @@
+@@ -248,23 +253,44 @@
    G.floorAt = (fx, fy) => mesh.floorAt(G.map.wrapFX(fx), G.map.wrapFY(fy)) * T;
    G.solidTopAt = (x, y) => mesh.solidTopAt(G.map.wrapX(x), G.map.wrapY(y));
    markers.build(ana.exits);
@@ -3587,7 +3630,7 @@
  }
  
  // the view again with the dark round a boss fight opened up (or closed again: null) - arena.js
-@@ -309,7 +327,7 @@
+@@ -309,7 +335,7 @@
      const changed = t.mapId !== m.mapId || !view.mesh;
      if (changed) {
        G.combat.reset({ carry: true });  // the old map's enemies leave with the old map (an event's run past its fight goes on)
@@ -3596,7 +3639,7 @@
        G.screen.setBrightness(0);
        await m.load(t.mapId);
        await loadUserHints();            // (the map editor's rules as saved now - mapedit.html)
-@@ -326,7 +344,7 @@
+@@ -326,7 +352,7 @@
      m.transferring = false;
      m.requestRefresh();
      G.coop.onTransfer(m.mapId, t.x, t.y, t.dir);
@@ -3605,7 +3648,7 @@
      if (t.fade !== 2) G.screen.fadeIn(16);
      else G.screen.setBrightness(255);
      if (changed) autosave();
-@@ -358,7 +376,7 @@
+@@ -358,7 +384,7 @@
    if ((kind === 'world') !== (G.coop.role === 'world')) return false;      // (never the one kind of save for the other)
    if (DEV_RUN) { if (!silent) G.ui.toast(tr('개발용 실행: 저장하지 않습니다')); return false; }
    const pc = G.map.playerChar;
@@ -3614,7 +3657,7 @@
    G.state.mapId = G.map.mapId;
    const leader = G.state.party.leader();
    const state = G.state.toJSON();
-@@ -376,20 +394,23 @@
+@@ -376,20 +402,23 @@
      }
      state.selfSwitches = [...self];
    }
@@ -3644,7 +3687,7 @@
  let lastSaveSlot = 1;
  // when a slot was saved, in the chosen language's format (older saves only kept the text of the day)
  function metaDate(meta) { return meta?.time ? fmtDate(meta.time) : meta?.date || ''; }
-@@ -398,65 +419,46 @@
+@@ -398,65 +427,46 @@
    const unit = $data.system.currency_unit || '';
    return [meta.level != null ? `Lv ${meta.level}` : '', meta.hp != null ? `HP ${meta.hp}` : '', meta.gold != null ? `${meta.gold} ${unit}` : ''].filter(Boolean).join(' · ');
  }
@@ -3731,7 +3774,7 @@
  };
  G.stateOfRm = (contents, label) => { const s = new GameState(); s.importRmSave(contents, label); return s; };
  async function readRmSave(file) {
-@@ -470,12 +472,14 @@
+@@ -470,12 +480,14 @@
  // ------------------------------------------------------------------ game start / title
  let mode = 'loading'; // loading | title | game | gameover
  async function startGame(state, overridePos) {
@@ -3746,7 +3789,7 @@
    G.pictures?.clear();
    G.map = G.map || new GameMap();
    G.combat.reset({ keepState: true });
-@@ -483,6 +487,7 @@
+@@ -483,6 +495,7 @@
    mode = 'game';
    G.ui.list.close();
    const pos = overridePos || { mapId: state.mapId, ...state.start };
@@ -3754,7 +3797,7 @@
    G.map.mapId = -1;
    G.map.reserveTransfer(pos.mapId, pos.x, pos.y, pos.dir || 2, 0);
    G.screen.setBrightness(0);
-@@ -491,7 +496,8 @@
+@@ -491,7 +504,8 @@
  G.enterWorld = enterWorld;
  // (what was going on in the game left goes with it: an event's run, the common events waiting - else a new game took them on)
  G.returnToTitle = () => {
@@ -3764,7 +3807,7 @@
    if (G.map) { G.map.interpreter.clear(); G.map.reservedCommon = []; }
    if (gameOverPanel) gameOverPanel.visible = false;
    G.state = null; mode = 'title'; showTitle();
-@@ -523,7 +529,10 @@
+@@ -523,7 +537,10 @@
  }
  G.gameOver = async () => {
    if (mode !== 'game') return;
@@ -3775,7 +3818,7 @@
    gameOverReady = false;
    G.ui.closeMenu?.(); G.ui.list.close();
    if (G.map) { G.map.interpreter.clear(); G.map.reservedCommon = []; }
-@@ -532,7 +541,7 @@
+@@ -532,7 +549,7 @@
    G.screen.fadeOut(60);
    await waitFrames(62);
    if (mode !== 'gameover') return;
@@ -3784,7 +3827,7 @@
    G.ui.hud.mesh.visible = false;
    const panel = await gameOverArt();
    const head = G.player.headWorld(new THREE.Vector3()), fwd = G.player.forwardVec();
-@@ -543,7 +552,7 @@
+@@ -543,7 +560,7 @@
    await waitFrames(30);
    gameOverReady = mode === 'gameover';
  };
@@ -3793,7 +3836,7 @@
  
  let titlePanel = null;
  async function showTitleArt(on) {
-@@ -565,6 +574,8 @@
+@@ -565,6 +582,8 @@
  
  async function showTitle() {
    mode = 'title';
@@ -3802,7 +3845,7 @@
    rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0);
    G.player.yaw = 0; G.player.pitch = 0;
    G.screen.setBrightness(255);
-@@ -573,9 +584,9 @@
+@@ -573,9 +592,9 @@
    const vrSlots = await listVrSaves();
    const auto = vrSlots.find(s => s.slot === 0);
    const items = [];
@@ -3814,7 +3857,7 @@
    // (a developer-server save played on here, in the game itself - saved as its own saves from then on)
    const worldSlots = await listVrSaves('world');
    if (worldSlots.length) items.push({ text: tr('개발자 서버 세이브 불러오기'), id: 'world', desc: tr('개발자 서버의 진행을 본편으로 가져옵니다') });
-@@ -600,11 +611,12 @@
+@@ -600,11 +619,12 @@
    for (const f of files) {
      try {
        const { header, contents } = await readRmSave(f);
@@ -3830,7 +3873,7 @@
      onSelect: (i, it) => { const s = new GameState(); s.importRmSave(it.contents, it.label); startGame(s); },
      onCancel: () => showTitle(),
    });
-@@ -612,8 +624,11 @@
+@@ -612,8 +632,11 @@
  async function showVrLoadMenu(back, kind = 'vr') {
    const slots = (await listVrSaves(kind)).sort((a, b) => a.slot - b.slot);
    G.ui.menuOpen = G.ui.menuOpen || mode === 'game';
@@ -3844,18 +3887,27 @@
      onCancel: back,
    });
  }
-@@ -649,8 +664,8 @@
+@@ -649,8 +672,8 @@
    b.over.update(b.emote ? pc.balloonId : 0, pc.balloonTime, 0);
  }
  let lastFrameError = '';
 -function frame() {
 -  try { frameBody(); } catch (e) {
 +function frame(_time, xrFrame) {
-+  try { viewMode.beforeFrame(xrFrame); frameBody(); } catch (e) {
++  try { viewMode.beforeFrame(xrFrame); frameBody(xrFrame); } catch (e) {
      const msg = String(e?.message || e);
      if (msg !== lastFrameError) {
        lastFrameError = msg;
-@@ -711,7 +726,7 @@
+@@ -676,7 +699,7 @@
+     c.obj.visible = Math.hypot(dx, dz) < reach;
+   }
+ }
+-function frameBody() {
++function frameBody(xrFrame) {
+   if (renderer.xr.isPresenting) { const rt = renderer.getRenderTarget(); if (rt?.isXRRenderTarget) xrTarget = rt; }
+   const dt = Math.min(clock.getDelta(), 0.1);
+   G.time += dt;
+@@ -711,7 +734,7 @@
      const m = G.map;
      if (m.transferring && !transferBusy) performTransfer();
      // the headset shows something else (SteamVR dashboard, desktop, system menu): the map and the fights wait
@@ -3864,7 +3916,7 @@
      if (m.grid && view.mesh) {
        if (!away) acc += dt;
        let steps = 0;
-@@ -739,12 +754,15 @@
+@@ -739,12 +762,15 @@
        const alpha = acc / STEP;
        layoutTilePictures(view.sprites, view.mapInfo);
        for (const s of view.sprites) s.update(head, alpha);
@@ -3882,6 +3934,15 @@
        G.coop.update(dt, head);               // (last: a visit that ends here sends the player elsewhere at once)
      } else {
        G.screen.updateLogic();
+@@ -756,7 +782,7 @@
+   G.audio.updateListener(camera);
+   G.input.endFrame();
+   G.screen.beginShake(G.three?.rig, dt);
+-  renderer.render(scene, camera);
++  renderWithXrStatus(renderer, scene, camera, xrFrame, session => vrButton.notifyPose(session));
+   spectator.render();
+   G.screen.endShake(G.three?.rig);
+ }
 --- upstream/app/src/mapanalysis.js
 +++ fork/apps/client/src/world/mapanalysis.js
 @@ -2,7 +2,7 @@
@@ -5567,19 +5628,20 @@
  
  export class Spectator {
    constructor(main, scene) {
-@@ -15,6 +20,11 @@
+@@ -15,6 +20,12 @@
      this.cam = new THREE.PerspectiveCamera(80, 16 / 9, 0.05, 400);
      this.renderer = null;
      this.active = false;
 +    this.wanted = false;
 +    this.ready = false;
 +    this.failed = false;
++    this.deferred = false;
 +    this.revision = 0;
 +    this.preparing = null;
      this.n = 0;
      this.p = new THREE.Vector3();
      this.q = new THREE.Quaternion();
-@@ -23,36 +33,97 @@
+@@ -23,36 +34,121 @@
    }
    start() {
      if (G.settings.spectator === false) return;
@@ -5591,6 +5653,7 @@
 +    this.wanted = true;
 +    this.failed = false;
 +    this.fresh = true;
++    if (!this.ready) this.deferred = true;
 +    // sessionstart runs on the headset's startup path. Context creation,
 +    // shader compilation and uploads belong to prepare's idle work instead.
 +    if (this.ready) this.activate();
@@ -5615,10 +5678,28 @@
 +    this.revision++;
 +    this.ready = false;
 +    this.failed = false;
++    if (this.main.xr.isPresenting) return Promise.resolve(this.deferPreparation());
++    this.deferred = false;
 +    if (!this.preparing) {
 +      this.preparing = this.prepareLatest().finally(() => { this.preparing = null; });
 +    }
 +    return this.preparing;
++  }
++  deferPreparation() {
++    this.deferred = true;
++    this.ready = false;
++    this.active = false;
++    document.body.classList.remove('spectating');
++    return false;
++  }
++  resumePreparation() {
++    if (G.settings.spectator === false || this.main.xr.isPresenting) return Promise.resolve(false);
++    if (this.ready) return Promise.resolve(true);
++    if (!this.deferred) return Promise.resolve(false);
++    // An already-started compile cannot be cancelled. Its next checkpoint
++    // settles before desktop work resumes; no idle polling runs in XR.
++    if (this.preparing) return this.preparing.then(() => this.resumePreparation());
++    return this.prepare();
 +  }
 +  async prepareLatest() {
 +    try {
@@ -5626,15 +5707,19 @@
 +        const revision = this.revision;
 +        await idle();
 +        if (G.settings.spectator === false) return false;
++        if (this.main.xr.isPresenting) return this.deferPreparation();
 +        if (revision !== this.revision) continue;
 +        this.renderer ||= this.createRenderer();
 +        this.resize();
 +        this.updateCamera();
 +        this.copyRendererSettings();
 +        await this.renderer.compileAsync(this.scene, this.cam);
++        if (G.settings.spectator === false) return false;
++        if (this.main.xr.isPresenting) return this.deferPreparation();
 +        if (revision !== this.revision) continue;
 +        await idle();
 +        if (G.settings.spectator === false) return false;
++        if (this.main.xr.isPresenting) return this.deferPreparation();
 +        if (revision !== this.revision) continue;
 +        // compileAsync prepares programs, but not geometry/texture uploads.
 +        // Warm those with the canvas still hidden before exposing this view.
@@ -5642,6 +5727,7 @@
 +        this.copyRendererSettings();
 +        this.warmRenderer();
 +        this.ready = true;
++        this.deferred = false;
 +        this.activate();
 +        return true;
 +      }
@@ -5688,7 +5774,7 @@
      const st = G.settings;
      if (st.spectatorLevel) {
        const e = new THREE.Euler().setFromQuaternion(q, 'YXZ');
-@@ -68,10 +139,26 @@
+@@ -68,10 +164,26 @@
      this.cam.position.copy(this.p);
      this.cam.quaternion.copy(this.q);
      this.cam.updateMatrixWorld();
@@ -5703,10 +5789,10 @@
 +  render() {
 +    if (!this.wanted || !this.main.xr.isPresenting || G.settings.spectator === false) return;
 +    if (!this.ready) {
-+      // This runs after main.render in the frame loop. Even when no PC
-+      // preparation was possible, the first headset draw never creates or
-+      // compiles the second context; schedule that work for a later idle task.
-+      if (!this.preparing && !this.failed) void this.prepare();
++      // An idle callback still runs on the main thread. A cold monitor view
++      // waits until desktop instead of uploading a second copy of the map
++      // between headset frames.
++      if (!this.failed) this.deferred = true;
 +      return;
 +    }
 +    if (!this.active || !this.renderer || (this.n++ & 1) === 1 || !this.updateCamera()) return;
@@ -7895,7 +7981,16 @@
    blocksTurning() { return this.menuOpen || !!this.sceneOpen || this.msg?.state === 'choice' || this.msg?.state === 'number' || !!this.prompt?.shown; }
 --- upstream/app/src/vrbutton.js
 +++ fork/apps/client/src/vr/vrbutton.js
-@@ -12,8 +12,9 @@
+@@ -5,15 +5,16 @@
+ // once (three.js restores it by itself). three.js asks for that only after the session has started, so the
+ // session died with the context: the first ENTER VR always failed, and three's VRButton could then stay on
+ // "EXIT VR" for a session that was gone (later clicks did nothing).
+-// Here the context is made XR compatible when the page loads (and when a headset shows up later) and again
+-// before a session is requested; a failed start ends what is left of the session and puts the button back.
++// Warm compatibility when the page loads (and when a headset appears). The click requests permission immediately;
++// after its grant, graphics and tracking preparation finish before Three attaches. Failed starts close their grant.
+ // Every step is logged to the console as "[xr] ..." - what the headset shows cannot be seen from the PC.
+ //
  // Leaving VR and coming back: Chrome on Windows starts only the first session after the browser started
  // reliably on an OpenXR runtime (crbug.com/40859047: later ones end at once, flicker, or stop being shown -
  // "hidden" for good). Chrome runs WebXR in a process of its own and starts a new one at once when it ends, so
@@ -7907,7 +8002,78 @@
  const SESSION_INIT = { optionalFeatures: ['local-floor', 'bounded-floor', 'layers', 'hand-tracking'] };
  
  const log = (...a) => console.info('[xr]', ...a);
-@@ -88,7 +89,8 @@
+@@ -24,6 +25,15 @@
+   let t;
+   return Promise.race([promise, new Promise((_, rej) => { t = setTimeout(() => rej(new Error(`${what} took over ${ms / 1000} s`)), ms); })])
+     .finally(() => clearTimeout(t));
++}
++
++// Three r170 repeats these asynchronous native requests inside setSession.
++// Serve the completed preparation while it attaches, then restore the exact
++// original property. The real XRSession remains the native layer's argument.
++function preparedMethod(target, key, value) {
++  const descriptor = Object.getOwnPropertyDescriptor(target, key);
++  Object.defineProperty(target, key, { configurable: true, writable: true, value });
++  return () => { if (descriptor) Object.defineProperty(target, key, descriptor); else delete target[key]; };
+ }
+ 
+ // the context events, for the log (a GPU switch shows up as lost + restored)
+@@ -36,11 +46,13 @@
+ }
+ 
+ function whenRestored(canvas, gl, ms) {
+-  return new Promise(res => {
++  return new Promise((res, reject) => {
+     if (!gl.isContextLost()) { res(); return; }
+     let t = 0;
+-    const done = () => { clearTimeout(t); canvas.removeEventListener('webglcontextrestored', done); setTimeout(res, 0); };
+-    t = setTimeout(done, ms);
++    const cleanup = () => { clearTimeout(t); canvas.removeEventListener('webglcontextrestored', done); };
++    const finish = () => { if (gl.isContextLost()) reject(new Error('The VR graphics context did not recover')); else res(); };
++    const done = () => { cleanup(); setTimeout(finish, 0); };
++    t = setTimeout(() => { cleanup(); finish(); }, ms);
+     canvas.addEventListener('webglcontextrestored', done);   // three.js's own handler (added first) restores its state
+   });
+ }
+@@ -50,7 +62,7 @@
+ function makeCompatible(renderer, why) {
+   const gl = renderer.getContext?.();
+   if (!gl || typeof gl.makeXRCompatible !== 'function') return Promise.resolve(false);
+-  if (gl.getContextAttributes?.()?.xrCompatible) return Promise.resolve(true);
++  if (gl.getContextAttributes?.()?.xrCompatible && !gl.isContextLost?.()) return Promise.resolve(true);
+   if (compatJob) return compatJob;
+   const canvas = renderer.domElement;
+   watchContext(canvas);
+@@ -58,14 +70,13 @@
+   log(`making the 3D context XR compatible (${why})`);
+   compatJob = (async () => {
+     try {
+-      await gl.makeXRCompatible();
++      let failed = false;
++      try { await gl.makeXRCompatible(); }
++      catch (e) { failed = true; warn('makeXRCompatible failed:', errText(e)); }
+       await whenRestored(canvas, gl, 10000);
++      if (failed) return !!gl.getContextAttributes?.()?.xrCompatible;
+       log(`XR compatible after ${Math.round(performance.now() - t0)} ms`);
+       return true;
+-    } catch (e) {
+-      warn('makeXRCompatible failed:', errText(e));
+-      await whenRestored(canvas, gl, 10000);
+-      return !!gl.getContextAttributes?.()?.xrCompatible;
+     } finally {
+       compatJob = null;
+     }
+@@ -80,7 +91,8 @@
+   const check = async why => {
+     let ok = false;
+     try { ok = await navigator.xr.isSessionSupported('immersive-vr'); } catch { /* blocked */ }
+-    if (ok) await makeCompatible(renderer, why);
++    if (ok) try { await makeCompatible(renderer, why); }
++    catch (e) { warn('VR graphics preparation failed:', errText(e)); }
+   };
+   navigator.xr.addEventListener?.('devicechange', () => { log('VR device change'); check('headset connected'); });
+   let t = 0;
+@@ -88,7 +100,8 @@
    clearTimeout(t);
  }
  
@@ -7917,23 +8083,53 @@
  export function createVRButton(renderer, opts = {}) {
    const sessionInit = opts.sessionInit || SESSION_INIT;
    const button = document.createElement('button');
-@@ -104,7 +106,7 @@
+@@ -99,105 +112,276 @@
+     button.disabled = !clickable;
+     button.classList.toggle('wide', text.length > 9);
+   };
++  const status = (stage, message) => {
++    button.title = message;
++    opts.onStatus?.({ stage, message, canCancel: ['permission', 'graphics', 'reference-space', 'attaching', 'viewer-pose', 'viewer-pose-slow'].includes(stage),
++      needsReload: stage === 'attachment-stalled' });
++  };
+   if (!('xr' in navigator)) {
+     show(window.isSecureContext === false ? 'WEBXR NEEDS HTTPS' : 'WEBXR NOT AVAILABLE', false);
      return button;
    }
    let state = 'off';       // off (no headset) | idle | starting | running | ending | resetting
 -  let session = null;
+-
+-  async function refresh() {
 +  let current = null;
- 
-   async function refresh() {
++  let refreshId = 0;
++
++  async function refresh({ quiet = false } = {}) {
++    if (state !== 'off' && state !== 'idle') return;
++    const id = ++refreshId;
      let ok = false, err = null;
-@@ -115,74 +117,141 @@
-     else { state = 'off'; show('VR NOT SUPPORTED', false); }
-   }
- 
+-    try { ok = await navigator.xr.isSessionSupported('immersive-vr'); } catch (e) { err = e; }
+-    if (state !== 'off' && state !== 'idle') return;
+-    if (err) { state = 'off'; show('VR NOT ALLOWED', false); warn('isSessionSupported failed:', errText(err)); }
+-    else if (ok) { state = 'idle'; show('ENTER VR', true); }
+-    else { state = 'off'; show('VR NOT SUPPORTED', false); }
+-  }
+-
 -  // after a session: a fresh XR process for the next one (see the top of this file)
 -  let resetting = null;
 -  function afterSession() {
 -    if (resetting) return resetting;
++    if (!quiet) { show('CHECKING VR...', false); status('checking', 'Checking whether a VR headset is available.'); }
++    try { ok = await timeout(navigator.xr.isSessionSupported('immersive-vr'), 8000, 'checking for a headset'); } catch (e) { err = e; }
++    if (id !== refreshId || state !== 'off' && state !== 'idle') return;
++    if (err) {
++      state = 'off'; show('CHECK VR AGAIN', true);
++      status('check-failed', 'The browser did not finish checking the headset. Check the VR connection, then click CHECK VR AGAIN.');
++      warn('isSessionSupported failed:', errText(err));
++    }
++    else if (ok) { state = 'idle'; show('ENTER VR', true); if (!quiet) status('idle', 'VR headset available.'); }
++    else { state = 'off'; show('VR NOT SUPPORTED', false); if (!quiet) status('idle', 'No VR headset is available.'); }
++  }
++
 +  // Recover a failed granted start; a healthy session keeps its ready runtime.
 +  async function afterSession(attempt) {
 +    if (current !== attempt) return;
@@ -7943,6 +8139,7 @@
 -      let done = false;
 -      if (opts.resetXr) {
 -        try { done = !!(await timeout(Promise.resolve(opts.resetXr()), 10000, 'XR reset')); } catch (e) { warn('XR reset failed:', errText(e)); }
++    if (attempt.failed) status('recovering', 'Recovering the VR connection.');
 +    let done = false;
 +    if (attempt.failed && opts.resetXr) {
 +      try { done = !!(await timeout(Promise.resolve(opts.resetXr()), 10000, 'XR reset')); } catch (e) { warn('XR reset failed:', errText(e)); }
@@ -7950,12 +8147,63 @@
 +    if (current !== attempt) return;
 +    if (done) {
 +      // the browser starts the new process at once; wait until it has found the headset (at most 15 s)
-+      const t0 = performance.now();
-+      let ok = false;
-+      while (!ok && performance.now() - t0 < 15000) {
-+        await new Promise(r => setTimeout(r, 400));
-+        if (current !== attempt) return;
-+        try { ok = await navigator.xr.isSessionSupported('immersive-vr'); } catch { /* */ }
++      const t0 = performance.now(), endAt = t0 + 15000;
++      let ok = false, expired = false, deadlineTimer, pauseTimer, queryTimer;
++      const deadline = new Promise(resolve => { deadlineTimer = setTimeout(() => { expired = true; resolve(false); }, 15000); });
++      try {
++        while (!ok && !expired) {
++          await Promise.race([new Promise(r => { pauseTimer = setTimeout(r, 400); }), deadline]);
++          clearTimeout(pauseTimer);
++          if (current !== attempt) return;
++          const remaining = endAt - performance.now();
++          if (expired || remaining <= 0) break;
++          try {
++            ok = await Promise.race([navigator.xr.isSessionSupported('immersive-vr'), deadline,
++              new Promise(resolve => { queryTimer = setTimeout(() => resolve(false), remaining); })]);
++          } catch { /* a runtime still restarting may reject detection */ }
++          finally { clearTimeout(queryTimer); }
++        }
++      } finally { clearTimeout(deadlineTimer); clearTimeout(pauseTimer); clearTimeout(queryTimer); }
++      log(`fresh XR process ${ok ? 'ready' : 'has no headset yet'} after ${Math.round(performance.now() - t0)} ms`);
++    } else if (attempt.failed) log('XR process not reset (the next session may not show)');
++    if (current !== attempt) return;
++    current = null;
++    state = 'idle';
++    show('ENTER VR', true);
++    status(attempt.cancelled ? 'cancelled' : attempt.failed ? 'failed' : 'idle',
++      attempt.cancelled ? 'VR startup cancelled.' : attempt.failed ? 'VR could not start. Check the headset connection, then try again.' : 'VR ended.');
++    refresh({ quiet: true });
++  }
++
++  function finishEnded(attempt) {
++    if (current !== attempt || !attempt.ended || !attempt.attachSettled || attempt.finished || renderer.xr.isPresenting) return;
++    attempt.finished = true;
++    clearTimeout(attempt.poseTimer);
++    attempt.session.removeEventListener('end', attempt.onEnd);
++    attempt.session.removeEventListener('visibilitychange', attempt.onVisibility);
++    if (attempt.failed) opts.restoreView?.();
++    void afterSession(attempt);
++  }
++  renderer.xr.addEventListener?.('sessionend', () => {
++    // Raw XRSession.end runs our listener before Three's listener. A microtask
++    // lets Three restore its saved renderer size before any failed-start fit.
++    const attempt = current;
++    if (attempt?.ended) queueMicrotask(() => finishEnded(attempt));
++  });
++
++  async function endAttempt(attempt) {
++    if (current !== attempt || attempt.ended || attempt.endPending) return;
++    attempt.exitRequested = true;
++    clearTimeout(attempt.poseTimer);
++    attempt.endPending = true;
++    state = 'ending';
++    show('EXITING...', false);
++    status('ending', 'Ending the VR session.');
++    try {
++      await timeout(Promise.race([Promise.resolve(attempt.session.end()), attempt.endObserved]), 8000, 'ending the VR session');
++      if (current === attempt && !attempt.ended) {
++        state = 'running'; show('EXIT VR', true);
++        status('ending-slow', 'The headset has not closed VR yet. Exit from the headset, or click EXIT VR to try again.');
        }
 -      if (done) {
 -        // the browser starts the new process at once; wait until it has found the headset (at most 15 s)
@@ -7973,36 +8221,7 @@
 -      refresh();
 -    })();
 -    return resetting;
-+      log(`fresh XR process ${ok ? 'ready' : 'has no headset yet'} after ${Math.round(performance.now() - t0)} ms`);
-+    } else if (attempt.failed) log('XR process not reset (the next session may not show)');
-+    if (current !== attempt) return;
-+    current = null;
-+    state = 'idle';
-+    show('ENTER VR', true);
-+    refresh();
-+  }
-+
-+  function finishEnded(attempt) {
-+    if (current !== attempt || !attempt.ended || !attempt.attachSettled || attempt.finished || renderer.xr.isPresenting) return;
-+    attempt.finished = true;
-+    attempt.session.removeEventListener('end', attempt.onEnd);
-+    attempt.session.removeEventListener('visibilitychange', attempt.onVisibility);
-+    if (attempt.failed) opts.restoreView?.();
-+    void afterSession(attempt);
-+  }
-+  renderer.xr.addEventListener?.('sessionend', () => {
-+    // Raw XRSession.end runs our listener before Three's listener. A microtask
-+    // lets Three restore its saved renderer size before any failed-start fit.
-+    const attempt = current;
-+    if (attempt?.ended) queueMicrotask(() => finishEnded(attempt));
-+  });
-+
-+  async function endAttempt(attempt) {
-+    if (current !== attempt || attempt.ended || attempt.endPending) return;
-+    attempt.endPending = true;
-+    state = 'ending';
-+    show('EXITING...', false);
-+    try { await attempt.session.end(); }
++    }
 +    catch (e) {
 +      if (current !== attempt || attempt.ended) return;
 +      warn('could not end the session:', errText(e));
@@ -8010,6 +8229,7 @@
 +      // EXIT VR can retry instead of offering a competing requestSession.
 +      state = 'running';
 +      show('EXIT VR', true);
++      status('ending-slow', 'VR is still open in the headset. Click EXIT VR to try again.');
 +    } finally { attempt.endPending = false; }
 +  }
 +
@@ -8022,23 +8242,29 @@
  
    async function start() {
 +    if (state !== 'idle' || renderer.xr.isPresenting) return;
-+    const attempt = { session: null, ended: false, failed: false, attachSettled: true, finished: false, endPending: false };
++    const attempt = { session: null, ended: false, failed: false, cancelled: false, attachSettled: true, finished: false, endPending: false };
++    attempt.cancelledPromise = new Promise((_, reject) => { attempt.abortPreparation = () => reject(new Error('VR startup cancelled')); });
++    attempt.endObserved = new Promise(resolve => { attempt.observeEnd = resolve; });
++    const prepare = (promise, ms, label) => timeout(Promise.race([promise, attempt.cancelledPromise]), ms, label);
 +    current = attempt;
      state = 'starting';
-     show('STARTING...', false);
+-    show('STARTING...', false);
++    show('CANCEL VR START', true);
++    status('permission', 'Waiting for the headset permission. Confirm VR in the headset, or cancel here.');
      log('ENTER VR');
      const t0 = performance.now();
 -    let s = null, ended = false;
      try {
-       await timeout(makeCompatible(renderer, 'ENTER VR'), 20000, 'makeXRCompatible');
+-      await timeout(makeCompatible(renderer, 'ENTER VR'), 20000, 'makeXRCompatible');
 -      s = await navigator.xr.requestSession('immersive-vr', sessionInit);
-+      if (current !== attempt) return;
-+      const request = Promise.resolve().then(() => navigator.xr.requestSession('immersive-vr', sessionInit));
++      // Keep the native permission request in the actual click activation.
++      // GPU switching may take seconds and must never precede this request.
++      const request = Promise.resolve(navigator.xr.requestSession('immersive-vr', sessionInit));
 +      request.then(s => {
 +        attempt.granted = s;
 +        if (current !== attempt || attempt.failed) endDetached(s);
 +      }, () => {});
-+      const s = await timeout(request, 20000, 'requestSession');
++      const s = await prepare(request, 20000, 'headset permission');
 +      if (current !== attempt || attempt.failed) return;
 +      attempt.session = s;
        log(`session granted (${(s.enabledFeatures || []).join(', ') || 'no feature list'}), visibility ${s.visibilityState}`);
@@ -8047,6 +8273,8 @@
 +      attempt.onEnd = () => {
 +        if (current !== attempt || attempt.ended) return;
 +        attempt.ended = true;
++        attempt.observeEnd();
++        if (!attempt.ready && !attempt.cancelled) attempt.failed = true;
 +        state = 'ending';
 +        show('EXITING...', false);
          log(`session ended after ${((performance.now() - t0) / 1000).toFixed(1)} s, ${renderer.info?.render?.frame ?? '?'} frames drawn`);
@@ -8068,9 +8296,34 @@
 +      };
 +      s.addEventListener('end', attempt.onEnd);
 +      s.addEventListener('visibilitychange', attempt.onVisibility);
++      status('graphics', 'Preparing graphics for the headset. You can cancel VR startup here.');
++      const compatible = await prepare(makeCompatible(renderer, 'ENTER VR'), 20000, 'preparing VR graphics');
++      if (current !== attempt || attempt.ended || attempt.cancelled) return;
++      // A stalled reference-space request must be ended before Three installs
++      // its manager. Its r170 cleanup assumes its animation context exists.
++      const restores = [];
++      attempt.restorePrepared = () => {
++        for (const restore of restores.reverse()) restore();
++        restores.length = 0;
++      };
++      if (typeof s.requestReferenceSpace === 'function') {
++        status('reference-space', 'Waiting for headset tracking. Check the headset connection or cancel here.');
++        const type = opts.referenceSpaceType || 'local-floor';
++        const reference = await prepare(s.requestReferenceSpace(type), 12000, 'headset tracking');
++        if (current !== attempt || attempt.ended || attempt.cancelled) return;
++        const original = s.requestReferenceSpace.bind(s);
++        restores.push(preparedMethod(s, 'requestReferenceSpace', requested => requested === type ? Promise.resolve(reference) : original(requested)));
++      }
++      const gl = renderer.getContext?.();
++      if (compatible && typeof gl?.makeXRCompatible === 'function') {
++        try { restores.push(preparedMethod(gl, 'makeXRCompatible', () => Promise.resolve())); }
++        catch (error) { attempt.restorePrepared(); throw error; }
++      }
 +      attempt.attachSettled = false;
++      status('attaching', 'Opening the headset display. You can cancel VR startup here.');
 +      const attaching = Promise.resolve().then(() => renderer.xr.setSession(s));
 +      const settled = () => {
++        attempt.restorePrepared();
 +        attempt.attachSettled = true;
 +        if (current !== attempt) return;
 +        if (attempt.ended) queueMicrotask(() => finishEnded(attempt));
@@ -8079,21 +8332,32 @@
 +      attaching.then(settled, () => { attempt.failed = true; settled(); });
 +      await timeout(attaching, 20000, 'setSession');
 +      if (current !== attempt || attempt.ended || attempt.failed) return;
++      if (attempt.cancelled) { void endAttempt(attempt); return; }
++      attempt.ready = true;
        state = 'running';
        show('EXIT VR', true);
++      if (opts.waitForPose && !attempt.firstPose) {
++        status('viewer-pose', 'VR display connected. Waiting for headset position. Put on the headset and return to the game.');
++        attempt.poseTimer = setTimeout(() => {
++          if (current === attempt && !attempt.ended && !attempt.exitRequested && !attempt.firstPose) status('viewer-pose-slow',
++            'The headset is not reporting its position yet. Return to the game in the headset, or use EXIT VR and reconnect.');
++        }, 12000);
++      } else status('ready', 'VR is ready.');
        const layer = renderer.xr.getBaseLayer?.();
        log(!layer ? 'in VR' : 'textureWidth' in layer ? `in VR, drawing into a projection layer ${layer.textureWidth}x${layer.textureHeight}`
          : `in VR, drawing into an XRWebGLLayer ${layer.framebufferWidth}x${layer.framebufferHeight}`);
      } catch (e) {
-+      if (current !== attempt || attempt.finished) return;
-+      attempt.failed = true;
-       warn('could not enter VR:', errText(e));
+-      warn('could not enter VR:', errText(e));
 -      if (!renderer.xr.isPresenting) opts.restoreView?.();
 -      session = null;
 -      if (s) {
 -        // a session was granted: its end brings the button back, after a fresh XR process
 -        if (!ended) s.end().catch(() => afterSession());
 -        setTimeout(() => { if (state === 'starting') afterSession(); }, 5000);
++      if (current !== attempt || attempt.finished) return;
++      if (attempt.attachSettled) attempt.restorePrepared?.();
++      if (!attempt.cancelled) attempt.failed = true;
++      if (!attempt.cancelled) warn('could not enter VR:', errText(e));
 +      if (attempt.session) {
 +        state = 'ending'; show('EXITING...', false);
 +        // Three's pending setSession cannot be cancelled. Wait for it to
@@ -8101,7 +8365,10 @@
 +        if (attempt.attachSettled) {
 +          if (attempt.ended) queueMicrotask(() => finishEnded(attempt));
 +          else void endAttempt(attempt);
-+        } else attempt.endAfterAttach = true;
++        } else {
++          attempt.endAfterAttach = true;
++          status('attachment-stalled', 'The headset display did not finish opening. Waiting for safe cleanup; if it stays here, close this game tab and reopen it from the launcher.');
++        }
          return;
        }
 +      if (attempt.granted) endDetached(attempt.granted);
@@ -8109,8 +8376,10 @@
 +      current = null;
        state = 'idle';
        show('ENTER VR', true);
-       refresh();
-@@ -190,10 +259,7 @@
+-      refresh();
++      status('failed', 'VR could not start. Check the headset permission and connection, then try again.');
++      refresh({ quiet: true });
+     }
    }
  
    function stop() {
@@ -8118,10 +8387,41 @@
 -    state = 'ending';
 -    show('EXITING...', false);
 -    session.end().catch(e => { warn('could not end the session:', errText(e)); session = null; state = 'idle'; show('ENTER VR', true); });
+-  }
 +    if (current?.session) void endAttempt(current);
-   }
++  }
++
++  button.cancelStartup = () => {
++    const attempt = current;
++    if (!attempt || state !== 'starting' && !(state === 'running' && opts.waitForPose && !attempt.firstPose)) return;
++    attempt.cancelled = true;
++    attempt.abortPreparation();
++    status('cancelling', 'Cancelling VR startup.');
++    if (attempt.session) {
++      if (attempt.attachSettled) void endAttempt(attempt);
++      else { attempt.endAfterAttach = true; state = 'ending'; show('EXITING...', false); }
++    } else {
++      // The browser permission request itself cannot be aborted. Its late
++      // grant handler closes it without ever attaching it to the renderer.
++      current = null; state = 'idle'; show('ENTER VR', true);
++      status('cancelled', 'VR startup cancelled.');
++    }
++  };
++  button.notifyPose = (session = renderer.xr.getSession?.()) => {
++    const attempt = current;
++    if (!attempt || attempt.session !== session || attempt.ended || attempt.cancelled || attempt.exitRequested || attempt.firstPose) return;
++    attempt.firstPose = true; clearTimeout(attempt.poseTimer);
++    if (attempt.ready) status('ready', 'VR is ready.');
++  };
  
    button.addEventListener('click', () => {
+-    if (state === 'idle') start();
++    if (state === 'off') refresh();
++    else if (state === 'idle') start();
++    else if (state === 'starting') button.cancelStartup();
+     else if (state === 'running') stop();
+   });
+   show('VR ...', false);
 --- upstream/app/src/weaponfx.js
 +++ fork/apps/client/src/combat/weaponfx.js
 @@ -5,7 +5,7 @@
@@ -10121,8 +10421,84 @@
 +  ctx.save(); ctx.imageSmoothingEnabled = false; slices(ctx, 64, 64, 32, 4, x, y, w, h); ctx.restore(); return true;
 +}
 --- /dev/null
++++ fork/apps/client/src/ui/xr-status.js
+@@ -0,0 +1,55 @@
++import { tr } from './i18n.js';
++
++// Runtime errors remain in diagnostics. This footer uses only known, translated
++// player messages; incoming exception strings must never enter the DOM.
++const COPY = {
++  checking: 'VR 헤드셋 확인 중...',
++  'check-failed': '헤드셋 확인 시간이 초과되었습니다. 연결을 확인한 뒤 CHECK VR AGAIN을 눌러 주세요',
++  permission: '헤드셋이나 브라우저에서 VR 요청을 허용해 주세요',
++  graphics: 'VR 화면 준비 중...',
++  'reference-space': '플레이 공간 준비 중...',
++  attaching: '게임을 헤드셋에 연결하는 중...',
++  'viewer-pose': '헤드셋 추적을 기다리는 중...',
++  'viewer-pose-slow': '추적이 지연되고 있습니다. 헤드셋을 착용하고 연결을 확인해 주세요',
++  ending: 'VR에서 나가는 중...',
++  'ending-slow': '헤드셋의 VR 종료를 기다리는 중...',
++  recovering: 'VR 연결을 복구하는 중...',
++  failed: 'VR을 시작하지 못했습니다. 헤드셋을 확인하고 다시 시도해 주세요',
++  cancelled: 'VR 시작을 취소했습니다',
++  cancelling: 'VR 시작을 취소하는 중...',
++  'attachment-stalled': 'VR 연결이 완료되지 않고 있습니다',
++};
++const REOPEN = '가능하면 먼저 저장한 뒤 게임 창을 닫고 다시 여세요';
++
++export function createXrStatus(container, { onCancel } = {}) {
++  const document = container.ownerDocument || globalThis.document;
++  const root = document.createElement('div'), text = document.createElement('span');
++  const help = document.createElement('span'), cancel = document.createElement('button');
++  root.className = 'xr-status'; root.hidden = true;
++  root.setAttribute('role', 'status'); root.setAttribute('aria-live', 'polite'); root.setAttribute('aria-atomic', 'true');
++  text.className = 'xr-status__message'; help.className = 'xr-status__help';
++  cancel.className = 'xr-status__cancel'; cancel.type = 'button'; cancel.hidden = true; cancel.disabled = true;
++  cancel.textContent = tr('VR 시작 취소');
++  root.append(text, help, cancel); container.append(root);
++  cancel.addEventListener('click', () => {
++    if (root.hidden || cancel.hidden || cancel.disabled) return;
++    cancel.disabled = true;
++    onCancel?.();
++  });
++  return {
++    update({ stage = 'idle', canCancel = false, needsReload = false } = {}) {
++      const copy = Object.hasOwn(COPY, stage) ? COPY[stage] : null;
++      root.hidden = !copy;
++      if (!copy) {
++        text.textContent = ''; help.textContent = ''; help.hidden = true;
++        cancel.hidden = true; cancel.disabled = true;
++        return;
++      }
++      const reopen = needsReload || stage === 'attachment-stalled';
++      text.textContent = tr(copy);
++      help.textContent = reopen ? tr(REOPEN) : ''; help.hidden = !reopen;
++      cancel.hidden = !canCancel || reopen || typeof onCancel !== 'function';
++      cancel.disabled = cancel.hidden;
++    },
++  };
++}
+--- /dev/null
++++ fork/apps/client/src/vr/frame-status.js
+@@ -0,0 +1,15 @@
++// Mark startup ready only after a successful draw for this session's tracked
++// XR frame. A granted session or a desktop render does not prove VR is drawing.
++const readySession = new WeakMap();
++
++export function renderWithXrStatus(renderer, scene, camera, frame, onTracked) {
++  renderer.render(scene, camera);
++  const xr = renderer.xr, session = xr.getSession?.();
++  if (!frame || !xr.isPresenting || !session || frame.session !== session) return;
++  if (readySession.get(renderer) === session) return;
++  const reference = xr.getReferenceSpace?.();
++  if (!reference) return;
++  let pose;
++  try { pose = frame.getViewerPose(reference); } catch { return; }
++  if (pose?.views?.length) { onTracked(session); readySession.set(renderer, session); }
++}
+--- /dev/null
 +++ fork/apps/client/src/vr/viewmode.js
-@@ -0,0 +1,130 @@
+@@ -0,0 +1,131 @@
 +import * as THREE from 'three';
 +import { G } from '../core/globals.js';
 +import { T } from '../world/mapmesh.js';
@@ -10242,6 +10618,7 @@
 +    G.xrAway = false;
 +    this.releaseTarget();
 +    this.spectator?.stop();
++    if (wasActive || this.spectator?.deferred) void this.spectator?.resumePreparation?.();
 +    this.renderer.setRenderTarget?.(null);
 +    Object.assign(this.camera, this.desktopLens);
 +    this.camera.view = this.desktopView ? { ...this.desktopView } : null;

@@ -2094,3 +2094,9 @@ build, 8 packaging regressions and 7 Python protocol regressions. The new covera
 includes 25 lifecycle cases total, 6 rendered-frame readiness cases, 7 localized
 footer cases, and 10 spectator cases total; existing pinned-Three view-mode
 regressions also pass. No original assets/saves or private test controls added.
+
+The source comparison uses runtime f88b455f9bb3fb2b5d746c82ec408ba05b0ecec7 (0.2.34):
+48 original modules, 15 unchanged after import moves, 33 modified, 43 new,
+0 missing; 3,609 added/854 removed lines in modified originals after import
+normalization. Existing paired images remain v0.2.25 and initialized gameplay
+captures remain v0.2.33; no screenshot relabelling or hardware capture claimed.
