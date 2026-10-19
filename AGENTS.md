@@ -2157,3 +2157,9 @@ unknown attachment refusal, automatic-reset deduplication and synchronous native
 request rejection. Four-language footer coverage totals 9 cases. Physical Quest
 restart/Link recovery and hardware startup latency remain unconfirmed; do not
 substitute the simulated native delays for a headset playtest.
+
+Current source comparison: runtime 07acc5999610f2d03b806609c5a97301830585d7 (0.2.35),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,676 added/856 removed lines in modified originals after
+import normalization. Paired screenshots remain 0.2.25 and initialized gameplay
+previews remain 0.2.33; no new hardware or gameplay screenshots are claimed.
