@@ -2163,3 +2163,48 @@ Current source comparison: runtime 07acc5999610f2d03b806609c5a97301830585d7 (0.2
 43 new and 0 missing; 3,676 added/856 removed lines in modified originals after
 import normalization. Paired screenshots remain 0.2.25 and initialized gameplay
 previews remain 0.2.33; no new hardware or gameplay screenshots are claimed.
+
+
+## VR world targeting and original counters (0.2.36)
+
+A controller can remain connected while Three r170 marks its target ray invisible
+on a frame with no input pose. Its old transform remains stored. World action
+previously used that stale horizontal direction and hand origin. Validate visibility,
+finite position/orientation and a meaningful horizontal component; otherwise use
+head direction and player origin together. If both rays are vertical, retain the
+logical player direction. Never rotate the VR headset to face an interaction.
+
+Original counter interactions reach the second cardinal cell. The old cone's
+1.7-tile limit rejected the Mental Ward counter NPC from the reachable approach,
+then its tile fallback used headset facing instead of controller aim. Only an
+actual intervening counter and a normal-priority event in that second cell extend
+cone reach. Floor props and ordinary distant events keep their existing limits.
+The VR tile fallback uses the same validated aim, with native underfoot/front/
+counter priority. Touch-trigger pages remain tile actions, not ranged cone targets.
+
+All VR and phantom starts retain active-page, erased/locked/pending, combat/arena
+and co-op authority checks through startActionEvent. An explicitly aimed cone
+refusal stops without activating unrelated loot. Native tile candidates instead
+continue after refusal, preserving guest-ineligible loot followed by an eligible
+exit/bonfire/boss. Desktop local tile dispatch remains the original GameMap path.
+The right trigger remains combat; right-stick-down is Examine/Talk.
+
+A private read-only original Map012 replay confirms sideways-head counter talk,
+missing/hidden/vertical/invalid-ray door and NPC fallback, and actual authored door
+conditions through the Interpreter: the locked page increments its variable
+without transfer, original unlocked pages transfer, and the inactive door remains
+inactive until its switch is enabled. No original maps/scripts or saves are copied
+into tests/distributions, and no save is written. Public fixtures are synthetic.
+
+Local gates: 896 JavaScript tests pass (15 additional; 23 world-action cases),
+ESLint, production build, Ruff, 8 packaging and 7 Python tests. New cases include
+the actual pinned Three controller null-pose lifecycle, invalid aim pairs, native
+counter negatives, touch-trigger direction, and real co-op refusal/exit routing.
+These are runtime regressions and original-data event replays, not a physical
+Quest 3 playtest or confirmation that every reported headset symptom is resolved.
+
+Current source comparison: runtime aff4cfac6663fbb919c68f8030fcc699967c19a9 (0.2.36),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,713 added/874 removed lines in modified originals after
+import normalization. Paired screenshots remain 0.2.25 and initialized gameplay
+previews remain 0.2.33; no new hardware or gameplay screenshots are claimed.
