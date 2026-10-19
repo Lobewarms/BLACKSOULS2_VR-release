@@ -13,6 +13,7 @@ import { T } from '../world/mapmesh.js';
 import { evalFormula } from '../game/rubyexpr.js';
 import { resolveCircle, lineOfSight } from '../world/collision.js';
 import { sheetInfo } from './sprites.js';
+import { usableRepeats } from '../combat/usable-counts.js';
 
 // how each looks. book: the picture(s) its summoning book shows (Graphics/Pictures) - [name, metres to the side,
 // metres back], a group laid out as the book lays it out; battler: a battle picture of the same one; chip: a
@@ -477,15 +478,16 @@ class Ally {
     this.sys.cool(a, s);
     const from = this.chest(new THREE.Vector3());
     if (toEnemy(s)) {
+      G.combat.itemGlobalEffects(s, it.enemy?.battle);
       let targets;
       const near = () => ctx.enemies.filter(e => Math.hypot(e.fx - this.fx, e.fy - this.fy) * T < 14);
       if (s.scope === 2) targets = near();
       else if (s.scope >= 3 && s.scope <= 6) { const n = near(); targets = n.length ? Array.from({ length: s.scope - 2 }, () => pick(n)) : []; }
       else targets = it.enemy?.alive ? [it.enemy] : [];
-      // as VX Ace: the skill's repeats - times the attack-count features (Hans's +11) for the plain attack on one
-      // enemy only, never for a spell
-      const atkTimes = s === G.combat.playerAttackSkill(a) && s.scope === 1 ? Math.max(0, Math.round(a.featuresSum(34) || 0)) : 0;
-      const reps = THREE.MathUtils.clamp((s.repeats || 1) * (1 + atkTimes), 1, 12), gap = reps > 5 ? 90 : 140;
+      // Attack-count traits add hits only to a normal attack; ordinary skills
+      // retain their own repeats for each separately selected target.
+      const normal = s === G.combat.playerAttackSkill(a) && s.scope === 1;
+      const reps = normal ? G.combat.attackHits(s, a) : usableRepeats(s), gap = reps > 5 ? 90 : 140;
       const anim = s.animation_id > 0 ? s.animation_id : s.animation_id === -1 ? (a.weapons()[0]?.animation_id || 1) : 0;
       const blow = {};                                   // (one attack for the groggy gauge, however many hits)
       targets.forEach((e, k) => {
@@ -498,19 +500,12 @@ class Ally {
       return;
     }
     // on friends: the one it chose, all of them, or itself
+    G.combat.itemGlobalEffects?.(s);
     const list = s.scope === 8 ? ctx.friends() : [it.friend || { battler: a, ally: this }];
     for (const f of list) {
       const b = f.battler;
       if (!b || b.hp <= 0) continue;
-      if (s.damage?.type === 3) this.sys.heal(f, Math.max(0, Math.floor(evalFormula(s.damage.formula, a, b) * (b.rec ?? 1))));
-      // (buffs: the player's last a turn of TURN_SECONDS; a companion's, as long - it has no clock of its own for them)
-      if (!f.ally) G.combat.applyBuffEffects(b, s, 6);
-      for (const ef of s.effects || []) {
-        if (ef.code === 11) { const v = Math.floor(b.mhp * ef.value1 + ef.value2); if (v > 0) this.sys.heal(f, v); }
-        else if (ef.code === 12) b.mp = Math.min(b.mmp, b.mp + Math.floor(b.mmp * ef.value1 + ef.value2));
-        else if (ef.code === 21 && ef.data_id > 1 && !b.stateResist(ef.data_id) && Math.random() < ef.value1) b.addState(ef.data_id);
-        else if (ef.code === 22) b.removeState(ef.data_id);
-      }
+      G.combat.applyUsableToActor(s, 'ally', { target: b, user: a, global: false });
       // (on the player: its sounds, not its drawing in the eyes)
       if (s.animation_id > 0) {
         const at = f.ally ? f.ally.chest(new THREE.Vector3()) : G.player.headWorld(new THREE.Vector3()).add(new THREE.Vector3(0, -0.5, 0));
@@ -525,33 +520,92 @@ class Ally {
   takeHit(e, skill, { dir = null, from = null, push = null } = {}) {
     const a = pick(this.living());
     if (!a || !this.stands) return;
+    const combat = G.combat, user = e?.b || a, hitType = skill?.hit_type ?? 1;
+    const miss = () => G.audio?.playSystemSe(hitType === 2 ? 19 : 18);
+    if (!combat.certainHit(user, skill) && a.certainty(1, hitType)) { miss(); return; }
+    if (e && hitType === 2 && a.mrf > Math.random()) { combat.reflectOntoEnemy(e, skill); return; }
+    if (skill?.__class === 'RPG::Skill' && a.skillCanceled(skill.id)) { G.audio?.playSystemSe(3); return; }
+    if (!combat.hitLands(user, skill) || combat.slipsWithAnswer(a, skill, user)) { miss(); return; }
     const dist = push ?? ((skill && G.combat.isHeavySkill(skill)) || (e?.boss && e.move) ? 0.8 : 0.35);
     if (dist > 0 && !this.wall) {
       const at = this.worldPos(new THREE.Vector3());
       const [dx, dy] = dir || (from ? [at.x - from.x, at.z - from.z] : e ? [this.fx - e.fx, this.fy - e.fy] : [-this.dir[0], -this.dir[1]]);
       this.knockBack(dx, dy, dist);
     }
-    let dmg = G.combat.computeDamage(e ? e.b : a, a, skill, 1);
+    const criticalChance = skill?.damage?.type > 0 && skill.damage.critical === true
+      ? THREE.MathUtils.clamp((user.cri || 0) * (1 - THREE.MathUtils.clamp(a.cev || 0, 0, 1)), 0, 1) : 0;
+    const critical = criticalChance > 0 && Math.random() < criticalChance;
+    let dmg = combat.computeDamage(user, a, skill, critical ? 2 : 1);
     // (it chose to guard - unless the blow goes through a guard, script 170)
-    if ((this.guardUntil || 0) > G.time && dmg > 0 && !G.combat.ignoresGuard(e?.b, skill)) dmg = dmg / (2 * Math.max(0.5, a.grd ?? 1));
+    if ((this.guardUntil || 0) > G.time && dmg > 0 && !combat.nativeGuarded(a) && !combat.ignoresGuard(user, skill)) dmg = dmg / (2 * Math.max(0.5, a.grd ?? 1));
     dmg = Math.round(dmg * (G.settings.difficulty ?? 1));
+    const hpBefore = a.hp;
+    const result = combat.applyResourceDamage(user, a, skill, dmg);
+    const hpLoss = Math.max(0, hpBefore - a.hp);
+    const damage = result.hpDamage || result.mpDamage;
     const p = this.worldPos(new THREE.Vector3());
-    G.combat.popup(new THREE.Vector3(p.x, p.y + this.h * 0.8, p.z), String(dmg), dmg > 0 ? '#ff8080' : '#9a9a9a');
+    combat.popup(new THREE.Vector3(p.x, p.y + this.h * 0.8, p.z), `${result.mpDamage ? 'MP ' : ''}${damage}`, damage > 0 ? result.mpDamage ? '#80b0ff' : '#ff8080' : '#9a9a9a');
     this.hurt = 0.3;
     const se = $data.system.sounds?.[14];                  // the actor-damage sound, where it was struck
     if (se) G.audio?.playSe(se, p);
-    if (dmg <= 0) return;
-    a.hp = Math.max(0, a.hp - dmg);
-    for (const ef of skill?.effects || []) {
-      if (ef.code !== 21 || ef.data_id <= 1 || a.stateResist(ef.data_id)) continue;
-      if (Math.random() < ef.value1 * 0.6 * a.stateRate(ef.data_id)) a.addState(ef.data_id);
+    const removeState = id => {
+      a.removeState(id);
+      const timers = this.sys.stateTimers?.get(a.id);
+      if (timers) delete timers[id];
+    };
+    // Only losing HP wakes damage-removable states; an MP hit still applies
+    // its other effects, including when the target has no MP left to lose.
+    if (hpLoss > 0) for (const id of [...a.states]) {
+      const st = $data.states[id];
+      if (id !== 1 && st?.remove_by_damage && Math.random() * 100 < st.chance_by_damage) removeState(id);
     }
-    if (a.hp <= 0) {
+    for (const ef of skill?.effects || []) {
+      if (ef.code === 21 && ef.data_id >= 0) {
+        const normal = ef.data_id === 0, ids = normal ? user.atkStates() : [ef.data_id];
+        for (const id of ids) {
+          const base = ef.value1 * (normal ? user.atkStatesRate(id) : 1) * (id === 1 ? 1 : 0.6);
+          if (id > 0 && Math.random() < combat.stateEffectChance(user, a, skill, id, base)) a.addState(id);
+        }
+      } else if (ef.code === 22 && Math.random() < ef.value1) removeState(ef.data_id);
+      else if (ef.code === 11 || ef.code === 12) {
+        const hp = ef.code === 11, key = hp ? 'hp' : 'mp', max = hp ? a.mhp : a.mmp;
+        const value = Math.floor((max * ef.value1 + ef.value2) * a.rec);
+        const change = a.healAmount(value, hp ? 0 : 1);
+        a[key] = Math.max(0, Math.min(max, a[key] + Math.floor(change * (change < 0 ? G.settings.difficulty ?? 1 : 1))));
+        if (hp && change < 0) for (const id of [...a.states]) {
+          const st = $data.states[id];
+          if (id !== 1 && st?.remove_by_damage && Math.random() * 100 < st.chance_by_damage) removeState(id);
+        }
+      } else if (ef.code === 13) a.tp = THREE.MathUtils.clamp(a.tp + Math.floor(ef.value1), 0, 100);
+      else if (ef.code === 42) a.addParam?.(ef.data_id, ef.value1);
+      else if (ef.code === 43) a.learnSkill?.(ef.data_id);
+    }
+    combat.applyBuffEffects(a, skill, TURN, 0.6, user);
+    const gain = combat.userResourceEffects(user, skill || {}, hpLoss);
+    if (e && (result.hpDrain > 0 || result.mpDrain > 0 || gain.hpGain > 0)) e.drawBar();
+    if (a.hp <= 0 && !a.stateResist(1) && !this.reviveOnFall(a)) {
       a.addState(1);
       const c = $data.system.sounds?.[15];                 // the actor-collapse sound
       if (c) G.audio?.playSe(c, p);
     }
     this.drawBar();
+  }
+
+  // Script 171 applies to every battler, including a companion struck down by
+  // a reversed heal. Its death clears ordinary states and buffs before revival.
+  reviveOnFall(actor = this.actor) {
+    if (!actor || actor.hp > 0 || actor.stateResist(1)) return false;
+    const revive = actor.autoRevive();
+    if (!revive) return false;
+    actor.die(); actor.removeState(1);
+    actor.hp = Math.min(actor.mhp, revive.hp);
+    if (revive.breakRate > Math.random() * 100) G.combat.breakSaver(actor, revive.source);
+    const timers = this.sys.stateTimers?.get(actor.id);
+    if (timers) for (const id of Object.keys(timers)) if (!actor.isState(+id)) delete timers[id];
+    if (revive.anim) G.screen?.playAnimationOn(this.chest(new THREE.Vector3()), revive.anim, { world: true, height: this.h });
+    G.audio?.playSystemSe(16);
+    this.drawBar();
+    return true;
   }
 
   // thrown back (a blow it took): pushed dist metres along (dx, dy) in a moment, fast at first and slowing
@@ -700,9 +754,11 @@ export class AllySystem {
   // (the meat shield's 20 turns end in its death)
   tickStates(dt) {
     const timers = (this.stateTimers ||= new Map());
+    const buffed = new Set();
     for (const u of this.list) {
       if (!u.stands) continue;
       for (const a of u.members()) {
+        if (!buffed.has(a)) { a.tickBuffs(dt); buffed.add(a); }
         let t = timers.get(a.id);
         if (!t) timers.set(a.id, (t = {}));
         for (const id of a.states) {

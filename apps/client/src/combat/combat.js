@@ -23,6 +23,7 @@ import { buildIconModel, getAdjust, setAdjust, resetAdjust, defaultAdjust } from
 import { WeaponFx, ELEMENT_FX } from './weaponfx.js';
 import { desktopRest, desktopSwing, desktopModel, desktopShield, desktopShieldGuardPoint, desktopEquipmentHidden } from './desktop-weapon.js';
 import { playerRecoveryRate } from './action-speed.js';
+import { usableRepeats, randomTargetCount } from './usable-counts.js';
 import { battlerEffects, effectsKey, fitLabel } from '../ui/battler-status.js';
 import { openFights } from '../world/maphints.js';
 import { personalPage } from '../network/coopworld.js';
@@ -1723,44 +1724,126 @@ export class CombatSystem {
     if (used) G.audio?.playSystemSe(22);
     return used;
   }
-  // effects of an item / skill on the player (the whole "party" here)
-  applyUsableToActor(obj, from) {
-    const actor = G.state.party.leader();
-    if (!actor) return false;
-    // <スキル無効:n> (script 196): a skill of the player's own that a state on them erases (그랑・기뇰's 사자와 유니콘:
-    // no buffs) - used, and nothing comes of it
-    if (obj.__class === 'RPG::Skill' && actor.skillCanceled(obj.id)) return false;
+  actorSupportTargets(obj, target = null) {
+    const leader = G.state.party.leader();
+    const party = G.state.party;
+    let targets = target ? [target] : [leader];
+    const revival = obj.scope === 9 || obj.scope === 10;
+    if (!target && (obj.scope === 8 || revival)) {
+      targets = party.members?.().slice(0, 4) || [leader];
+      // A companion may be constructed before its actor is available through
+      // the party facade. Restrict this fallback to current battle members.
+      const ids = party.actors?.slice(0, 4);
+      for (const unit of this.allies?.list || []) {
+        if (unit.leaving || unit.gone) continue;
+        for (const member of unit.members()) if (!ids || ids.includes(member.id)) targets.push(member);
+      }
+      targets = targets.filter(a => a && (revival ? a.hp <= 0 : a.hp > 0));
+    }
+    targets = [...new Set(targets.filter(Boolean))];
+    if (revival) targets = targets.filter(a => a.hp <= 0);
+    return obj.scope === 9 ? targets.slice(0, 1) : targets;
+  }
+  // Friendly scopes share the same effect path, whether cast by the leader or
+  // a companion. An explicit recipient is useful for a companion's chosen ally.
+  applyUsableToActor(obj, from, { target = null, user = null, global = true, repeats = true, battle = null, opposed = false } = {}) {
+    const leader = G.state.party.leader();
+    user ||= leader;
+    if (!obj || !user) return false;
+    const targets = opposed && target ? [target] : this.actorSupportTargets(obj, target);
+    const revival = !opposed && (obj.scope === 9 || obj.scope === 10);
+    if (revival && !targets.length) return false;
     let used = false;
     const type = obj.damage?.type || 0;
-    const pha = obj.__class === 'RPG::Item' ? actor.pha : 1;     // 약의 지식: items heal more (rings, oaths)
-    if (type === 3 || type === 4) {
-      const v = Math.max(0, Math.floor(evalFormula(obj.damage.formula, actor, actor) * actor.rec));
-      if (type === 3) this.healPlayerHp(actor, v);
-      else this.healPlayerMp(actor, v);
-      used = true;
-    }
+    const pha = obj.__class === 'RPG::Item' ? user.pha ?? 1 : 1;
+    const count = repeats ? usableRepeats(obj) : 1;
     // (script 169's stealth: <ステルス:n> on what is used - the map's monsters do not notice the player for n steps)
     const stealth = /ステルス:(\d+)/i.exec(obj.note || '');
     if (stealth && +stealth[1] > 0) { G.state.system.stealthSteps = +stealth[1]; used = true; }
-    if (this.applyBuffEffects(actor, obj, TURN_SECONDS)) used = true;
-    for (const ef of obj.effects || []) {
-      switch (ef.code) {
-        case 11: { const v = Math.floor((actor.mhp * ef.value1 + ef.value2) * actor.rec * pha); if (v > 0) this.healPlayerHp(actor, v); else if (v < 0) { actor.hp = Math.max(0, actor.hp + v); this.popupAtPlayer(String(v), '#ffb0b0'); } used = true; break; }
-        case 12: { const v = Math.floor((actor.mmp * ef.value1 + ef.value2) * actor.rec * pha); if (v > 0) this.healPlayerMp(actor, v); else if (v < 0) actor.mp = Math.max(0, actor.mp + v); used = true; break; }
-        case 13: actor.tp = Math.min(100, actor.tp + ef.value1); used = true; break;
-        case 21: if (ef.data_id > 0 && Math.random() < ef.value1) { actor.addState(ef.data_id); this.timeActorState(ef.data_id); this.fightState(ef.data_id); } used = true; break;
-        case 22: actor.removeState(ef.data_id); used = true; break;
-        case 42: actor.addParam(ef.data_id, ef.value1); used = true; break;
-        case 43: {
-          const sk = $data.skills[ef.data_id];
-          if (sk && !actor.skills.includes(sk.id)) { actor.learnSkill(sk.id); G.ui.toast(tr('{name} 습득', { name: stripEscapes(sk.name) }), sk.icon_index); }
-          used = true; break;
+    // VX Ace reserves global common events once per use, independently of the
+    // number of recipients/repetitions and even if a recipient cancels it.
+    if (global && (obj.effects || []).some(ef => ef.code === 44)) {
+      if (this.itemGlobalEffects) this.itemGlobalEffects(obj, battle);
+      else for (const ef of obj.effects) if (ef.code === 44) G.map.reserveCommonEvent(ef.data_id);
+      used = true;
+      if (from === 'menu') G.ui.closeMenu();
+    }
+    for (const actor of targets) {
+      if (obj.__class === 'RPG::Skill' && actor.skillCanceled?.(obj.id)) continue;
+      const unit = actor !== leader ? this.allies?.unitOf?.(actor.id) : null;
+      const recover = (amount, mp = false) => {
+        if (actor === leader) return mp ? this.healPlayerMp(actor, amount) : this.healPlayerHp(actor, amount);
+        const value = actor.healAmount(amount, mp ? 1 : 0), resource = mp ? 'mp' : 'hp', max = mp ? actor.mmp : actor.mhp;
+        actor[resource] = THREE.MathUtils.clamp(actor[resource] + value, 0, max);
+        if (!mp && value > 0) this.allies?.showHeal?.({ battler: actor, ally: unit }, value);
+        unit?.drawBar();
+        return value;
+      };
+      for (let r = 0; r < count; r++) {
+        if (r && (actor.hp <= 0 || revival)) break;
+        if (opposed && (!this.hitLands(user, obj)
+          || !this.certainHit(user, obj) && actor.certainty?.(1, obj.hit_type ?? 1)
+          || this.slipsWithAnswer(actor, obj, user))) {
+          G.audio?.playSystemSe(obj.hit_type === 2 ? 19 : 18);
+          continue;
         }
-        case 44: G.map.reserveCommonEvent(ef.data_id); used = true; if (from === 'menu') G.ui.closeMenu(); break;
-        default: break;
+        let hpDamage = 0;
+        if ([1, 2, 5, 6].includes(type)) {
+          const result = this.applyResourceDamage(user, actor, obj, this.computeDamage(user, actor, obj));
+          hpDamage = result.hpDamage;
+          if (result.hpDamage > 0) this.damageRemovesActorStates(actor);
+          if (actor === leader && (result.hpDamage || result.mpDamage)) this.popupAtPlayer(`${result.mpDamage ? 'MP ' : ''}-${result.hpDamage || result.mpDamage}`, '#ffb0b0');
+          unit?.drawBar(); used = true;
+        } else if (type === 3 || type === 4) {
+          recover(Math.max(0, Math.floor(this.computeDamage(user, actor, obj) * (actor.rec ?? 1))), type === 4);
+          used = true;
+        }
+        for (const ef of obj.effects || []) {
+          switch (ef.code) {
+            case 11: {
+              const v = Math.trunc((actor.mhp * ef.value1 + ef.value2) * (actor.rec ?? 1) * pha);
+              if (v > 0) recover(v); else if (v < 0) { actor.hp = Math.max(0, actor.hp + v); if (actor === leader) this.popupAtPlayer(String(v), '#ffb0b0'); }
+              used = true; break;
+            }
+            case 12: {
+              const v = Math.trunc((actor.mmp * ef.value1 + ef.value2) * (actor.rec ?? 1) * pha);
+              if (v > 0) recover(v, true); else if (v < 0) actor.mp = Math.max(0, actor.mp + v);
+              used = true; break;
+            }
+            case 13: actor.tp = THREE.MathUtils.clamp(actor.tp + Math.trunc(ef.value1), 0, 100); used = true; break;
+            case 21: {
+              const ids = ef.data_id === 0 ? user.atkStates() : [ef.data_id];
+              for (const id of ids) {
+                const chance = ef.data_id === 0 ? this.stateEffectChance(user, actor, obj, id, ef.value1 * user.atkStatesRate(id))
+                  : opposed ? this.stateEffectChance(user, actor, obj, id, ef.value1) : actor.stateResist(id) ? 0 : ef.value1;
+                if (id > 0 && Math.random() < chance) {
+                  actor.addState(id);
+                  if (actor === leader) { this.timeActorState(id); this.fightState(id); }
+                }
+              }
+              used = true; break;
+            }
+            case 22: if (Math.random() < ef.value1) actor.removeState(ef.data_id); used = true; break;
+            case 31: case 32: case 33: case 34:
+              if (this.applyBuffEffects(actor, { ...obj, effects: [ef] }, TURN_SECONDS, 1, user)) used = true;
+              break;
+            case 42: actor.addParam(ef.data_id, ef.value1); used = true; break;
+            case 43: {
+              const sk = $data.skills[ef.data_id];
+              if (sk && !actor.skills.includes(sk.id)) { actor.learnSkill(sk.id); G.ui.toast(tr('{name} 습득', { name: stripEscapes(sk.name) }), sk.icon_index); }
+              used = true; break;
+            }
+            default: break;
+          }
+        }
+        this.userResourceEffects?.(user, obj, hpDamage);
+        if (actor.hp <= 0) {
+          if (actor === leader) this.playerFalls(battle);
+          else if (!actor.stateResist(1) && !unit?.reviveOnFall?.(actor)) actor.addState(1);
+        }
+        unit?.drawBar();
       }
     }
-    if (actor.hp <= 0) this.playerFalls(null);
     return used;
   }
   // a heal on the player, after the recovery rules on them (script 172 - 허약, 천수 영역: nothing, or as much damage)
@@ -1781,15 +1864,21 @@ export class CombatSystem {
   // VX Ace's buff effects of an item / skill on a battler: 31 a buff, 32 a debuff (by its debuff rate - times chance,
   // as the player's states are), 33 / 34 a buff / a debuff taken away; turn: the seconds a turn lasts for it. Whether
   // the item / skill had any
-  applyBuffEffects(b, obj, turn, chance = 1) {
+  applyBuffEffects(b, obj, turn, chance = 1, user = b) {
     let any = false;
     for (const ef of obj?.effects || []) {
       if (ef.code === 31) { b.addBuff(ef.data_id, ef.value1 * turn); any = true; }
-      else if (ef.code === 32) { if (Math.random() < b.debuffRate(ef.data_id) * chance) b.addDebuff(ef.data_id, ef.value1 * turn); any = true; }
+      else if (ef.code === 32) { if (Math.random() < this.debuffEffectChance(user, b, obj, ef.data_id, chance)) b.addDebuff(ef.data_id, ef.value1 * turn); any = true; }
       else if (ef.code === 33) { if (b.buffs[ef.data_id] > 0) b.removeBuff(ef.data_id); any = true; }
       else if (ef.code === 34) { if (b.buffs[ef.data_id] < 0) b.removeBuff(ef.data_id); any = true; }
     }
     return any;
+  }
+  debuffEffectChance(user, target, obj, id, base = 1) {
+    const note = obj?.note || '', forced = /<強制付与>/.test(note);
+    const rate = forced || /<有効度無視弱体付与>/.test(note) ? 1 : target.debuffRate(id);
+    const luck = forced || /<運無視弱体付与>/.test(note) ? 1 : Math.max(0, 1 + ((user?.luk ?? 0) - (target.luk ?? 0)) * 0.001);
+    return THREE.MathUtils.clamp(base * rate * luck, 0, 1);
   }
   // the player at 0 HP falls (the fight lost) - unless a state keeps them up (진혼가, 불사신: the death state resisted -
   // they stay at 0 HP until it ends), or something brings them back at once in a fight (自動蘇生, script 171)
@@ -1952,18 +2041,18 @@ export class CombatSystem {
   }
   // the blow that lands with a weapon art on: that skill, paid for now (with too little MP left by then: a
   // plain blow, and the art is gone)
-  takeArmedSkill(actor) {
+  takeArmedSkill(actor, battle = null) {
     const s = this.skillArm?.skill;
     if (!s || !actor) return null;
     this.skillArm = null;
-    if (!actor.skillCostPayable(s) || actor.skillSealed(s.id)) {
+    if (!actor.skillCostPayable(s) || actor.skillSealed(s.id) || !actor.skillTypeUsable(s)) {
       G.ui.toast(`${stripEscapes(s.name)}: ${this.costShort(actor, s)}`, s.icon_index);
       G.audio?.playSystemSe(3);
       return null;
     }
     this.actorPays(actor, s);
     this.skillCD[s.id] = G.time + this.coolSeconds(s);
-    this.actorUserEffect(s);
+    this.actorUserEffect(s, battle);
     return s;
   }
   // skills used from the menu (heals, buffs, common events)
@@ -1974,6 +2063,7 @@ export class CombatSystem {
     skill = this.skillByState(actor, skill);
     const ok = actor.skillCostPayable(skill) && !actor.skillSealed(skill.id) && actor.skillTypeUsable(skill) && this.skillCooling(skill) <= 0;
     if (!ok || (skill.scope >= 1 && skill.scope <= 6) || skill.occasion === 1 || skill.occasion === 3) { G.audio?.playSystemSe(3); return false; }
+    if ((skill.scope === 9 || skill.scope === 10) && !this.actorSupportTargets(skill).length) { G.audio?.playSystemSe(3); return false; }
     this.actorPays(actor, skill);
     this.skillCD[skill.id] = G.time + this.coolSeconds(skill);
     this.stageCool(skill);
@@ -1986,13 +2076,16 @@ export class CombatSystem {
     const t = obj.damage?.type || 0;
     return t === 3 || t === 4 || (obj.effects || []).some(e => e.code === 11 || e.code === 12);
   }
-  payUsable(obj, kind) {
-    if (kind === 'item') { if (obj.consumable) G.state.party.gainItem('item', obj.id, -1); }
+  payUsable(obj, kind, battle = null) {
+    if (kind === 'item') {
+      if (obj.consumable) G.state.party.gainItem('item', obj.id, -1);
+      if (obj.scope >= 1 && obj.scope <= 6) this.itemGlobalEffects(obj, battle);
+    }
     else {
       this.actorPays(G.state.party.leader(), obj);
       this.skillCD[obj.id] = G.time + this.coolSeconds(obj);
       this.stageCool(obj);
-      this.actorUserEffect(obj);
+      this.actorUserEffect(obj, battle);
     }
   }
   // a skill of mine paid for: MP, TP and the HP it costs (script 128 - shown as it goes, like a blow taken)
@@ -2008,9 +2101,10 @@ export class CombatSystem {
   }
   // a skill of mine with <使用者効果 n> (script 113): skill n's effects on me as well, once the skill has done its
   // work (the next cut's mark of 삼단 베기, a bullet loaded, a guard)
-  actorUserEffect(s) {
+  actorUserEffect(s, battle = null) {
+    if (s.scope >= 1 && s.scope <= 6) this.itemGlobalEffects(s, battle);
     const self = this.userEffectSkill(s);
-    if (self) this.later(60, () => { if (!this.playerDead) this.applyUsableToActor(self, 'self'); });
+    if (self) this.later(60, () => { if (!this.playerDead) this.applyUsableToActor(self, 'self', { battle }); });
   }
   performUsable(obj, kind) {
     const scope = obj.scope || 0;
@@ -2020,14 +2114,14 @@ export class CombatSystem {
     if (scope >= 1 && scope <= 6) {
       const targets = this.pickTargets(obj, kind);
       if (!targets.length) { G.ui.toast(tr('{name}: 대상이 없습니다', { name }), obj.icon_index); G.audio?.playSystemSe(3); return false; }
-      this.payUsable(obj, kind);
+      this.payUsable(obj, kind, targets[0]?.battle);
       const from = this.castOrigin();
       // thrown items and magic fly to the target; physical / sure-hit skills land at once
       const flies = kind === 'item' || obj.hit_type === 2;
       targets.forEach((e, i) => {
         if (flies) this.later(i * 140, () => { if (e.alive) this.launchUsable(obj, kind, from, e); });
         else {
-          this.applyUsableToEnemy(e, obj, from);
+          for (let r = 0; r < usableRepeats(obj); r++) this.later(r * 120, () => { if (e.alive) this.applyUsableToEnemy(e, obj, from); });
           const wp = e.worldPos(new THREE.Vector3()); wp.y += e.h * 0.5;
           if (obj.animation_id > 0) G.screen.playAnimationOn(wp, obj.animation_id, { rate: 3, height: e.h });
           else G.audio?.playSe(G.seAt('Slash1', 90, 100), wp);
@@ -2038,7 +2132,8 @@ export class CombatSystem {
       G.input.haptic('left', 0.5, 60);
       return true;
     }
-    // the player (and the party, which is just the player here)
+    // Friendly revival chooses a dead battle member before spending anything.
+    if ((scope === 9 || scope === 10) && !this.actorSupportTargets(obj).length) { G.audio?.playSystemSe(3); return false; }
     const how = kind === 'item' && this.handUse(obj);
     if (how) return this.holdConsumable(obj, how);
     if (kind === 'item' && this.isDrink(obj)) {
@@ -2515,13 +2610,16 @@ export class CombatSystem {
       const hpShort = actor.mp >= actor.skillMpCost(obj) && actor.tp >= (obj.tp_cost || 0);
       G.ui.toast(hpShort ? tr('{name}: HP가 부족합니다', { name }) : tr('{name}: MP가 부족합니다', { name }), obj.icon_index); this.cancelReady(); return;
     }
+    if (kind === 'skill' && (actor.skillSealed(obj.id) || !actor.skillTypeUsable(obj) || this.skillCooling(obj) > 0)) {
+      G.audio?.playSystemSe(3); this.cancelReady(); return;
+    }
     if (!G.vr) this.deskActUntil = G.time + DESK_ACT / playerRecoveryRate(actor); // recovery only; costs and skill turn cooldowns stay unchanged
     const aim = r.aim || this.readyAim();
     const from = new THREE.Vector3(); r.fx.getWorldPosition(from);
     // throwing knives stay in the hand - one throw per pull, no waiting - until they run out or X puts them away
     const knife = kind === 'item' && this.isKnife(obj);
     if (!knife) this.cancelReady();
-    this.payUsable(obj, kind);
+    this.payUsable(obj, kind, aim.enemy?.battle);
     if (kind === 'skill') this.playerFollowUp(obj, aim.enemy || null, from);
     if (knife && G.state.party.itemCount('item', obj.id) <= 0) this.cancelReady();
     G.input.haptic('right', 0.8, 70);
@@ -2542,7 +2640,7 @@ export class CombatSystem {
       this.spawnProjectile(from, to.clone().sub(from), { ...opts, aoe: 2.5, dest: to, mesh: kind === 'item' ? this.iconSprite(obj.icon_index) : null, color: this.skillColor(obj) });
       return;
     }
-    const n = { 3: 1, 4: 2, 5: 3, 6: 4 }[obj.scope] || 1;
+    const n = randomTargetCount(obj.scope);
     for (let k = 0; k < n; k++) {
       this.later(k * 130, () => {
         const dir = aim.dir.clone();
@@ -2596,13 +2694,13 @@ export class CombatSystem {
     const pt = (G.coop?.pvpTargets?.() || []).find(c => Math.hypot(c.x - at.x, c.z - at.z) - c.r < THROWN_SPLASH);
     if (pt) this.strikePlayerWith(pt, p.usable);
     if (!best) return;
-    const n = Math.max(1, Math.min(5, p.usable.repeats || 1));
+    const n = usableRepeats(p.usable);
     for (let r = 0; r < n; r++) this.later(r * 120, () => { if (best.alive) this.applyUsableToEnemy(best, p.usable, at); });
   }
   // an area spell / thrown item bursting at a spot: everything within the radius takes it
   burstUsable(obj, at, radius) {
     this.burstFx(this.skillColor(obj), obj.animation_id, at, radius);
-    const n = Math.max(1, Math.min(5, obj.repeats || 1));
+    const n = usableRepeats(obj);
     for (const e of this.allTargets()) {
       const wp = e.worldPos(tmpB);
       if (Math.hypot(wp.x - at.x, wp.z - at.z) > radius + e.hr * T) continue;
@@ -2669,7 +2767,7 @@ export class CombatSystem {
     const front = cands.filter(c => c.ang < 0.6).sort((a, b) => (a.ang * 4 + a.d * 0.08) - (b.ang * 4 + b.d * 0.08));
     if (!front.length) return [];
     if (obj.scope === 1) return [front[0].e];
-    const n = { 3: 1, 4: 2, 5: 3, 6: 4 }[obj.scope] || 1;
+    const n = randomTargetCount(obj.scope);
     const pool = front.slice(0, 4).map(c => c.e);
     return Array.from({ length: n }, () => pool[Math.floor(Math.random() * pool.length)]);
   }
@@ -2712,6 +2810,7 @@ export class CombatSystem {
     if (!this.certainHit(actor, obj) && e.b.certainty(1, obj.hit_type ?? 1)) { this.missOn(e, obj); return -1; }
     // a spell turned back (magic reflection - an enemy chanting, 영창): it lands on the one who cast it
     if (canReflect && !by && obj.hit_type === 2 && e.b.mrf > Math.random()) { this.reflectOntoPlayer(e, obj); return -1; }
+    if (obj.__class === 'RPG::Skill' && e.b.skillCanceled(obj.id)) { G.audio?.playSystemSe(3); return -1; }
     if (!this.hitLands(actor, obj)) { this.missOn(e, obj); return -1; }
     // slipped in a stance that answers it (리포스트, script 191): nothing lands
     const slip = this.slipsWithAnswer(e.b, obj, actor);
@@ -2730,9 +2829,7 @@ export class CombatSystem {
       e.flash = 0.18; if (e.bar) e.bar.visible = true; e.drawBar();
       const mp = type === 2 || type === 6;
       this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.75, p.z), mp ? `MP -${dmg}` : String(dmg), dmg <= 0 ? '#9a9a9a' : mp ? '#80b0ff' : weak ? '#ff3a3a' : color || (crit ? '#ffd040' : '#ffffff'));
-      const converted = result.hpDamage > 0 ? this.convertDrain(actor, obj, result.hpDamage) : 0;
-      if (converted > 0 && actor) actor.hp = Math.min(actor.mhp, actor.hp + converted);
-      const heal = result.hpDrain + converted;
+      const heal = result.hpDrain;
       if (heal > 0 && actor) {
         if (by) this.allies.healActor(by, heal); else this.popupAtPlayer(`+${heal}`, '#60ff80');
       }
@@ -2745,7 +2842,7 @@ export class CombatSystem {
     }
     for (const ef of obj.effects || []) {
       if (ef.code === 11) {                              // HP by a share of max HP (negative: a cut), by its recovery rate
-        const v = Math.floor((e.b.mhp * ef.value1 + ef.value2) * e.b.rec);
+        const v = e.b.healAmount(Math.floor((e.b.mhp * ef.value1 + ef.value2) * e.b.rec * (obj.__class === 'RPG::Item' ? actor.pha : 1)));
         if (v < 0) {
           e.b.hp = Math.max(0, e.b.hp + v);
           e.flash = 0.18; if (e.bar) e.bar.visible = true; e.drawBar();
@@ -2765,19 +2862,23 @@ export class CombatSystem {
           continue;
         }
         if (Math.random() < this.stateEffectChance(actor, e.b, obj, id, ef.value1)) this.addEnemyState(e, id);
-      } else if (ef.code === 22) {
+      } else if (ef.code === 22 && this.removalLands(ef)) {
         e.b.removeState(ef.data_id);
         if (e.stateTimers) delete e.stateTimers[ef.data_id];
       } else if (ef.code === 12) {                       // MP by a share (a minus: taken away)
-        const v = Math.floor((e.b.mmp * ef.value1 + ef.value2) * e.b.rec);
+        const v = e.b.healAmount(Math.floor((e.b.mmp * ef.value1 + ef.value2) * e.b.rec * (obj.__class === 'RPG::Item' ? actor.pha : 1)), 1);
         e.b.mp = Math.max(0, Math.min(e.b.mmp, e.b.mp + v));
-      } else if (ef.code === 44) this.fightCommonEvent(ef.data_id, e.battle);
+      }
     }
     // buffs / debuffs (a curse on its weapon, its legs shot): a cold glow as it goes down, a warm one up
     const before = e.b.buffs.reduce((a, v) => a + v, 0);
-    if (this.applyBuffEffects(e.b, obj, ENEMY_TURN)) {
+    if (this.applyBuffEffects(e.b, obj, ENEMY_TURN, 1, actor)) {
       const after = e.b.buffs.reduce((a, v) => a + v, 0);
       if (after !== before) this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.5, p.z), { color: after < before ? 0x5878ff : 0xff7848, size: e.h * 0.9, life: 0.5, grow: 1.3 });
+    }
+    const userGain = this.userResourceEffects(actor, obj, type === 1 || type === 5 ? dmg : 0);
+    if (userGain.hpGain > 0) {
+      if (by) this.allies.healActor(by, userGain.hpGain); else this.popupAtPlayer(`+${userGain.hpGain}`, '#60ff80');
     }
     this.checkEnemyDeath(e);
     return dmg;
@@ -2800,6 +2901,7 @@ export class CombatSystem {
     const luck = forced || /<運無視ステート付与>/.test(note) ? 1 : Math.max(0, 1 + ((user?.luk ?? 0) - (target.luk ?? 0)) * 0.001);
     return THREE.MathUtils.clamp(base * rate * luck, 0, 1);
   }
+  removalLands(effect) { return effect.value1 >= 1 || effect.value1 > 0 && Math.random() < effect.value1; }
   missOn(e, obj) {
     const p = e.worldPos(new THREE.Vector3());
     G.audio?.playSystemSe(obj?.hit_type === 2 ? 19 : 18);
@@ -2817,21 +2919,14 @@ export class CombatSystem {
     G.audio?.playSystemSe(20);
     this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), { color: 0xc8f0ff, size: e.h * 0.9, life: 0.35, grow: 1.5 });
     if (!actor || this.playerDead) return;
-    const t = obj.damage?.type || 0;
-    const result = this.applyResourceDamage(actor, actor, obj, [1, 2, 5, 6].includes(t) ? this.computeDamage(actor, actor, obj) : 0);
-    const dmg = result.hpDamage || result.mpDamage;
-    if (dmg > 0) {
+    const hp = actor.hp, mp = actor.mp;
+    // VX Ace SP1 marks a reflected caster as an opponent of itself. Preserve
+    // susceptibility/LUK while sharing the complete, non-recursive effect path.
+    this.applyUsableToActor(obj, 'reflection', { target: actor, user: actor, global: false, repeats: false, battle: e.battle, opposed: true });
+    if (actor.hp < hp || actor.mp < mp) {
       G.screen.hurtFlash(1);
       G.input.haptic('left', 0.8, 90); G.input.haptic('right', 0.8, 90);
-      this.popupAtPlayer(`${result.mpDamage ? 'MP ' : ''}-${dmg}`, result.mpDamage ? '#80b0ff' : '#ffb0b0');
     }
-    for (const ef of obj.effects || []) {
-      if (ef.code === 21 && ef.data_id === 1) {
-        if (Math.random() < this.stateEffectChance(actor, actor, obj, 1, ef.value1)) actor.addState(1);
-      } else if (ef.code === 21 && ef.data_id > 1 && !actor.stateResist(ef.data_id) && Math.random() < ef.value1 * actor.stateRate(ef.data_id)) { actor.addState(ef.data_id); this.timeActorState(ef.data_id); }
-    }
-    this.applyBuffEffects(actor, obj, TURN_SECONDS);
-    if (actor.hp <= 0) this.playerFalls(e.battle);
   }
   // an enemy's spell turned back by the player (magic reflection - 거울의 대방패): it lands on that enemy
   reflectOntoEnemy(e, skill) {
@@ -2839,21 +2934,13 @@ export class CombatSystem {
     G.audio?.playSystemSe(20);
     this.spawnGlow(head.clone().add(new THREE.Vector3(0, -0.3, 0)), { color: 0xc8f0ff, size: 0.8, life: 0.35, grow: 1.6 });
     if (!e?.alive) return;
-    const p = e.worldPos(new THREE.Vector3());
-    const t = skill.damage?.type || 0;
-    const result = this.applyResourceDamage(e.b, e.b, skill, [1, 2, 5, 6].includes(t) ? this.computeDamage(e.b, e.b, skill) : 0);
-    const dmg = result.hpDamage || result.mpDamage;
+    const p = e.worldPos(new THREE.Vector3()), hp = e.b.hp, mp = e.b.mp;
+    this.applySkillOn(e, { ...skill, repeats: 1 }, e.b, { opposed: true });
+    const hpLoss = Math.max(0, hp - e.b.hp), mpLoss = Math.max(0, mp - e.b.mp), dmg = hpLoss || mpLoss;
     if (dmg > 0) {
       e.flash = 0.18; if (e.bar) e.bar.visible = true; e.drawBar();
-      this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.75, p.z), result.mpDamage ? `MP -${dmg}` : String(dmg), '#c8f0ff');
+      this.popup(new THREE.Vector3(p.x, p.y + e.h * 0.75, p.z), mpLoss && !hpLoss ? `MP -${dmg}` : String(dmg), '#c8f0ff');
     }
-    for (const ef of skill.effects || []) {
-      if (ef.code === 21 && ef.data_id === 1) {
-        if (Math.random() < this.stateEffectChance(e.b, e.b, skill, 1, ef.value1)) e.b.hp = 0;
-      } else if (ef.code === 21 && ef.data_id > 1 && !e.b.stateResist(ef.data_id) && Math.random() < ef.value1 * e.b.stateRate(ef.data_id)) this.addEnemyState(e, ef.data_id);
-    }
-    this.applyBuffEffects(e.b, skill, ENEMY_TURN);
-    this.checkEnemyDeath(e);
   }
   // a common event a skill that strikes calls (effect 44) runs at once beside the fight, as VX Ace runs it in the
   // battle - 비전・귀섬 calls 最期の太刀, and 귀신 무사's last stand ends in 할복 (once a use, however many it hits)
@@ -2861,13 +2948,21 @@ export class CombatSystem {
     if (G.coop?.phantom) return;                   // (another player's world: its events are run there)
     const list = commonEventList(id);
     if (!list) return;
-    if (this.ceAt?.[id] !== undefined && G.time - this.ceAt[id] < 0.3) return;
-    (this.ceAt ||= {})[id] = G.time;
     const it = new Interpreter(1);
     it.troop = true;
     it.battleOwner = battle;
     it.setup(list, 0);
     this.sideInterps.push(it);
+  }
+  // Common events belong to an action, not an individual target or repeat.
+  // Map consumables retain their reserved map interpreter; combat has its own
+  // battle-owned interpreter even when every target evades the action.
+  itemGlobalEffects(obj, battle = null) {
+    const owner = battle || this.battles?.find(b => !b.done && b.enemies?.some(e => e.alive));
+    for (const ef of obj?.effects || []) if (ef.code === 44) {
+      if (owner) this.fightCommonEvent(ef.data_id, owner);
+      else G.map?.reserveCommonEvent?.(ef.data_id);
+    }
   }
   // 変換攻撃 (script 199): <変換攻撃判定:chance> on the skill, then <HP変換攻撃:percent,chance> on it or on
   // the attacker's equipment / states turns that share of the damage dealt into HP (the youtou's drain)
@@ -2883,6 +2978,15 @@ export class CombatSystem {
       if (parseFloat(b) > Math.floor(Math.random() * 100)) pct += parseFloat(a) || 0;
     }
     return Math.floor(dmg * pct / 100);
+  }
+  userResourceEffects(user, obj, hpDamage = 0) {
+    if (!user) return { hpGain: 0, tpGain: 0 };
+    const beforeHp = user.hp, beforeTp = user.tp || 0;
+    const converted = this.convertDrain(user, obj, hpDamage);
+    if (converted > 0) user.hp = Math.min(user.mhp, user.hp + converted);
+    const tp = Math.trunc((Number(obj.tp_gain) || 0) * (user.tcr ?? 1));
+    if (tp) user.tp = THREE.MathUtils.clamp(beforeTp + tp, 0, 100);
+    return { hpGain: user.hp - beforeHp, tpGain: (user.tp || 0) - beforeTp };
   }
   // VX Ace: at 0 HP an enemy gets the death state unless it resists it (불사신 and other gimmicks); then
   // it stays standing at 0 HP until the gimmick takes the resistance away
@@ -3087,7 +3191,7 @@ export class CombatSystem {
   // damage can still display its overkill value. Drains bypass recovery rules.
   applyResourceDamage(user, target, skill, value) {
     const type = skill?.damage?.type || 0, amount = Math.max(0, Math.round(Number(value) || 0));
-    const hpDamage = type === 1 || type === 5 ? amount : 0;
+    const hpDamage = type === 1 || type === 5 ? this.gutsDamage(target, amount) : 0;
     const mpDamage = type === 2 || type === 6 ? Math.min(Math.max(0, target.mp), amount) : 0;
     const hpDrain = type === 5 ? Math.min(Math.max(0, target.hp), hpDamage) : 0;
     const mpDrain = type === 6 ? mpDamage : 0;
@@ -3096,6 +3200,14 @@ export class CombatSystem {
     if (user && hpDrain > 0) user.hp = Math.min(user.mhp, user.hp + hpDrain);
     if (user && mpDrain > 0) user.mp = Math.min(user.mmp, user.mp + mpDrain);
     return { hpDamage, mpDamage, hpDrain, mpDrain };
+  }
+  gutsDamage(target, damage) {
+    const config = G.scripts?.guts;
+    if (!config || !target.isState(config.stateId) || damage < target.hp || target.hp <= 0) return damage;
+    const limit = config.limitPercent ? target.mhp * config.limit / 100 : config.limit;
+    const floor = config.hpPercent ? Math.trunc(target.mhp * config.hp / 100) : Math.trunc(config.hp);
+    if (damage > limit || config.canDieAtOne && target.hp <= floor) return damage;
+    return Math.max(0, target.hp - floor);
   }
   computeDamage(attacker, target, skill, mult = 1) {
     if (!skill?.damage || skill.damage.type === 0) return 0;
@@ -3111,8 +3223,16 @@ export class CombatSystem {
     const variance = skill.damage.variance || 0;
     const amp = Math.floor(Math.max(Math.abs(v) * variance / 100, 0));
     v += Math.floor(Math.random() * (amp + 1)) + Math.floor(Math.random() * (amp + 1)) - amp;
-    v = Math.round(v * mult);
+    v *= mult;
+    // Original Guard is a battler trait, so spells, weapon arts, reflected hits
+    // and companion attacks all use it. Recovery formulas are never guarded.
+    if (v > 0 && [1, 2, 5, 6].includes(skill.damage.type) && this.nativeGuarded(target) && !this.ignoresGuard(attacker, skill)) v /= 2 * target.grd;
+    v = Math.round(v);
     return Math.max(0, v);
+  }
+  nativeGuarded(target) {
+    return !!target && !target.dead && !!target.featuresSet?.(62).includes(1)
+      && !(target.states || []).some(id => ($data.states[id]?.restriction || 0) >= 4);
   }
   // Script 193 combines the attacker's penetration traits with this skill's
   // bonus. The game also uses the trait spelling on skills, so accept it there
@@ -3151,11 +3271,13 @@ export class CombatSystem {
   }
   // hits per blow: the skill's repeats (+ attack-count features) times its random-target count
   attackHits(skill, actor) {
-    const repeats = Number(skill.repeats), extra = Number(actor?.featuresSum(34));
-    const n = Math.max(1, Number.isFinite(repeats) ? Math.trunc(repeats) : 1) + Math.max(0, Number.isFinite(extra) ? Math.trunc(extra) : 0);
+    const extra = Number(actor?.featuresSum(34));
+    // Original Game_Action expands a normal single-target attack's target list
+    // by 1 + attack-count traits, then Scene_Battle repeats each target hit.
+    const targets = skill.scope === 1 ? 1 + Math.max(0, Number.isFinite(extra) ? Math.trunc(extra) : 0) : randomTargetCount(skill.scope);
     // Original upgraded machine guns reach twelve hits. Keep valid counts while
     // bounding a malformed database value before it can enqueue a huge volley.
-    return THREE.MathUtils.clamp(n * ({ 3: 1, 4: 2, 5: 3, 6: 4 }[skill.scope] || 1), 1, 64);
+    return THREE.MathUtils.clamp(usableRepeats(skill) * targets, 1, 64);
   }
   criticalLands(target, skill) {
     if (skill.damage?.critical === false) return false;
@@ -3170,7 +3292,7 @@ export class CombatSystem {
     const actor = G.state.party.leader();
     // a weapon art on the weapon (red): this blow is that skill - its formula, hits, element and animation -
     // at least at full strength, and not weakened by flailing
-    const art = this.takeArmedSkill(actor);
+    const art = this.takeArmedSkill(actor, e.battle);
     const skill = art || this.skillByState(actor, this.playerAttackSkill(actor));
     let mult = (art ? Math.max(1, power) : power) * this.buffMult();
     // a charged blow hits up to twice as hard; a hard or charged blow on a broken enemy is the big attack
@@ -3183,7 +3305,7 @@ export class CombatSystem {
     let weak = false;
     if (melee && !art) { const r = this.rushMult(); if (r < 1) { mult *= r; weak = true; } }
     if (e.state === 'idle' || (e.alertTime > 0 && e.state === 'chase' && !e.battle)) mult *= 2;     // (a backstab)
-    if (e.state === 'guard' && !this.ignoresGuard(actor, skill)) mult *= 0.3;
+    if (e.state === 'guard' && !this.nativeGuarded(e.b) && !this.ignoresGuard(actor, skill)) mult *= 0.3;
     if (crit && !this.criticalLands(e.b, skill)) crit = false;
     if (crit) mult *= 2;
     const p = e.worldPos(new THREE.Vector3());
@@ -3229,7 +3351,7 @@ export class CombatSystem {
   afterPlayerAction(s, e, from, art) {
     if (this.lastAct?.s === s && G.time - this.lastAct.t < 0.12) return;
     this.lastAct = { s, t: G.time };
-    if (!art) this.actorUserEffect(s);
+    if (!art) this.actorUserEffect(s, e?.battle);
     this.playerFollowUp(s, e, from);
   }
   // a skill of mine that goes on with another (script 189 使用後追加行動 - 거룩한 총검's cut or thrust and then its gun
@@ -3244,7 +3366,7 @@ export class CombatSystem {
       const next = a.id > 0 ? this.skillByState(actor, $data.skills[a.id]) : null;
       if (!next) continue;
       this.later(320, () => {
-        if (this.playerDead || !actor.skillCostPayable(next) || actor.skillSealed(next.id) || this.skillCooling(next) > 0) return;
+        if (this.playerDead || !actor.skillCostPayable(next) || actor.skillSealed(next.id) || !actor.skillTypeUsable(next) || this.skillCooling(next) > 0) return;
         let targets = [];
         if (next.scope >= 1 && next.scope <= 6) {
           const head = G.player.headWorld(new THREE.Vector3()), op = new THREE.Vector3();
@@ -3255,7 +3377,7 @@ export class CombatSystem {
         this.actorPays(actor, next);
         this.skillCD[next.id] = G.time + this.coolSeconds(next);
         const at = from || this.castOrigin();
-        const gun = this.skillLook(next) === 'gun', reps = THREE.MathUtils.clamp(next.repeats || 1, 1, 8);
+        const gun = this.skillLook(next) === 'gun', reps = usableRepeats(next);
         for (const t of targets) {
           const wp = t.worldPos(new THREE.Vector3()); wp.y += t.h * 0.5;
           if (next.animation_id > 0) { G.screen.playAnimationOn(wp, next.animation_id, { rate: 3, height: t.h }); G.coop?.shareAnim?.(wp, next.animation_id, t.h); }
@@ -3269,7 +3391,7 @@ export class CombatSystem {
           });
         }
         if (!targets.length) this.applyUsableToActor(next, 'self');
-        this.actorUserEffect(next);
+        this.actorUserEffect(next, targets[0]?.battle || e?.battle);
         this.playerFollowUp(next, targets[0] || e, from, depth + 1);
       });
       return;
@@ -3512,6 +3634,9 @@ export class CombatSystem {
     const counter = e && this.playerCounterSkill(e, skill, actor);
     // a spell turned back (magic reflection: 거울의 대방패)
     if (!counter && e && skill?.hit_type === 2 && actor.mrf > Math.random()) { this.reflectOntoEnemy(e, skill); return; }
+    if (skill?.__class === 'RPG::Skill' && actor.skillCanceled(skill.id)) {
+      G.audio?.playSystemSe(3); this.queuePlayerCounter(e, counter); return;
+    }
     if (e && skill && !this.hitLands(e.b, skill)) {
       G.audio?.playSystemSe(17); this.queuePlayerCounter(e, counter); return;
     }
@@ -3558,7 +3683,7 @@ export class CombatSystem {
       this.reportStruck(e, 2);
     } else if (guarded && (shieldHit || blockable)) {
       blocked = true;
-      dmg = Math.round(dmg * (this.hasShield ? 0.25 : 0.5) / Math.max(0.5, actor.grd));      // (방어 효과율)
+      if (!this.nativeGuarded(actor)) dmg = Math.round(dmg * (this.hasShield ? 0.25 : 0.5) / Math.max(0.5, actor.grd));      // (방어 효과율)
       this.stamina = Math.max(0, this.stamina - 0.22); this.staminaDelay = 1;
       this.guardTing(ep);
       this.reportStruck(e, 1);
@@ -3584,6 +3709,14 @@ export class CombatSystem {
     if (e && (result.hpDrain > 0 || result.mpDrain > 0) && this.skillLook(skill) === 'drain') this.drainStream(e, head, skill);
     // the rest of it lands with no damage too (a sleep spell, a curse - the states only came with damage before)
     for (const ef of skill?.effects || []) {
+      if (ef.code === 22 && this.removalLands(ef)) {
+        actor.removeState(ef.data_id);
+        if (G.state.system.stateTimers) delete G.state.system.stateTimers[ef.data_id];
+      } else if (ef.code === 11 && ef.value1 >= 0 && ef.value2 >= 0) {
+        this.healPlayerHp(actor, Math.floor((actor.mhp * ef.value1 + ef.value2) * actor.rec));
+      } else if (ef.code === 12 && ef.value1 >= 0 && ef.value2 >= 0) {
+        this.healPlayerMp(actor, Math.floor((actor.mmp * ef.value1 + ef.value2) * actor.rec));
+      }
       if (ef.code !== 21 || ef.data_id < 0) continue;
       const normal = ef.data_id === 0, ids = normal ? e?.b.atkStates() || [] : [ef.data_id];
       for (const id of ids) {
@@ -3602,7 +3735,9 @@ export class CombatSystem {
         }
       }
     }
-    this.applyBuffEffects(actor, skill, TURN_SECONDS, 0.6);
+    this.applyBuffEffects(actor, skill, TURN_SECONDS, 0.6, e?.b || actor);
+    const gain = this.userResourceEffects(e?.b, skill, hpDamage);
+    if (e && gain.hpGain > 0) e.drawBar();
     if (actor.hp <= 0) this.playerFalls(e?.battle);
     else this.queuePlayerCounter(e, counter);
   }
@@ -4611,7 +4746,7 @@ export class CombatSystem {
     }
     return false;
   }
-  skillHits(skill) { return THREE.MathUtils.clamp((skill.repeats || 1) * ({ 3: 1, 4: 2, 5: 3, 6: 4 }[skill.scope] || 1), 1, 6); }
+  skillHits(skill) { return THREE.MathUtils.clamp(usableRepeats(skill) * randomTargetCount(skill.scope), 1, 64); }
   bossFamily(s) {
     if (s._bossFam !== undefined) return s._bossFam;
     // (흑기사 린다메아's own moves; a leap over the player in a cloak - bossmoves.js)
@@ -4907,7 +5042,7 @@ export class CombatSystem {
     e.move = fam; e.act = null; e.comboStep = 0;
     e.style = this.skillStyle(s);
     e.aim = Math.atan2(dy, dx);
-    if (fam === 'flurry') e.comboLen = THREE.MathUtils.clamp(this.skillHits(s), 2, 5);
+    if (fam === 'flurry') e.comboLen = THREE.MathUtils.clamp(this.skillHits(s), 2, 64);
     e.state = 'windup';
     e.glinted = false;
     e.timer0 = e.timer = this.windupTime(e, s, e.style);
@@ -6371,7 +6506,7 @@ export class CombatSystem {
             if (p.aoe) break;                         // area spells burst below
             if (p.usable) {
               // (a round of a skill's shot is one hit of it, and the skill's animation comes once for all its rounds)
-              const n = p.one ? 1 : Math.max(1, Math.min(5, p.usable.repeats || 1));
+              const n = p.one ? 1 : usableRepeats(p.usable);
               for (let r = 0; r < n; r++) this.later(r * 120, () => this.applyUsableToEnemy(e, p.usable, pos));
               if (p.usable.animation_id > 0 && !p.volley?.shown) G.screen.playAnimationOn(new THREE.Vector3(wp.x, wp.y + e.h * 0.5, wp.z), p.usable.animation_id, { rate: 3, height: e.h });
               if (p.volley) p.volley.shown = true;
@@ -6860,27 +6995,74 @@ export class CombatSystem {
   // of its own that never wears off stays (귀신 무사's 할복, the marks its patterns count) - the 8 turns are for
   // what the player puts on it
   applySkillToSelf(e, skill) {
+    if (skill.scope === 9 || skill.scope === 10) {
+      const dead = e.battle?.enemies.filter(o => !o.escaped && !o.hidden && o.b.hp <= 0) || [];
+      for (const t of skill.scope === 9 ? dead.slice(0, 1) : dead) this.applySkillOn(t, skill, e.b);
+      return;
+    }
     // (one for all its allies - 의욕을 고취시켰다, a boss's war cry: every one of its side in this fight)
     const all = skill.scope === 8 && e.battle ? e.battle.enemies.filter(o => o.alive && !o.hidden) : [e];
-    for (const t of all.includes(e) ? all : [e, ...all]) this.applySkillOn(t, skill);
+    for (const t of all.includes(e) ? all : [e, ...all]) this.applySkillOn(t, skill, e.b);
   }
-  applySkillOn(e, skill) {
-    for (const ef of skill.effects || []) {
-      if (ef.code === 21 && ef.data_id > 0) {
-        if (!e.b.stateResist(ef.data_id) && Math.random() < ef.value1) this.addEnemyState(e, ef.data_id, true, true);
-      } else if (ef.code === 22) {
-        e.b.removeState(ef.data_id);
-        if (e.stateTimers) delete e.stateTimers[ef.data_id];
-        if (e.actionStates) delete e.actionStates[ef.data_id];
-      } else if (ef.code === 11) {
-        const v = e.b.healAmount(Math.floor(e.b.mhp * ef.value1 + ef.value2));
-        if (v) { e.b.hp = Math.max(0, Math.min(e.b.mhp, e.b.hp + v)); e.drawBar(); }
-        if (v < 0) this.checkEnemyDeath(e);
-      } else if (ef.code === 41) this.enemyEscape(e);
-    }
-    if (this.applyBuffEffects(e.b, skill, ENEMY_TURN)) {
-      const p = e.worldPos(new THREE.Vector3());
-      this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.5, p.z), { color: 0xff7848, size: e.h * 0.9, life: 0.5, grow: 1.3 });
+  applySkillOn(e, skill, user = e.b, { opposed = false } = {}) {
+    if (!skill || e.b.skillCanceled?.(skill.id)) return;
+    const revival = !opposed && (skill.scope === 9 || skill.scope === 10);
+    if (revival && (e.b.hp > 0 || e.escaped || e.hidden)) return;
+    const type = skill.damage?.type || 0;
+    const recover = (amount, mp = false) => {
+      const v = e.b.healAmount(amount, mp ? 1 : 0), resource = mp ? 'mp' : 'hp', max = mp ? e.b.mmp : e.b.mhp;
+      e.b[resource] = THREE.MathUtils.clamp(e.b[resource] + v, 0, max);
+      e.drawBar();
+    };
+    for (let r = 0; r < usableRepeats(skill); r++) {
+      if (r && (e.b.hp <= 0 || e.escaped || revival)) break;
+      if (opposed && (!this.hitLands(user, skill)
+        || !this.certainHit(user, skill) && e.b.certainty?.(1, skill.hit_type ?? 1)
+        || this.slipsWithAnswer(e.b, skill, user))) {
+        G.audio?.playSystemSe(skill.hit_type === 2 ? 19 : 18);
+        continue;
+      }
+      let hpDamage = 0;
+      if ([1, 2, 5, 6].includes(type)) {
+        const result = this.applyResourceDamage(user, e.b, skill, this.computeDamage(user, e.b, skill));
+        hpDamage = result.hpDamage;
+        if (result.hpDamage > 0) this.damageRemovesStates(e);
+        e.drawBar();
+      } else if (type === 3 || type === 4) {
+        recover(Math.max(0, Math.floor(this.computeDamage(user, e.b, skill) * (e.b.rec ?? 1))), type === 4);
+      }
+      let buffed = false;
+      for (const ef of skill.effects || []) {
+        if (ef.code === 21) {
+          const ids = ef.data_id === 0 ? user.atkStates() : [ef.data_id];
+          for (const id of ids) {
+            const chance = ef.data_id === 0 ? this.stateEffectChance(user, e.b, skill, id, ef.value1 * user.atkStatesRate(id))
+              : opposed ? this.stateEffectChance(user, e.b, skill, id, ef.value1) : e.b.stateResist(id) ? 0 : ef.value1;
+            if (id > 0 && Math.random() < chance) {
+              if (id === 1) e.b.hp = 0;
+              else this.addEnemyState(e, id, true, true);
+            }
+          }
+        } else if (ef.code === 22 && Math.random() < ef.value1) {
+          e.b.removeState(ef.data_id);
+          if (e.stateTimers) delete e.stateTimers[ef.data_id];
+          if (e.actionStates) delete e.actionStates[ef.data_id];
+        } else if (ef.code === 11 || ef.code === 12) {
+          const mp = ef.code === 12, base = mp ? e.b.mmp : e.b.mhp;
+          const v = Math.trunc((base * ef.value1 + ef.value2) * (e.b.rec ?? 1));
+          if (v > 0) recover(v, mp);
+          else if (v < 0) { const resource = mp ? 'mp' : 'hp'; e.b[resource] = Math.max(0, e.b[resource] + v); e.drawBar(); }
+        } else if (ef.code >= 31 && ef.code <= 34) {
+          if (this.applyBuffEffects(e.b, { ...skill, effects: [ef] }, ENEMY_TURN, 1, user)) buffed = true;
+        } else if (ef.code === 41) this.enemyEscape(e);
+      }
+      this.userResourceEffects?.(user, skill, hpDamage);
+      if (buffed) {
+        const p = e.worldPos(new THREE.Vector3());
+        this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.5, p.z), { color: 0xff7848, size: e.h * 0.9, life: 0.5, grow: 1.3 });
+      }
+      if (revival && e.b.hp > 0 && !e.b.isState(1)) { this.pruneStateTimers(e); this.reviveEnemy(e); }
+      this.checkEnemyDeath(e);
     }
   }
   // VX Ace's escape (a skill's escape effect: 도망친다 - the rabbits, 암흑 물질, 라스, 교활한 원숭이 low on HP, 하얀
@@ -6988,7 +7170,7 @@ export class CombatSystem {
     G.audio?.playSystemSe(skill?.hit_type === 2 ? 19 : 18);
     G.input.haptic('left', 0.25, 40); G.input.haptic('right', 0.25, 40);
     if (!e || G.time - (this.answeredAt ?? -1) < 0.15) return;
-    const ans = answers.find(x => x.p > Math.floor(Math.random() * 100) && $data.skills[x.id] && actor.skillCostPayable($data.skills[x.id]) && !actor.skillSealed($data.skills[x.id].id));
+    const ans = answers.find(x => x.p > Math.floor(Math.random() * 100) && $data.skills[x.id] && actor.skillCostPayable($data.skills[x.id]) && !actor.skillSealed($data.skills[x.id].id) && actor.skillTypeUsable($data.skills[x.id]));
     if (!ans) return;
     this.answeredAt = G.time;
     const s = $data.skills[ans.id];
@@ -7316,7 +7498,7 @@ export class CombatSystem {
     hits.set(t.id, G.time);
     const actor = G.state.party.leader();
     if (!actor) return false;
-    const n = one ? 1 : Math.max(1, Math.min(5, obj.repeats || 1)), mult = this.buffMult(), item = obj.__class === 'RPG::Item';
+    const n = one ? 1 : usableRepeats(obj), mult = this.buffMult(), item = obj.__class === 'RPG::Item';
     for (let r = 0; r < n; r++) this.later(r * 120, () => G.coop?.sendPvp(t.id, obj.id, mult, false, actor, item));
     if (obj.animation_id > 0) G.screen.playAnimationOn(new THREE.Vector3(t.x, t.y + 0.9, t.z), obj.animation_id, { rate: 3, height: t.h });
     G.input.haptic('left', 0.5, 50);
@@ -7463,7 +7645,7 @@ export class CombatSystem {
   // does - its damage, its Break / Hard Break, its animation once; paid and cooling as the skill is (Ⅱ, Ⅲ: 3 turns). Cooling
   // (or unpaid), nothing fires: the original's stab goes on without its shot then
   fireSkillShot(actor, s) {
-    if (this.skillCooling(s) > 0 || !actor.skillCostPayable(s) || actor.skillSealed(s.id)) {
+    if (this.skillCooling(s) > 0 || !actor.skillCostPayable(s) || actor.skillSealed(s.id) || !actor.skillTypeUsable(s)) {
       this.rangedCooldown = 0.25;
       G.audio?.playSystemSe(3);
       G.input.haptic('right', 0.25, 30);
@@ -7471,7 +7653,8 @@ export class CombatSystem {
     }
     this.actorPays(actor, s);
     this.skillCD[s.id] = G.time + this.coolSeconds(s);
-    const n = THREE.MathUtils.clamp((s.repeats || 1) * ({ 4: 2, 5: 3, 6: 4 }[s.scope] || 1), 1, 8);
+    this.actorUserEffect(s);
+    const n = THREE.MathUtils.clamp(usableRepeats(s) * randomTargetCount(s.scope), 1, 64);
     const pace = playerRecoveryRate(actor), tail = (n - 1) * BURST_GAP;
     if (!G.vr) this.deskActUntil = Math.max(this.deskActUntil ?? -Infinity, G.time + DESK_ACT / pace + tail);
     this.rangedCooldown = 0.6 / pace + tail;

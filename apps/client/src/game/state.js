@@ -192,6 +192,14 @@ export class BattlerBase {
     this.clampHpMp();
   }
   clampHpMp() {
+    // VX Ace refresh erases resisted states, including ones applied before an
+    // immunity was equipped or added. Erase directly: removeState revives Death.
+    const resisted = new Set(this.featuresSet(14));
+    this.states = this.states.filter(id => {
+      if (!resisted.has(id)) return true;
+      delete this.stateTurns[id]; delete this.stateSteps[id];
+      return false;
+    });
     this.hp = Math.max(0, Math.min(this.hp, this.mhp));
     this.mp = Math.max(0, Math.min(this.mp, this.mmp));
   }
@@ -483,8 +491,13 @@ export class GameActor extends BattlerBase {
       .map(id => $data.skills[id]).filter(s => s && s.name);
   }
   skillTypeUsable(skill) {
+    if (!this.skillWeaponUsable(skill)) return false;
     if (!skill.stype_id) return true;
     return this.featuresSet(41).includes(skill.stype_id) && !this.featuresSet(42).includes(skill.stype_id);
+  }
+  skillWeaponUsable(skill) {
+    const required = [skill.required_wtype_id1, skill.required_wtype_id2].filter(id => id > 0);
+    return !required.length || this.weapons().some(weapon => required.includes(weapon?.wtype_id));
   }
   skillSealed(id) { return this.featuresSet(44).includes(id); }
   // <アイテム封印> (script 186) on a state, equipment...: no items in a fight (하얀 감옥 영역, 간호사 영역)

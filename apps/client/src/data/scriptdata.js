@@ -108,6 +108,31 @@ function exchangeShop(src) {
   }
   return result;
 }
+// Script 160 keeps a lethal HP hit at the configured floor while its state is
+// active. Read its static settings; the state ID is not an engine constant.
+function gutsSettings(src) {
+  const clean = speakerSource(src);
+  let result;
+  for (const block of clean.matchAll(/^[ \t]*module[ \t]+Nana[ \t]*\n([\s\S]*?)^[ \t]*end\b/gm)) {
+    if (!/\bSTATE_KONJO\b/.test(block[1])) continue;
+    result = null;
+    const lines = block[1].split('\n').map(line => line.trim()).filter(Boolean), settings = new Map();
+    if (lines.some(line => !/^[A-Z]\w*\s*=/.test(line))) continue;
+    for (const line of lines) {
+      const assignment = /^([A-Z]\w*)\s*=\s*(.*?)\s*;?$/.exec(line);
+      if (assignment) settings.set(assignment[1], assignment[2]);
+    }
+    const number = key => /^\d+(?:\.\d+)?$/.test(settings.get(key) || '') ? Number(settings.get(key)) : NaN;
+    const stateId = number('STATE_KONJO'), limit = number('KONJO_DAMAGE'), hp = number('KONJO_HP');
+    const mode = settings.get('KONJO_MODE'), limitPercent = settings.get('KONJO_DAMAGE_PER'), hpPercent = settings.get('KONJO_HP_PER');
+    if (!Number.isSafeInteger(stateId) || stateId <= 0 || !Number.isFinite(limit) || !Number.isFinite(hp)
+      || !['true', 'false'].includes(mode) || !['true', 'false', '0', '1'].includes(limitPercent)
+      || !['true', 'false'].includes(hpPercent)) continue;
+    // The original compares DAMAGE_PER to numeric 1, and HP_PER to true.
+    result = { stateId, limit, limitPercent: limitPercent === '1', hp, hpPercent: hpPercent === 'true', canDieAtOne: mode === 'true' };
+  }
+  return result;
+}
 // the menu's variable window ("メニュー変数": the SEN under its title, shown unless a switch is off)
 function menuVariable(src) {
   const v = /Var_Num\s*=\s*(\d+)/.exec(src);
@@ -284,7 +309,7 @@ export async function loadScriptData() {
 }
 // what the game's scripts set up, from their sections ([name, source] in the game's order)
 export function readScripts(entries) {
-  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null };
+  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null };
   const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
   // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
   // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
@@ -308,6 +333,8 @@ export function readScripts(entries) {
     out.difficulty = difficulty(src) || out.difficulty;
     const exchange = exchangeShop(src);
     if (exchange !== undefined) out.exchangeShop = exchange;
+    const guts = gutsSettings(src);
+    if (guts !== undefined) out.guts = guts;
     for (const k of Object.keys(want)) {
       if (name === want[k]) (byName[k] ||= []).push(src);
       else if (!byContent[k] && holds[k](src)) byContent[k] = src;

@@ -92,10 +92,13 @@ test('ordinary reserved map common events retain map-owned pictures and tones du
   assert.deepEqual(e.pictures, [[picture, null]]); assert.deepEqual(e.tones, [[tone, 0, null]]);
 });
 
-for (const action of ['hit', 'attack', 'boss', 'delayed', 'delayedLift']) test(`${action} effect44 forwards its own battle into the real side-event factory`, t => {
+for (const action of ['global', 'attack', 'boss', 'delayed', 'delayedLift']) test(`${action} effect44 forwards its own battle into the real side-event factory`, t => {
   const e = environment(t), skill = { id: 2, animation_id: 0, effects: [{ code: 44, data_id: 1 }] };
   const enemy = Object.assign(e.owner.enemies[0], { battle: e.owner, skill, plan: {}, puppet: false });
-  if (action === 'hit') e.combat.applyUsableToEnemy(enemy, skill, null);
+  if (action === 'global') {
+    e.combat.itemGlobalEffects(skill, e.owner);
+    for (let i = 0; i < 9; i++) e.combat.applyUsableToEnemy(enemy, skill, null);
+  }
   else if (action === 'attack') e.combat.executeAttack(enemy, 1, 0, 0);
   else if (action === 'boss') e.combat.releaseBossMove(enemy);
   else {

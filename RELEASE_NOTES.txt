@@ -1,10 +1,15 @@
-BLACK SOULS II VR 0.2.28
+BLACK SOULS II VR 0.2.29
 
-White Crow exchange
-- Show the original Candy costs, Candy icon and available balance instead of misleading zero-Souls prices.
-- Require and consume the correct Candy amount for every purchase and quantity.
-- Storage mode uses stored Candy and puts purchases in storage, as in the original game.
-- Check balances again before confirming a purchase. Canceling does not spend anything.
+Weapon and skill effects
+- Restore Grit's survival effect, self-targeted damage, and enemy healing and MP recovery.
+- Restore authored hit counts, including long volleys and weapons combined with extra-attack equipment.
+- Party-wide support skills now reach companions; companion buffs expire correctly.
+- Revival targets fallen allies correctly, including enemy revival and companion automatic revival.
+- Correct companion MP damage, drains, status-only attacks, accuracy, criticals and reflection.
+- Apply custom lifesteal to enemy attacks as well as player attacks.
+- Respect weapon requirements, Dodge seals, state immunity, and original debuff luck rules.
+- Apply Guard consistently to spells and weapon skills without reducing damage twice.
+- Preserve complete reflected effects and dispatch skill common events once per use, even on a miss.
 
 Install the update, then close and reopen the game window to load the changes.
 Your existing saves are retained. The original game is required and is not included.

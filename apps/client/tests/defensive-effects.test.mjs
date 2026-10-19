@@ -28,7 +28,7 @@ function environment(t, features = [], note = '') {
   $data.skills[31] = skill(31, 1, '', '60'); $data.skills[32] = skill(32, 1, '', '80');
   const actor = new Battler(features, note), jobs = [], hits = [];
   const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
-    outOfFight: () => false, heldBoss: () => false, scheduleDelayed() {}, allies: { substitute: () => null },
+    battles: [], outOfFight: () => false, heldBoss: () => false, scheduleDelayed() {}, allies: { substitute: () => null },
     isBlocking: () => false, reportStruck: (_enemy, how) => hits.push(how), skillLook: () => '',
     later: (_ms, callback) => jobs.push(callback), castOrigin: () => new THREE.Vector3(),
     spawnGlow() {}, popup() {}, popupAtPlayer() {}, groggyHit() {},

@@ -1727,3 +1727,106 @@ The public literal runtime comparison now uses commit74121ea (0.2.28):48 origina
 modules retained,17 unchanged after import moves,31 modified,36 new,0 missing;
 2800 added/685 removed lines in modified originals after import normalization.
 The six actual comparison images remain explicitly labelled0.2.25.
+
+
+## Weapon and skill execution audit (0.2.29)
+
+The user requested another complete effect audit after the material-exchange fix.
+Private read-only inventories covered500 weapons,260 armors,999 skills,252
+states,200 actors and70 classes. The note census contains32 categories, including
+non-angle turn-free markers; installed skill effects use10 ordinary effect codes.
+An effect tag's presence in a parser is not evidence its real action path uses it.
+Inspect player, enemy, companion, self/support and reflection routes separately.
+
+All640 damage-bearing skills were evaluated across eight isolated profiles:
+full resources, low caster HP, low target HP, both at1HP, unequal stats, low MP,
+state-dependent branches and scaled variables.5120 raw evaluator calls,5120
+public evalFormula calls and5120 computeDamage calls produced no warnings,
+exceptions, undefined/nonfinite raw values or invalid damage. This establishes
+formula execution for those profiles; it does not prove every effect/event branch
+or a full story/headset playthrough. Original formulas, scripts, databases, saves
+and private numeric reports must stay outside Git and releases.
+
+### Repaired mechanisms
+
+- Script160's Grit rule had no runtime handler. Read moduleNana's literal
+  STATE_KONJO/KONJO_* settings into scripts.guts, without hardcoded state59.
+  Apply the configured lethal-hit floor and threshold in shared resource damage;
+  MODE true allows a later hit to kill at the floor. MP damage, direct Death
+  effects and percentage recovery effects are separate. Preserve drain accounting.
+- Friendly/self skills now execute formula HP/MP damage as well as recovery,
+  all authored repeats, correct caster MAT/recipient REC/item-user PHA and effect
+  array order. Actual skill145 now loses300HP for100MP; skill803 repeats its
+  recovery three times. Enemy formula recovery (e.g.15) and MP effect12 work.
+- Scope8 support reaches the current living battle party, including companions.
+  Ally support delegates to the same effect path; companion buff clocks tick once
+  per actor when game logic runs and remain still while paused.
+- Legitimate7/9-repeat skills were truncated by5/6/8-hit caps. Use bounded
+  usableRepeats and randomTargetCount consistently across thrown items, projectiles,
+  bursts, volleys, follow-ups and enemy attack plans. Valid counts remain intact;
+  malformed counts are bounded64. Native normal single-target attacks multiply
+  item repeats by1+attack-count traits; all/random scopes receive no extra targets
+  from that trait. Machine gun plus the extra-attack ring legitimately reaches14;
+  repeated replacement attacks plus the ring reach6/9. Costs are paid per action.
+- Enemy custom HP conversion now heals its source after a real hit. User TP gain
+  uses TCR per landed target/repeat (309 installed skills have tp_gain; no installed
+  skills cost TP). Misses and perfect guards grant neither. Recovery inversion
+  does not alter native resource drains or direct custom conversion.
+- Debuffs include original user LUK, target susceptibility and script185's
+  ignore-luck/ignore-rate/forced tags. Preserve the port's existing0.6 incoming
+  nonfatal status/debuff factor as an explicit real-time adaptation.
+- Direct PC/VR Dodge respects the original Dodge skill seal. Required weapon
+  types use the original OR rule, including dual wield, and are rechecked when
+  a readied/armed skill fires after equipment changes. Newly granted feature14
+  immunity erases already present states on refresh without recursive removeState
+  calls or accidentally reviving Death at1HP. Feature13 resistance is distinct.
+- Companion hits use shared HP/MP damage/drains and Grit, apply status-only attacks,
+  normal-attack state traits, Death/resistance, buff effects, resource conversion,
+  hit/evasion, CRI/CEV and MRF. Companion timers do not modify leader timers.
+- Native Guard feature62/data1 reduces positive formula damage by2*GRD unless
+  script170's ignore-guard rule succeeds. Do not stack it with the existing manual
+  enemy guard0.3, player shield or companion timed-guard adapters. Healing and
+  independent percentage effects remain outside formula Guard.
+- Reflection delegates complete effects once to the original caster, including
+  hit/evasion, healing reversal, state removal and buffs. Keep battle death-owner
+  identity, auto-revival, resources and no recursive invocation. Script109 SP1
+  changes opposite? while magic_reflection is true: the reflected caster remains
+  opposed for state susceptibility/LUK even though caster and target are the same.
+  Do not incorrectly replace those original checks with friendly-state chances.
+- Common-event effect44 belongs to an action before target hit/evasion, once per
+  use. Move it out of per-hit handlers; many-target/long-repeat misses still run
+  one global event. Separate same-frame uses must not be suppressed by a generic
+  timestamp debounce. Preserve explicit battle ownership and map reservations.
+
+### Verification limits
+
+Use neutral synthetic fixtures for public regressions. Private reproductions use
+installed numeric metadata only and do not access player saves. Native turn order,
+manual gestures, timed recovery, free-turn markers and existing hostile-state
+scaling remain real-time adaptations; do not claim turn-for-turn equivalence.
+The new checks cover identified execution gaps and every database/formula record
+in the bounded audits. They do not establish that every possible equipment,
+resistance, story event and multiplayer combination was manually played.
+
+Target skill cancellation (script196) is evaluated after invocation selection;
+reflection/counter selection precedes item_apply in the original. Cancel the
+recipient's skill effects without refunding action costs or suppressing global
+events. Items with the same numeric ID are unaffected. Actual installed
+cancellation IDs are friendly skills; hostile-path tests establish generic
+source-rule support rather than claiming an installed offensive example.
+
+The final reachability audit found skills33/34 learned by the initial actor's
+class and skill34 in enemy292's actions. Revival scopes9/10 must select dead
+current-party/troop members (first/all), never heal a living caster by default.
+Do not spend player skill costs when there is no eligible recipient. Reuse the
+existing reviveEnemy lifecycle and the same troop entry; rewards are finalized
+once per unique defeated entry at battle end. Scope9/10 selection is separate
+from direct automatic revival, whose source break, immunity and timer handling
+also apply to companions. New logic never edits old player saves retroactively.
+
+Final local verification passed753 JavaScript regressions (105 added for this
+release), ESLint, Ruff, the production build,8 packaging tests and7 Python
+protocol tests. Targeted suites reproduce the repaired paths with synthetic
+records, including real action/Interpreter/companion lifecycle and battle-end
+reward handling. Preserve the audited distinction between passing formula
+profiles, passing mechanic regressions, and unperformed full story/headset runs.
