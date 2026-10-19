@@ -1,15 +1,14 @@
-BLACK SOULS II VR 0.2.35
+BLACK SOULS II VR 0.2.36
 
-Slow connections and stuck VR exits
-- Give a slow headset connection time to finish instead of discarding it after 20 seconds.
-- Keep one connection in progress while cancellation or shutdown is unfinished.
-- Offer Reset VR connection after a stalled startup or exit.
-- Wait for actual closure before allowing another entry; do not reload the game automatically.
-- Keep clearer progress and recovery instructions in all four supported languages.
+VR doors and conversations
+- Keep nearby doors and people usable when right-controller tracking is lost.
+- Use your view direction when the controller has no usable horizontal aim.
+- Talk across original counters without having to turn your head in the same direction.
+- Keep touch doors aligned with controller aim and preserve the original door locks.
 
-If Quest Link itself freezes, restart the headset and Link, and check the
-Meta Link PC app for graphics-driver warnings. A game update cannot repair a
-frozen headset service or change its driver.
+In VR, point toward a nearby door or person and flick the right thumbstick down
+to Examine/Talk. If the controller is not tracked, look toward the target instead.
+The trigger remains the weapon control.
 
 Install the update, then close and reopen the game window to load the changes.
 Your existing saves are retained. The original game is required and is not included.

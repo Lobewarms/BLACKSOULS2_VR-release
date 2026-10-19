@@ -61,8 +61,7 @@ export class Player {
     const f = this.forward2D();
     return new THREE.Vector3(f.x, 0, f.z);
   }
-  facingDir() {
-    const f = this.forward2D();
+  facingDir(f = this.forward2D()) {
     if (Math.abs(f.x) > Math.abs(f.z)) return f.x > 0 ? 6 : 4;
     return f.z > 0 ? 2 : 8;
   }
@@ -407,28 +406,30 @@ export class Player {
   // (a co-op phantom) the action button on an event of the host's world (a boss fight by the rules, a door when the
   // guests go their own way): under the player, or in front of it
   askBossAction() {
-    const pc = G.map.playerChar, d = this.facingDir();
-    const dx = d === 4 ? -1 : d === 6 ? 1 : 0, dy = d === 8 ? -1 : d === 2 ? 1 : 0;
-    const f = this.aimDirection(), best = this.actionCone(f, ev => !ev.net?.hidden);
-    if (G.vr && best) return this.startActionEvent(best.ev);
-    if (G.coop.phantomTouch([...G.map.eventsXy(pc.x, pc.y).filter(ev => ev.triggerIn([0]) && !ev.normalPriority()),
-      ...G.map.eventsXy(pc.x + dx, pc.y + dy).filter(ev => ev.triggerIn([0, 1, 2]) && ev.normalPriority())], 'action')) return true;
-    // (as tryAction: else the nearest action event in front - in 3D a door or a bonfire is seldom faced square on)
-    return best ? this.startActionEvent(best.ev) : false;
+    return this.tryAction();
   }
 
   tryAction() {
     const pc = G.map.playerChar;
-    const d = this.facingDir();
+    const aim = this.interactionAim(), f = aim.direction;
+    const d = G.vr ? this.facingDir(f) : this.facingDir();
     const dx = d === 4 ? -1 : d === 6 ? 1 : 0, dy = d === 8 ? -1 : d === 2 ? 1 : 0;
-    const f = this.aimDirection();
-    let best = G.vr ? this.actionCone(f) : null;
+    let best = G.vr ? this.actionCone(f, undefined, aim.origin) : null;
     if (best) return this.startActionEvent(best.ev);
-    if (G.map.actionAt(pc.x, pc.y, pc.x + dx, pc.y + dy)) return true;
+    if (G.vr || G.coop?.phantom) {
+      // Keep the original underfoot/front/counter order, using the same aim as
+      // the cone. Dispatch through the shared locks and co-op authority checks.
+      const groups = [G.map.eventsXy(pc.x, pc.y).filter(ev => ev.triggerIn([0]) && !ev.normalPriority()),
+        G.map.eventsXy(pc.x + dx, pc.y + dy).filter(ev => ev.triggerIn([0, 1, 2]) && ev.normalPriority())];
+      if (G.map.grid.isCounter(pc.x + dx, pc.y + dy))
+        groups.push(G.map.eventsXy(pc.x + dx * 2, pc.y + dy * 2).filter(ev => ev.triggerIn([0, 1, 2]) && ev.normalPriority()));
+      for (const group of groups) for (const target of group)
+        if (this.actionEventReady(target) && this.startActionEvent(target)) return true;
+    } else if (G.map.actionAt(pc.x, pc.y, pc.x + dx, pc.y + dy)) return true;
     // forgiving cone search for 3D: nearest action event in front
     if (!G.vr) best = this.actionCone(f);
     if (best) return this.startActionEvent(best.ev);
-    if (!best && !G.map.interpreter.running() && G.combat?.allies?.talkTo(f)) return true;
+    if (!best && !G.coop?.phantom && !G.map.interpreter.running() && G.combat?.allies?.talkTo(f)) return true;
     return false;
   }
   // World grabs use the same event and co-op authority path as the action button.
@@ -436,10 +437,7 @@ export class Player {
   startActionEvent(ev) {
     const map = G.map, pc = map?.playerChar;
     if (!pc || !this.canMove() || G.ui?.sceneOpen || G.combat?.gripAdjust || map.interpreter.running()) return false;
-    if (!ev || !map.eventList.includes(ev) || !ev.page || ev.erased || ev.starting || ev.locked || ev.empty()
-      || ![0, 1, 2].includes(ev.trigger) || map.eventList.some(other => other.starting)
-      || G.combat?.hidesEvent?.(ev) || G.arena?.blocksTrigger?.(ev)
-      || G.coop?.phantom && (ev.net?.hidden || ev.net?.gone)) return false;
+    if (!this.actionEventReady(ev) || map.eventList.some(other => other.starting)) return false;
     const position = eventActionPosition(ev, map, pc);
     if (!position) return false;
     // Scripted "move forward" commands must face the chosen visible target.
@@ -449,23 +447,31 @@ export class Player {
     if (!started) pc.direction = previousDirection;
     return !!started;
   }
+  actionEventReady(ev) {
+    return !!ev && G.map.eventList.includes(ev) && !!ev.page && !ev.erased && !ev.starting && !ev.locked && !ev.empty()
+      && [0, 1, 2].includes(ev.trigger) && !G.combat?.hidesEvent?.(ev) && !G.arena?.blocksTrigger?.(ev)
+      && !(G.coop?.phantom && (ev.net?.hidden || ev.net?.gone));
+  }
+  // Only the original cardinal counter tile permits reaching a second cell.
+  // An ordinary wall, floor or a counter off to the side never extends reach.
+  actionAcrossCounter(ev) {
+    const map = G.map, pc = map.playerChar;
+    if (!ev.normalPriority()) return false;
+    const dx = map.nearX(ev.x, pc.x) - pc.x, dy = map.nearY(ev.y, pc.y) - pc.y;
+    return (Math.abs(dx) === 2 && dy === 0 || dx === 0 && Math.abs(dy) === 2)
+      && map.grid.isCounter(pc.x + dx / 2, pc.y + dy / 2);
+  }
   // the action event nearest in front (f: the way the player points), { ev, score } or null
-  actionCone(f, ok = () => true) {
+  actionCone(f, ok = () => true, origin = this.interactionAim().origin) {
     const pc = G.map.playerChar;
-    const ray = G.vr && G.input.controllers.right?.ray;
-    const aim = ray ? ray.getWorldPosition(new THREE.Vector3()) : null;
-    const origin = aim && Number.isFinite(aim.x) && Number.isFinite(aim.z)
-      ? { x: aim.x / T - 0.5, y: aim.z / T - 0.5 } : null;
     let best = null;
     for (const ev of G.map.eventList) {
-      if (ev.trigger !== 0 || !ev.page || ev.empty() || ev.erased || ev.starting || ev.locked
-        || G.combat?.hidesEvent?.(ev) || G.arena?.blocksTrigger?.(ev)
-        || G.coop?.phantom && (ev.net?.hidden || ev.net?.gone) || !ok(ev)) continue;
+      if (ev.trigger !== 0 || !this.actionEventReady(ev) || !ok(ev)) continue;
       const position = eventActionPosition(ev);
       if (!position) continue;
       const ex = position.x - pc.fx, ey = position.y - pc.fy;
       const dist = Math.hypot(ex, ey);
-      const maxD = ev.normalPriority() ? 1.7 : 1.1;
+      const maxD = this.actionAcrossCounter(ev) ? 2.7 : ev.normalPriority() ? 1.7 : 1.1;
       if (dist > maxD) continue;
       // VR points from the hand, which may be beside or past an event underfoot.
       // That event must not beat the object the controller is actually aiming at.
@@ -481,14 +487,27 @@ export class Player {
   }
   // VR: point with the right controller; desktop: view direction
   aimDirection() {
-    const c = G.input.controllers.right;
-    if (G.vr && c) {
-      c.ray.getWorldQuaternion(tmpQ);
-      const f = new THREE.Vector3(0, 0, -1).applyQuaternion(tmpQ);
-      const l = Math.hypot(f.x, f.z) || 1;
-      return { x: f.x / l, z: f.z / l };
+    return this.interactionAim().direction;
+  }
+  interactionAim() {
+    const ray = G.vr && G.input.controllers.right?.ray;
+    if (ray && ray.visible !== false) {
+      const position = ray.getWorldPosition(new THREE.Vector3());
+      const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(ray.getWorldQuaternion(new THREE.Quaternion()));
+      const horizontal = Math.hypot(forward.x, forward.z);
+      // Three hides an untracked target ray but retains its old transform.
+      // Near-vertical pointing also has no useful horizontal world target.
+      if ([position.x, position.y, position.z, forward.x, forward.y, forward.z].every(Number.isFinite) && horizontal >= 0.2) {
+        return { direction: { x: forward.x / horizontal, z: forward.z / horizontal },
+          origin: { x: position.x / T - 0.5, y: position.z / T - 0.5 } };
+      }
     }
-    return this.forward2D();
+    const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(this.camera.getWorldQuaternion(new THREE.Quaternion()));
+    const horizontal = Math.hypot(forward.x, forward.z), d = G.map?.playerChar?.direction;
+    const direction = Number.isFinite(horizontal) && horizontal >= 0.2
+      ? { x: forward.x / horizontal, z: forward.z / horizontal }
+      : { x: d === 4 ? -1 : d === 6 ? 1 : 0, z: d === 2 ? 1 : d === 8 ? -1 : 0 };
+    return { direction, origin: null };
   }
 
   // a way nobody can see (병든 시계탑 3's bridge - mapmesh.js hiddenWay): in 2D the player goes along it a tile at a time and
