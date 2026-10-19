@@ -2472,3 +2472,9 @@ Ruff,8 packaging and7 Python tests. The preceding40 Bonus Action cases and all
 existing combat/UI regressions remain green. The earlier pending0.2.39 source
 checkpoint passed exact-head CI; final publication requires the new combined
 head to pass CI again. No physical-headset playtest is claimed.
+
+
+Combined source comparison: runtime 12f6835bc79e937047d3f3c679409848b19c3f5e (0.2.39),
+48 original modules retained,15 unchanged after import moves,33 modified,
+44 new and0 missing;4,141 added/935 removed lines in modified originals after
+import normalization. Historical screenshot labels/pins remain unchanged.

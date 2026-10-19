@@ -92,13 +92,13 @@ It compares original ZIP entries with the committed fork files, matching moved
 modules by filename. The diff retains actual import-path changes and normalizes
 line endings. It includes new fork runtime modules and is intended for review.
 The current source comparison is version 0.2.39 at commit
-37aa9b4745081ccedb00447f5b860d37024e80aa; the captured image pairs above remain
+12f6835bc79e937047d3f3c679409848b19c3f5e; the captured image pairs above remain
 the labelled version 0.2.25 comparison.
 The complete PR also contains the launcher, build tools, tests and documentation.
 
 Ignoring relative import-path moves and line endings for the summary only:
-48 original modules retained, 15 unchanged, 33 modified, and 43 new fork modules.
-Modified original modules contain 3,974 added and 927 removed lines after those
+48 original modules retained, 15 unchanged, 33 modified, and 44 new fork modules.
+Modified original modules contain 4,141 added and 935 removed lines after those
 import-path moves are normalized.
 
 ## Launcher screenshot supplied by the fork maintainer

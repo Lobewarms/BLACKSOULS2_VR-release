@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: 37aa9b4745081ccedb00447f5b860d37024e80aa (committed source)
+# Fork: 12f6835bc79e937047d3f3c679409848b19c3f5e (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -694,7 +694,18 @@
      this.battles.push(battle);
      G.state.system.battleCount++;
      const members = battle.troop?.members || [];
-@@ -1076,10 +1239,11 @@
+@@ -1070,16 +1233,21 @@
+       let e;
+       if (own?.m === m && sym?.enemy) {
+         e = sym.enemy; sym.enemy = null;
+-        e.battle = battle; e.state = 'chase'; e.alertTime = 0.4;
++        e.battle = battle;
++        // A distant hit may already have killed this field body before its event reaches
++        // Battle Processing. Keep its collapse (including an already finished fade).
++        if (e.alive) e.state = 'chase';
++        e.alertTime = 0.4;
+       } else {
+         const lateral = (k - (sorted.length - 1) / 2) * 1.1;
          let fx = ax + Math.cos(toP + Math.PI / 2) * lateral - Math.cos(toP) * 0.4;
          let fy = ay + Math.sin(toP + Math.PI / 2) * lateral - Math.sin(toP) * 0.4;
          [fx, fy] = resolveCircle(fx, fy, 0.35);
@@ -707,7 +718,7 @@
        if (battle.private) this.makePrivate(e, battle.hallKey);
        battle.enemies.push(e);
        this.enemies.push(e);
-@@ -1184,6 +1348,8 @@
+@@ -1184,6 +1352,8 @@
      if (result === 0 && m.played) G.audio?.playMe(G.state.system.battleEndMe || $data.system.battle_end_me);
    }
    onBattleEnd(battle) {
@@ -716,7 +727,7 @@
      G.player.floatDown?.();                         // (blown up by the wind when it ended: let down gently)
      if (battle.result === 0 && battle.private) G.coop?.hallucinationBeaten?.(battle.hallKey);
      if (battle.result === 0) {
-@@ -1205,7 +1371,7 @@
+@@ -1205,7 +1375,7 @@
          }
        }
        if (gold && party.partyAbility(4)) gold *= 2;
@@ -725,7 +736,7 @@
        if (exp) for (const a of party.members()) a.changeExp(a.currentExp + Math.floor(exp * a.exr));
        G.state.system.winCount++;
        if (battle.event) this.defeated.set(battle.event, G.time);
-@@ -1245,6 +1411,7 @@
+@@ -1245,6 +1415,7 @@
    // the battle a troop event belongs to (several fights can run at once)
    battleOf(interp) {
      const root = interp ? (interp.root || interp) : null;
@@ -733,7 +744,7 @@
      return (root && this.battles.find(x => x.troopInterp === root)) || this.battles.find(x => !x.done);
    }
    enemyCondition(index, sub, stateId, interp) {
-@@ -1319,6 +1486,17 @@
+@@ -1319,6 +1490,17 @@
        if (p.list === interp.list || p.span !== 2 || !c.switch_valid || c.turn_valid || c.enemy_valid || c.actor_valid || c.turn_ending) continue;
        if (!p.list.some(x => x.code === 336 && x.parameters[0] === member)) continue;
        if (G.state.sw(c.switch_id)) G.state.setSw(c.switch_id, false);
@@ -751,7 +762,7 @@
      }
    }
    // Enemy Transform: the new form's picture, and its own moves - none of the old form's left half done
-@@ -1377,9 +1555,10 @@
+@@ -1377,9 +1559,10 @@
      if (this.gripAdjust) return;                     // the items are being moved by hand
      const { weapon: ws, offhand: os } = this.heldSpecs();
      const wtype = ws?.wtype || WTYPE.SWORD;
@@ -763,7 +774,7 @@
      this.wtype = wtype;
      if (this.weapon) this.weapon.parent?.remove(this.weapon);
      if (this.shield) this.shield.parent?.remove(this.shield);
-@@ -1398,17 +1577,14 @@
+@@ -1398,17 +1581,14 @@
        obj.position.fromArray(g.p); obj.quaternion.fromArray(g.q);
        return true;
      };
@@ -784,7 +795,7 @@
        this.weapon.userData.ranged = !!this.shotKind;
      } else {
        // bare hands: nothing to draw (VR shows the hand), the fist is what hits
-@@ -1424,8 +1600,7 @@
+@@ -1424,8 +1604,7 @@
        if (this.shotKind === 'gun') this.addLaser(this.weapon);
      } else {
        G.three.camera.add(this.weapon);
@@ -794,7 +805,7 @@
      }
      this.shield = null;
      this.offGun = null;
-@@ -1435,17 +1610,19 @@
+@@ -1435,17 +1614,19 @@
        if (os.gun) {
          // pistol in the left hand: held like a weapon (cannot guard with it)
          const gunModel = sModel || makeWeaponMesh(WTYPE.GUN);
@@ -817,7 +828,7 @@
          if (G.vr && ctrl.left) {
            // the holder's +Z (shield front) turns to -X = the back of the left hand
            ctrl.left.grip.add(this.shield);
-@@ -1454,8 +1631,7 @@
+@@ -1454,8 +1635,7 @@
            handPose(this.shield, os);
          } else {
            G.three.camera.add(this.shield);
@@ -827,7 +838,7 @@
          }
        }
      }
-@@ -1467,17 +1643,23 @@
+@@ -1467,17 +1647,23 @@
    // (PC: a shield only comes into view while the guard is up - updateDeskShield; held low all the time it hid the
    // status window and part of the view)
    showArms() {
@@ -856,7 +867,7 @@
    }
    // 무장해제 (VR: right stick click, PC: H): the weapon and shield go away with the sound of gear coming off,
    // the bare hands show, and nothing the hands do hits - no swing, Break, shot or weapon art, so no one is cut
-@@ -1487,7 +1669,7 @@
+@@ -1487,7 +1673,7 @@
      this.disarmed = on;
      // what the hands were doing with them ends (a weapon art is paid only when it lands: nothing is lost)
      this.hasPrev = false; this.charge = null; this.deskCharge = null; this.breakArm = null;
@@ -865,7 +876,7 @@
      if (on) this.skillArm = null;
      if (this.breakGlow) this.breakGlow.visible = false;
      this.showArms();
-@@ -1678,44 +1860,126 @@
+@@ -1678,44 +1864,126 @@
      if (used) G.audio?.playSystemSe(22);
      return used;
    }
@@ -1024,7 +1035,7 @@
      return used;
    }
    // a heal on the player, after the recovery rules on them (script 172 - 허약, 천수 영역: nothing, or as much damage)
-@@ -1736,15 +2000,21 @@
+@@ -1736,15 +2004,21 @@
    // VX Ace's buff effects of an item / skill on a battler: 31 a buff, 32 a debuff (by its debuff rate - times chance,
    // as the player's states are), 33 / 34 a buff / a debuff taken away; turn: the seconds a turn lasts for it. Whether
    // the item / skill had any
@@ -1048,7 +1059,7 @@
    }
    // the player at 0 HP falls (the fight lost) - unless a state keeps them up (진혼가, 불사신: the death state resisted -
    // they stay at 0 HP until it ends), or something brings them back at once in a fight (自動蘇生, script 171)
-@@ -1840,7 +2110,27 @@
+@@ -1840,7 +2114,27 @@
    isBreakSkill(obj) {
      return /브레이크|ブレイク|破防|\bbreak/i.test(obj.name || '') && (obj.effects || []).some(e => e.code === 21 && (e.data_id === 7 || e.data_id === 8));
    }
@@ -1077,7 +1088,7 @@
      let obj = entryData(entry);
      const actor = G.state.party.leader();
      if (!obj || !actor || this.playerDead) return false;
-@@ -1854,23 +2144,16 @@
+@@ -1854,23 +2148,16 @@
        if (this.inCombat && actor.itemSealed()) return fail(tr('봉인되어 있습니다'));
        if (G.state.party.itemCount('item', obj.id) <= 0) return fail(tr('남은 것이 없습니다'));
      } else {
@@ -1105,7 +1116,7 @@
        if (this.isBreakSkill(obj)) {
          if (/건 ?브레이크|ガン ?ブレイク|枪械?破防|\bgun ?break/i.test(obj.name || '')) { if ((this.breakCooldown || 0) <= G.time) this.fireGunBreak(obj); return true; }
          this.breakArm = { skill: obj, until: G.time + 3 };          // the next swing that lands within 3 s
-@@ -1879,9 +2162,9 @@
+@@ -1879,9 +2166,9 @@
        }
        // a physical blow on one enemy (일섬, 참수, 삼단 베기...): it goes onto the weapon, which glows red, and
        // comes out with the next blow that lands - MP and cool-down are paid then. X puts it away
@@ -1118,7 +1129,7 @@
    }
    // HP damage on one enemy that is not a spell: RPG Maker's 물리 공격 (일섬, 참수...), or 필중 (sure hit) when it
    // hits by attack power / defence (혈도 찌르기, 거합베기, 월광도, 다리 쏘기, 피의 시련...) or comes with a weapon
-@@ -1907,47 +2190,44 @@
+@@ -1907,47 +2194,44 @@
    }
    // the blow that lands with a weapon art on: that skill, paid for now (with too little MP left by then: a
    // plain blow, and the art is gone)
@@ -1182,7 +1193,7 @@
      }
    }
    // a skill of mine paid for: MP, TP and the HP it costs (script 128 - shown as it goes, like a blow taken)
-@@ -1963,37 +2243,53 @@
+@@ -1963,37 +2247,53 @@
    }
    // a skill of mine with <使用者効果 n> (script 113): skill n's effects on me as well, once the skill has done its
    // work (the next cut's mark of 삼단 베기, a bullet loaded, a guard)
@@ -1246,7 +1257,7 @@
      const how = kind === 'item' && this.handUse(obj);
      if (how) return this.holdConsumable(obj, how);
      if (kind === 'item' && this.isDrink(obj)) {
-@@ -2001,12 +2297,18 @@
+@@ -2001,12 +2301,18 @@
        G.audio?.playSystemSe(22);
        return true;
      }
@@ -1266,7 +1277,7 @@
      return used;
    }
    // ---- a herb bottle / syringe in the right hand (VR) ----------------------------------------
-@@ -2184,7 +2486,7 @@
+@@ -2184,7 +2490,7 @@
      if (!this.weapon || !this.weapon.visible || !this.weapon.parent) return null;
      const base = new THREE.Vector3(), tip = new THREE.Vector3();
      if (!this.weaponSegment(base, tip)) return null;
@@ -1275,7 +1286,7 @@
      return { base, tip };
    }
    // A state an event gives the party during a fight (Change State, 313 - a boss's rules: 그랑・기뇰's 악랄영역 that
-@@ -2470,13 +2772,22 @@
+@@ -2470,13 +2776,22 @@
        const hpShort = actor.mp >= actor.skillMpCost(obj) && actor.tp >= (obj.tp_cost || 0);
        G.ui.toast(hpShort ? tr('{name}: HP가 부족합니다', { name }) : tr('{name}: MP가 부족합니다', { name }), obj.icon_index); this.cancelReady(); return;
      }
@@ -1300,7 +1311,7 @@
      if (kind === 'skill') this.playerFollowUp(obj, aim.enemy || null, from);
      if (knife && G.state.party.itemCount('item', obj.id) <= 0) this.cancelReady();
      G.input.haptic('right', 0.8, 70);
-@@ -2497,7 +2808,7 @@
+@@ -2497,7 +2812,7 @@
        this.spawnProjectile(from, to.clone().sub(from), { ...opts, aoe: 2.5, dest: to, mesh: kind === 'item' ? this.iconSprite(obj.icon_index) : null, color: this.skillColor(obj) });
        return;
      }
@@ -1309,7 +1320,7 @@
      for (let k = 0; k < n; k++) {
        this.later(k * 130, () => {
          const dir = aim.dir.clone();
-@@ -2551,13 +2862,13 @@
+@@ -2551,13 +2866,13 @@
      const pt = (G.coop?.pvpTargets?.() || []).find(c => Math.hypot(c.x - at.x, c.z - at.z) - c.r < THROWN_SPLASH);
      if (pt) this.strikePlayerWith(pt, p.usable);
      if (!best) return;
@@ -1325,7 +1336,7 @@
      for (const e of this.allTargets()) {
        const wp = e.worldPos(tmpB);
        if (Math.hypot(wp.x - at.x, wp.z - at.z) > radius + e.hr * T) continue;
-@@ -2616,15 +2927,17 @@
+@@ -2616,15 +2931,17 @@
        const wp = e.worldPos(new THREE.Vector3());
        const to = new THREE.Vector3(wp.x - head.x, 0, wp.z - head.z);
        const d = to.length();
@@ -1346,7 +1357,7 @@
      const pool = front.slice(0, 4).map(c => c.e);
      return Array.from({ length: n }, () => pool[Math.floor(Math.random() * pool.length)]);
    }
-@@ -2659,14 +2972,16 @@
+@@ -2659,14 +2976,16 @@
    }
    // an item / skill landing on an enemy: damage formula, drain, added / removed states.
    // mult scales the damage (swing power, back stab, critical); 0 damage stays 0 like the original
@@ -1365,7 +1376,7 @@
      // slipped in a stance that answers it (리포스트, script 191): nothing lands
      const slip = this.slipsWithAnswer(e.b, obj, actor);
      if (slip) { this.enemySlips(e, slip, obj, sourcePos, by); return -1; }
-@@ -2677,65 +2992,89 @@
+@@ -2677,65 +2996,89 @@
      }
      const type = obj.damage?.type || 0;
      let dmg = 0;
@@ -1473,7 +1484,7 @@
    missOn(e, obj) {
      const p = e.worldPos(new THREE.Vector3());
      G.audio?.playSystemSe(obj?.hit_type === 2 ? 19 : 18);
-@@ -2753,19 +3092,14 @@
+@@ -2753,19 +3096,14 @@
      G.audio?.playSystemSe(20);
      this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), { color: 0xc8f0ff, size: e.h * 0.9, life: 0.35, grow: 1.5 });
      if (!actor || this.playerDead) return;
@@ -1499,7 +1510,7 @@
    }
    // an enemy's spell turned back by the player (magic reflection - 거울의 대방패): it lands on that enemy
    reflectOntoEnemy(e, skill) {
-@@ -2773,32 +3107,35 @@
+@@ -2773,32 +3111,35 @@
      G.audio?.playSystemSe(20);
      this.spawnGlow(head.clone().add(new THREE.Vector3(0, -0.3, 0)), { color: 0xc8f0ff, size: 0.8, life: 0.35, grow: 1.6 });
      if (!e?.alive) return;
@@ -1549,7 +1560,7 @@
    }
    // 変換攻撃 (script 199): <変換攻撃判定:chance> on the skill, then <HP変換攻撃:percent,chance> on it or on
    // the attacker's equipment / states turns that share of the damage dealt into HP (the youtou's drain)
-@@ -2814,6 +3151,15 @@
+@@ -2814,6 +3155,15 @@
        if (parseFloat(b) > Math.floor(Math.random() * 100)) pct += parseFloat(a) || 0;
      }
      return Math.floor(dmg * pct / 100);
@@ -1565,7 +1576,7 @@
    }
    // VX Ace: at 0 HP an enemy gets the death state unless it resists it (불사신 and other gimmicks); then
    // it stays standing at 0 HP until the gimmick takes the resistance away
-@@ -2895,9 +3241,9 @@
+@@ -2895,9 +3245,9 @@
    tickEnemyStates(e, dt) {
      if (e.alive) e.b.tickBuffs(dt);
      const timers = e.stateTimers;
@@ -1577,7 +1588,7 @@
        timers[k] -= dt;
        if (timers[k] <= 0) {
          delete timers[k]; e.b.removeState(+k); removed = true;
-@@ -2905,12 +3251,17 @@
+@@ -2905,12 +3255,17 @@
        }
      }
      if (removed) this.checkEnemyDeath(e);
@@ -1597,7 +1608,7 @@
        const v = Math.max(1, Math.floor(e.b.mhp * -hrg));
        e.b.hp = Math.max(0, e.b.hp - v);
        if (e.bar) e.bar.visible = true; e.drawBar();
-@@ -3008,6 +3359,29 @@
+@@ -3008,6 +3363,29 @@
    }
  
    // ---- damage --------------------------------------------------------------------------
@@ -1627,7 +1638,7 @@
    computeDamage(attacker, target, skill, mult = 1) {
      if (!skill?.damage || skill.damage.type === 0) return 0;
      let v = evalFormula(skill.damage.formula, attacker.solo ? attacker.solo() : attacker, target);
-@@ -3018,13 +3392,36 @@
+@@ -3018,13 +3396,36 @@
        const els = attacker.atkElements();
        if (els.length) v *= Math.max(...els.map(e => target.elementRate(e)));
      }
@@ -1667,7 +1678,7 @@
    }
    // 攻撃ID変更 (script 203): equipment / states can swap the normal attack (skill 1) for their own skill;
    // with several, the highest <攻撃ID優先度変更:n> on the skill wins, then the highest id
-@@ -3047,8 +3444,18 @@
+@@ -3047,8 +3448,18 @@
    }
    // hits per blow: the skill's repeats (+ attack-count features) times its random-target count
    attackHits(skill, actor) {
@@ -1688,7 +1699,7 @@
    }
    // a weapon blow (VR swing, desktop click, arrow / bullet): the attack skill's formula, element, hits,
    // drain and states (Raiden's axes hit by the wielder's HP, the youtou drains, daggers hit twice...)
-@@ -3058,7 +3465,7 @@
+@@ -3058,7 +3469,7 @@
      const actor = G.state.party.leader();
      // a weapon art on the weapon (red): this blow is that skill - its formula, hits, element and animation -
      // at least at full strength, and not weakened by flailing
@@ -1697,7 +1708,7 @@
      const skill = art || this.skillByState(actor, this.playerAttackSkill(actor));
      let mult = (art ? Math.max(1, power) : power) * this.buffMult();
      // a charged blow hits up to twice as hard; a hard or charged blow on a broken enemy is the big attack
-@@ -3071,8 +3478,8 @@
+@@ -3071,8 +3482,8 @@
      let weak = false;
      if (melee && !art) { const r = this.rushMult(); if (r < 1) { mult *= r; weak = true; } }
      if (e.state === 'idle' || (e.alertTime > 0 && e.state === 'chase' && !e.battle)) mult *= 2;     // (a backstab)
@@ -1708,7 +1719,7 @@
      if (crit) mult *= 2;
      const p = e.worldPos(new THREE.Vector3());
      const hits = one ? 1 : this.attackHits(skill, actor);
-@@ -3117,7 +3524,7 @@
+@@ -3117,7 +3528,7 @@
    afterPlayerAction(s, e, from, art) {
      if (this.lastAct?.s === s && G.time - this.lastAct.t < 0.12) return;
      this.lastAct = { s, t: G.time };
@@ -1717,7 +1728,7 @@
      this.playerFollowUp(s, e, from);
    }
    // a skill of mine that goes on with another (script 189 使用後追加行動 - 거룩한 총검's cut or thrust and then its gun
-@@ -3132,7 +3539,7 @@
+@@ -3132,7 +3543,7 @@
        const next = a.id > 0 ? this.skillByState(actor, $data.skills[a.id]) : null;
        if (!next) continue;
        this.later(320, () => {
@@ -1726,7 +1737,7 @@
          let targets = [];
          if (next.scope >= 1 && next.scope <= 6) {
            const head = G.player.headWorld(new THREE.Vector3()), op = new THREE.Vector3();
-@@ -3143,7 +3550,7 @@
+@@ -3143,7 +3554,7 @@
          this.actorPays(actor, next);
          this.skillCD[next.id] = G.time + this.coolSeconds(next);
          const at = from || this.castOrigin();
@@ -1735,7 +1746,7 @@
          for (const t of targets) {
            const wp = t.worldPos(new THREE.Vector3()); wp.y += t.h * 0.5;
            if (next.animation_id > 0) { G.screen.playAnimationOn(wp, next.animation_id, { rate: 3, height: t.h }); G.coop?.shareAnim?.(wp, next.animation_id, t.h); }
-@@ -3157,7 +3564,7 @@
+@@ -3157,7 +3568,7 @@
            });
          }
          if (!targets.length) this.applyUsableToActor(next, 'self');
@@ -1744,7 +1755,7 @@
          this.playerFollowUp(next, targets[0] || e, from, depth + 1);
        });
        return;
-@@ -3174,6 +3581,43 @@
+@@ -3174,6 +3585,43 @@
      let id = 0;
      for (const o of e.b.featureObjects()) { const m = /<\s*反撃スキル\s*(\d+)\s*>/.exec(o?.note || ''); if (m) id = Math.max(id, +m[1]); }
      this.startCounter(e, $data.skills[id] || $data.skills[1]);
@@ -1788,7 +1799,7 @@
    }
    // a counter (反撃) or an answer to a slipped blow (回避時スキル): a quick blow at the player, 0.35 s to see it
    // coming; not a turn of the enemy's own (as in the original, it comes inside the player's action)
-@@ -3251,8 +3695,7 @@
+@@ -3251,8 +3699,7 @@
    groggyHit(e, actor, obj, mult, blow) {
      const max = this.groggyMax(e);
      if (!max || !actor || !e.alive || e.state === 'stagger' || e.grogDown || this.inDuel(e)) return;     // (her duel: no groggy)
@@ -1798,7 +1809,7 @@
      const used = blow?.grog?.get(e) || 0;
      g = Math.min(g, GROGGY.cap * max - used);
      if (!(g > 0)) return;
-@@ -3359,20 +3802,37 @@
+@@ -3359,20 +3806,37 @@
        G.input.haptic('left', 0.2, 30); G.input.haptic('right', 0.2, 30);
        return;
      }
@@ -1844,7 +1855,7 @@
      dmg = Math.round(dmg * G.settings.difficulty);
      // a share of the HP / MP the skill takes away besides (HP / MP recovery with a minus - 조커 -100%, 하얀 충격
      // -99%, 황산 -25%, 톱니바퀴 MP -8%: VX Ace's item_effect_recover_hp, by the target's recovery rate); no guard
-@@ -3396,7 +3856,7 @@
+@@ -3396,7 +3860,7 @@
        this.reportStruck(e, 2);
      } else if (guarded && (shieldHit || blockable)) {
        blocked = true;
@@ -1853,7 +1864,7 @@
        this.stamina = Math.max(0, this.stamina - 0.22); this.staminaDelay = 1;
        this.guardTing(ep);
        this.reportStruck(e, 1);
-@@ -3409,27 +3869,50 @@
+@@ -3409,27 +3873,50 @@
        G.audio?.playSystemSe(14);
        this.reportStruck(e, 0);
      }
@@ -1918,7 +1929,7 @@
    }
    // (a co-op guest struck by the host's enemy: how it went - 0 it landed, 1 guarded, 2 a perfect guard - is shown on
    // this player as the host sees it)
-@@ -3762,6 +4245,7 @@
+@@ -3762,6 +4249,7 @@
        b.pageDone.add(key);
        b.troopInterp = new Interpreter(1);
        b.troopInterp.troop = true;                  // its music changes play even during battle music
@@ -1926,7 +1937,7 @@
        b.troopInterp.setup(page.list, 0);
        b.troopInterp.update();                      // at once, like the original processing it right away
        return;
-@@ -3777,6 +4261,7 @@
+@@ -3777,6 +4265,7 @@
    }
  
    update(dt) {
@@ -1934,7 +1945,7 @@
      if (!G.map?.grid) return;
      if (this.gripAdjust) this.updateGripAdjust();
      this.refreshEquipment();
-@@ -3788,9 +4273,10 @@
+@@ -3788,9 +4277,10 @@
      // stamina
      this.staminaDelay = Math.max(0, this.staminaDelay - dt);
      if (this.staminaDelay <= 0) this.stamina = Math.min(1, this.stamina + 0.45 * dt);
@@ -1946,7 +1957,7 @@
      // drinking takes a moment (quick slot potions)
      if (this.healing) {
        this.healing.t -= dt;
-@@ -3810,6 +4296,7 @@
+@@ -3810,6 +4300,7 @@
      // (PC: whatever took the hands this frame - a blow, a cast, a drink - has the guard down before any blow lands)
      if (this.guardUp && this.handsBusy()) this.updateGuard();
      this.updateWeaponGlow();
@@ -1954,7 +1965,7 @@
      this.updateActorStates(dt, paused);
      this.updateGhost();
      this.updateWeaponFx(dt);
-@@ -3997,6 +4484,7 @@
+@@ -3997,6 +4488,7 @@
        const wp = e.worldPos(tmpA);
        e.group.position.copy(wp);
        e.group.position.y += e.hover || 0;
@@ -1962,7 +1973,7 @@
        e.mesh.rotation.y = Math.atan2(head.x - wp.x, head.z - wp.z);
        e.mesh.rotation.z = 0; e.mesh.position.x = 0; e.mesh.position.z = 0;
        // (one hanging high over the player - the stage machine in the flies - leans its face down toward them)
-@@ -4433,7 +4921,7 @@
+@@ -4433,7 +4925,7 @@
      }
      return false;
    }
@@ -1971,7 +1982,7 @@
    bossFamily(s) {
      if (s._bossFam !== undefined) return s._bossFam;
      // (흑기사 린다메아's own moves; a leap over the player in a cloak - bossmoves.js)
-@@ -4729,7 +5217,7 @@
+@@ -4729,7 +5221,7 @@
      e.move = fam; e.act = null; e.comboStep = 0;
      e.style = this.skillStyle(s);
      e.aim = Math.atan2(dy, dx);
@@ -1980,7 +1991,7 @@
      e.state = 'windup';
      e.glinted = false;
      e.timer0 = e.timer = this.windupTime(e, s, e.style);
-@@ -4788,14 +5276,14 @@
+@@ -4788,14 +5280,14 @@
        // before it: let down gently)
        if (d.skill && this.liftInfo().falls.has(d.skill.id)) {
          if (this.playerDead || !d.e.alive) { G.player.floatDown?.(); continue; }
@@ -1997,7 +2008,7 @@
        this.enemyStrikePlayer(d.e, d.skill, { blockable: false, certain: true, delayed: true });
      }
    }
-@@ -4964,7 +5452,7 @@
+@@ -4964,7 +5456,7 @@
      const plan = e.plan, s = e.skill, fam = e.move;
      if (!plan) { this.endMove(e, 0.5); return; }
      G.coop?.onBossMove?.(e);                       // (its co-op guests see it go off as well - coop.js)
@@ -2006,7 +2017,7 @@
      const ep = e.worldPos(new THREE.Vector3());
      if (this.releaseNewMove(e, fam, plan, s, ep)) return;          // (bossmoves.js)
      const anim = s.animation_id > 0 ? s.animation_id : 0;
-@@ -5964,7 +6452,7 @@
+@@ -5964,7 +6456,7 @@
      const skill = e.skill;
      G.coop?.onEnemyAct?.(e, skill);
      // (a co-op guest's copy of the host's enemy only shows its move: what it does is done on the host's side)
@@ -2015,7 +2026,7 @@
      const plan = e.plan || this.planAttack(e, skill, e.style);
      // (from where its area was laid down)
      const ep = plan?.ox !== undefined ? new THREE.Vector3(plan.ox, plan.oy, plan.oz) : e.worldPos(new THREE.Vector3());
-@@ -6130,7 +6618,8 @@
+@@ -6130,7 +6622,8 @@
          // a shot is stopped only where it actually meets the shield (one that goes through a guard passes it)
          let shielded = false;
          if (this.shield && this.hasShield && (G.vr || this.shield.visible) && (!p.pierce || (this.guardUp && !this.disarmed && G.time - (this.guardRaisedAt ?? -99) <= PERFECT_GUARD))) {
@@ -2025,7 +2036,7 @@
            if (pos.distanceTo(tmpA) < 0.32) shielded = true;
          }
          // (the shots of a fan hit no more times than their skill does)
-@@ -6192,7 +6681,7 @@
+@@ -6192,7 +6685,7 @@
              if (p.aoe) break;                         // area spells burst below
              if (p.usable) {
                // (a round of a skill's shot is one hit of it, and the skill's animation comes once for all its rounds)
@@ -2034,7 +2045,7 @@
                for (let r = 0; r < n; r++) this.later(r * 120, () => this.applyUsableToEnemy(e, p.usable, pos));
                if (p.usable.animation_id > 0 && !p.volley?.shown) G.screen.playAnimationOn(new THREE.Vector3(wp.x, wp.y + e.h * 0.5, wp.z), p.usable.animation_id, { rate: 3, height: e.h });
                if (p.volley) p.volley.shown = true;
-@@ -6273,10 +6762,15 @@
+@@ -6273,10 +6766,15 @@
        const inPlay = !!(n.flags & 8);
        if (e && (!!e.inPlay !== inPlay || (inPlay && e.memberIndex !== n.mi))) { e.remove(); e = null; }
        if (!e) {
@@ -2051,7 +2062,7 @@
        }
        if (src) e.hallKey = n.hallKey;
        e.netFlags = n.flags;
-@@ -6289,6 +6783,7 @@
+@@ -6289,6 +6787,7 @@
        e.outOfFight = !!(n.flags & 128);
        e.noTarget = !!(n.flags & 4) || (!!(n.flags & 64) && !G.coop?.rules?.guestStartsBoss) || e.outOfFight;
        e.boss = !!(n.flags & 32);
@@ -2059,7 +2070,7 @@
        // (a boss made stronger for its co-op fight - coop.js scaleBosses: its HP, MP and groggy gauge as big as there)
        if ((e.b.coopK || 1) !== n.k) { e.b.coopK = n.k; e.grogId = null; }
        const fresh = G.time - (e.netReported ?? -9) < 0.6;
-@@ -6310,6 +6805,9 @@
+@@ -6310,6 +6809,9 @@
          // (a plain shot winding up turns after its target there: its line here too)
          if (n.aim !== null && e.state === 'windup' && e.plan?.shot && !e.move && e.plan.ox !== undefined) this.aimShot(e, n.aim);
          e.b.hp = fresh ? Math.min(e.b.hp, n.hp) : n.hp;
@@ -2069,7 +2080,7 @@
          if (!fresh) e.b.states = n.states.slice();
          const gmax = this.groggyMax(e);
          if (gmax && !fresh) e.grog = gmax * n.grog / 100;
-@@ -6320,9 +6818,9 @@
+@@ -6320,9 +6822,9 @@
      }
      for (const [id, e] of this.puppets) if ((e.src || null) === src && !seen.has(id)) { e.remove(); this.puppets.delete(id); }
    }
@@ -2081,7 +2092,7 @@
    // big attack that ends one }]
    puppetReports() {
      const out = [];
-@@ -6336,8 +6834,9 @@
+@@ -6336,8 +6838,9 @@
        const add = now.states.filter(id => !b.states.includes(id) && !skip(id));
        const rm = b.states.filter(id => !now.states.includes(id) && !skip(id));
        const d = Math.round(b.hp - now.hp), g = Math.round(Math.max(0, b.grog - now.grog));
@@ -2093,7 +2104,7 @@
          e.netReported = G.time;
        }
        e.netBase = now;
-@@ -6347,6 +6846,7 @@
+@@ -6347,6 +6850,7 @@
    // (host) a guest's blow on one of this world's enemies: taken as if it had struck here - its numbers in the friend's
    // colour, the fight started if it was roaming, a Break, the groggy gauge, states, the fall
    applyGuestHit(r, from = null) {
@@ -2101,7 +2112,7 @@
      const e = this.netEnemies().find(x => x.netId === r.id) || this.hallEnemyFor(r.id, from);
      if (!e || !e.alive || e.hidden) return false;
      // (a boss fight that guest did not join, or watches fallen)
-@@ -6368,6 +6868,12 @@
+@@ -6368,6 +6872,12 @@
          G.audio?.playSe(G.seAt('Slash1', 70, 100), new THREE.Vector3(p.x, p.y + e.h * 0.5, p.z));
          this.damageRemovesStates(e);
        }
@@ -2114,7 +2125,7 @@
      }
      for (const id of r.add) if ($data.states[id] && !e.b.stateResist(id)) this.addEnemyState(e, id, true);
      for (const id of r.rm) { e.b.removeState(id); if (e.stateTimers) delete e.stateTimers[id]; }
-@@ -6467,11 +6973,20 @@
+@@ -6467,11 +6977,20 @@
          if (speed > needSpeed && travel > needTravel) {
            const power = THREE.MathUtils.clamp(0.6 + (speed - needSpeed) / 5, 0.6, 1.4) * (this.stamina > 0.1 ? 1 : 0.5);
            const charge = this.charge?.level || 0, strong = speed > needSpeed * 1.5;
@@ -2137,7 +2148,7 @@
                landed = true;
                const brk = this.breakArmed();
                if (brk) this.breakOnHit(e, brk, this.prevTip);
-@@ -6483,28 +6998,33 @@
+@@ -6483,28 +7002,33 @@
                this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.1)); this.staminaDelay = 0.8;
              }
            }
@@ -2179,7 +2190,7 @@
            this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.12)); this.staminaDelay = 0.7;
            G.audio?.playSe(G.seAt('Wind7', 60, charge >= 0.35 ? 100 : 140));
          }
-@@ -6512,10 +7032,12 @@
+@@ -6512,10 +7036,12 @@
        if (G.input.breakPressed()) this.pressBreak();
        if (this.swing) {
          const s = this.swing;
@@ -2195,7 +2206,7 @@
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
            const reach = this.weaponLength() + 0.9;
-@@ -6533,7 +7055,7 @@
+@@ -6533,7 +7059,7 @@
              }
            }
          }
@@ -2204,7 +2215,7 @@
            s.npcDone = true;
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
-@@ -6549,7 +7071,11 @@
+@@ -6549,7 +7075,11 @@
              return d < reach && to.normalize().dot(f) > 0.5;
            }, { power: this.stamina > 0.1 ? 1 : 0.5, charge: s.charge || 0 });
          }
@@ -2217,7 +2228,7 @@
        }
      }
    }
-@@ -6667,27 +7193,74 @@
+@@ -6667,27 +7197,74 @@
    // of its own that never wears off stays (귀신 무사's 할복, the marks its patterns count) - the 8 turns are for
    // what the player puts on it
    applySkillToSelf(e, skill) {
@@ -2311,7 +2322,7 @@
      }
    }
    // VX Ace's escape (a skill's escape effect: 도망친다 - the rabbits, 암흑 물질, 라스, 교활한 원숭이 low on HP, 하얀
-@@ -6705,13 +7278,14 @@
+@@ -6705,13 +7282,14 @@
      if (e.ring) e.ring.material.opacity = 0;
      G.audio?.playSystemSe(8);
    }
@@ -2327,7 +2338,7 @@
        it.setup(list, 0);
        this.sideInterps.push(it);
      }
-@@ -6737,9 +7311,8 @@
+@@ -6737,9 +7315,8 @@
    // Script 191 回避時発動スキル: <全回避時スキル:n[,p]> (or 物理- / 魔法- / 必中-, by the attack's hit type) on a battler's
    // states, equipment or self - an attack it slips, it answers with skill n (p % of the time): 흰 유니콘 유니스's
    // 리포스트 (a stance of evasion +100% for two of its actions, every slipped blow answered by a lunge, 판트), and the
@@ -2339,7 +2350,7 @@
    evadeAnswers(b, hitType) {
      const out = [];
      for (const o of b?.featureObjects?.() || []) {
-@@ -6757,7 +7330,6 @@
+@@ -6757,7 +7334,6 @@
      const ht = skill?.hit_type ?? 1;
      if (!b || ht === 0 || this.certainHit(user, skill)) return null;
      const answers = this.evadeAnswers(b, ht);
@@ -2347,7 +2358,7 @@
      return Math.random() < (ht === 1 ? b.eva : b.mev) ? answers : null;
    }
    // (the stance shows while it lasts)
-@@ -6796,7 +7368,7 @@
+@@ -6796,7 +7372,7 @@
      G.audio?.playSystemSe(skill?.hit_type === 2 ? 19 : 18);
      G.input.haptic('left', 0.25, 40); G.input.haptic('right', 0.25, 40);
      if (!e || G.time - (this.answeredAt ?? -1) < 0.15) return;
@@ -2356,7 +2367,7 @@
      if (!ans) return;
      this.answeredAt = G.time;
      const s = $data.skills[ans.id];
-@@ -6884,9 +7456,15 @@
+@@ -6884,9 +7460,15 @@
        G.input.haptic('right', 1, 160);
      } else G.audio?.playSystemSe(17);
    }
@@ -2374,7 +2385,7 @@
      if (!this.breakGlow) {
        if (!on) return;
        this.breakGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTexture(), color: 0xffc040, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
-@@ -6898,7 +7476,7 @@
+@@ -6898,7 +7480,7 @@
      if (this.breakGlow.parent !== this.root) this.root.add(this.breakGlow);
      this.breakGlow.position.copy(tip);
      const k = 0.75 + 0.25 * Math.sin(G.time * 12), b = Math.max(0.7, fxk());
@@ -2383,7 +2394,7 @@
      this.breakGlow.material.color.setRGB(b, 0.75 * b, 0.25 * b);
    }
    // fire the shield-slot gun: its own shot sounds (the skill's animation), muzzle flash, tracer;
-@@ -6912,7 +7490,7 @@
+@@ -6912,7 +7494,7 @@
      let from = null, dir;
      if (gun) {
        gun.updateWorldMatrix(true, true);
@@ -2392,7 +2403,7 @@
      }
      // the shot leaves along where the left controller points, however the gun model is turned in the hand
      const ray = this.aimRay('left');
-@@ -7124,7 +7702,7 @@
+@@ -7124,7 +7706,7 @@
      hits.set(t.id, G.time);
      const actor = G.state.party.leader();
      if (!actor) return false;
@@ -2401,7 +2412,7 @@
      for (let r = 0; r < n; r++) this.later(r * 120, () => G.coop?.sendPvp(t.id, obj.id, mult, false, actor, item));
      if (obj.animation_id > 0) G.screen.playAnimationOn(new THREE.Vector3(t.x, t.y + 0.9, t.z), obj.animation_id, { rate: 3, height: t.h });
      G.input.haptic('left', 0.5, 50);
-@@ -7247,13 +7825,20 @@
+@@ -7247,13 +7829,20 @@
    fireRanged() {
      const kind = this.shotKind, actor = G.state.party.leader();
      const shot = kind === 'gun' && actor ? this.gunShotSkill(actor) : null;
@@ -2425,7 +2436,7 @@
    }
    // the shot a gun's blow goes on with (script 189 使用後追加行動), by the state the one holding it is in (script 195):
    // 거룩한 총검's stab goes on with the shot of the bullet loaded (총탄 장전 - states 190 / 191 / 192) - Ⅰ 총검 건
-@@ -7270,19 +7855,28 @@
+@@ -7270,19 +7859,28 @@
    // does - its damage, its Break / Hard Break, its animation once; paid and cooling as the skill is (Ⅱ, Ⅲ: 3 turns). Cooling
    // (or unpaid), nothing fires: the original's stab goes on without its shot then
    fireSkillShot(actor, s) {
@@ -2459,7 +2470,7 @@
    }
    // one round of kind 'gun' | 'bow' | 'magic' (skill: a skill's shot, one hit of it - fireSkillShot)
    fireShot(kind, one, breakSkill, { skill = null, volley = null } = {}) {
-@@ -7299,7 +7893,7 @@
+@@ -7299,7 +7897,7 @@
    // where what the right hand holds shoots from: its tip
    muzzle() {
      this.weapon.updateWorldMatrix(true, false);
@@ -2965,9 +2976,14 @@
    ['서약  ({name})', 'Oath  ({name})', '誓約  ({name})', '誓约  ({name})'],
    ['(서약 해제)', '(no oath)', '(誓約を解く)', '(解除誓约)'],
    ['{name} 구입', 'Buy {name}', '{name} を購入', '购买 {name}'],
-@@ -396,6 +468,9 @@
+@@ -395,7 +467,14 @@
+   ['{label}: VR판에서는 아직 지원하지 않습니다', '{label}: not in the VR version yet', '{label}: VR版ではまだ対応していません', '{label}：VR 版暂不支持'],
    ['이동할 수 있는 화톳불이 없습니다', 'No bonfire to travel to', '移動できる篝火がありません', '没有可以传送的篝火'],
    ['화톳불 전송', 'Bonfire travel', '篝火転送', '篝火传送'],
++  ['지도를 불러오는 중입니다', 'Loading map…', '地図を読み込み中…', '正在加载地图…'],
++  ['지도 미리보기를 사용할 수 없습니다', 'Map preview unavailable', '地図を表示できません', '地图预览不可用'],
++  ['↑↓: 선택 · Enter: 결정 · Esc: 뒤로', '↑↓: Select · Enter: Confirm · Esc: Back', '↑↓: 選択 · Enter: 決定 · Esc: 戻る', '↑↓: 选择 · Enter: 确定 · Esc: 返回'],
++  ['스틱: 선택 · A: 결정 · B: 뒤로', 'Stick: Select · A: Confirm · B: Back', 'スティック: 選択 · A: 決定 · B: 戻る', '摇杆: 选择 · A: 确定 · B: 返回'],
    ['상점  (소지: {gold} {unit})', 'Shop  (you have: {gold} {unit})', 'ショップ  (所持: {gold} {unit})', '商店  (持有：{gold} {unit})'],
 +  ['{name}  (소지: {gold} {unit})', '{name}  (you have: {gold} {unit})', '{name}  (所持: {gold} {unit})', '{name}  (持有：{gold} {unit})'],
 +  ['교환', 'Exchange', '交換', '交换'],
@@ -5772,16 +5788,142 @@
  export function bonfireList(src) {
    const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
    const unq = (a, b) => (a ?? b ?? '').replace(/\\(.)/g, '$1');
-@@ -139,7 +310,7 @@
+@@ -115,6 +286,125 @@
+   }
+   return out.sort((a, b) => a.index - b.index);
+ }
++// Only literal arrays, numbers and picture names are needed by ShortMove.
++// Installed Ruby stays data: expressions and interpolated strings never run.
++function bonfireLiteral(source, start) {
++  const invalid = Symbol('invalid');
++  let at = start, nodes = 0;
++  const space = () => { while (/\s/.test(source[at] || '') && at < source.length) at++; };
++  const value = depth => {
++    space();
++    if (++nodes > 8192 || depth > 4) return invalid;
++    if (source[at] === '[') {
++      const result = []; at++; space();
++      while (source[at] !== ']') {
++        const entry = value(depth + 1);
++        if (entry === invalid) return invalid;
++        result.push(entry); space();
++        if (source[at] === ']') break;
++        if (source[at++] !== ',') return invalid;
++        space();
++      }
++      at++; return result;
++    }
++    if (source[at] === '"' || source[at] === "'") {
++      const begin = at, quote = source[at++];
++      while (at < source.length && at - begin <= 512) {
++        const c = source[at++];
++        if (c === '\\') { at++; continue; }
++        if (c === quote) {
++          const text = speakerString(source.slice(begin, at));
++          return text !== null && text.length <= 256 ? text : invalid;
++        }
++      }
++      return invalid;
++    }
++    if (/^nil\b/.test(source.slice(at, at + 4))) { at += 3; return null; }
++    const number = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?/i.exec(source.slice(at, at + 64));
++    if (!number) return invalid;
++    at += number[0].length;
++    const result = Number(number[0]);
++    return Number.isFinite(result) ? result : invalid;
++  };
++  const result = value(0);
++  // Reject suffixes such as string concatenation, method calls and modifiers.
++  return result === invalid || !/^[ \t]*(?:\r?\n|;|$)/.test(source.slice(at)) ? null : { value: result };
++}
++function bonfirePicture(value) {
++  return typeof value === 'string' && value.length <= 256 && !/[\0\r\n:]/.test(value)
++    && !/^[\\/]/.test(value) && !value.split(/[\\/]/).some(part => part === '.' || part === '..');
++}
++function bonfireMarker(row, player = false) {
++  if (!Array.isArray(row) || row.length < (player ? 3 : 5)) return null;
++  const [type, x, y] = row;
++  if (![0, 1, 2].includes(type) || ![x, y].every(n => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 16384)) return null;
++  const marker = { type, x, y }, data = row[player ? 3 : 5];
++  const positiveId = n => Number.isInteger(n) && n > 0 && n <= 999999;
++  if (!player) {
++    if (![row[3], row[4]].every(n => n === 0 || positiveId(n))) return null;
++    marker.showSwitch = row[3]; marker.hideSwitch = row[4];
++  }
++  if (type === 0) {
++    // The player's marker uses the current leader; static icons name an actor.
++    if (!player) { if (!positiveId(data)) return null; marker.actorId = data; }
++  } else if (type === 1) {
++    marker.size = 7; marker.color = [0, 0, 0];
++    if (data != null) {
++      if (!Array.isArray(data)) return null;
++      if (data[0] != null) {
++        if (!Number.isFinite(data[0]) || data[0] < 0 || data[0] > 1024) return null;
++        marker.size = data[0];
++      }
++      if ([1, 2, 3].every(i => data[i] != null)) {
++        const color = data.slice(1, 4);
++        if (color.length !== 3 || !color.every(n => Number.isFinite(n) && n >= 0 && n <= 255)) return null;
++        marker.color = color;
++      }
++    }
++  } else {
++    if (!bonfirePicture(data) || !data) return null;
++    marker.picture = data;
++  }
++  return marker;
++}
++export function bonfireMap(src) {
++  if (typeof src !== 'string' || src.length > 2_000_000) return null;
++  const source = speakerSource(src), players = {}, icons = new Map();
++  const assignment = /(?:^|[\n;])[ \t]*(?:\w+::)*(MAPDATA|PLAYER_ICON|ICONLIST)[ \t]*(?:\[[ \t]*(\d+)[ \t]*\])?[ \t]*=[ \t]*/g;
++  let picture, scanned = 0, quote = null;
++  for (const match of source.matchAll(assignment)) {
++    // A line resembling an assignment inside a quoted Ruby string is inert.
++    const keyword = match.index + match[0].indexOf(match[1]);
++    while (scanned < keyword) {
++      const c = source[scanned++];
++      if (quote) { if (c === '\\') scanned++; else if (c === quote) quote = null; }
++      else if (c === '"' || c === "'") quote = c;
++    }
++    if (quote || match[2] !== undefined && +match[2] > 4095) continue;
++    const literal = bonfireLiteral(source, match.index + match[0].length);
++    if (!literal) continue;
++    const data = literal.value;
++    if (match[1] === 'MAPDATA') {
++      if (match[2] === undefined && bonfirePicture(data)) picture = data;
++      continue;
++    }
++    if (match[2] === undefined) {
++      if (!Array.isArray(data)) continue;
++      if (match[1] === 'PLAYER_ICON') for (const index of Object.keys(players)) delete players[index];
++      else icons.clear();
++      data.slice(0, 4096).forEach((row, index) => {
++        const marker = bonfireMarker(row, match[1] === 'PLAYER_ICON');
++        if (marker) { if (match[1] === 'PLAYER_ICON') players[index] = marker; else icons.set(index, marker); }
++      });
++    } else {
++      const index = +match[2], player = match[1] === 'PLAYER_ICON', marker = bonfireMarker(data, player);
++      if (marker) { if (player) players[index] = marker; else icons.set(index, marker); }
++      else if (player) delete players[index];
++      else icons.delete(index);
++    }
++  }
++  return picture === undefined ? null : { picture, players, icons: [...icons].sort((a, b) => a[0] - b[0]).map(([, marker]) => marker) };
++}
+ // which bonfires the travel list shows, and which of those can be picked - as the original's window has it
+ // (Window_k_ShortMove_Command visible? / selectable?): one taken away (its switch on) is gone; one that can be taken away but is
+ // not yet is there whatever else; else a switch of 0 shows it always, any other only when on. Picking it needs its switch (0: always)
+@@ -139,7 +429,7 @@
  }
  // what the game's scripts set up, from their sections ([name, source] in the game's order)
  export function readScripts(entries) {
 -  const out = { names: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null };
-+  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null, regularWindow: null };
++  const out = { names: {}, nameAliases: {}, bonfires: [], bonfireMap: null, symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null, regularWindow: null };
    const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
    // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
    // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
-@@ -150,6 +321,8 @@
+@@ -150,6 +440,8 @@
    };
    const byName = {}, byContent = {};
    for (const [name, src] of entries) {
@@ -5790,7 +5932,7 @@
      // font size / screen size: the last assignment in script order wins (comment lines skipped)
      const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
      for (const m of live.matchAll(/Font\.default_size\s*=\s*(\d+)/g)) out.fontSize = +m[1];
-@@ -159,16 +332,19 @@
+@@ -159,18 +451,22 @@
      out.synthesis = synthesis(src) || out.synthesis;
      out.keep = keeper(src) || out.keep;
      out.difficulty = difficulty(src) || out.difficulty;
@@ -5813,7 +5955,10 @@
 +    if (key === 'bonfire') {
        out.bonfires.push(...bonfireList(src));
        out.bonfires.sort((a, b) => a.index - b.index);
++      out.bonfireMap = bonfireMap(src) || out.bonfireMap;
      } else if (key === 'symbol') {
+       const clean = src.split(/\r?\n/).map(l => l.replace(/#.*$/, '')).join('\n');
+       const block = /SYMBOL_SETTING_LIST\s*=\s*\{([\s\S]*?)\n\s*\}/.exec(clean)?.[1] || '';
 --- upstream/app/src/sky.js
 +++ fork/apps/client/src/world/sky.js
 @@ -4,15 +4,42 @@
@@ -6703,7 +6848,7 @@
    // a torn piece of the machine's picture: its crop, cut out along a ragged edge, drawn bigger
 --- upstream/app/src/ui.js
 +++ fork/apps/client/src/ui/ui.js
-@@ -1,14 +1,24 @@
+@@ -1,14 +1,25 @@
 +import { bonfireShown, bonfirePickable } from '../data/scriptdata.js';
  // VR-friendly UI: message window (RPG Maker escape codes), choices, number input, HUD,
  // notifications, pause menu, shop, bonfire warp.
@@ -6731,10 +6876,11 @@
 +import { paintDesktopHud, bonusHudStatus } from './desktop-hud.js';
 +import { RewardFeed } from './reward-feed.js';
 +import { paintClassicMenu } from './classic-menu.js';
++import { BonfireTravel } from './bonfire-travel.js';
  
  export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
  const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
-@@ -36,6 +46,23 @@
+@@ -36,6 +47,23 @@
      this.mesh.visible = false;
    }
    commit() { this.tex.needsUpdate = true; }
@@ -6758,7 +6904,7 @@
    clear() { this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
    // uv hit from a ray (VR pointer)
    hit(raycaster) {
-@@ -50,15 +77,24 @@
+@@ -50,15 +78,24 @@
    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
  }
@@ -6785,7 +6931,7 @@
  export function convertEscapes(text) {
    let t = String(text ?? '').replace(/\\/g, '\x1b').replace(/\x1b\x1b/g, '\\');
    for (let i = 0; i < 2; i++) t = t.replace(/\x1bV\[(\d+)\]/gi, (_, n) => String(G.state.v(+n)));
-@@ -94,10 +130,13 @@
+@@ -94,10 +131,13 @@
    return { text: plain, color: cm ? textColor(+cm[1]) : '#ddd' };
  }
  
@@ -6802,7 +6948,7 @@
    if (windowSkin) {
      const ctx = windowSkin.getContext('2d', { willReadFrequently: true });
      palette = [];
-@@ -108,11 +147,13 @@
+@@ -108,11 +148,13 @@
    }
  }
  export function textColor(n) { return palette[n] || '#fff'; }
@@ -6819,7 +6965,7 @@
  }
  
  // Layout converted text into drawable ops; s = canvas pixels per RM pixel, base = the game's font size
-@@ -183,25 +224,102 @@
+@@ -183,25 +225,103 @@
    }
  }
  
@@ -6898,10 +7044,11 @@
 -  open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '' } = {}) {
 +    this.scrollbar = new MenuScrollbar(this.panel);
 +  }
-+  open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '', layout = null } = {}) {
++  open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '', layout = null, hint = null } = {}) {
      this.title = title; this.items = items; this.onSelect = onSelect; this.onCancel = onCancel; this.onAdjust = onAdjust;
 -    // (index -1: no row picked yet - the event choices, as the original's 誤選択防止 script: the first up / down, or the
 -    // laser moved onto a row, picks one; the confirm button does nothing until then)
++    this.hint = hint;
 +    this.classic = !!layout?.classic;
 +    if (!this.adaptive) {
 +      this.rows = layout?.rows || this.base.rows; this.rowTop = this.classic ? 24 : 100;
@@ -6928,7 +7075,7 @@
    // the title on one line - a long one (a co-op question with names in it) smaller, or on two lines at a sentence's end
    drawTitle(ctx, room) {
      const t = this.title || '';
-@@ -220,27 +338,93 @@
+@@ -220,27 +340,93 @@
      if (wide > room) ctx.font = `bold ${Math.max(18, Math.floor(30 * room / wide))}px ${FONT}`;
      ctx.fillText(a, 36, 32); ctx.fillText(b, 36, 72);
    }
@@ -7029,7 +7176,7 @@
        ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : '#f0f0f0';
        let rightW = 0;
        if (it.right) {
-@@ -249,9 +433,15 @@
+@@ -249,9 +435,15 @@
          ctx.textAlign = 'right';
          ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : 'rgba(235,225,195,0.95)';
          ctx.fillText(it.right, canvas.width - 44, y + this.rowH / 2 - 2);
@@ -7046,7 +7193,7 @@
        }
        let name = stripEscapes(it.text);
        const maxW = canvas.width - 44 - rightW - x;
-@@ -261,10 +451,14 @@
+@@ -261,10 +453,14 @@
        }
        ctx.fillText(name, x, y + this.rowH / 2 - 2);
      }
@@ -7062,7 +7209,7 @@
      }
      const desc = this.items[this.index]?.desc || this.footer;
      if (Array.isArray(desc)) {
-@@ -277,10 +471,27 @@
+@@ -277,10 +473,30 @@
        ctx.fillStyle = 'rgba(230,220,200,0.85)';
        ctx.fillText(stripEscapes(desc).slice(0, 60), 36, canvas.height - 30);
      }
@@ -7072,7 +7219,10 @@
 +    } else if (this.adaptive && !G.vr && !this.footer) {
 +      ctx.font = `20px ${FONT}`;
 +      ctx.fillText(fitLabel(ctx, tr('Enter: 결정 · Esc: 뒤로'), canvas.width - 64 - (this.items.length > this.rows ? 100 : 0)), 32, canvas.height - 24);
-+    } else ctx.fillText(tr(G.vr ? '스틱: 선택 · A / 트리거: 결정 · B: 뒤로' : '클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로'), 36, 84);
++    } else {
++      const hint = this.hint?.() || tr(G.vr ? '스틱: 선택 · A / 트리거: 결정 · B: 뒤로' : '클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로');
++      ctx.fillText(this.hint ? fitLabel(ctx, hint, canvas.width - 72) : hint, 36, 84);
++    }
      this.panel.commit();
    }
    update(raycaster) {
@@ -7090,7 +7240,7 @@
      let changed = false;
      const ny = input.navY();
      // (from no row: down picks the first, up the last - 誤選択防止 1.01)
-@@ -292,17 +503,19 @@
+@@ -292,17 +508,19 @@
        let hover = -1;
        if (uv) {
          const py = (1 - uv.y) * this.panel.canvas.height;
@@ -7114,7 +7264,7 @@
      }
      if (changed) { this.draw(); G.audio?.playSystemSe(0); }
      if (input.confirm()) {
-@@ -312,7 +525,6 @@
+@@ -312,7 +530,6 @@
        else G.audio?.playSystemSe(3);
        return true;
      }
@@ -7122,7 +7272,7 @@
      return false;
    }
  }
-@@ -334,18 +546,31 @@
+@@ -334,18 +551,31 @@
      this.gridTop = 150;
      this.panel = new Panel(widthPx, this.gridTop + rows * this.cellH + 120, widthM);
      this.tabs = []; this.tab = 0; this.index = 0; this.top = 0; this.focusTabs = false;
@@ -7155,7 +7305,7 @@
    setItems(tabIndex, items) { this.tabs[tabIndex].items = items; this.index = Math.min(this.index, Math.max(0, items.length - 1)); this.draw(); }
    draw() {
      const { ctx, canvas } = this.panel;
-@@ -369,15 +594,18 @@
+@@ -369,15 +599,18 @@
      const row = Math.floor(this.index / this.cols);
      if (row < this.top) this.top = row;
      if (row >= this.top + this.rows) this.top = row - this.rows + 1;
@@ -7177,7 +7327,7 @@
        }
        drawIcon(ctx, it.icon, x + 10, y + 14, 48);
        ctx.font = `29px ${FONT}`;
-@@ -394,6 +622,7 @@
+@@ -394,6 +627,7 @@
        }
      }
      const totalRows = Math.ceil(items.length / this.cols);
@@ -7185,7 +7335,7 @@
      if (totalRows > this.rows) {
        ctx.font = `26px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.45)';
        ctx.textAlign = 'right'; ctx.fillText(`${row + 1}/${totalRows}`, canvas.width - 36, 50); ctx.textAlign = 'left';
-@@ -414,6 +643,12 @@
+@@ -414,6 +648,12 @@
    }
    update(raycaster) {
      const input = G.input;
@@ -7198,7 +7348,7 @@
      let changed = false;
      const items = this.items;
      const dx = input.navX(), dy = input.navY();
-@@ -429,18 +664,18 @@
+@@ -429,18 +669,18 @@
        const uv = this.panel.hit(raycaster);
        let hover = null;                          // 't3' = tab 3, 'c12' = cell 12
        if (uv) {
@@ -7221,7 +7371,7 @@
        }
        const apply = h => {
          if (h[0] === 't') { const t = +h.slice(1); if (t !== this.tab || !this.focusTabs) { this.tab = t; this.focusTabs = true; this.index = 0; this.top = 0; changed = true; } }
-@@ -449,17 +684,17 @@
+@@ -449,17 +689,17 @@
        // the laser moves the cursor only when it moves onto another tab / cell; the trigger picks it
        if (this.hover === undefined) this.hover = hover;   // just opened: remember, don't jump
        else if (hover !== this.hover) { this.hover = hover; if (hover) apply(hover); }
@@ -7242,7 +7392,7 @@
      return false;
    }
  }
-@@ -599,15 +834,15 @@
+@@ -599,15 +839,15 @@
        const uv = this.panel.hit(raycaster);
        let hover = null;
        if (uv) {
@@ -7260,7 +7410,7 @@
      }
      if (changed) { this.draw(); G.audio?.playSystemSe(0); }
      if (G.vr && input.xrPressed('right', 4)) { this.press(this.keysOf(this.row)[this.col]); return true; }   // A: the key picked
-@@ -622,14 +857,20 @@
+@@ -622,14 +862,21 @@
      this.scene = scene; this.camera = camera; this.rig = rig;
      this.root = new THREE.Group();          // world-space anchor in front of the user
      scene.add(this.root);
@@ -7277,12 +7427,13 @@
      this.root.add(this.choice.panel.mesh);
      this.list = new ListPanel(980, 8, 0.98);
      this.root.add(this.list.panel.mesh);
++    this.bonfireTravel = new BonfireTravel({ Panel, root: this.root, list: this.list, ui: this, font: FONT, windowBg, fitLabel });
 +    this.menuOverview = new Panel(960, 960, 0.96);
 +    this.root.add(this.menuOverview.mesh);
      this.grid = new GridPanel(1260, 3, 6, 1.2);
      this.root.add(this.grid.panel.mesh);
      this.keyboard = new KeyboardPanel();
-@@ -637,12 +878,24 @@
+@@ -637,12 +884,24 @@
      this.bannerPanel = new Panel(1600, 260, 2.2);
      this.root.add(this.bannerPanel.mesh);
      this.toastPanel = new Panel(900, 300, 0.75);
@@ -7309,7 +7460,7 @@
      this.menuOpen = false;
      this.sceneOpen = null;
      this.prompt = null;                     // (co-op) join the boss fight? - askBossJoin
-@@ -654,6 +907,9 @@
+@@ -654,6 +913,9 @@
      this.numberRange = null;
      this.consumedConfirm = false;
      this.anchorYaw = null;
@@ -7319,7 +7470,7 @@
      this.hudDirty = true;
      this.lastHud = '';
    }
-@@ -661,6 +917,30 @@
+@@ -661,6 +923,30 @@
    // ---------------------------------------------------------------- placement
    // keep UI in front of the user; re-centre when they look away
    placeRoot(force = false) {
@@ -7350,7 +7501,7 @@
      const head = new THREE.Vector3();
      this.camera.getWorldPosition(head);
      const q = new THREE.Quaternion();
-@@ -677,30 +957,132 @@
+@@ -677,30 +963,133 @@
      this.root.rotation.set(0, a, 0);
    }
  
@@ -7361,6 +7512,7 @@
 +    if (this.list.visible) { this.list.hover = -2; this.list.draw(); }
 +    if (this.grid.visible) { this.grid.hover = undefined; this.grid.draw(); }
 +    if (this.keyboard.visible) { this.keyboard.draw(); this.keyboard.field(!vr); }
++    this.updateBonfireTravel();
 +    const message = this.msg || this.heldMessage?.message || (this.remote?.shown ? this.remote : null);
 +    if (message) this.drawMessage(message);
 +    if (this.msg?.state === 'number') this.drawNumber();
@@ -7486,7 +7638,7 @@
      msg.reveal = 0; msg.wait = 0; msg.fast = false; msg.state = 'typing';
      msg.ops = null;
      this.placeRoot(true);
-@@ -710,13 +1092,13 @@
+@@ -710,13 +1099,13 @@
      if (msg.lines.length === 0) msg.state = 'done-typing';
    }
    speakerName(msg) {
@@ -7503,7 +7655,7 @@
    }
    // The message box keeps the original window's proportions (BLACKSOULS II: a 640 px wide window, 12 px padding,
    // a 19 px font on 24 px lines, the face 96 px with the text 112 px in): every line takes the same share of the
-@@ -734,7 +1116,9 @@
+@@ -734,7 +1123,9 @@
      const L = this.messageLayout();
      msg.ops = layoutText(msg.lines, msg.face ? L.textX : L.left, L.top, L.k, ctx, L.font, L.right);
      msg.total = msg.ops.filter(o => o.k === 'ch' || o.k === 'icon').length;
@@ -7514,7 +7666,7 @@
      if (msg.face) loadCanvas('Graphics/Faces', msg.face).then(c => { msg.faceCanvas = c; if (this.msg === msg || (this.remote === msg && msg.shown)) this.drawMessage(msg); });
    }
    drawMessage(msg = this.msg) {
-@@ -742,13 +1126,23 @@
+@@ -742,13 +1133,23 @@
      const p = this.msgPanel;
      const { ctx, canvas } = p;
      p.clear();
@@ -7539,7 +7691,7 @@
      if (msg.state === 'waitInput' || msg.state === 'pause') {
        ctx.fillStyle = 'rgba(230,210,160,' + (0.5 + 0.5 * Math.sin(G.time * 6)) + ')';
        ctx.beginPath(); ctx.moveTo(canvas.width - 50, canvas.height - 40); ctx.lineTo(canvas.width - 30, canvas.height - 40);
-@@ -757,11 +1151,14 @@
+@@ -757,11 +1158,14 @@
      p.commit();
      // name tab
      const np = this.namePanel;
@@ -7556,7 +7708,7 @@
        np.commit();
        np.mesh.visible = this.msgPanel.mesh.visible;
      } else np.mesh.visible = false;
-@@ -772,13 +1169,28 @@
+@@ -772,13 +1176,28 @@
      const y = pos === 0 ? 0.22 : pos === 1 ? -0.05 : -0.32;
      this.msgPanel.mesh.position.set(0, y, 0);
      this.namePanel.mesh.position.set(-this.msgPanel.widthM / 2 + this.namePanel.widthM / 2 + 0.02, y + this.msgPanel.heightM / 2 + this.namePanel.heightM / 2 - 0.005, 0);
@@ -7588,7 +7740,7 @@
      this.choice.close();
      this.consumedConfirm = true;
      this.actionLockUntil = G.time + 0.25;
-@@ -803,7 +1215,7 @@
+@@ -803,7 +1222,7 @@
    updateBossPrompt(dt) {
      const p = this.prompt;
      if (!p) return;
@@ -7597,7 +7749,7 @@
      if ((p.left -= dt) <= 0) { this.closeBossPrompt(); p.answer(false); return; }
      if (!p.shown) {
        p.shown = true;
-@@ -836,7 +1248,7 @@
+@@ -836,7 +1255,7 @@
    updateRemote() {
      const r = this.remote;
      if (!r) return;
@@ -7606,7 +7758,7 @@
        if (r.shown) {
          if (!this.msg) { this.msgPanel.mesh.visible = false; this.namePanel.mesh.visible = false; }
          if (r.choiceUp && this.msg?.state !== 'choice' && !this.prompt?.shown) this.choice.close();
-@@ -854,7 +1266,7 @@
+@@ -854,7 +1273,7 @@
      if (r.reveal < r.total) { r.reveal = Math.min(r.total, r.reveal + 2); this.drawMessage(r); }
      else if (r.choices && !r.choiceUp) {
        r.choiceUp = true;
@@ -7615,7 +7767,7 @@
        this.choice.panel.mesh.visible = true;
        this.layoutPanels(r);
      }
-@@ -862,6 +1274,10 @@
+@@ -862,6 +1281,10 @@
    updateMessage() {
      const msg = this.msg;
      const input = G.input;
@@ -7626,7 +7778,7 @@
      if (msg.state === 'typing') {
        if (input.advance()) { this.consumedConfirm = true; msg.skip = true; msg.wait = 0; }
        if (msg.wait > 0) { msg.wait--; return; }
-@@ -893,7 +1309,7 @@
+@@ -893,7 +1316,7 @@
        if (msg.choices) {
          msg.state = 'choice';
          this.choice.open('', msg.choices.map(c => ({ text: c.text, enabled: c.enabled })), {
@@ -7635,7 +7787,7 @@
            onSelect: i => { msg.onChoice?.(i); this.closeMessage(); },
            onCancel: () => { if (msg.cancelable) { msg.onChoice?.(-1); this.closeMessage(); } },
          });
-@@ -985,11 +1401,11 @@
+@@ -985,11 +1408,11 @@
      if (ray) {
        const uv = this.choice.panel.hit(ray);
        if (uv) {
@@ -7650,7 +7802,7 @@
          }
        }
      }
-@@ -1151,13 +1567,19 @@
+@@ -1151,13 +1574,19 @@
    coopMembersRow() { return { text: tr('멤버 ({n}명)', { n: G.coop.members().length }), id: 'members', desc: tr('고르면 모두의 위치를 봅니다') }; }
    showCoopMembers(index = 0) {
      const c = G.coop;
@@ -7672,7 +7824,7 @@
      });
    }
    // (the developer's world) what of this bag may be given to that one: its things (not the key items), weapons and
-@@ -1213,12 +1635,12 @@
+@@ -1213,12 +1642,12 @@
      if (kind === 'world') {
        for (const s of ((await G.listSaves?.('world')) || []).sort((a, b) => a.slot - b.slot)) {
          const m = G.saveMeta(s.meta);
@@ -7687,7 +7839,7 @@
        }
        for (const s of (await G.listRmSaves?.()) || []) items.push({ text: `${tr('원작')} ${s.label}  ${s.map}`, right: String(s.time), rm: s });
      }
-@@ -1227,7 +1649,7 @@
+@@ -1227,7 +1656,7 @@
      this.list.open(kind === 'world' ? tr('서버 세이브 불러오기') : tr('세이브 불러오기'), items, {
        onSelect: async (i, it) => {
          const st = it.rm ? G.stateOfRm(it.rm.contents, it.rm.label) : await G.loadSave(it.slot, it.kind);
@@ -7696,7 +7848,7 @@
          this.closeMenu();
          c.worldLoad(st);
        },
-@@ -1451,9 +1873,9 @@
+@@ -1451,9 +1880,9 @@
    notifyGain(kind, id, n) {
      const d = itemData(kind, id);
      if (!d) return;
@@ -7709,7 +7861,7 @@
    // SEN went up or down (BLACKSOULS II's SEN reminder, from its own script): its strip and its sound
    notifySen(delta) {
      const sen = G.scripts?.sen;
-@@ -1492,7 +1914,7 @@
+@@ -1492,7 +1921,7 @@
        ctx.globalAlpha = a;
        const y = 10 + i * 72;
        if (t.sen) { this.drawSenStrip(ctx, p.canvas.width, y, t); ctx.globalAlpha = 1; return; }
@@ -7718,7 +7870,7 @@
        let x = 24;
        if (t.icon) { drawIcon(ctx, t.icon, x, y + 8, 48); x += 60; }
        ctx.font = `34px ${FONT}`; ctx.fillStyle = t.color; ctx.textBaseline = 'middle';
-@@ -1503,66 +1925,147 @@
+@@ -1503,66 +1932,147 @@
      });
      p.commit();
      p.mesh.visible = this.toasts.length > 0;
@@ -7908,7 +8060,7 @@
      const c = G.input.controllers.right;
      if (!G.vr || !c) return null;
      const m = c.ray.matrixWorld;
-@@ -1572,70 +2075,155 @@
+@@ -1572,70 +2082,156 @@
    }
  
    // ---------------------------------------------------------------- menus
@@ -7938,9 +8090,10 @@
      this.showMainMenu();
    }
    closeMenu() {
++    this.bonfireTravel?.close();
 +    this.navigation.close();
 +    this.menuOverview.mesh.visible = false;
-+    if (this.sceneOpen === 'map') this.sceneOpen = null;
++    if (this.sceneOpen === 'map' || this.sceneOpen === 'bonfire') this.sceneOpen = null;
      this.menuOpen = false;
      this.list.close();
      this.grid.close();
@@ -8090,7 +8243,7 @@
        case 'coop': this.showCoopMenu(); break;
        case 'turn':
          if (s.snapTurn && s.snapAngle === 30) s.snapAngle = 45;
-@@ -1650,8 +2238,42 @@
+@@ -1650,8 +2246,43 @@
        case 'diff':
          s.difficulty = s.difficulty >= 1.5 ? 0.5 : +(s.difficulty + 0.25).toFixed(2);
          G.saveSettings?.(); this.reopenMain('diff'); break;
@@ -8104,6 +8257,7 @@
 +    }
 +  }
 +  showMap() {
++    this.bonfireTravel?.close();
 +    G.pictures?.requestViewerCancel?.();
 +    this.unlockPointer();
 +    this.mapReturnMenu = this.menuOpen;
@@ -8134,7 +8288,7 @@
      }
    }
    // an item / skill does something (effects or a damage formula)
-@@ -1760,11 +2382,14 @@
+@@ -1760,11 +2391,14 @@
      const back = () => { if (this.menuOpen) this.showSkills(keep); };
      const entry = { kind: 'skill', id: s.id };
      const slot = quickSlotOf(entry);
@@ -8152,7 +8306,7 @@
        { text: slot >= 0 ? tr('퀵슬롯 ({n}번에 등록됨)', { n: slot + 1 }) : tr('퀵슬롯에 등록'), id: 'quick', enabled: s.occasion !== 3,
          desc: tr('퀵슬롯 버튼(VR: X, PC: Q)을 누른 채 손을 옮기고 떼면 사용') },
        { text: tr('취소'), id: 'back' },
-@@ -1779,23 +2404,27 @@
+@@ -1779,23 +2413,27 @@
    }
  
    // ---- equipment ----
@@ -8188,7 +8342,7 @@
      const P = $data.system.terms.params;
      const parts = [0, 2, 3, 4, 5, 6, 7].filter(i => after[i] !== before[i])
        .map(i => `${P[i]} ${after[i] > before[i] ? '+' : '−'}${Math.abs(after[i] - before[i])}`);
-@@ -1807,7 +2436,8 @@
+@@ -1807,7 +2445,8 @@
      this.grid.close();
      const slots = a.equips.map((e, slot) => {
        const d = itemData(e.kind, e.id);
@@ -8198,7 +8352,7 @@
      });
      this.list.open(tr('장비  ({name})', { name: a.name || '' }), slots, {
        index,
-@@ -1819,7 +2449,8 @@
+@@ -1819,7 +2458,8 @@
    // pointed at - what it changes, then what it is
    showEquipChoices(slot) {
      const a = G.state.party.leader();
@@ -8208,7 +8362,7 @@
      const party = G.state.party;
      const cands = [{ text: tr('(장비 해제)'), id: 0, desc: this.paramDelta(a, slot, kind, 0) }];
      for (const [id, n] of party.container(kind)) {
-@@ -1832,7 +2463,10 @@
+@@ -1832,7 +2472,10 @@
      this.grid.open(tr('{slot} 변경', { slot: this.slotName(slot) }), [{ label: this.slotName(slot), items: cands }], {
        tab: 0,
        onSelect: (it) => {
@@ -8220,7 +8374,7 @@
          G.combat.equipKey = null;
          G.audio?.playSystemSe(4);
          this.showEquipSlots(slot);
-@@ -1892,6 +2526,7 @@
+@@ -1892,6 +2535,7 @@
      const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
      const items = [
        { text: tr('VR 이동 속도'), id: 'vrSpeed', right: `×${s.vrSpeed ?? 2}`, desc: tr('스틱으로 걷는 속도 배율 (VR에서만)') },
@@ -8228,7 +8382,7 @@
        { text: tr('휘두르기 판정'), id: 'swing', right: SWING[s.swingLevel ?? 2], desc: tr('이 정도 세기로 휘둘러야 공격이 들어갑니다 (VR)') },
        { text: tr('이펙트 밝기'), id: 'fx', right: `${Math.round((s.fxBrightness ?? 0.5) * 100)}%`, desc: tr('번쩍임·빛·스킬 애니메이션의 밝기') },
        { text: tr('스킬 애니메이션'), id: 'anims', right: ANIMS[s.skillAnims || 'all'], desc: tr('원작 스킬·공격 애니메이션을 대상 위치에 재생합니다') },
-@@ -1909,6 +2544,7 @@
+@@ -1909,6 +2553,7 @@
        index,
        onSelect: (i, it) => {
          if (it.id === 'vrSpeed') s.vrSpeed = cycle([1, 1.5, 2, 2.5, 3], s.vrSpeed ?? 2);
@@ -8236,7 +8390,7 @@
          if (it.id === 'swing') s.swingLevel = ((s.swingLevel ?? 2) + 1) % 4;
          if (it.id === 'fx') s.fxBrightness = cycle([0.25, 0.5, 0.75, 1], s.fxBrightness ?? 0.5);
          if (it.id === 'anims') s.skillAnims = cycle(['all', 'skills', 'off'], s.skillAnims || 'all');
-@@ -1996,11 +2632,13 @@
+@@ -1996,16 +2641,19 @@
      const items = [
        { text: `${a.name || '???'}  Lv ${a.level}`, right: $data.classes[a.classId]?.name || '' },
        { text: `HP ${a.hp}/${a.mhp}`, right: `MP ${a.mp}/${a.mmp}` },
@@ -8247,15 +8401,24 @@
        ...a.partners.map(sid => { const it = this.oathInfo(sid); return { text: it.name, right: it.lv, desc: it.effect }; }),
      ];
 -    this.list.open(tr('상태'), items, { onSelect: () => {}, onCancel: () => this.showMainMenu() });
+-  }
+-  returnToTitle() { G.returnToTitle?.(); }
 +    this.list.open(tr('상태'), items, { onSelect: () => {}, onCancel: () => this.reopenMain('status') });
-   }
-   returnToTitle() { G.returnToTitle?.(); }
++  }
++  returnToTitle() { this.bonfireTravel?.close(); G.returnToTitle?.(); }
  
-@@ -2013,14 +2651,9 @@
+   // scenes requested by script calls
+   openScene(name) {
++    if (name !== 'Scene_ShortMove') this.bonfireTravel?.close();
+     if (name === 'Scene_ShortMove') { this.openBonfireWarp(); return; }
+     if (name === 'Scene_ItemSynthesis') { this.openSynthesis(); return; }
+     if (name === 'Scene_Keep' || name === 'Scene_Item_Keep') { this.openKeep(); return; }
+@@ -2013,25 +2661,39 @@
      this.toast(tr('{label}: VR판에서는 아직 지원하지 않습니다', { label }));
    }
    openBonfireWarp() {
 -    // (shown and picked as the original's window has it - scriptdata.js bonfireShown / bonfirePickable)
++    this.bonfireTravel?.close();
      const sw = id => G.state.sw(id);
      const list = (G.scripts.bonfires || []).filter(b => bonfireShown(b, sw));
 -    if (!list.length) {
@@ -8265,9 +8428,45 @@
 -    }
 +    if (!list.length) { this.toast(tr('이동할 수 있는 화톳불이 없습니다')); return; }
      this.sceneOpen = 'bonfire';
-     this.placeRoot(true);
-     this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, desc: b.desc[0], enabled: bonfirePickable(b, sw) })), {
-@@ -2212,9 +2845,8 @@
+-    this.placeRoot(true);
+-    this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, desc: b.desc[0], enabled: bonfirePickable(b, sw) })), {
++    const state = G.state, map = G.map;
++    let closed = false;
++    const close = () => {
++      closed = true;
++      this.bonfireTravel?.close(); this.list.close(); this.sceneOpen = null;
++    };
++    this.list.panel?.mesh.position.set(0, 0, 0);
++    this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, enabled: bonfirePickable(b, sw) })), {
++      hint: () => tr(G.vr ? '스틱: 선택 · A: 결정 · B: 뒤로' : '↑↓: 선택 · Enter: 결정 · Esc: 뒤로'),
+       onSelect: i => {
+         const b = list[i];
+-        this.list.close(); this.sceneOpen = null;
+-        G.map.reserveTransfer(b.mapId, b.x, b.y, b.dir, 0);
+-        if (!G.coop?.phantom) for (const ce of b.commons) G.map.reserveCommonEvent(ce);      // (a co-op guest's: the host's world's to run)
++        if (closed || this.sceneOpen !== 'bonfire' || state !== G.state || map !== G.map || map.transferring || G.combat?.playerDead) return;
++        if (!b || !bonfireShown(b, sw) || !bonfirePickable(b, sw)) { G.audio?.playSystemSe(3); return; }
++        close();
++        map.reserveTransfer(b.mapId, b.x, b.y, b.dir, 0);
++        if (!G.coop?.phantom) for (const ce of b.commons) map.reserveCommonEvent(ce);      // (a co-op guest's: the host's world's to run)
+       },
+-      onCancel: () => { this.list.close(); this.sceneOpen = null; },
+-    });
++      onCancel: close,
++    });
++    this.bonfireTravel?.open(list, G.scripts.bonfireMap);
++    this.placeRoot(true);
++  }
++  updateBonfireTravel() {
++    if (!this.bonfireTravel) return;
++    const owned = !!this.bonfireTravel.session;
++    if (!this.bonfireTravel.update() && owned && this.sceneOpen === 'bonfire') {
++      this.list.close(); this.sceneOpen = null;
++    }
+   }
+   // Select Key Item (104): which key item; the variable gets its id (0: cancelled)
+   openKeyItemChoice(varId) {
+@@ -2212,9 +2874,8 @@
    }
    closeShop() { this.list.close(); this.sceneOpen = null; this.shopKeep = false; }
    showShopCommand(entries, index = 0) {
@@ -8279,7 +8478,7 @@
      ], {
        index,
        onSelect: (i, it) => {
-@@ -2236,17 +2868,51 @@
+@@ -2236,17 +2897,51 @@
      const msg = this.shopKeep ? K.toKeep : K.toBag;
      if (msg) this.toast(msg);
    }
@@ -8336,7 +8535,7 @@
        index: at,
        onSelect: (i, it) => {
          at = i;
-@@ -2321,36 +2987,52 @@
+@@ -2321,36 +3016,52 @@
        onCancel: back,
      });
    }
@@ -8400,11 +8599,12 @@
          this.showShopQuantity(e, back, it.step === 'max' ? max : n + it.step, i);
        },
        onAdjust: dx => { this.showShopQuantity(e, back, n + dx, this.list.index); return true; },
-@@ -2362,8 +3044,10 @@
+@@ -2362,8 +3073,11 @@
    update(dt) {
      this.consumedConfirm = false;
      this.pointerTarget = false;
 +    this.updateDialoguePresentation();
++    this.updateBonfireTravel();
 +    if (this.sceneBusy() || this.dialogueActive() || this.keyboard.visible || this.prompt?.shown) this.unlockPointer();
      if (this.actionLockUntil && G.time < this.actionLockUntil) this.consumedConfirm = true;
 -    const anyPanel = this.msg || this.menuOpen || this.sceneOpen || this.banner || this.toasts.length || this.remote?.shown || this.prompt?.shown;
@@ -8412,7 +8612,7 @@
      if (anyPanel) this.placeRoot();
      if (this.banner) {
        this.banner.t += dt;
-@@ -2374,15 +3058,19 @@
+@@ -2374,15 +3088,19 @@
        }
        this.drawBanner();
      }
@@ -8437,7 +8637,7 @@
      }
      this.updateBossPrompt(dt);
      this.updateRemote();
-@@ -2393,7 +3081,20 @@
+@@ -2393,7 +3111,21 @@
        if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
      }
      this.drawHud();
@@ -8448,6 +8648,7 @@
 +    this.navigation.update(dt, this.hudPresent && !G.combat?.playerDead && !this.dialogueActive() && !this.banner?.blocking,
 +      !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
 +    this.updateDungeonStatus();
++    this.updateBonfireTravel();
 +    if (!G.vr) this.placeRoot();
 +    const rewardPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
 +    if (!this.hudPresent && this.rewardsHadPlayer) this.rewards.clear();
@@ -8458,7 +8659,7 @@
      this.updatePointerLine();
    }
    updateHudFollow() {
-@@ -2406,11 +3107,23 @@
+@@ -2406,11 +3138,23 @@
      this.camera.getWorldPosition(head);
      this.hud.mesh.lookAt(head);
    }
@@ -10343,6 +10544,173 @@
 +  if (ctx.measureText(text).width <= width) return text;
 +  while (chars.length && ctx.measureText(chars.join('') + '…').width > width) chars.pop();
 +  return chars.join('') + '…';
++}
+--- /dev/null
++++ fork/apps/client/src/ui/bonfire-travel.js
+@@ -0,0 +1,164 @@
++import { G } from '../core/globals.js';
++import { loadCanvas } from '../data/assets.js';
++import { desktopViewport } from './desktop-layout.js';
++import { tr } from './i18n.js';
++
++// Scene_ShortMove's map is artwork shared by every destination. Its marker
++// coordinates stay in that artwork's space, even when the UI is resized.
++export class BonfireTravel {
++  constructor({ Panel, root, list, ui, font = 'sans-serif', windowBg, fitLabel = (_ctx, text) => text, load = loadCanvas }) {
++    Object.assign(this, { root, list, ui, font, windowBg, fitLabel, load });
++    this.panel = new Panel(780, 678, 0.78);
++    root.add(this.panel.mesh);
++    this.generation = 0;
++    this.session = null;
++  }
++  open(destinations, config) {
++    this.close();
++    const panel = this.list.panel;
++    this.session = { generation: ++this.generation, destinations, config, items: this.list.items,
++      state: G.state, map: G.map, mapId: G.map?.mapId, assets: new Map(), revision: 0,
++      original: { width: panel.canvas.width, height: panel.canvas.height, widthM: panel.widthM,
++        position: panel.mesh.position.clone(), rows: this.list.rows, rowTop: this.list.rowTop,
++        rowH: this.list.rowH, choiceFont: this.list.choiceFont } };
++    this.layoutKey = this.drawKey = null;
++    this.panel.mesh.visible = true;
++    this.update();
++  }
++  owns(session = this.session) {
++    return !!session && session === this.session && session.generation === this.generation
++      && session.state === G.state && session.map === G.map && session.mapId === G.map?.mapId
++      && !G.map?.transferring && !G.combat?.playerDead && this.ui.sceneOpen === 'bonfire'
++      && this.list.visible && this.list.items === session.items;
++  }
++  close() {
++    const session = this.session;
++    this.generation++;
++    this.session = null;
++    this.panel.mesh.visible = false;
++    this.layoutKey = this.drawKey = null;
++    if (!session || this.list.items !== session.items) return;
++    const original = session.original;
++    this.list.rows = original.rows; this.list.rowTop = original.rowTop; this.list.rowH = original.rowH;
++    this.list.choiceFont = original.choiceFont;
++    this.list.panel.resize(original.width, original.height, original.widthM);
++    this.list.panel.mesh.position.copy(original.position);
++    if (this.list.visible) this.list.draw();
++  }
++  asset(folder, name) {
++    const session = this.session;
++    if (!session || typeof name !== 'string' || !name) return null;
++    const key = `${folder}/${name}`;
++    if (!session.assets.has(key)) {
++      const entry = { image: null, done: false };
++      session.assets.set(key, entry);
++      Promise.resolve().then(() => this.load(folder, name)).then(image => {
++        if (!this.owns(session)) return;
++        entry.image = image?.width > 0 && image?.height > 0 ? image : null;
++        entry.done = true; session.revision++; this.update();
++      }, () => {
++        if (!this.owns(session)) return;
++        entry.done = true; session.revision++; this.update();
++      });
++    }
++    return session.assets.get(key);
++  }
++  layout() {
++    const viewport = desktopViewport(G.input, G.three?.renderer);
++    const narrow = !G.vr && viewport.width < 760;
++    const rows = narrow ? Math.min(this.session.original.rows, viewport.height < 640 ? 2 : 3) : this.session.original.rows;
++    const key = `${G.vr}/${narrow}/${rows}`;
++    if (key === this.layoutKey) return;
++    this.layoutKey = key;
++    this.list.rows = rows;
++    this.list.rowTop = 100; this.list.rowH = 64; this.list.choiceFont = 36;
++    if (narrow) {
++      const listHeight = 110 + rows * 64 + 56, previewHeight = 450, gap = 0.016;
++      this.list.panel.resize(640, listHeight, 0.64);
++      this.panel.resize(640, previewHeight, 0.64);
++      this.panel.mesh.position.set(0, (listHeight / 1000 + gap) / 2, 0);
++      this.list.panel.mesh.position.set(0, -(previewHeight / 1000 + gap) / 2, 0);
++    } else {
++      const height = 110 + rows * 64 + 56;
++      this.list.panel.resize(600, height, 0.6);
++      this.panel.resize(780, height, 0.78);
++      this.list.panel.mesh.position.set(-0.398, 0, 0);
++      this.panel.mesh.position.set(0.308, 0, 0);
++    }
++    this.narrow = narrow;
++    // draw() clamps scrolling against the new row count without losing focus.
++    this.list.draw();
++    this.drawKey = null;
++  }
++  markers() {
++    const session = this.session, config = session.config, selected = session.destinations[this.list.index];
++    const icons = (config?.icons || []).filter(marker =>
++      (!marker.showSwitch || session.state.sw(marker.showSwitch)) && (!marker.hideSwitch || !session.state.sw(marker.hideSwitch)));
++    const player = selected && config?.players?.[selected.index];
++    return [...icons.map(marker => ({ ...marker, actor: marker.type === 0 ? session.state.actor?.(marker.actorId) : null })),
++      ...(player ? [{ ...player, actor: player.type === 0 ? session.state.party?.leader?.() : null }] : [])];
++  }
++  update() {
++    if (!this.session) return false;
++    if (!this.owns()) { this.close(); return false; }
++    this.layout();
++    const session = this.session, selected = session.destinations[this.list.index], markers = this.markers();
++    const map = this.asset('Graphics/Pictures', session.config?.picture);
++    const prepared = markers.map(marker => ({ ...marker, image: marker.type === 0
++      ? this.asset('Graphics/Characters', marker.actor?.characterName)?.image
++      : marker.type === 2 ? this.asset('Graphics/Pictures', marker.picture)?.image : null }));
++    const key = JSON.stringify([this.layoutKey, this.list.index, session.revision, selected?.name, selected?.desc,
++      prepared.map(marker => [marker.type, marker.x, marker.y, marker.size, marker.color, marker.picture,
++        marker.actor?.characterName, marker.actor?.characterIndex])]);
++    if (key !== this.drawKey) { this.drawKey = key; this.draw(selected, map, prepared); }
++    return true;
++  }
++  draw(selected, map, markers) {
++    const { panel, font } = this, { ctx, canvas } = panel;
++    panel.clear();
++    this.windowBg?.(ctx, 4, 4, canvas.width - 8, canvas.height - 8, G.vr ? 0.9 : 0.25, G.vr ? 1 : 0.65);
++    ctx.save(); ctx.textBaseline = 'middle'; ctx.textAlign = 'left'; ctx.imageSmoothingEnabled = false;
++    const area = { x: 24, y: 20, width: canvas.width - 48, height: this.narrow ? 272 : canvas.height - 174 };
++    const image = map?.image;
++    if (image) {
++      const scale = Math.min(area.width / image.width, area.height / image.height);
++      const rect = { x: area.x + (area.width - image.width * scale) / 2,
++        y: area.y + (area.height - image.height * scale) / 2, width: image.width * scale, height: image.height * scale };
++      this.imageRect = rect;
++      ctx.drawImage(image, rect.x, rect.y, rect.width, rect.height);
++      ctx.save(); ctx.beginPath(); ctx.rect(rect.x, rect.y, rect.width, rect.height); ctx.clip();
++      for (const marker of markers) this.drawMarker(marker, rect, scale);
++      ctx.restore();
++    } else {
++      this.imageRect = null;
++      ctx.fillStyle = '#e8d8a8'; ctx.font = `30px ${font}`; ctx.textAlign = 'center';
++      ctx.fillText(this.fitLabel(ctx, tr(map && !map.done ? '지도를 불러오는 중입니다' : '지도 미리보기를 사용할 수 없습니다'), area.width), canvas.width / 2, area.y + area.height / 2);
++      ctx.textAlign = 'left';
++    }
++    const y = this.narrow ? 320 : canvas.height - 120;
++    ctx.fillStyle = '#e8d8a8'; ctx.font = `36px ${font}`;
++    ctx.fillText(this.fitLabel(ctx, String(selected?.name || ''), canvas.width - 48), 24, y);
++    ctx.fillStyle = '#f0f0f0'; ctx.font = `${this.narrow ? 34 : 30}px ${font}`;
++    for (let i = 0; i < 2; i++) ctx.fillText(this.fitLabel(ctx, String(selected?.desc?.[i] || ''), canvas.width - 48), 24, y + 46 + i * 42);
++    ctx.restore(); panel.commit();
++  }
++  drawMarker(marker, rect, scale) {
++    if (![marker.x, marker.y].every(Number.isFinite)) return;
++    const ctx = this.panel.ctx, x = rect.x + marker.x * scale, y = rect.y + marker.y * scale;
++    if (marker.type === 1) {
++      const size = Number.isFinite(marker.size) ? Math.max(0, marker.size) : 7;
++      const color = marker.color || [0, 0, 0];
++      ctx.fillStyle = `rgb(${color.join(',')})`;
++      ctx.fillRect(rect.x + (marker.x - Math.floor(size / 2)) * scale,
++        rect.y + (marker.y - Math.floor(size / 2)) * scale, size * scale, size * scale);
++    } else if (marker.type === 2 && marker.image) {
++      ctx.drawImage(marker.image, x, y, marker.image.width * scale, marker.image.height * scale);
++    } else if (marker.type === 0 && marker.image) {
++      const single = /^[!]*\$/.test(marker.actor?.characterName || ''), image = marker.image;
++      const cw = image.width / (single ? 3 : 12), ch = image.height / (single ? 4 : 8);
++      const raw = marker.actor?.characterIndex, index = single ? 0 : Number.isInteger(raw) ? Math.max(0, Math.min(7, raw)) : 0;
++      ctx.drawImage(image, (index % 4 * 3 + 1) * cw, Math.floor(index / 4) * 4 * ch, cw, ch,
++        x - cw * scale / 2, y - ch * scale, cw * scale, ch * scale);
++    }
++  }
 +}
 --- /dev/null
 +++ fork/apps/client/src/ui/classic-menu.js
