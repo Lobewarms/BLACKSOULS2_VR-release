@@ -1862,3 +1862,8 @@ mechanic regressions, not a claim of physical-headset or full-story playtesting.
 
 Local verification passed 758 JavaScript regressions, ESLint, Ruff, the production
 build, 8 packaging tests and 7 Python protocol tests.
+
+The literal upstream runtime comparison now uses commit 39953da (0.2.30):
+48 original modules retained, 16 unchanged after import moves, 32 modified,
+37 new, 0 missing; 3,206 added/808 removed lines in modified originals after
+import normalization. Actual comparison images remain labelled 0.2.25.
