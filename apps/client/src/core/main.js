@@ -175,7 +175,10 @@ renderer.xr.addEventListener('sessionend', () => {
   viewMode.restoreDesktop();
 });
 const vrContainer = document.getElementById('vrbtn');
-const vrStatus = createXrStatus(vrContainer, { onCancel: () => vrButton.cancelStartup() });
+const vrStatus = createXrStatus(vrContainer, {
+  onCancel: () => vrButton.cancelStartup(),
+  onRecover: () => vrButton.recoverConnection(),
+});
 const vrButton = createVRButton(renderer, {
   waitForPose: true,
   referenceSpaceType: 'local-floor',
@@ -184,8 +187,8 @@ const vrButton = createVRButton(renderer, {
   // the headset shows something else (the SteamVR dashboard or desktop, the system menu, the headset is off):
   // the game waits, as it does behind a menu
   onVisibility: v => { G.xrAway = v === 'visible-blurred' || v === 'hidden'; },
-  // Only a failed granted start requests browser-runtime recovery (src/vrbutton.js).
-  // Healthy session exits keep the current runtime ready for immediate reentry.
+  // Failed ended starts and an explicit stalled-connection recovery can reset
+  // this game browser's XR service. Healthy exits keep the runtime ready.
   resetXr: async () => {
     const r = await fetch('/api/xr-reset', { method: 'POST' });
     if (!r.ok) return false;

@@ -158,6 +158,9 @@ pkill -f coop_server; f=$(ls -t coop_server*.py | head -1); [ "$f" = coop_server
 - 无法识别游戏文件夹：请选择包含 Game.exe 和 Data 文件夹 (或 Game.rgss3a) 的文件夹。
 - 显示「VR NOT SUPPORTED」：请先启动 SteamVR 或 Quest Link，关闭游戏窗口后再按一次「启动」。
 - 退出 VR 后再次进入：按钮会短暂显示「VR ...」，变回 ENTER VR 后再按即可。
+- VR连接较慢时，请按照进度提示操作，并让头显保持就绪。
+- 取消后会等待尚未完成的连接关闭。启动或退出卡住时，请使用出现的“重置VR连接”，等待完成后再进入。
+- 如果无法确认连接已关闭，请尽可能先保存，然后重新打开游戏窗口。如果Quest Link本身卡住，请重启头显和Link，并查看Meta Link电脑应用中的警告。
 - 打开仪表板或摘下头显时，游戏会暂停。
 - 只有使用 SteamVR 时手柄才会振动。
 - 端口错误：请在启动器中更换端口号。

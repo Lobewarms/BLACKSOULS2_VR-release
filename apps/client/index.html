@@ -21,11 +21,12 @@
     border-radius: 5px; background: rgba(6,5,8,.88); color: #f0ece4; font: 13px/1.4 "Malgun Gothic", sans-serif; text-align: center; }
   #vrbtn .xr-status[hidden], #vrbtn .xr-status [hidden] { display: none; }
   #vrbtn .xr-status__help { color: #d8d0c0; font-size: 12px; }
-  #vrbtn .xr-status__cancel { width: auto; max-width: 100%; padding: 6px 12px; border: 1px solid #c6baa2;
+  #vrbtn .xr-status__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+  #vrbtn .xr-status__cancel, #vrbtn .xr-status__recover { width: auto; max-width: 100%; padding: 6px 12px; border: 1px solid #c6baa2;
     border-radius: 4px; background: #26222b; color: #fff; font: inherit; opacity: 1; cursor: pointer; }
-  #vrbtn .xr-status__cancel:hover:enabled { background: #3a333e; }
-  #vrbtn .xr-status__cancel:focus-visible { outline: 2px solid #e2d4b7; outline-offset: 2px; }
-  #vrbtn .xr-status__cancel:disabled { cursor: wait; }
+  #vrbtn .xr-status__cancel:hover:enabled, #vrbtn .xr-status__recover:hover:enabled { background: #3a333e; }
+  #vrbtn .xr-status__cancel:focus-visible, #vrbtn .xr-status__recover:focus-visible { outline: 2px solid #e2d4b7; outline-offset: 2px; }
+  #vrbtn .xr-status__cancel:disabled, #vrbtn .xr-status__recover:disabled { cursor: wait; }
   /* while the headset is on, the page shows the player's view for people watching */
   #spectator { position: fixed; inset: 0; width: 100%; height: 100%; display: none; z-index: 1; background: #000; }
   body.spectating #spectator { display: block; }

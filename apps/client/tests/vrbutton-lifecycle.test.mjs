@@ -124,19 +124,17 @@ test('failed start whose end rejects remains retryable until its actual end even
   assert.equal(e.restores, 1); assert.equal(e.button.textContent, 'ENTER VR');
 });
 
-test('a timed-out request ends its late grant without attaching it over the next live session', async t => {
+test('a fifty-five-second native grant stays owned after soft feedback and enters VR without another request', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
-  const grant = deferred(), late = new Session(), fresh = new Session();
-  const e = environment(t, { request: index => index === 0 ? grant.promise : fresh });
+  const grant = deferred(), session = new Session();
+  const e = environment(t, { request: () => grant.promise });
   await e.start(); assert.equal(e.button.textContent, 'CANCEL VR START');
   t.mock.timers.tick(20000); await flush();
-  assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.attached.length, 0);
-  await e.start(); assert.equal(e.xr.getSession(), fresh);
-  grant.resolve(late); await flush();
-  assert.equal(late.endCalls, 1); assert.deepEqual(e.attached, [fresh]);
-  assert.equal(e.xr.getSession(), fresh); assert.equal(e.button.textContent, 'EXIT VR');
-  late.visibility('hidden'); late.emitEnd(); await flush();
-  assert.equal(e.xr.getSession(), fresh); assert.equal(e.visibility.length, 0);
+  assert.equal(e.statuses.at(-1).stage, 'permission-slow'); assert.equal(e.attached.length, 0);
+  assert.equal(e.button.textContent.includes('ENTER VR'), false); assert.equal(e.requests.length, 1);
+  t.mock.timers.tick(35000); grant.resolve(session); await flush();
+  assert.equal(session.endCalls, 0); assert.deepEqual(e.attached, [session]);
+  assert.equal(e.xr.getSession(), session); assert.equal(e.button.textContent, 'EXIT VR'); assert.equal(e.requests.length, 1);
   e.button.click(); await flush();
 });
 
@@ -155,10 +153,10 @@ test('an uncancellable attachment timeout owns the attempt until it settles and 
   assert.equal(e.restores, 1); assert.equal(e.button.textContent, 'ENTER VR');
 });
 
-test('a request grant racing its timeout in the same turn is still closed without attachment', async t => {
+test('a grant racing the ninety-second hard stall is observed and closed without attachment', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const grant = deferred(), session = new Session(), e = environment(t, { request: () => grant.promise });
-  await e.start(); t.mock.timers.tick(20000); grant.resolve(session); await flush();
+  await e.start(); t.mock.timers.tick(90000); grant.resolve(session); await flush();
   assert.equal(session.endCalls, 1); assert.equal(e.attached.length, 0);
   assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.restores, 1);
 });
@@ -225,15 +223,20 @@ test('the native session request runs synchronously in the click activation befo
   assert.equal(e.button.textContent, 'EXIT VR'); e.button.click(); await flush();
 });
 
-test('cancelling pending permission closes its late grant without attaching it over the next live session', async t => {
+test('cancelling permission owns its late grant until actual end and blocks any newer request', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const grant = deferred(), late = new Session(), fresh = new Session();
   const e = environment(t, { request: index => index ? fresh : grant.promise });
   await e.start(); assert.equal(e.statuses.at(-1).stage, 'permission'); assert.equal(e.statuses.at(-1).canCancel, true);
-  e.button.click(); await flush(); assert.equal(e.button.textContent, 'ENTER VR');
-  assert.equal(e.statuses.at(-1).stage, 'cancelled');
-  await e.start(); grant.resolve(late); await flush();
-  assert.equal(late.endCalls, 1); assert.deepEqual(e.attached, [fresh]); assert.equal(e.xr.getSession(), fresh);
+  e.button.click(); await flush(); assert.equal(e.button.textContent, 'WAITING FOR VR...');
+  assert.equal(e.statuses.at(-1).stage, 'permission-stalled');
+  e.button.click(); assert.equal(e.requests.length, 1);
+  late.endBehavior = () => new Promise(() => {}); grant.resolve(late); await flush();
+  assert.equal(late.endCalls, 1); assert.deepEqual(e.attached, []); assert.equal(e.xr.getSession(), null);
+  t.mock.timers.tick(8000); await flush(); assert.equal(e.button.textContent, 'EXIT VR');
+  e.button.click(); await flush(); assert.equal(e.requests.length, 1, 'EXIT retries cleanup instead of starting another request');
+  late.emitEnd(); await flush(); assert.equal(e.button.textContent, 'ENTER VR');
+  await e.start(); assert.equal(e.xr.getSession(), fresh); assert.deepEqual(e.attached, [fresh]);
   e.button.click(); await flush();
 });
 
@@ -426,4 +429,130 @@ test('a hung recovery support query respects the total fifteen-second deadline a
   assert.equal(e.button.textContent, 'EXIT VR'); query.resolve(false); await flush();
   assert.equal(e.xr.getSession(), session); assert.equal(e.button.textContent, 'EXIT VR');
   e.button.click(); await flush(); assert.equal(e.resets, 1, 'healthy exit must not reset after recovery query timed out');
+});
+
+test('ninety-second permission stall keeps native ownership and offers only explicit recovery', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const grant = deferred(), e = environment(t, { request: () => grant.promise, reset: async () => false });
+  await e.start(); t.mock.timers.tick(20000); await flush();
+  assert.equal(e.statuses.at(-1).stage, 'permission-slow'); assert.equal(e.statuses.at(-1).canRecover, false);
+  t.mock.timers.tick(70000); await flush();
+  assert.equal(e.statuses.at(-1).stage, 'permission-stalled'); assert.equal(e.statuses.at(-1).canRecover, true);
+  assert.equal(e.button.textContent.includes('ENTER VR'), false); assert.equal(e.resets, 0);
+  e.button.click(); e.platform.dispatchEvent(new Event('devicechange')); await flush(); assert.equal(e.requests.length, 1);
+  grant.reject(new DOMException('Native request ended', 'AbortError')); await flush();
+  assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.resets, 0, 'a rejected permission request needs no automatic runtime stop');
+});
+
+test('manual recovery after cancelling permission keeps its late grant owned until both native end and reset settlement', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const grant = deferred(), reset = deferred(), late = new Session(); late.endBehavior = () => new Promise(() => {});
+  const e = environment(t, { request: () => grant.promise, reset: () => reset.promise });
+  await e.start(); e.button.cancelStartup(); assert.equal(e.statuses.at(-1).canRecover, true);
+  assert.equal(e.button.recoverConnection(), true); assert.equal(e.button.recoverConnection(), false); await flush();
+  assert.equal(e.resets, 1); grant.resolve(late); await flush();
+  assert.equal(late.endCalls, 1); assert.equal(e.attached.length, 0);
+  t.mock.timers.tick(8000); await flush();
+  assert.equal(e.statuses.at(-1).stage, 'recovering'); assert.equal(e.button.disabled, true);
+  late.emitEnd(); await flush(); assert.notEqual(e.button.textContent, 'ENTER VR');
+  e.button.click(); assert.equal(e.requests.length, 1);
+  reset.resolve(false); await flush(); assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.resets, 1);
+});
+
+test('failed recovery cannot free a cancelled native permission request before its actual rejection', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const grant = deferred(), e = environment(t, { request: () => grant.promise, reset: async () => false });
+  await e.start(); e.button.cancelStartup(); e.button.recoverConnection(); await flush();
+  assert.equal(e.statuses.at(-1).stage, 'recovery-stalled'); assert.equal(e.statuses.at(-1).needsReload, true);
+  assert.equal(e.statuses.at(-1).canRecover, false); assert.notEqual(e.button.textContent, 'ENTER VR');
+  e.button.click(); assert.equal(e.requests.length, 1); assert.equal(e.resets, 1);
+  grant.reject(new DOMException('Runtime disconnected', 'AbortError')); await flush();
+  assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.resets, 1);
+});
+
+test('explicit stuck-exit recovery preserves pinned Three cleanup and cannot unlock a new session while reset is pending', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const reset = deferred(), n = nativeManager(t), session = new n.NativeSession();
+  const e = environment(t, { renderer: n.renderer, request: () => session, reset: () => reset.promise });
+  await e.start(); session.end = function () { this.endCalls++; return new Promise(() => {}); };
+  e.button.click(); t.mock.timers.tick(8000); await flush();
+  assert.equal(e.statuses.at(-1).canRecover, true); assert.equal(e.button.recoverConnection(), true);
+  assert.equal(e.button.recoverConnection(), false); await flush(); assert.equal(e.resets, 1);
+  session.dispatchEvent({ type: 'end' }); await flush();
+  assert.equal(n.manager.isPresenting, false); assert.equal(n.manager.getSession(), null);
+  assert.deepEqual(n.dimensions(), [1280, 720, 2], 'the native manager, not a fabricated end, restores its framebuffer and DPR');
+  assert.notEqual(e.button.textContent, 'ENTER VR'); assert.equal(e.button.disabled, true);
+  e.button.click(); assert.equal(e.requests.length, 1);
+  reset.resolve(true); await flush(); t.mock.timers.tick(400); await flush();
+  assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.resets, 1);
+});
+
+test('failed or rejected explicit exit recovery retains the live session instead of fabricating cleanup', async t => {
+  for (const throws of [false, true]) await t.test(throws ? 'rejected operation' : 'no process ended', async t => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const e = environment(t, { reset: async () => { if (throws) throw new Error('Reset unavailable'); return false; } });
+    const session = await e.start(); session.endBehavior = () => new Promise(() => {});
+    e.button.click(); t.mock.timers.tick(8000); await flush(); e.button.recoverConnection(); await flush();
+    assert.equal(e.statuses.at(-1).stage, 'recovery-stalled'); assert.equal(e.statuses.at(-1).needsReload, true);
+    assert.equal(e.xr.getSession(), session); assert.equal(e.xr.isPresenting, true); assert.equal(e.restores, 0);
+    assert.equal(e.button.recoverConnection(), false); e.button.click(); assert.equal(e.requests.length, 1); assert.equal(e.resets, 1);
+    session.emitEnd(); await flush(); assert.equal(e.button.textContent, 'ENTER VR');
+  });
+});
+
+test('reset timeout retains ownership even after native end until its late operation truly settles', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const reset = deferred(), e = environment(t, { reset: () => reset.promise }), session = await e.start();
+  session.endBehavior = () => new Promise(() => {}); e.button.click(); t.mock.timers.tick(8000); await flush();
+  e.button.recoverConnection(); await flush(); t.mock.timers.tick(10000); await flush();
+  assert.equal(e.statuses.at(-1).stage, 'recovery-stalled'); assert.equal(e.statuses.at(-1).canRecover, false);
+  session.emitEnd(); await flush(); assert.equal(e.xr.isPresenting, false); assert.notEqual(e.button.textContent, 'ENTER VR');
+  assert.equal(e.statuses.at(-1).stage, 'recovery-stalled'); e.button.click(); assert.equal(e.requests.length, 1);
+  reset.resolve(false); await flush(); assert.equal(e.button.textContent, 'ENTER VR');
+  const fresh = await e.start(); session.emitEnd(); session.visibility('hidden'); await flush();
+  assert.equal(e.xr.getSession(), fresh); assert.equal(e.resets, 1); e.button.click(); await flush();
+});
+
+test('a positive reset result without native end remains blocked and later real cleanup alone permits reentry', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const e = environment(t, { reset: async () => true }), session = await e.start();
+  session.endBehavior = () => new Promise(() => {}); e.button.click(); t.mock.timers.tick(8000); await flush();
+  e.button.recoverConnection(); await flush(); assert.notEqual(e.button.textContent, 'ENTER VR');
+  t.mock.timers.tick(10000); await flush(); assert.equal(e.statuses.at(-1).stage, 'recovery-stalled');
+  assert.equal(e.xr.isPresenting, true); assert.equal(e.xr.getSession(), session); assert.equal(e.restores, 0);
+  session.emitEnd(); await flush(); t.mock.timers.tick(400); await flush(); assert.equal(e.button.textContent, 'ENTER VR');
+});
+
+test('healthy hidden sessions and unknown Three attachments never authorize runtime recovery', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const attachment = deferred(); let block = false;
+  const e = environment(t, { reset: async () => false, attach: async (_session, xr) => { if (block) await attachment.promise; xr.isPresenting = true; } });
+  const session = await e.start(); session.visibility('hidden');
+  assert.equal(e.button.recoverConnection(), false); assert.equal(e.resets, 0);
+  e.button.click(); await flush(); block = true; await e.start();
+  assert.equal(e.button.recoverConnection(), false); e.button.cancelStartup();
+  t.mock.timers.tick(20000); await flush();
+  assert.equal(e.statuses.at(-1).stage, 'attachment-stalled'); assert.equal(e.statuses.at(-1).canRecover, false);
+  assert.equal(e.button.recoverConnection(), false); assert.equal(e.resets, 0);
+  attachment.resolve(); await flush(); assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.resets, 0);
+});
+
+test('manual recovery of a failed granted start is not repeated by its automatic ended-start recovery', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const reset = deferred(), session = new Session(); session.endBehavior = () => new Promise(() => {});
+  const e = environment(t, { request: () => session, reset: () => reset.promise, attach: async () => { throw new Error('Attachment failed'); } });
+  await e.start(); t.mock.timers.tick(8000); await flush(); assert.equal(e.button.recoverConnection(), true); await flush();
+  session.emitEnd(); await flush(); assert.equal(e.restores, 1); assert.notEqual(e.button.textContent, 'ENTER VR');
+  reset.resolve(false); await flush(); assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.resets, 1);
+});
+
+test('a synchronous native permission rejection clears pending ownership and permits an intentional retry', async t => {
+  let calls = 0;
+  const e = environment(t, { reset: async () => false, request: () => {
+    if (++calls === 1) throw new DOMException('Permission denied', 'NotAllowedError'); return new Session();
+  } });
+  await e.start(); assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.statuses.at(-1).stage, 'failed');
+  assert.equal(e.button.recoverConnection(), false); assert.equal(e.resets, 0); assert.equal(e.restores, 1);
+  const session = await e.start(); assert.equal(calls, 2); assert.equal(e.xr.getSession(), session);
+  e.button.click(); await flush();
 });

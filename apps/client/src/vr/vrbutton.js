@@ -114,8 +114,9 @@ export function createVRButton(renderer, opts = {}) {
   };
   const status = (stage, message) => {
     button.title = message;
-    opts.onStatus?.({ stage, message, canCancel: ['permission', 'graphics', 'reference-space', 'attaching', 'viewer-pose', 'viewer-pose-slow'].includes(stage),
-      needsReload: stage === 'attachment-stalled' });
+    opts.onStatus?.({ stage, message, canCancel: ['permission', 'permission-slow', 'graphics', 'reference-space', 'attaching', 'viewer-pose', 'viewer-pose-slow'].includes(stage),
+      canRecover: ['permission-stalled', 'ending-slow'].includes(stage) && recoveryAllowed(current), needsReload: ['attachment-stalled', 'recovery-stalled'].includes(stage)
+        || stage === 'permission-stalled' && !opts.resetXr });
   };
   if (!('xr' in navigator)) {
     show(window.isSecureContext === false ? 'WEBXR NEEDS HTTPS' : 'WEBXR NOT AVAILABLE', false);
@@ -124,6 +125,48 @@ export function createVRButton(renderer, opts = {}) {
   let state = 'off';       // off (no headset) | idle | starting | running | ending | resetting
   let current = null;
   let refreshId = 0;
+
+  function recoveryAllowed(attempt) {
+    return !!(attempt && opts.resetXr && attempt.attachSettled && !attempt.resetAttempted && !nativeFinished(attempt)
+      && (attempt.permissionPending && (attempt.cancelled || attempt.permissionStalled) || attempt.exitRequested && attempt.endFailed));
+  }
+
+  function clearPermissionTimers(attempt) {
+    clearTimeout(attempt.permissionSlowTimer); clearTimeout(attempt.permissionDeadline);
+  }
+
+  function nativeFinished(attempt) {
+    return !attempt.permissionPending && (attempt.ended || attempt.requestRejected) && attempt.attachSettled && !renderer.xr.isPresenting;
+  }
+
+  function recoveryStalled(attempt) {
+    if (current !== attempt) return;
+    state = 'resetting'; show('VR RECOVERY STALLED', false);
+    status('recovery-stalled', 'The browser has not safely closed the VR connection. Save if possible, then close this game window and reopen it from the launcher.');
+  }
+
+  function beginRecovery(attempt) {
+    if (current !== attempt || !attempt.attachSettled || attempt.resetAttempted || !opts.resetXr) return false;
+    attempt.resetAttempted = true;
+    const recovery = attempt.recovery = { pending: true, ok: false };
+    state = 'resetting'; show('RECOVERING VR...', false);
+    status('recovering', 'Recovering the VR connection. Waiting for the browser to close its existing session.');
+    recovery.timer = setTimeout(() => { recovery.timedOut = true; recoveryStalled(attempt); }, 10000);
+    // The diagnostic deadline does not cancel this native process operation.
+    // Keep ownership until it really settles, even if raw end arrived earlier.
+    Promise.resolve().then(() => opts.resetXr()).then(value => {
+      recovery.ok = !!value;
+    }, error => { warn('XR reset failed:', errText(error)); }).finally(() => {
+      recovery.pending = false; clearTimeout(recovery.timer);
+      if (current !== attempt) return;
+      if (nativeFinished(attempt)) finishAttempt(attempt);
+      else if (!recovery.ok || recovery.timedOut) recoveryStalled(attempt);
+      else {
+        recovery.signalTimer = setTimeout(() => { if (!nativeFinished(attempt)) recoveryStalled(attempt); }, 10000);
+      }
+    });
+    return true;
+  }
 
   async function refresh({ quiet = false } = {}) {
     if (state !== 'off' && state !== 'idle') return;
@@ -143,15 +186,11 @@ export function createVRButton(renderer, opts = {}) {
 
   // Recover a failed granted start; a healthy session keeps its ready runtime.
   async function afterSession(attempt) {
-    if (current !== attempt) return;
+    if (current !== attempt || attempt.recovery?.pending || attempt.finishing) return;
+    attempt.finishing = true;
     state = 'resetting';
     show('VR ...', false);
-    if (attempt.failed) status('recovering', 'Recovering the VR connection.');
-    let done = false;
-    if (attempt.failed && opts.resetXr) {
-      try { done = !!(await timeout(Promise.resolve(opts.resetXr()), 10000, 'XR reset')); } catch (e) { warn('XR reset failed:', errText(e)); }
-    }
-    if (current !== attempt) return;
+    const done = !!attempt.recovery?.ok;
     if (done) {
       // the browser starts the new process at once; wait until it has found the headset (at most 15 s)
       const t0 = performance.now(), endAt = t0 + 15000;
@@ -174,6 +213,7 @@ export function createVRButton(renderer, opts = {}) {
       log(`fresh XR process ${ok ? 'ready' : 'has no headset yet'} after ${Math.round(performance.now() - t0)} ms`);
     } else if (attempt.failed) log('XR process not reset (the next session may not show)');
     if (current !== attempt) return;
+    attempt.finished = true;
     current = null;
     state = 'idle';
     show('ENTER VR', true);
@@ -182,21 +222,45 @@ export function createVRButton(renderer, opts = {}) {
     refresh({ quiet: true });
   }
 
-  function finishEnded(attempt) {
-    if (current !== attempt || !attempt.ended || !attempt.attachSettled || attempt.finished || renderer.xr.isPresenting) return;
-    attempt.finished = true;
-    clearTimeout(attempt.poseTimer);
-    attempt.session.removeEventListener('end', attempt.onEnd);
-    attempt.session.removeEventListener('visibilitychange', attempt.onVisibility);
-    if (attempt.failed) opts.restoreView?.();
+  function finishAttempt(attempt) {
+    if (current !== attempt || !nativeFinished(attempt) || attempt.finished) return;
+    if (!attempt.cleaned) {
+      attempt.cleaned = true;
+      clearPermissionTimers(attempt); clearTimeout(attempt.poseTimer);
+      attempt.session?.removeEventListener('end', attempt.onEnd);
+      attempt.session?.removeEventListener('visibilitychange', attempt.onVisibility);
+      if (attempt.failed) opts.restoreView?.();
+    }
+    if (attempt.recovery?.pending) {
+      if (attempt.recovery.timedOut) recoveryStalled(attempt);
+      else { state = 'resetting'; show('RECOVERING VR...', false); status('recovering', 'Waiting for browser VR recovery to finish.'); }
+      return;
+    }
+    clearTimeout(attempt.recovery?.signalTimer);
+    if (attempt.failed && attempt.session && !attempt.resetAttempted && opts.resetXr) {
+      beginRecovery(attempt); return;
+    }
     void afterSession(attempt);
   }
   renderer.xr.addEventListener?.('sessionend', () => {
     // Raw XRSession.end runs our listener before Three's listener. A microtask
     // lets Three restore its saved renderer size before any failed-start fit.
     const attempt = current;
-    if (attempt?.ended) queueMicrotask(() => finishEnded(attempt));
+    if (attempt?.ended) queueMicrotask(() => finishAttempt(attempt));
   });
+
+  function stalledEnd(attempt) {
+    attempt.endFailed = true;
+    if (attempt.recovery) {
+      if (attempt.recovery.pending && !attempt.recovery.timedOut) {
+        state = 'resetting'; show('RECOVERING VR...', false);
+        status('recovering', 'Waiting for browser VR recovery to finish.');
+      } else recoveryStalled(attempt);
+      return;
+    }
+    state = 'running'; show('EXIT VR', true);
+    status('ending-slow', 'VR is still open in the headset. Retry EXIT VR or recover the connection.');
+  }
 
   async function endAttempt(attempt) {
     if (current !== attempt || attempt.ended || attempt.endPending) return;
@@ -208,33 +272,22 @@ export function createVRButton(renderer, opts = {}) {
     status('ending', 'Ending the VR session.');
     try {
       await timeout(Promise.race([Promise.resolve(attempt.session.end()), attempt.endObserved]), 8000, 'ending the VR session');
-      if (current === attempt && !attempt.ended) {
-        state = 'running'; show('EXIT VR', true);
-        status('ending-slow', 'The headset has not closed VR yet. Exit from the headset, or click EXIT VR to try again.');
-      }
+      if (current === attempt && !attempt.ended) stalledEnd(attempt);
     }
     catch (e) {
       if (current !== attempt || attempt.ended) return;
       warn('could not end the session:', errText(e));
       // A rejected end does not mean the headset session ended. Retain it so
       // EXIT VR can retry instead of offering a competing requestSession.
-      state = 'running';
-      show('EXIT VR', true);
-      status('ending-slow', 'VR is still open in the headset. Click EXIT VR to try again.');
+      stalledEnd(attempt);
     } finally { attempt.endPending = false; }
-  }
-
-  function endDetached(session) {
-    // requestSession may resolve after its timeout. Never attach that session
-    // or let its eventual events change the currently owned attempt.
-    try { Promise.resolve(session.end()).catch(e => warn('could not end a late session:', errText(e))); }
-    catch (e) { warn('could not end a late session:', errText(e)); }
   }
 
   async function start() {
     if (state !== 'idle' || renderer.xr.isPresenting) return;
-    const attempt = { session: null, ended: false, failed: false, cancelled: false, attachSettled: true, finished: false, endPending: false };
+    const attempt = { session: null, permissionPending: true, ended: false, failed: false, cancelled: false, attachSettled: true, finished: false, endPending: false };
     attempt.cancelledPromise = new Promise((_, reject) => { attempt.abortPreparation = () => reject(new Error('VR startup cancelled')); });
+    attempt.cancelledPromise.catch(() => {});
     attempt.endObserved = new Promise(resolve => { attempt.observeEnd = resolve; });
     const prepare = (promise, ms, label) => timeout(Promise.race([promise, attempt.cancelledPromise]), ms, label);
     current = attempt;
@@ -247,12 +300,19 @@ export function createVRButton(renderer, opts = {}) {
       // Keep the native permission request in the actual click activation.
       // GPU switching may take seconds and must never precede this request.
       const request = Promise.resolve(navigator.xr.requestSession('immersive-vr', sessionInit));
-      request.then(s => {
-        attempt.granted = s;
-        if (current !== attempt || attempt.failed) endDetached(s);
-      }, () => {});
-      const s = await prepare(request, 20000, 'headset permission');
-      if (current !== attempt || attempt.failed) return;
+      attempt.permissionSlowTimer = setTimeout(() => {
+        if (current === attempt && attempt.permissionPending && !attempt.cancelled && !attempt.resetAttempted)
+          status('permission-slow', 'The VR runtime is taking longer to connect. Keep waiting, or cancel this request.');
+      }, 20000);
+      attempt.permissionDeadline = setTimeout(() => {
+        if (current !== attempt || !attempt.permissionPending || attempt.cancelled || attempt.resetAttempted) return;
+        attempt.permissionStalled = true; attempt.failed = true;
+        state = 'permission-blocked'; show('WAITING FOR VR...', false);
+        status('permission-stalled', 'The browser has not finished opening VR. Recover the connection, or close this game window and reopen it.');
+      }, 90000);
+      const s = await request;
+      attempt.permissionPending = false; clearPermissionTimers(attempt);
+      if (current !== attempt) return;
       attempt.session = s;
       log(`session granted (${(s.enabledFeatures || []).join(', ') || 'no feature list'}), visibility ${s.visibilityState}`);
       attempt.onEnd = () => {
@@ -264,7 +324,7 @@ export function createVRButton(renderer, opts = {}) {
         show('EXITING...', false);
         log(`session ended after ${((performance.now() - t0) / 1000).toFixed(1)} s, ${renderer.info?.render?.frame ?? '?'} frames drawn`);
         opts.onVisibility?.('ended');
-        queueMicrotask(() => finishEnded(attempt));
+        queueMicrotask(() => finishAttempt(attempt));
       };
       attempt.onVisibility = () => {
         if (current !== attempt || attempt.ended) return;
@@ -273,6 +333,7 @@ export function createVRButton(renderer, opts = {}) {
       };
       s.addEventListener('end', attempt.onEnd);
       s.addEventListener('visibilitychange', attempt.onVisibility);
+      if (attempt.cancelled || attempt.permissionStalled || attempt.resetAttempted) { void endAttempt(attempt); return; }
       status('graphics', 'Preparing graphics for the headset. You can cancel VR startup here.');
       const compatible = await prepare(makeCompatible(renderer, 'ENTER VR'), 20000, 'preparing VR graphics');
       if (current !== attempt || attempt.ended || attempt.cancelled) return;
@@ -303,7 +364,7 @@ export function createVRButton(renderer, opts = {}) {
         attempt.restorePrepared();
         attempt.attachSettled = true;
         if (current !== attempt) return;
-        if (attempt.ended) queueMicrotask(() => finishEnded(attempt));
+        if (attempt.ended) queueMicrotask(() => finishAttempt(attempt));
         else if (attempt.endAfterAttach) { attempt.endAfterAttach = false; void endAttempt(attempt); }
       };
       attaching.then(settled, () => { attempt.failed = true; settled(); });
@@ -333,7 +394,7 @@ export function createVRButton(renderer, opts = {}) {
         // Three's pending setSession cannot be cancelled. Wait for it to
         // settle before ending/resetting, so it cannot attach after cleanup.
         if (attempt.attachSettled) {
-          if (attempt.ended) queueMicrotask(() => finishEnded(attempt));
+          if (attempt.ended) queueMicrotask(() => finishAttempt(attempt));
           else void endAttempt(attempt);
         } else {
           attempt.endAfterAttach = true;
@@ -341,13 +402,8 @@ export function createVRButton(renderer, opts = {}) {
         }
         return;
       }
-      if (attempt.granted) endDetached(attempt.granted);
-      if (!renderer.xr.isPresenting) opts.restoreView?.();
-      current = null;
-      state = 'idle';
-      show('ENTER VR', true);
-      status('failed', 'VR could not start. Check the headset permission and connection, then try again.');
-      refresh({ quiet: true });
+      attempt.permissionPending = false; attempt.requestRejected = true; clearPermissionTimers(attempt);
+      finishAttempt(attempt);
     }
   }
 
@@ -359,18 +415,20 @@ export function createVRButton(renderer, opts = {}) {
     const attempt = current;
     if (!attempt || state !== 'starting' && !(state === 'running' && opts.waitForPose && !attempt.firstPose)) return;
     attempt.cancelled = true;
-    attempt.abortPreparation();
     status('cancelling', 'Cancelling VR startup.');
-    if (attempt.session) {
+    clearPermissionTimers(attempt);
+    if (attempt.permissionPending) {
+      // The native request has no abort operation. AutoVr must not see ENTER
+      // VR again until that request rejects or its eventual grant truly ends.
+      state = 'permission-blocked'; show('WAITING FOR VR...', false);
+      status('permission-stalled', 'Cancellation is waiting for the VR runtime. Recover the connection, or close this game window and reopen it.');
+    } else if (attempt.session) {
+      attempt.abortPreparation();
       if (attempt.attachSettled) void endAttempt(attempt);
       else { attempt.endAfterAttach = true; state = 'ending'; show('EXITING...', false); }
-    } else {
-      // The browser permission request itself cannot be aborted. Its late
-      // grant handler closes it without ever attaching it to the renderer.
-      current = null; state = 'idle'; show('ENTER VR', true);
-      status('cancelled', 'VR startup cancelled.');
     }
   };
+  button.recoverConnection = () => recoveryAllowed(current) ? beginRecovery(current) : false;
   button.notifyPose = (session = renderer.xr.getSession?.()) => {
     const attempt = current;
     if (!attempt || attempt.session !== session || attempt.ended || attempt.cancelled || attempt.exitRequested || attempt.firstPose) return;

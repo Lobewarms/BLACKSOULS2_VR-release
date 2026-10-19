@@ -100,6 +100,7 @@ It remembers your selected folder after you launch the game.
 
 - **What do I need?** Windows 10/11, an up-to-date Chrome or Edge, and your original game.
 - **VR NOT SUPPORTED?** Start Quest Link or SteamVR first, close the game window, then click **Launch** again.
+- **VR is still connecting?** Keep the headset ready and follow the progress message. Cancel keeps the unfinished connection owned until it closes. If a connection or exit stalls, use **Reset VR connection** when offered; wait for confirmation before entering again. If recovery cannot confirm closure, save if possible and reopen the game window. If Quest Link itself is frozen, restart the headset and Link, and check warnings in the Meta Link PC app.
 - **Missing tiles or emotes?** Installing the optional RPG Maker VX Ace RTP may help.
 - **Navigation:** PC has a circular, translucent minimap with your position, facing direction and exits. Press **N** or open **Mod tools → Map** for the full area map. In VR, look above your left controller. Use **Back** or **B** to return. Hide the minimap in **Mod tools → Settings → Combat / display settings**.
 - **PC and VR layouts:** PC has larger menus and a fixed screen HUD. VR keeps menus in front of you and the HUD above your left controller. Switching modes changes both the layout and the control hints.

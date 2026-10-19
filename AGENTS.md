@@ -2100,3 +2100,60 @@ The source comparison uses runtime f88b455f9bb3fb2b5d746c82ec408ba05b0ecec7 (0.2
 0 missing; 3,609 added/854 removed lines in modified originals after import
 normalization. Existing paired images remain v0.2.25 and initialized gameplay
 captures remain v0.2.33; no screenshot relabelling or hardware capture claimed.
+
+
+## Slow native permission and stuck exit recovery (0.2.35)
+
+The 20-second permission deadline in 0.2.34 can reject a viable native startup.
+The verified engine's AutoVr helper clicks ENTER VR up to 3 times, polls 30 seconds
+after each click but stops that wait when ENTER VR reappears, then retries after
+1 second. The permission request itself cannot be cancelled by a Promise race.
+At 20 seconds the old UI returned ENTER, so AutoVr submitted pending duplicates;
+WebXR normally rejects those while the first native create continues. A 55-second
+late grant was then discarded and ended without ever reaching Three's renderer.
+A private unchanged-module replay reproduced 3 page calls, 1 native create, 2
+pending-request rejections, 0 attachments and 1 late end. Public regressions use
+synthetic delayed promises, not copied engine implementation or original data.
+
+Keep the actual click request and extend its grace with soft progress feedback.
+Cancellation or timeout must retain pending native ownership until rejection or
+a real granted-session end. A stalled native end remains owned for retry. Manual
+Reset VR connection calls the existing same-origin engine endpoint, which maps
+its request's TCP client to Chromium's browser parent and terminates only that
+parent's device.mojom.XRDeviceService child. It does not restart Meta services,
+close the page or require a synthetic XRSession end. A reset is not proof that
+native cleanup completed; actual request settlement and raw session/manager
+cleanup still gate reentry. Pending Three setSession is never forcibly reset.
+
+The native Meta IPC failures and Link's own graphics-driver freeze warning are
+separate from this reproducible app timing bug. A public Meta investigation
+reports a similar named-pipe/AppContainer startup delay:
+https://developers.meta.com/horizon/feedback/vr/investigations/1070515512504086/
+Treat that investigation as a reported issue, not proof of causality for every
+headset. Do not add --no-sandbox, change global OpenXR selection, restart unrelated
+browsers or install/roll back drivers automatically. Keep native logs, process
+metadata and private inspection helpers outside the distribution. A scoped
+browser-service reset cannot guarantee recovery of a frozen Quest Link shell;
+manual headset/Link restart may still be required. No hardware recovery has been
+confirmed merely from the process state, a simulated promise or CI results.
+
+
+The final lifecycle uses 20-second soft feedback and 90-second hard diagnostic
+without forgetting the native promise. Explicit reset is eligible only for
+cancelled/stalled native permission or an exit that failed after 8 seconds,
+with manager attachment settled. The 10-second reset deadline is informational;
+its original operation remains owned until it actually settles. Reentry needs
+both that settlement and native rejection/end plus Three cleanup. Successful
+manual reset is not repeated by automatic failed-start recovery. A positive
+process-stop count alone does not fabricate session end or desktop readiness.
+Both recovery actions share a per-stage click guard, and all instructions are
+translated. The main adapter wires reset to the existing scoped local endpoint.
+
+Local gates: 881 JavaScript tests pass (14 additional), ESLint, production build,
+Ruff, 8 packaging and 7 Python tests. Lifecycle coverage now totals 37 cases,
+including a 55-second valid grant, 90-second stall, cancelled late grant, delayed
+reset/native end races, duplicate actions, reset false/rejection/timeout/no-end,
+unknown attachment refusal, automatic-reset deduplication and synchronous native
+request rejection. Four-language footer coverage totals 9 cases. Physical Quest
+restart/Link recovery and hardware startup latency remain unconfirmed; do not
+substitute the simulated native delays for a headset playtest.

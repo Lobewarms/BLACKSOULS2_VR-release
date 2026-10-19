@@ -1,14 +1,15 @@
-BLACK SOULS II VR 0.2.34
+BLACK SOULS II VR 0.2.35
 
-Entering VR
-- Request the headset connection immediately when you click ENTER VR.
-- Avoid repeating a completed graphics switch while opening the headset view.
-- Show connection progress and let you cancel while VR is starting.
-- Report when the headset is connected but still waiting for tracking.
-- Retry a slow VR exit without opening a competing headset session.
-- Keep an unprepared desktop spectator view from uploading the map during VR play.
+Slow connections and stuck VR exits
+- Give a slow headset connection time to finish instead of discarding it after 20 seconds.
+- Keep one connection in progress while cancellation or shutdown is unfinished.
+- Offer Reset VR connection after a stalled startup or exit.
+- Wait for actual closure before allowing another entry; do not reload the game automatically.
+- Keep clearer progress and recovery instructions in all four supported languages.
 
-If a connection remains stalled, follow the message beside ENTER VR.
-Check that Quest Link or SteamVR is connected, then try again.
+If Quest Link itself freezes, restart the headset and Link, and check the
+Meta Link PC app for graphics-driver warnings. A game update cannot repair a
+frozen headset service or change its driver.
+
 Install the update, then close and reopen the game window to load the changes.
 Your existing saves are retained. The original game is required and is not included.

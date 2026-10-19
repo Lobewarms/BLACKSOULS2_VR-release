@@ -165,6 +165,9 @@ Troubleshooting
 - The game folder is not accepted: pick the folder with Game.exe and the Data folder (or Game.rgss3a).
 - "VR NOT SUPPORTED": start SteamVR or Quest Link first, close the game window and press "Launch" again.
 - Going back into VR: after you leave, the button reads "VR ..." for a moment; when it says ENTER VR again, press it.
+- A slow VR connection keeps one request open; follow its progress message and keep the headset ready.
+- Cancel waits for the unfinished connection to close. If startup or exit stalls, use "Reset VR connection" when offered, then wait before entering again.
+- If recovery cannot confirm closure, save if possible and reopen the game window. If Quest Link itself freezes, restart the headset and Link and check the Meta Link PC app for warnings.
 - The game waits while the dashboard is open or the headset is off.
 - Controller vibration only works with SteamVR.
 - Port error: change the port number in the launcher.
