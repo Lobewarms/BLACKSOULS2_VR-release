@@ -1926,3 +1926,8 @@ transformations, minions, mounts and real guest rendering/network validation.
 
 ESLint, Ruff, production build, 8 packaging tests and 7 Python protocol tests
 also passed locally for the enemy-artwork update.
+
+The literal source comparison now uses runtime a9b6649 (0.2.31): 48 original
+modules retained, 15 unchanged after import moves, 33 modified, 38 new, 0 missing;
+3,305 added/822 removed lines in modified originals after import normalization.
+The actual screenshot comparisons remain labelled 0.2.25.

@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: 39953da0361a54ce731a52d9e6d40a360e634d9e (committed source)
+# Fork: a9b6649c620936aa323fa1a017180e201af467ff (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -391,7 +391,44 @@
  // the one sound of a Break (or a groggy gauge) that lands - the user's choice: the game's own 金属 (1) at half pitch, from
  // where it starts (its first 0.07 s are silent, twice that slowed down)
  const BREAK_SE = { name: '金属 (1)', volume: 100, pitch: 50, from: 0.07 };
-@@ -448,7 +452,7 @@
+@@ -219,17 +223,31 @@
+ 
+ // ------------------------------------------------------------------ textures
+ const battlerCache = new Map();
+-function battlerTexture(name, hue) {
+-  const key = `${name}#${hue}`;
++function battlerTexture(name, hue, folder = 'Graphics/Battlers') {
++  if (!name) return Promise.resolve(null); // VX Ace's empty_bitmap has no visible pixels.
++  const key = `${folder}/${name}#${hue}`;
+   if (!battlerCache.has(key)) {
+-    battlerCache.set(key, loadCanvas('Graphics/Battlers', name, hue).then(c => {
++    const pending = loadCanvas(folder, name, hue).then(c => {
+       if (!c) return null;
++      const core = drawnHalfWidth(c);
++      const pixels = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
++      let clear = 0, drawn = 0;
++      for (let i = 3; i < pixels.length; i += 4) {
++        if (pixels[i] === 0) clear++;
++        if (pixels[i] > 64) drawn++;
++      }
+       const tex = new THREE.CanvasTexture(c);
+       tex.colorSpace = THREE.SRGBColorSpace;
+       tex.minFilter = THREE.LinearMipmapLinearFilter;
+       tex.anisotropy = 4;
+-      return { tex, w: c.width, h: c.height, core: drawnHalfWidth(c) };
+-    }));
++      // Only a visible cutout can stand in for a blank controller. Opaque
++      // scenery and fully transparent backgrounds are never enemy bodies.
++      return { tex, w: c.width, h: c.height, core, cutout: clear >= c.width * c.height * 0.01 && drawn > 0 };
++    }).catch(error => { console.warn('battler texture failed', folder, name, error); return null; }).then(t => {
++      if (!t && battlerCache.get(key) === pending) battlerCache.delete(key);
++      return t;
++    });
++    battlerCache.set(key, pending);
+   }
+   return battlerCache.get(key);
+ }
+@@ -448,7 +466,7 @@
  
  // ------------------------------------------------------------------ action enemy
  let netSeq = 0;                  // (co-op: the number the players share for one enemy body - coop.js)
@@ -400,7 +437,62 @@
    constructor(sys, battle, enemyId, fx, fy, opts = {}) {
      this.sys = sys; this.battle = battle;
      this.netId = ++netSeq;
-@@ -505,13 +509,15 @@
+@@ -469,22 +487,47 @@
+     if (opts.inPlay) { this.inPlay = true; this.memberIndex = opts.memberIndex; }
+     // (a form gone up into the sky - bossmoves.js skyHold: drawn as the form it was, out of sight up there)
+     this.lookAs = opts.lookAs || 0; this.sky = !!opts.lookAs;
++    this.memberIndex = opts.memberIndex;
++    this._battlebacks = opts.battlebacks ?? null;
+     this.group = new THREE.Group();
+     sys.root.add(this.group);
+     this.ready = this.build();
+   }
+   get data() { return this.b.data; }
++  get battlebacks() {
++    return this._battlebacks ?? (Number.isInteger(this.battle?.artMember) && this.memberIndex === this.battle.artMember ? this.battle.battlebacks : null) ?? [];
++  }
++  set battlebacks(names) { this._battlebacks = names; }
++  async artwork(look) {
++    const stage = G.theater?.battlerTexture?.(this);
++    if (stage) {
++      try { const t = await stage; if (t) return t; }
++      catch (error) { console.warn('stage battler texture failed', error); }
++    }
++    // Some original encounters draw the creature in a battleback instead of
++    // its battler. Keep that authored art on the initial sole controller even
++    // after hidden minions appear. Shared rider/mount pictures keep their path.
++    if (!this.data.battler_name && this.battlebacks.some(Boolean)) {
++      for (let i = 0; i < 2; i++) {
++        const t = await battlerTexture(this.battlebacks[i], 0, `Graphics/Battlebacks${i + 1}`);
++        if (t?.cutout) return { ...t, backdrop: true };
++      }
++    }
++    return battlerTexture(look.battler_name, look.battler_hue);
++  }
+   get alive() { return !this.b.dead && this.state !== 'dying' && this.state !== 'dead'; }
+   // 対象不可 in its note: nothing can be aimed at it - no blow, shot or spell of the player's or a companion's
+   // reaches it (the dark stage machine above 그랑・기뇰's last act, until its last form)
+   get untargetable() { if (this.noTarget || this.sys.skyHidden(this)) return true; const d = this.data; return !!d && (d._untargetable ??= /対象不可/.test(d.note || '')); }
+   async build() {
++    const group = this.group, revision = this.buildRevision = (this.buildRevision || 0) + 1;
+     this.group.userData.enemy = true;          // (a reset sweeps up any enemy body left behind)
+     const d = this.data, id = this.b.enemyId;
+     // (a stage play draws some bodies its own way - src/theater.js)
+     const look = (this.lookAs && $data.enemies[this.lookAs]) || d;
+-    const t = await (G.theater?.battlerTexture?.(this) || battlerTexture(look.battler_name, look.battler_hue));
+-    if (this.b.enemyId !== id) return;             // changed into something else meanwhile: that build is the one
++    const t = await this.artwork(look);
++    if (this.buildRevision !== revision || this.group !== group || this.b.enemyId !== id) return;
++    if (t?.backdrop) { this.sky = false; this.lookAs = 0; this.diving = false; this.lift = 0; }
+     this.picW = t?.w || 0;
+     let w = 1, h = 1.8;
+     if (t) {
+@@ -501,17 +544,19 @@
+     this.hr = THREE.MathUtils.clamp(core, 0.25, 1.8) / T;
+     const geo = new THREE.PlaneGeometry(w, h);
+     geo.translate(0, h / 2, 0);
+-    this.mat = new THREE.MeshLambertMaterial({ map: t?.tex || null, color: t ? 0xffffff : 0x884444, transparent: true, alphaTest: 0.25, side: THREE.DoubleSide, emissive: 0x000000 });
++    this.mat = new THREE.MeshLambertMaterial({ map: t?.tex || null, color: 0xffffff, visible: !!t, transparent: true, alphaTest: 0.25, side: THREE.DoubleSide, emissive: 0x000000 });
      this.mesh = new THREE.Mesh(geo, this.mat);
      this.mesh.rotation.order = 'YXZ';              // (turned to the player, then leant - in its own plane, or toward them)
      this.group.add(this.mesh);
@@ -421,7 +513,7 @@
      this.bar.renderOrder = 1400;
      this.bar.visible = false;
      this.group.add(this.bar);
-@@ -545,25 +551,56 @@
+@@ -545,25 +590,57 @@
    }
    drawBar() {
      if (!this.barCanvas) return;
@@ -478,6 +570,7 @@
    // (lift: off the floor - a boss in the middle of a leap)
    worldPos(target = new THREE.Vector3()) { return target.set((this.fx + 0.5) * T, (G.floorAt ? G.floorAt(this.fx, this.fy) : 0) + (this.lift || 0), (this.fy + 0.5) * T); }
    remove() {
++    this.buildRevision = (this.buildRevision || 0) + 1;
      this.sys.root.remove(this.group);
      this.mesh?.geometry.dispose(); this.mat?.dispose();
 +    this.barTex?.dispose(); this.bar?.material.dispose();
@@ -485,7 +578,16 @@
      this.cueRing?.geometry.dispose(); this.cueRing?.material.dispose();
      for (const gh of this.ghosts || []) gh.g.material.dispose();
      this.balloon?.dispose();
-@@ -653,6 +690,8 @@
+@@ -581,6 +658,8 @@
+     this.done = false; this.result = -1;
+     this.time = 0; this.escapeTimer = 0;
+     this.troop = $data.troops[opts.troopId];
++    const visible = this.troop?.members?.map((m, i) => ({ m, i })).filter(({ m }) => !m.hidden) || [];
++    this.artMember = visible.length === 1 ? visible[0].i : null;
+     this.pageDone = new Set();
+   }
+   get alive() { return this.enemies.filter(e => e.alive && !e.hidden); }
+@@ -653,6 +732,8 @@
    // ---- lifecycle -------------------------------------------------------------
    // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
    reset({ keepState = false, carry = false } = {}) {
@@ -494,7 +596,30 @@
      // (carry - a map change: an event's run that is past its fight, in its win or lose branch, goes on on the new map as
      // the original's map interpreter would - 혼돈 던전 / 시공 던전's defeat, CE269, takes the party out and then lets the
      // menu and saving back; dropped with the old map, saving stayed shut until 고왕의 뼛가루. One still in its fight
-@@ -1184,6 +1223,8 @@
+@@ -1045,7 +1126,8 @@
+     // starts it again from the same event (never idle in between), after its lose branch brought the party back
+     if (this.playerDead && (G.state.party.leader()?.hp || 0) > 0) { this.playerDead = false; this.deathHandled = false; }
+     const sym = event ? this.symbols.get(event) : null;
+-    const battle = new Battle(this, { troopId, canEscape, canLose, event, interpreter, symbol: sym, private: !!sym?.private, hallKey: sym?.hallKey || null });
++    const battlebacks = ((interpreter?.root || interpreter)?.battlebacks ?? G.map.battlebacks ?? []).slice();
++    const battle = new Battle(this, { troopId, canEscape, canLose, event, interpreter, battlebacks, symbol: sym, private: !!sym?.private, hallKey: sym?.hallKey || null });
+     this.battles.push(battle);
+     G.state.system.battleCount++;
+     const members = battle.troop?.members || [];
+@@ -1076,10 +1158,11 @@
+         let fx = ax + Math.cos(toP + Math.PI / 2) * lateral - Math.cos(toP) * 0.4;
+         let fy = ay + Math.sin(toP + Math.PI / 2) * lateral - Math.sin(toP) * 0.4;
+         [fx, fy] = resolveCircle(fx, fy, 0.35);
+-        e = new ActionEnemy(this, battle, m.enemy_id, fx, fy, { hidden: m.hidden });
++        e = new ActionEnemy(this, battle, m.enemy_id, fx, fy, { hidden: m.hidden, memberIndex: members.indexOf(m) });
+         e.alertTime = 0.8 + k * 0.3;
+       }
+       e.memberIndex = members.indexOf(m);
++      if (own?.m === m && !e.data.battler_name && e.battlebacks.some(Boolean)) this.rebuildEnemyArt(e);
+       if (battle.private) this.makePrivate(e, battle.hallKey);
+       battle.enemies.push(e);
+       this.enemies.push(e);
+@@ -1184,6 +1267,8 @@
      if (result === 0 && m.played) G.audio?.playMe(G.state.system.battleEndMe || $data.system.battle_end_me);
    }
    onBattleEnd(battle) {
@@ -503,7 +628,7 @@
      G.player.floatDown?.();                         // (blown up by the wind when it ended: let down gently)
      if (battle.result === 0 && battle.private) G.coop?.hallucinationBeaten?.(battle.hallKey);
      if (battle.result === 0) {
-@@ -1205,7 +1246,7 @@
+@@ -1205,7 +1290,7 @@
          }
        }
        if (gold && party.partyAbility(4)) gold *= 2;
@@ -512,7 +637,7 @@
        if (exp) for (const a of party.members()) a.changeExp(a.currentExp + Math.floor(exp * a.exr));
        G.state.system.winCount++;
        if (battle.event) this.defeated.set(battle.event, G.time);
-@@ -1245,6 +1286,7 @@
+@@ -1245,6 +1330,7 @@
    // the battle a troop event belongs to (several fights can run at once)
    battleOf(interp) {
      const root = interp ? (interp.root || interp) : null;
@@ -520,7 +645,25 @@
      return (root && this.battles.find(x => x.troopInterp === root)) || this.battles.find(x => !x.done);
    }
    enemyCondition(index, sub, stateId, interp) {
-@@ -1377,9 +1419,10 @@
+@@ -1319,6 +1405,17 @@
+       if (p.list === interp.list || p.span !== 2 || !c.switch_valid || c.turn_valid || c.enemy_valid || c.actor_valid || c.turn_ending) continue;
+       if (!p.list.some(x => x.code === 336 && x.parameters[0] === member)) continue;
+       if (G.state.sw(c.switch_id)) G.state.setSw(c.switch_id, false);
++    }
++  }
++  rebuildEnemyArt(e) {
++    e.remove(); e.group = new THREE.Group(); this.root.add(e.group); e.ready = e.build();
++  }
++  changeBattleBack(battle, names) {
++    if (!battle || battle.done || !this.battles.includes(battle)) return;
++    if (JSON.stringify(battle.battlebacks) === JSON.stringify(names)) return;
++    battle.battlebacks = names.slice();
++    for (const e of battle.enemies) {
++      if (e.memberIndex === battle.artMember && !e.data.battler_name) this.rebuildEnemyArt(e);
+     }
+   }
+   // Enemy Transform: the new form's picture, and its own moves - none of the old form's left half done
+@@ -1377,9 +1474,10 @@
      if (this.gripAdjust) return;                     // the items are being moved by hand
      const { weapon: ws, offhand: os } = this.heldSpecs();
      const wtype = ws?.wtype || WTYPE.SWORD;
@@ -532,7 +675,7 @@
      this.wtype = wtype;
      if (this.weapon) this.weapon.parent?.remove(this.weapon);
      if (this.shield) this.shield.parent?.remove(this.shield);
-@@ -1398,17 +1441,14 @@
+@@ -1398,17 +1496,14 @@
        obj.position.fromArray(g.p); obj.quaternion.fromArray(g.q);
        return true;
      };
@@ -553,7 +696,7 @@
        this.weapon.userData.ranged = !!this.shotKind;
      } else {
        // bare hands: nothing to draw (VR shows the hand), the fist is what hits
-@@ -1424,8 +1464,7 @@
+@@ -1424,8 +1519,7 @@
        if (this.shotKind === 'gun') this.addLaser(this.weapon);
      } else {
        G.three.camera.add(this.weapon);
@@ -563,7 +706,7 @@
      }
      this.shield = null;
      this.offGun = null;
-@@ -1435,17 +1474,19 @@
+@@ -1435,17 +1529,19 @@
        if (os.gun) {
          // pistol in the left hand: held like a weapon (cannot guard with it)
          const gunModel = sModel || makeWeaponMesh(WTYPE.GUN);
@@ -586,7 +729,7 @@
          if (G.vr && ctrl.left) {
            // the holder's +Z (shield front) turns to -X = the back of the left hand
            ctrl.left.grip.add(this.shield);
-@@ -1454,8 +1495,7 @@
+@@ -1454,8 +1550,7 @@
            handPose(this.shield, os);
          } else {
            G.three.camera.add(this.shield);
@@ -596,7 +739,7 @@
          }
        }
      }
-@@ -1467,17 +1507,23 @@
+@@ -1467,17 +1562,23 @@
    // (PC: a shield only comes into view while the guard is up - updateDeskShield; held low all the time it hid the
    // status window and part of the view)
    showArms() {
@@ -625,7 +768,7 @@
    }
    // 무장해제 (VR: right stick click, PC: H): the weapon and shield go away with the sound of gear coming off,
    // the bare hands show, and nothing the hands do hits - no swing, Break, shot or weapon art, so no one is cut
-@@ -1487,7 +1533,7 @@
+@@ -1487,7 +1588,7 @@
      this.disarmed = on;
      // what the hands were doing with them ends (a weapon art is paid only when it lands: nothing is lost)
      this.hasPrev = false; this.charge = null; this.deskCharge = null; this.breakArm = null;
@@ -634,7 +777,7 @@
      if (on) this.skillArm = null;
      if (this.breakGlow) this.breakGlow.visible = false;
      this.showArms();
-@@ -1678,44 +1724,126 @@
+@@ -1678,44 +1779,126 @@
      if (used) G.audio?.playSystemSe(22);
      return used;
    }
@@ -793,7 +936,7 @@
      return used;
    }
    // a heal on the player, after the recovery rules on them (script 172 - 허약, 천수 영역: nothing, or as much damage)
-@@ -1736,15 +1864,21 @@
+@@ -1736,15 +1919,21 @@
    // VX Ace's buff effects of an item / skill on a battler: 31 a buff, 32 a debuff (by its debuff rate - times chance,
    // as the player's states are), 33 / 34 a buff / a debuff taken away; turn: the seconds a turn lasts for it. Whether
    // the item / skill had any
@@ -817,7 +960,7 @@
    }
    // the player at 0 HP falls (the fight lost) - unless a state keeps them up (진혼가, 불사신: the death state resisted -
    // they stay at 0 HP until it ends), or something brings them back at once in a fight (自動蘇生, script 171)
-@@ -1907,18 +2041,18 @@
+@@ -1907,18 +2096,18 @@
    }
    // the blow that lands with a weapon art on: that skill, paid for now (with too little MP left by then: a
    // plain blow, and the art is gone)
@@ -839,7 +982,7 @@
      return s;
    }
    // skills used from the menu (heals, buffs, common events)
-@@ -1929,6 +2063,7 @@
+@@ -1929,6 +2118,7 @@
      skill = this.skillByState(actor, skill);
      const ok = actor.skillCostPayable(skill) && !actor.skillSealed(skill.id) && actor.skillTypeUsable(skill) && this.skillCooling(skill) <= 0;
      if (!ok || (skill.scope >= 1 && skill.scope <= 6) || skill.occasion === 1 || skill.occasion === 3) { G.audio?.playSystemSe(3); return false; }
@@ -847,7 +990,7 @@
      this.actorPays(actor, skill);
      this.skillCD[skill.id] = G.time + this.coolSeconds(skill);
      this.stageCool(skill);
-@@ -1941,13 +2076,16 @@
+@@ -1941,13 +2131,16 @@
      const t = obj.damage?.type || 0;
      return t === 3 || t === 4 || (obj.effects || []).some(e => e.code === 11 || e.code === 12);
    }
@@ -867,7 +1010,7 @@
      }
    }
    // a skill of mine paid for: MP, TP and the HP it costs (script 128 - shown as it goes, like a blow taken)
-@@ -1963,9 +2101,10 @@
+@@ -1963,9 +2156,10 @@
    }
    // a skill of mine with <使用者効果 n> (script 113): skill n's effects on me as well, once the skill has done its
    // work (the next cut's mark of 삼단 베기, a bullet loaded, a guard)
@@ -880,7 +1023,7 @@
    }
    performUsable(obj, kind) {
      const scope = obj.scope || 0;
-@@ -1975,14 +2114,14 @@
+@@ -1975,14 +2169,14 @@
      if (scope >= 1 && scope <= 6) {
        const targets = this.pickTargets(obj, kind);
        if (!targets.length) { G.ui.toast(tr('{name}: 대상이 없습니다', { name }), obj.icon_index); G.audio?.playSystemSe(3); return false; }
@@ -897,7 +1040,7 @@
            const wp = e.worldPos(new THREE.Vector3()); wp.y += e.h * 0.5;
            if (obj.animation_id > 0) G.screen.playAnimationOn(wp, obj.animation_id, { rate: 3, height: e.h });
            else G.audio?.playSe(G.seAt('Slash1', 90, 100), wp);
-@@ -1993,7 +2132,8 @@
+@@ -1993,7 +2187,8 @@
        G.input.haptic('left', 0.5, 60);
        return true;
      }
@@ -907,7 +1050,7 @@
      const how = kind === 'item' && this.handUse(obj);
      if (how) return this.holdConsumable(obj, how);
      if (kind === 'item' && this.isDrink(obj)) {
-@@ -2184,7 +2324,7 @@
+@@ -2184,7 +2379,7 @@
      if (!this.weapon || !this.weapon.visible || !this.weapon.parent) return null;
      const base = new THREE.Vector3(), tip = new THREE.Vector3();
      if (!this.weaponSegment(base, tip)) return null;
@@ -916,7 +1059,7 @@
      return { base, tip };
    }
    // A state an event gives the party during a fight (Change State, 313 - a boss's rules: 그랑・기뇰's 악랄영역 that
-@@ -2470,13 +2610,16 @@
+@@ -2470,13 +2665,16 @@
        const hpShort = actor.mp >= actor.skillMpCost(obj) && actor.tp >= (obj.tp_cost || 0);
        G.ui.toast(hpShort ? tr('{name}: HP가 부족합니다', { name }) : tr('{name}: MP가 부족합니다', { name }), obj.icon_index); this.cancelReady(); return;
      }
@@ -935,7 +1078,7 @@
      if (kind === 'skill') this.playerFollowUp(obj, aim.enemy || null, from);
      if (knife && G.state.party.itemCount('item', obj.id) <= 0) this.cancelReady();
      G.input.haptic('right', 0.8, 70);
-@@ -2497,7 +2640,7 @@
+@@ -2497,7 +2695,7 @@
        this.spawnProjectile(from, to.clone().sub(from), { ...opts, aoe: 2.5, dest: to, mesh: kind === 'item' ? this.iconSprite(obj.icon_index) : null, color: this.skillColor(obj) });
        return;
      }
@@ -944,7 +1087,7 @@
      for (let k = 0; k < n; k++) {
        this.later(k * 130, () => {
          const dir = aim.dir.clone();
-@@ -2551,13 +2694,13 @@
+@@ -2551,13 +2749,13 @@
      const pt = (G.coop?.pvpTargets?.() || []).find(c => Math.hypot(c.x - at.x, c.z - at.z) - c.r < THROWN_SPLASH);
      if (pt) this.strikePlayerWith(pt, p.usable);
      if (!best) return;
@@ -960,7 +1103,7 @@
      for (const e of this.allTargets()) {
        const wp = e.worldPos(tmpB);
        if (Math.hypot(wp.x - at.x, wp.z - at.z) > radius + e.hr * T) continue;
-@@ -2624,7 +2767,7 @@
+@@ -2624,7 +2822,7 @@
      const front = cands.filter(c => c.ang < 0.6).sort((a, b) => (a.ang * 4 + a.d * 0.08) - (b.ang * 4 + b.d * 0.08));
      if (!front.length) return [];
      if (obj.scope === 1) return [front[0].e];
@@ -969,7 +1112,7 @@
      const pool = front.slice(0, 4).map(c => c.e);
      return Array.from({ length: n }, () => pool[Math.floor(Math.random() * pool.length)]);
    }
-@@ -2659,14 +2802,16 @@
+@@ -2659,14 +2857,16 @@
    }
    // an item / skill landing on an enemy: damage formula, drain, added / removed states.
    // mult scales the damage (swing power, back stab, critical); 0 damage stays 0 like the original
@@ -988,7 +1131,7 @@
      // slipped in a stance that answers it (리포스트, script 191): nothing lands
      const slip = this.slipsWithAnswer(e.b, obj, actor);
      if (slip) { this.enemySlips(e, slip, obj, sourcePos, by); return -1; }
-@@ -2677,65 +2822,89 @@
+@@ -2677,65 +2877,89 @@
      }
      const type = obj.damage?.type || 0;
      let dmg = 0;
@@ -1096,7 +1239,7 @@
    missOn(e, obj) {
      const p = e.worldPos(new THREE.Vector3());
      G.audio?.playSystemSe(obj?.hit_type === 2 ? 19 : 18);
-@@ -2753,19 +2922,14 @@
+@@ -2753,19 +2977,14 @@
      G.audio?.playSystemSe(20);
      this.spawnGlow(new THREE.Vector3(p.x, p.y + e.h * 0.6, p.z), { color: 0xc8f0ff, size: e.h * 0.9, life: 0.35, grow: 1.5 });
      if (!actor || this.playerDead) return;
@@ -1122,7 +1265,7 @@
    }
    // an enemy's spell turned back by the player (magic reflection - 거울의 대방패): it lands on that enemy
    reflectOntoEnemy(e, skill) {
-@@ -2773,32 +2937,35 @@
+@@ -2773,32 +2992,35 @@
      G.audio?.playSystemSe(20);
      this.spawnGlow(head.clone().add(new THREE.Vector3(0, -0.3, 0)), { color: 0xc8f0ff, size: 0.8, life: 0.35, grow: 1.6 });
      if (!e?.alive) return;
@@ -1172,7 +1315,7 @@
    }
    // 変換攻撃 (script 199): <変換攻撃判定:chance> on the skill, then <HP変換攻撃:percent,chance> on it or on
    // the attacker's equipment / states turns that share of the damage dealt into HP (the youtou's drain)
-@@ -2814,6 +2981,15 @@
+@@ -2814,6 +3036,15 @@
        if (parseFloat(b) > Math.floor(Math.random() * 100)) pct += parseFloat(a) || 0;
      }
      return Math.floor(dmg * pct / 100);
@@ -1188,7 +1331,7 @@
    }
    // VX Ace: at 0 HP an enemy gets the death state unless it resists it (불사신 and other gimmicks); then
    // it stays standing at 0 HP until the gimmick takes the resistance away
-@@ -2895,9 +3071,9 @@
+@@ -2895,9 +3126,9 @@
    tickEnemyStates(e, dt) {
      if (e.alive) e.b.tickBuffs(dt);
      const timers = e.stateTimers;
@@ -1200,7 +1343,7 @@
        timers[k] -= dt;
        if (timers[k] <= 0) {
          delete timers[k]; e.b.removeState(+k); removed = true;
-@@ -2905,12 +3081,17 @@
+@@ -2905,12 +3136,17 @@
        }
      }
      if (removed) this.checkEnemyDeath(e);
@@ -1220,7 +1363,7 @@
        const v = Math.max(1, Math.floor(e.b.mhp * -hrg));
        e.b.hp = Math.max(0, e.b.hp - v);
        if (e.bar) e.bar.visible = true; e.drawBar();
-@@ -3008,6 +3189,29 @@
+@@ -3008,6 +3244,29 @@
    }
  
    // ---- damage --------------------------------------------------------------------------
@@ -1250,7 +1393,7 @@
    computeDamage(attacker, target, skill, mult = 1) {
      if (!skill?.damage || skill.damage.type === 0) return 0;
      let v = evalFormula(skill.damage.formula, attacker.solo ? attacker.solo() : attacker, target);
-@@ -3018,13 +3222,36 @@
+@@ -3018,13 +3277,36 @@
        const els = attacker.atkElements();
        if (els.length) v *= Math.max(...els.map(e => target.elementRate(e)));
      }
@@ -1290,7 +1433,7 @@
    }
    // 攻撃ID変更 (script 203): equipment / states can swap the normal attack (skill 1) for their own skill;
    // with several, the highest <攻撃ID優先度変更:n> on the skill wins, then the highest id
-@@ -3047,8 +3274,18 @@
+@@ -3047,8 +3329,18 @@
    }
    // hits per blow: the skill's repeats (+ attack-count features) times its random-target count
    attackHits(skill, actor) {
@@ -1311,7 +1454,7 @@
    }
    // a weapon blow (VR swing, desktop click, arrow / bullet): the attack skill's formula, element, hits,
    // drain and states (Raiden's axes hit by the wielder's HP, the youtou drains, daggers hit twice...)
-@@ -3058,7 +3295,7 @@
+@@ -3058,7 +3350,7 @@
      const actor = G.state.party.leader();
      // a weapon art on the weapon (red): this blow is that skill - its formula, hits, element and animation -
      // at least at full strength, and not weakened by flailing
@@ -1320,7 +1463,7 @@
      const skill = art || this.skillByState(actor, this.playerAttackSkill(actor));
      let mult = (art ? Math.max(1, power) : power) * this.buffMult();
      // a charged blow hits up to twice as hard; a hard or charged blow on a broken enemy is the big attack
-@@ -3071,8 +3308,8 @@
+@@ -3071,8 +3363,8 @@
      let weak = false;
      if (melee && !art) { const r = this.rushMult(); if (r < 1) { mult *= r; weak = true; } }
      if (e.state === 'idle' || (e.alertTime > 0 && e.state === 'chase' && !e.battle)) mult *= 2;     // (a backstab)
@@ -1331,7 +1474,7 @@
      if (crit) mult *= 2;
      const p = e.worldPos(new THREE.Vector3());
      const hits = one ? 1 : this.attackHits(skill, actor);
-@@ -3117,7 +3354,7 @@
+@@ -3117,7 +3409,7 @@
    afterPlayerAction(s, e, from, art) {
      if (this.lastAct?.s === s && G.time - this.lastAct.t < 0.12) return;
      this.lastAct = { s, t: G.time };
@@ -1340,7 +1483,7 @@
      this.playerFollowUp(s, e, from);
    }
    // a skill of mine that goes on with another (script 189 使用後追加行動 - 거룩한 총검's cut or thrust and then its gun
-@@ -3132,7 +3369,7 @@
+@@ -3132,7 +3424,7 @@
        const next = a.id > 0 ? this.skillByState(actor, $data.skills[a.id]) : null;
        if (!next) continue;
        this.later(320, () => {
@@ -1349,7 +1492,7 @@
          let targets = [];
          if (next.scope >= 1 && next.scope <= 6) {
            const head = G.player.headWorld(new THREE.Vector3()), op = new THREE.Vector3();
-@@ -3143,7 +3380,7 @@
+@@ -3143,7 +3435,7 @@
          this.actorPays(actor, next);
          this.skillCD[next.id] = G.time + this.coolSeconds(next);
          const at = from || this.castOrigin();
@@ -1358,7 +1501,7 @@
          for (const t of targets) {
            const wp = t.worldPos(new THREE.Vector3()); wp.y += t.h * 0.5;
            if (next.animation_id > 0) { G.screen.playAnimationOn(wp, next.animation_id, { rate: 3, height: t.h }); G.coop?.shareAnim?.(wp, next.animation_id, t.h); }
-@@ -3157,7 +3394,7 @@
+@@ -3157,7 +3449,7 @@
            });
          }
          if (!targets.length) this.applyUsableToActor(next, 'self');
@@ -1367,7 +1510,7 @@
          this.playerFollowUp(next, targets[0] || e, from, depth + 1);
        });
        return;
-@@ -3174,6 +3411,43 @@
+@@ -3174,6 +3466,43 @@
      let id = 0;
      for (const o of e.b.featureObjects()) { const m = /<\s*反撃スキル\s*(\d+)\s*>/.exec(o?.note || ''); if (m) id = Math.max(id, +m[1]); }
      this.startCounter(e, $data.skills[id] || $data.skills[1]);
@@ -1411,7 +1554,7 @@
    }
    // a counter (反撃) or an answer to a slipped blow (回避時スキル): a quick blow at the player, 0.35 s to see it
    // coming; not a turn of the enemy's own (as in the original, it comes inside the player's action)
-@@ -3251,8 +3525,7 @@
+@@ -3251,8 +3580,7 @@
    groggyHit(e, actor, obj, mult, blow) {
      const max = this.groggyMax(e);
      if (!max || !actor || !e.alive || e.state === 'stagger' || e.grogDown || this.inDuel(e)) return;     // (her duel: no groggy)
@@ -1421,7 +1564,7 @@
      const used = blow?.grog?.get(e) || 0;
      g = Math.min(g, GROGGY.cap * max - used);
      if (!(g > 0)) return;
-@@ -3359,20 +3632,37 @@
+@@ -3359,20 +3687,37 @@
        G.input.haptic('left', 0.2, 30); G.input.haptic('right', 0.2, 30);
        return;
      }
@@ -1467,7 +1610,7 @@
      dmg = Math.round(dmg * G.settings.difficulty);
      // a share of the HP / MP the skill takes away besides (HP / MP recovery with a minus - 조커 -100%, 하얀 충격
      // -99%, 황산 -25%, 톱니바퀴 MP -8%: VX Ace's item_effect_recover_hp, by the target's recovery rate); no guard
-@@ -3396,7 +3686,7 @@
+@@ -3396,7 +3741,7 @@
        this.reportStruck(e, 2);
      } else if (guarded && (shieldHit || blockable)) {
        blocked = true;
@@ -1476,7 +1619,7 @@
        this.stamina = Math.max(0, this.stamina - 0.22); this.staminaDelay = 1;
        this.guardTing(ep);
        this.reportStruck(e, 1);
-@@ -3409,27 +3699,50 @@
+@@ -3409,27 +3754,50 @@
        G.audio?.playSystemSe(14);
        this.reportStruck(e, 0);
      }
@@ -1541,7 +1684,7 @@
    }
    // (a co-op guest struck by the host's enemy: how it went - 0 it landed, 1 guarded, 2 a perfect guard - is shown on
    // this player as the host sees it)
-@@ -3762,6 +4075,7 @@
+@@ -3762,6 +4130,7 @@
        b.pageDone.add(key);
        b.troopInterp = new Interpreter(1);
        b.troopInterp.troop = true;                  // its music changes play even during battle music
@@ -1549,7 +1692,7 @@
        b.troopInterp.setup(page.list, 0);
        b.troopInterp.update();                      // at once, like the original processing it right away
        return;
-@@ -3791,6 +4105,7 @@
+@@ -3791,6 +4160,7 @@
      this.rangedCooldown = Math.max(0, this.rangedCooldown - dt);
      this.updateGuard();
      this.updateDeskShield(dt);
@@ -1557,7 +1700,7 @@
      // drinking takes a moment (quick slot potions)
      if (this.healing) {
        this.healing.t -= dt;
-@@ -3997,6 +4312,7 @@
+@@ -3997,6 +4367,7 @@
        const wp = e.worldPos(tmpA);
        e.group.position.copy(wp);
        e.group.position.y += e.hover || 0;
@@ -1565,7 +1708,7 @@
        e.mesh.rotation.y = Math.atan2(head.x - wp.x, head.z - wp.z);
        e.mesh.rotation.z = 0; e.mesh.position.x = 0; e.mesh.position.z = 0;
        // (one hanging high over the player - the stage machine in the flies - leans its face down toward them)
-@@ -4433,7 +4749,7 @@
+@@ -4433,7 +4804,7 @@
      }
      return false;
    }
@@ -1574,7 +1717,7 @@
    bossFamily(s) {
      if (s._bossFam !== undefined) return s._bossFam;
      // (흑기사 린다메아's own moves; a leap over the player in a cloak - bossmoves.js)
-@@ -4729,7 +5045,7 @@
+@@ -4729,7 +5100,7 @@
      e.move = fam; e.act = null; e.comboStep = 0;
      e.style = this.skillStyle(s);
      e.aim = Math.atan2(dy, dx);
@@ -1583,7 +1726,7 @@
      e.state = 'windup';
      e.glinted = false;
      e.timer0 = e.timer = this.windupTime(e, s, e.style);
-@@ -4788,14 +5104,14 @@
+@@ -4788,14 +5159,14 @@
        // before it: let down gently)
        if (d.skill && this.liftInfo().falls.has(d.skill.id)) {
          if (this.playerDead || !d.e.alive) { G.player.floatDown?.(); continue; }
@@ -1600,7 +1743,7 @@
        this.enemyStrikePlayer(d.e, d.skill, { blockable: false, certain: true, delayed: true });
      }
    }
-@@ -4964,7 +5280,7 @@
+@@ -4964,7 +5335,7 @@
      const plan = e.plan, s = e.skill, fam = e.move;
      if (!plan) { this.endMove(e, 0.5); return; }
      G.coop?.onBossMove?.(e);                       // (its co-op guests see it go off as well - coop.js)
@@ -1609,7 +1752,7 @@
      const ep = e.worldPos(new THREE.Vector3());
      if (this.releaseNewMove(e, fam, plan, s, ep)) return;          // (bossmoves.js)
      const anim = s.animation_id > 0 ? s.animation_id : 0;
-@@ -5964,7 +6280,7 @@
+@@ -5964,7 +6335,7 @@
      const skill = e.skill;
      G.coop?.onEnemyAct?.(e, skill);
      // (a co-op guest's copy of the host's enemy only shows its move: what it does is done on the host's side)
@@ -1618,7 +1761,7 @@
      const plan = e.plan || this.planAttack(e, skill, e.style);
      // (from where its area was laid down)
      const ep = plan?.ox !== undefined ? new THREE.Vector3(plan.ox, plan.oy, plan.oz) : e.worldPos(new THREE.Vector3());
-@@ -6130,7 +6446,8 @@
+@@ -6130,7 +6501,8 @@
          // a shot is stopped only where it actually meets the shield (one that goes through a guard passes it)
          let shielded = false;
          if (this.shield && this.hasShield && (G.vr || this.shield.visible) && (!p.pierce || (this.guardUp && !this.disarmed && G.time - (this.guardRaisedAt ?? -99) <= PERFECT_GUARD))) {
@@ -1628,7 +1771,7 @@
            if (pos.distanceTo(tmpA) < 0.32) shielded = true;
          }
          // (the shots of a fan hit no more times than their skill does)
-@@ -6192,7 +6509,7 @@
+@@ -6192,7 +6564,7 @@
              if (p.aoe) break;                         // area spells burst below
              if (p.usable) {
                // (a round of a skill's shot is one hit of it, and the skill's animation comes once for all its rounds)
@@ -1637,7 +1780,24 @@
                for (let r = 0; r < n; r++) this.later(r * 120, () => this.applyUsableToEnemy(e, p.usable, pos));
                if (p.usable.animation_id > 0 && !p.volley?.shown) G.screen.playAnimationOn(new THREE.Vector3(wp.x, wp.y + e.h * 0.5, wp.z), p.usable.animation_id, { rate: 3, height: e.h });
                if (p.volley) p.volley.shown = true;
-@@ -6289,6 +6606,7 @@
+@@ -6273,10 +6645,15 @@
+       const inPlay = !!(n.flags & 8);
+       if (e && (!!e.inPlay !== inPlay || (inPlay && e.memberIndex !== n.mi))) { e.remove(); e = null; }
+       if (!e) {
+-        e = new ActionEnemy(this, null, n.enemyId, n.fx, n.fy, { dormant: true, inPlay, memberIndex: n.mi, lookAs });
++        e = new ActionEnemy(this, null, n.enemyId, n.fx, n.fy, { dormant: true, inPlay, memberIndex: n.mi, lookAs, battlebacks: n.battlebacks });
+         e.puppet = true; e.netId = n.id;
+         if (src) { e.src = src; e.private = true; }
+         this.puppets.set(keyOf(n.id), e);
++      }
++      const battlebacks = n.battlebacks ?? null;
++      if (JSON.stringify(e._battlebacks ?? null) !== JSON.stringify(battlebacks)) {
++        e.battlebacks = battlebacks;
++        this.rebuildEnemyArt(e);
+       }
+       if (src) e.hallKey = n.hallKey;
+       e.netFlags = n.flags;
+@@ -6289,6 +6666,7 @@
        e.outOfFight = !!(n.flags & 128);
        e.noTarget = !!(n.flags & 4) || (!!(n.flags & 64) && !G.coop?.rules?.guestStartsBoss) || e.outOfFight;
        e.boss = !!(n.flags & 32);
@@ -1645,7 +1805,7 @@
        // (a boss made stronger for its co-op fight - coop.js scaleBosses: its HP, MP and groggy gauge as big as there)
        if ((e.b.coopK || 1) !== n.k) { e.b.coopK = n.k; e.grogId = null; }
        const fresh = G.time - (e.netReported ?? -9) < 0.6;
-@@ -6310,6 +6628,9 @@
+@@ -6310,6 +6688,9 @@
          // (a plain shot winding up turns after its target there: its line here too)
          if (n.aim !== null && e.state === 'windup' && e.plan?.shot && !e.move && e.plan.ox !== undefined) this.aimShot(e, n.aim);
          e.b.hp = fresh ? Math.min(e.b.hp, n.hp) : n.hp;
@@ -1655,7 +1815,7 @@
          if (!fresh) e.b.states = n.states.slice();
          const gmax = this.groggyMax(e);
          if (gmax && !fresh) e.grog = gmax * n.grog / 100;
-@@ -6320,9 +6641,9 @@
+@@ -6320,9 +6701,9 @@
      }
      for (const [id, e] of this.puppets) if ((e.src || null) === src && !seen.has(id)) { e.remove(); this.puppets.delete(id); }
    }
@@ -1667,7 +1827,7 @@
    // big attack that ends one }]
    puppetReports() {
      const out = [];
-@@ -6336,8 +6657,9 @@
+@@ -6336,8 +6717,9 @@
        const add = now.states.filter(id => !b.states.includes(id) && !skip(id));
        const rm = b.states.filter(id => !now.states.includes(id) && !skip(id));
        const d = Math.round(b.hp - now.hp), g = Math.round(Math.max(0, b.grog - now.grog));
@@ -1679,7 +1839,7 @@
          e.netReported = G.time;
        }
        e.netBase = now;
-@@ -6347,6 +6669,7 @@
+@@ -6347,6 +6729,7 @@
    // (host) a guest's blow on one of this world's enemies: taken as if it had struck here - its numbers in the friend's
    // colour, the fight started if it was roaming, a Break, the groggy gauge, states, the fall
    applyGuestHit(r, from = null) {
@@ -1687,7 +1847,7 @@
      const e = this.netEnemies().find(x => x.netId === r.id) || this.hallEnemyFor(r.id, from);
      if (!e || !e.alive || e.hidden) return false;
      // (a boss fight that guest did not join, or watches fallen)
-@@ -6368,6 +6691,12 @@
+@@ -6368,6 +6751,12 @@
          G.audio?.playSe(G.seAt('Slash1', 70, 100), new THREE.Vector3(p.x, p.y + e.h * 0.5, p.z));
          this.damageRemovesStates(e);
        }
@@ -1700,7 +1860,7 @@
      }
      for (const id of r.add) if ($data.states[id] && !e.b.stateResist(id)) this.addEnemyState(e, id, true);
      for (const id of r.rm) { e.b.removeState(id); if (e.stateTimers) delete e.stateTimers[id]; }
-@@ -6504,7 +6833,7 @@
+@@ -6504,7 +6893,7 @@
          const charge = THREE.MathUtils.clamp((G.time - this.deskCharge - 0.15) / 1.0, 0, 1);
          this.deskCharge = null;
          if (!this.swing && this.stamina > 0.05) {
@@ -1709,7 +1869,7 @@
            this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.12)); this.staminaDelay = 0.7;
            G.audio?.playSe(G.seAt('Wind7', 60, charge >= 0.35 ? 100 : 140));
          }
-@@ -6512,10 +6841,12 @@
+@@ -6512,10 +6901,12 @@
        if (G.input.breakPressed()) this.pressBreak();
        if (this.swing) {
          const s = this.swing;
@@ -1725,7 +1885,7 @@
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
            const reach = this.weaponLength() + 0.9;
-@@ -6533,7 +6864,7 @@
+@@ -6533,7 +6924,7 @@
              }
            }
          }
@@ -1734,7 +1894,7 @@
            s.npcDone = true;
            const head = G.player.headWorld(new THREE.Vector3());
            const f = G.player.forwardVec();
-@@ -6549,7 +6880,7 @@
+@@ -6549,7 +6940,7 @@
              return d < reach && to.normalize().dot(f) > 0.5;
            }, { power: this.stamina > 0.1 ? 1 : 0.5, charge: s.charge || 0 });
          }
@@ -1743,7 +1903,7 @@
        }
      }
    }
-@@ -6667,27 +6998,74 @@
+@@ -6667,27 +7058,74 @@
    // of its own that never wears off stays (귀신 무사's 할복, the marks its patterns count) - the 8 turns are for
    // what the player puts on it
    applySkillToSelf(e, skill) {
@@ -1837,7 +1997,7 @@
      }
    }
    // VX Ace's escape (a skill's escape effect: 도망친다 - the rabbits, 암흑 물질, 라스, 교활한 원숭이 low on HP, 하얀
-@@ -6705,13 +7083,14 @@
+@@ -6705,13 +7143,14 @@
      if (e.ring) e.ring.material.opacity = 0;
      G.audio?.playSystemSe(8);
    }
@@ -1853,7 +2013,7 @@
        it.setup(list, 0);
        this.sideInterps.push(it);
      }
-@@ -6737,9 +7116,8 @@
+@@ -6737,9 +7176,8 @@
    // Script 191 回避時発動スキル: <全回避時スキル:n[,p]> (or 物理- / 魔法- / 必中-, by the attack's hit type) on a battler's
    // states, equipment or self - an attack it slips, it answers with skill n (p % of the time): 흰 유니콘 유니스's
    // 리포스트 (a stance of evasion +100% for two of its actions, every slipped blow answered by a lunge, 판트), and the
@@ -1865,7 +2025,7 @@
    evadeAnswers(b, hitType) {
      const out = [];
      for (const o of b?.featureObjects?.() || []) {
-@@ -6757,7 +7135,6 @@
+@@ -6757,7 +7195,6 @@
      const ht = skill?.hit_type ?? 1;
      if (!b || ht === 0 || this.certainHit(user, skill)) return null;
      const answers = this.evadeAnswers(b, ht);
@@ -1873,7 +2033,7 @@
      return Math.random() < (ht === 1 ? b.eva : b.mev) ? answers : null;
    }
    // (the stance shows while it lasts)
-@@ -6796,7 +7173,7 @@
+@@ -6796,7 +7233,7 @@
      G.audio?.playSystemSe(skill?.hit_type === 2 ? 19 : 18);
      G.input.haptic('left', 0.25, 40); G.input.haptic('right', 0.25, 40);
      if (!e || G.time - (this.answeredAt ?? -1) < 0.15) return;
@@ -1882,7 +2042,7 @@
      if (!ans) return;
      this.answeredAt = G.time;
      const s = $data.skills[ans.id];
-@@ -6912,7 +7289,7 @@
+@@ -6912,7 +7349,7 @@
      let from = null, dir;
      if (gun) {
        gun.updateWorldMatrix(true, true);
@@ -1891,7 +2051,7 @@
      }
      // the shot leaves along where the left controller points, however the gun model is turned in the hand
      const ray = this.aimRay('left');
-@@ -7124,7 +7501,7 @@
+@@ -7124,7 +7561,7 @@
      hits.set(t.id, G.time);
      const actor = G.state.party.leader();
      if (!actor) return false;
@@ -1900,7 +2060,7 @@
      for (let r = 0; r < n; r++) this.later(r * 120, () => G.coop?.sendPvp(t.id, obj.id, mult, false, actor, item));
      if (obj.animation_id > 0) G.screen.playAnimationOn(new THREE.Vector3(t.x, t.y + 0.9, t.z), obj.animation_id, { rate: 3, height: t.h });
      G.input.haptic('left', 0.5, 50);
-@@ -7246,11 +7623,12 @@
+@@ -7246,11 +7683,12 @@
    // instead (gunShotSkill - 거룩한 총검)
    fireRanged() {
      const kind = this.shotKind, actor = G.state.party.leader();
@@ -1916,7 +2076,7 @@
      const brk = this.breakArmed();                 // (fired with Break held: the first shot carries the Break)
      this.fireShot(kind, n > 1, brk);
      for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot(kind, true, null));
-@@ -7270,7 +7648,7 @@
+@@ -7270,7 +7708,7 @@
    // does - its damage, its Break / Hard Break, its animation once; paid and cooling as the skill is (Ⅱ, Ⅲ: 3 turns). Cooling
    // (or unpaid), nothing fires: the original's stab goes on without its shot then
    fireSkillShot(actor, s) {
@@ -1925,7 +2085,7 @@
        this.rangedCooldown = 0.25;
        G.audio?.playSystemSe(3);
        G.input.haptic('right', 0.25, 30);
-@@ -7278,8 +7656,11 @@
+@@ -7278,8 +7716,11 @@
      }
      this.actorPays(actor, s);
      this.skillCD[s.id] = G.time + this.coolSeconds(s);
@@ -1939,7 +2099,7 @@
      const volley = { shown: false };
      this.fireShot('gun', true, null, { skill: s, volley });
      for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot('gun', true, null, { skill: s, volley }));
-@@ -7299,7 +7680,7 @@
+@@ -7299,7 +7740,7 @@
    // where what the right hand holds shoots from: its tip
    muzzle() {
      this.weapon.updateWorldMatrix(true, false);
@@ -1950,7 +2110,7 @@
    arrowMesh() {
 --- upstream/app/src/coop.js
 +++ fork/apps/client/src/network/coop.js
-@@ -17,20 +17,23 @@
+@@ -17,20 +17,24 @@
  // Every message is small, checked field by field and only ever read as data; what steers a guest's world (welcome,
  // world changes, transfers) is taken only from the host.
  import * as THREE from 'three';
@@ -1982,10 +2142,11 @@
 +import { tr } from '../ui/i18n.js';
 +import { packEnemyBuffs, readEnemyBuffs } from './enemy-status.js';
 +import { packEnemyMp, readEnemyMp } from './enemy-resources.js';
++import { packEnemyArt, readEnemyArt } from './enemy-art.js';
  import { NO_H_SWITCH, refOf, indexMap, isRef, sayAt, pictureAt, soundAt, animationAt, musicOk, guard } from './coopguard.js';
  
  const PROTO = 11;
-@@ -317,7 +320,7 @@
+@@ -317,7 +321,7 @@
      this.peers = new Map();     // the others: id -> { id, host, heard, seq, avatar, pose }
      this.hostId = null;         // (guest) the host's id
      this.summoned = false;      // (guest) standing in the host's world
@@ -1994,26 +2155,26 @@
      this.flags = new Map();     // (host) the world's changes not sent yet
      this.follow = null;         // (guest) where the host went last
      this.lastError = '';        // why the last visit could not begin (the co-op menu says it)
-@@ -941,7 +944,8 @@
+@@ -941,7 +945,8 @@
      if (!this.ready()) return;
      const m = G.map.mapId, list = [], fights = [];
      const syms = new Map([...G.combat.symbols.values()].filter(s => s.enemy).map(s => [s.enemy, s]));
 -    for (const e of G.combat.netEnemies()) {
-+    const enemies = G.combat.netEnemies(), buffs = packEnemyBuffs(enemies), mp = packEnemyMp(enemies);
++    const enemies = G.combat.netEnemies(), buffs = packEnemyBuffs(enemies), mp = packEnemyMp(enemies), art = packEnemyArt(enemies);
 +    for (const e of enemies) {
        list.push(this.enemyEntry(e, e.battle ? null : syms.get(e)));
        fights.push(e.battle?.coopIn ? e.battle : null);
      }
-@@ -952,7 +956,7 @@
+@@ -952,7 +957,7 @@
        const key = JSON.stringify(mine);
        if (key === p.enKey && !mine.length) continue;          // (nothing there, as last told)
        p.enKey = key;
 -      this.send({ t: 'en', m, e: mine }, p.id);
-+      this.send({ t: 'en', m, e: mine, buffs, mp }, p.id);
++      this.send({ t: 'en', m, e: mine, buffs, mp, art }, p.id);
      }
    }
    enemyEntry(e, sym = null) {
-@@ -1138,8 +1142,8 @@
+@@ -1138,8 +1143,8 @@
      p.hits.push(t);
      const ids = a => isList(a, 16) && a.every(id => isInt(id, 2, 9999) && $data.states?.[id]);
      if (!isInt(m.id, 1, Number.MAX_SAFE_INTEGER) || !isInt(m.d, -1e7, 1e7) || !ids(m.add) || !ids(m.rm) || !isNum(m.g, 1e7) || m.g < 0
@@ -2024,7 +2185,7 @@
    }
    // (host) a guest asks to begin a boss fight here (askBossStart): only by the server's rules, for an event of this map
    // that does begin one, at the guest's side (where this world sees the guest too), and while this world is free for
-@@ -1509,7 +1513,8 @@
+@@ -1509,7 +1514,8 @@
    summon(world, place) {
      G.combat.reset();                    // (a fight of its own left unfinished ends in its own world, as on leaving a map)
      const pc = G.map.playerChar;
@@ -2034,7 +2195,7 @@
      this.restAt = null;                  // (no bonfire of the host's world rested at yet)
      this.scrOf.clear(); this.authNow = undefined; this.leadsNow = false;     // (nothing of this world's screens known yet)
      this.bossCall = null; this.bossGo = null;
-@@ -1518,7 +1523,7 @@
+@@ -1518,7 +1524,7 @@
      G.map.interpreter.clear();
      G.map.reservedCommon = [];
      this.summoned = true;
@@ -2043,7 +2204,7 @@
      console.info('[coop] in the host\'s world');
    }
    goHome() {
-@@ -1529,7 +1534,7 @@
+@@ -1529,7 +1535,7 @@
      G.combat.reset({ keepState: true });
      G.map.interpreter.clear();
      G.map.reservedCommon = [];
@@ -2052,16 +2213,17 @@
      console.info('[coop] back home');
    }
    onMap(m) {
-@@ -2031,6 +2036,8 @@
+@@ -2031,6 +2037,9 @@
          if (!this.badEnemyAt || now() - this.badEnemyAt > 5) { this.badEnemyAt = now(); console.warn('[coop] enemy entry not taken:', JSON.stringify(n).slice(0, 240)); }
          continue;
        }
 +      e.statusBuffs = readEnemyBuffs(m.buffs, e.id);
 +      e.mp = readEnemyMp(m.mp, e.id);
++      e.battlebacks = readEnemyArt(m.art, e.id);
        list.push(e);
      }
      G.combat.applyPuppets(list);
-@@ -2252,7 +2259,7 @@
+@@ -2252,7 +2261,7 @@
    enterAway(st, place, phase) {
      if (this.role !== 'world' || this.wphase !== 'choosing') return;
      G.combat.reset();
@@ -2070,7 +2232,7 @@
      this.summoned = true;
      G.map.interpreter.clear();
      G.map.reservedCommon = [];
-@@ -2583,12 +2590,15 @@
+@@ -2583,12 +2592,15 @@
      const m = G.map.mapId, groups = G.combat.hallGroups();
      for (const p of this.guests()) {
        if (p.pose?.m !== m) continue;
@@ -2085,16 +2247,17 @@
        if (k === p.henKey && !list.length) continue;
        p.henKey = k;
 -      this.send({ t: 'hen', m, e: list }, p.id);
-+      this.send({ t: 'hen', m, e: list, buffs: packEnemyBuffs(enemies), mp: packEnemyMp(enemies) }, p.id);
++      this.send({ t: 'hen', m, e: list, buffs: packEnemyBuffs(enemies), mp: packEnemyMp(enemies), art: packEnemyArt(enemies) }, p.id);
      }
    }
    onHallEnemies(m, from) {
-@@ -2601,6 +2611,8 @@
+@@ -2601,6 +2613,9 @@
        if (!e || typeof key !== 'string' || !HALL_KEY.test(key) || !isNum(age, 1e7) || age < 0) continue;
        if (!seen.has(key) || !this.followHall(key, from, age)) continue;
        e.hallKey = key;
 +      e.statusBuffs = readEnemyBuffs(m.buffs, e.id);
 +      e.mp = readEnemyMp(m.mp, e.id);
++      e.battlebacks = readEnemyArt(m.art, e.id);
        list.push(e);
      }
      G.combat.applyPuppets(list, from);
@@ -2253,7 +2416,14 @@
  import { isFallRoute, SWITCH_PASS, PLAYER_BLOCK_REGIONS, EVENT_PASS_REGIONS } from './mapanalysis.js';
  
  // The first-person player seen through the RPG Maker character interface
-@@ -67,6 +67,8 @@
+@@ -61,12 +61,15 @@
+   constructor() {
+     this.mapId = 0;
+     this.map = null;
++    this.battlebacks = ['', ''];
+     this.grid = null;
+     this.events = {};
+     this.eventList = [];
      this.interpreter = new Interpreter(0, true);
      this.playerChar = new PlayerChar();
      this.needRefresh = false;
@@ -2262,7 +2432,7 @@
      this.transfer = null;          // pending {mapId, x, y, dir, fade}
      this.transferring = false;
      this.commonParallel = [];
-@@ -90,7 +92,10 @@
+@@ -90,7 +93,10 @@
    requestRefresh() { this.needRefresh = true; }
  
    onEventPageChanged(ev) {
@@ -2273,6 +2443,14 @@
      G.combat?.onEventPageChanged(ev);
      // (a tile it lays that opens the way where the map's own tiles shut it - a bridge a lever lays: the 3D view is built again
      // with it, or without it - mapbuild.js openingTiles)
+@@ -109,6 +115,7 @@
+     this.loading = true;
+     this.mapId = mapId;
+     this.map = map;
++    this.battlebacks = map.specify_battleback ? [map.battleback1_name || '', map.battleback2_name || ''] : ['', ''];
+     this.grid = new MapGrid(map, $data.tilesets[map.tileset_id]);
+     // RPG Maker's looping maps (scroll type 1 vertical, 2 horizontal, 3 both): walking off one edge comes in at
+     // the other, so a position past an edge is the cell on the other side (wrapX / wrapY)
 --- upstream/app/src/globals.js
 +++ fork/apps/client/src/core/globals.js
 @@ -10,6 +10,7 @@
@@ -2857,15 +3035,18 @@
  
  // the interpreter running a command right now (the innermost): what kind of run made a change to the world
  // (coopworld.js writeSyncs)
-@@ -26,6 +28,7 @@
+@@ -26,8 +28,10 @@
      this.killMode = false;
      this.mapId = 0; this.eventId = 0; this.list = null; this.index = 0;
      this.waitCount = 0; this.waitMode = ''; this.child = null; this.branch = {};
 +    this.saveRequest = null;
      this.indent = 0; this.params = null; this.choiceGroup = null; this.battle = null;
      this.battleBgmBefore = undefined;
++    this.battlebacks = undefined;
      this.undo = null;
-@@ -42,6 +45,7 @@
+   }
+   // what an event's run changed (switches, variables, self switches: key -> the value before), kept on its root so a
+@@ -42,6 +46,7 @@
    }
    setup(list, eventId = 0) {
      this.clear();
@@ -2873,7 +3054,7 @@
      this.mapId = G.map.mapId;
      this.eventId = eventId;
      this.list = list;
-@@ -90,6 +94,7 @@
+@@ -90,6 +95,7 @@
          this.balloonGuard = 0;
          break;
        case 'scene': if (G.ui.sceneBusy()) return true; break;
@@ -2881,7 +3062,7 @@
        default: break;
      }
      this.waitMode = '';
-@@ -154,7 +159,7 @@
+@@ -154,7 +160,7 @@
        case 103: this.index++; this.setupNumberInput(msg, this.list[this.index].parameters); break;
        default: break;
      }
@@ -2890,7 +3071,7 @@
      G.coop?.onSay?.(this, msg);            // (co-op: the guests in this world read it too - coop.js)
      this.index++;
      this.waitMode = 'message';
-@@ -166,7 +171,7 @@
+@@ -166,7 +172,7 @@
      if (this.killMode && this.killChoice()) return true;
      const msg = { face: '', faceIndex: 0, background: 0, position: 2, lines: [], choices: null, at: this.index };
      this.setupChoices(msg);
@@ -2899,7 +3080,7 @@
      G.coop?.onSay?.(this, msg);
      this.index++;
      this.waitMode = 'message';
-@@ -212,6 +217,9 @@
+@@ -212,6 +218,9 @@
        }
        this.choiceGroup.results = results;
        this.branch[indent] = results.get(groupIdx[0]);
@@ -2909,7 +3090,7 @@
      };
    }
    choiceCond(cond) {
-@@ -222,6 +230,7 @@
+@@ -222,6 +231,7 @@
      const g = this.choiceGroup;
      if (!g || !g.results || !g.results.has(this.index)) return false;
      this.branch[this.indent] = g.results.get(this.index);
@@ -2917,7 +3098,7 @@
      return true;
    }
    c402() { if (this.branch[this.indent] !== this.params[0]) this.skipBranch(); return true; }
-@@ -235,7 +244,7 @@
+@@ -235,7 +245,7 @@
      if (G.ui.messageBusy()) return false;
      const msg = { face: '', lines: [], position: 2 };
      this.setupNumberInput(msg, this.params);
@@ -2926,7 +3107,7 @@
      this.waitMode = 'message';
      this.index++;
      return false;
-@@ -253,7 +262,7 @@
+@@ -253,7 +263,7 @@
      const lines = [], at = this.index;
      while (this.nextCode() === 405) { this.index++; lines.push(this.list[this.index].parameters[0]); }
      const msg = { face: '', lines, position: 1, scroll: true, at };
@@ -2935,7 +3116,7 @@
      G.coop?.onSay?.(this, msg);
      this.index++;
      this.waitMode = 'message';
-@@ -611,7 +620,15 @@
+@@ -611,7 +621,15 @@
      return false;
    }
    c223() {
@@ -2952,7 +3133,7 @@
      if (this.params[2]) this.wait(this.params[1]);
      return true;
    }
-@@ -628,17 +645,27 @@
+@@ -628,17 +646,27 @@
      return true;
    }
    c230() { this.wait(this.params[0]); return true; }
@@ -2985,7 +3166,31 @@
    c236() {
      G.screen.setWeather?.(this.params[0], this.params[1], this.params[2]);
      if (this.params[3]) this.wait(this.params[2]);
-@@ -829,7 +856,18 @@
+@@ -665,8 +693,21 @@
+   // ---------------------------------------------------------------- map
+   c281() { return true; }
+   c282() { G.map.changeTileset?.(this.params[0]); return true; }
+-  // Change Battle Back: the fight stands on the map itself; a stage play hangs it as the act's scenery (src/theater.js)
+-  c283() { G.theater?.battleBack(this.params[0]); return true; }
++  // Keep both authored layers. A troop owns its live changes; other events set
++  // future encounters without replacing artwork in an unrelated ongoing fight.
++  c283() {
++    const root = this.root || this, troop = root.troop;
++    const battle = troop ? G.combat?.battleOf?.(this) : root.battle;
++    if (troop && (!battle || battle.done)) return true;
++    const names = [this.params[0] || '', this.params[1] || ''];
++    if (!troop) {
++      G.map.battlebacks = names.slice();
++      root.battlebacks = names.slice();
++    }
++    if (battle && !battle.done) G.combat?.changeBattleBack?.(battle, names);
++    if (!G.theater?.active || G.theater.battle === battle) G.theater?.battleBack(names[0]);
++    return true;
++  }
+   c284() { G.map.changeParallax?.(this.params[0]); return true; }
+   c285() {
+     const [varId, type, desig, px, py] = this.params;
+@@ -829,7 +870,18 @@
      this.waitMode = 'scene';
      return true;
    }
@@ -3005,7 +3210,7 @@
    // Game Over: the game ends there and goes to the title (main.js G.gameOver) - its run stops here. A co-op guest falls by the
    // server's rules instead
    c353() {
-@@ -839,8 +877,14 @@
+@@ -839,8 +891,14 @@
    }
    c354() { G.ui.returnToTitle?.(); return true; }
    c355() {
@@ -5858,6 +6063,21 @@
  
  const CURTAIN_CES = [362, 363, 364];
  const CURTAIN_PIC = /^幕[１２３４５６７８]?$/;
+@@ -251,7 +251,13 @@
+     if (!(this.active || e.inPlay) || !this.isPart(e)) return null;
+     const i = ((e.memberIndex ?? 0) % PIECES.length + PIECES.length) % PIECES.length;
+     const key = `piece${i}`;
+-    if (!this.tex.has(key)) this.tex.set(key, this.tornPiece(i));
++    if (!this.tex.has(key)) {
++      const pending = this.tornPiece(i).catch(error => { console.warn('stage piece texture failed', error); return null; }).then(t => {
++        if (!t && this.tex.get(key) === pending) this.tex.delete(key);
++        return t;
++      });
++      this.tex.set(key, pending);
++    }
+     return this.tex.get(key);
+   }
+   // a torn piece of the machine's picture: its crop, cut out along a ragged edge, drawn bigger
 --- upstream/app/src/ui.js
 +++ fork/apps/client/src/ui/ui.js
 @@ -1,14 +1,23 @@
@@ -8702,6 +8922,38 @@
 +    input.haptic?.(best.hand, 0.25, 45);
 +    return true;
 +  }
++}
+--- /dev/null
++++ fork/apps/client/src/network/enemy-art.js
+@@ -0,0 +1,29 @@
++// Optional art metadata leaves the legacy 15/17-field enemy tuples unchanged.
++// Only names in each recipient's installed battleback folders can be selected.
++import { resolveImage } from '../data/assets.js';
++
++function battlebacks(value) {
++  if (!Array.isArray(value) || value.length !== 2) return null;
++  for (let i = 0; i < 2; i++) {
++    const name = value[i];
++    if (typeof name !== 'string' || name.length > 128 || name.includes('..') || /[\\/:?#%\u0000-\u001f\u007f]/.test(name)) return null;
++    if (name && !resolveImage(`Graphics/Battlebacks${i + 1}`, name)) return null;
++  }
++  return value.slice();
++}
++
++export function packEnemyArt(enemies) {
++  const entries = [];
++  for (const enemy of enemies) {
++    if (!Number.isSafeInteger(enemy.netId) || enemy.netId < 1) continue;
++    const names = battlebacks(enemy.battlebacks);
++    if (names) entries.push([enemy.netId, names]);
++  }
++  return Object.fromEntries(entries);
++}
++
++export function readEnemyArt(snapshot, id) {
++  if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)
++    || !Object.prototype.hasOwnProperty.call(snapshot, id)) return null;
++  return battlebacks(snapshot[id]);
 +}
 --- /dev/null
 +++ fork/apps/client/src/network/enemy-resources.js
