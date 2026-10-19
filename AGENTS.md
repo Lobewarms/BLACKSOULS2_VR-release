@@ -1830,3 +1830,8 @@ protocol tests. Targeted suites reproduce the repaired paths with synthetic
 records, including real action/Interpreter/companion lifecycle and battle-end
 reward handling. Preserve the audited distinction between passing formula
 profiles, passing mechanic regressions, and unperformed full story/headset runs.
+
+The public literal runtime comparison now uses commit9a69f17 (0.2.29):48 original
+modules retained,16 unchanged after import moves,32 modified,37 new,0 missing;
+3203 added/808 removed lines in modified originals after import normalization.
+The six actual comparison images remain explicitly labelled0.2.25.
