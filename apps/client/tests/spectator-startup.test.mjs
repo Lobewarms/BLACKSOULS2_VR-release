@@ -7,7 +7,7 @@ import { G } from '../src/core/globals.js';
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const flush = async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); };
 function environment(t, options = {}) {
-  const previous = { ...G }, idle = [], classes = new Set(), calls = [], listeners = {};
+  const previous = { ...G }, idle = [], classes = new Set(), calls = [], listeners = {}, gpuStates = [];
   t.after(() => Object.assign(G, previous));
   for (const [key, value] of Object.entries({
     document: { createElement: () => ({}), body: { appendChild() {}, classList: { add: value => classes.add(value), remove: value => classes.delete(value) } } },
@@ -31,15 +31,15 @@ function environment(t, options = {}) {
   let creates = 0;
   const renderer = {
     setPixelRatio(value) { calls.push(['ratio', value]); }, setSize(...value) { calls.push(['size', ...value]); },
-    compileAsync(...args) { calls.push(['compile', ...args]); return options.compile ? options.compile() : Promise.resolve(); },
+    compileAsync(...args) { calls.push(['compile', ...args]); gpuStates.push(['compile', main.xr.isPresenting]); return options.compile ? options.compile() : Promise.resolve(); },
     render(_scene, camera) { calls.push(['render', camera.position.clone(), camera.quaternion.clone(), camera.fov, world.frustumCulled, hidden.frustumCulled]);
-      options.render?.(); },
+      gpuStates.push(['render', main.xr.isPresenting]); options.render?.(); },
   };
   class TestSpectator extends Spectator {
-    createRenderer() { creates++; calls.push(['create']); if (options.create) options.create(); return renderer; }
+    createRenderer() { creates++; calls.push(['create']); gpuStates.push(['create', main.xr.isPresenting]); if (options.create) options.create(); return renderer; }
   }
   const spectator = new TestSpectator(main, scene);
-  return { spectator, scene, main, head, world, hidden, classes, calls, renderer, idle,
+  return { spectator, scene, main, head, world, hidden, classes, calls, renderer, idle, gpuStates,
     get creates() { return creates; }, count: kind => calls.filter(call => call[0] === kind).length,
     async idleStep() { assert.ok(idle.length, 'an idle preparation step should be pending'); idle.shift()(); await flush(); },
     resize() { listeners.resize(); },
@@ -67,17 +67,19 @@ test('PC preparation warms shaders and all visible geometry before ENTER VR, reu
   assert.equal(e.creates, 1); assert.equal(e.count('compile'), 1); assert.equal(e.count('render'), 3);
 });
 
-test('unprepared startup and the first headset frame never create a context or block on shader preparation', async t => {
-  const compile = deferred(), e = environment(t, { compile: () => compile.promise });
+test('unprepared startup defers the monitor for the whole XR session and resumes on desktop', async t => {
+  const e = environment(t);
   e.main.xr.isPresenting = true; e.spectator.start();
   assert.equal(e.creates, 0); assert.equal(e.spectator.active, false);
   e.calls.push(['headset draw']); e.spectator.render();
   assert.deepEqual(e.calls, [['headset draw']]); assert.equal(e.classes.has('spectating'), false);
-  await e.idleStep(); assert.equal(e.creates, 1); assert.equal(e.count('compile'), 1);
-  e.spectator.render(); assert.equal(e.count('render'), 0); assert.equal(e.classes.has('spectating'), false);
-  compile.resolve(); await flush(); await e.idleStep();
-  assert.equal(e.spectator.active, true); assert.equal(e.classes.has('spectating'), true);
-  assert.equal(e.count('render'), 1);
+  for (let i = 0; i < 30; i++) e.spectator.render();
+  assert.equal(e.idle.length, 0); assert.equal(e.creates, 0); assert.equal(e.spectator.deferred, true);
+  assert.equal(await e.spectator.resumePreparation(), false); assert.equal(e.spectator.failed, false);
+  e.spectator.stop(); e.main.xr.isPresenting = false;
+  const resumed = e.spectator.resumePreparation(); await e.idleStep(); await e.idleStep();
+  assert.equal(await resumed, true); assert.equal(e.spectator.ready, true); assert.equal(e.spectator.active, false);
+  assert.deepEqual(e.gpuStates, [['create', false], ['compile', false], ['render', false]]);
 });
 
 test('a newer map preparation invalidates pending scene work without exposing an obsolete warm view', async t => {
@@ -95,7 +97,7 @@ test('stop during preparation does not reopen the monitor and disabled spectator
   const e = environment(t); G.settings.spectator = false;
   assert.equal(await e.spectator.prepare(), false); e.main.xr.isPresenting = true; e.spectator.start(); e.spectator.render();
   assert.equal(e.creates, 0); assert.equal(e.idle.length, 0);
-  G.settings.spectator = true; e.spectator.start(); const preparation = e.spectator.prepare();
+  G.settings.spectator = true; e.main.xr.isPresenting = false; e.spectator.start(); const preparation = e.spectator.prepare();
   await e.idleStep(); e.spectator.stop(); await e.idleStep(); await preparation;
   assert.equal(e.spectator.ready, true); assert.equal(e.spectator.active, false); assert.equal(e.classes.has('spectating'), false);
 });
@@ -103,13 +105,63 @@ test('stop during preparation does not reopen the monitor and disabled spectator
 test('a failed warm draw restores original culling and stays off the headset draw path until retry', async t => {
   let failure = true;
   const e = environment(t, { render: () => { if (failure) throw new Error('monitor context unavailable'); } });
-  e.main.xr.isPresenting = true; e.spectator.start(); e.spectator.render();
-  const preparation = e.spectator.preparing; await e.idleStep(); await e.idleStep();
+  const preparation = e.spectator.prepare(); await e.idleStep(); await e.idleStep();
   assert.equal(await preparation, false); assert.equal(e.world.frustumCulled, true);
   assert.equal(e.spectator.active, false); assert.equal(e.classes.has('spectating'), false);
+  e.main.xr.isPresenting = true; e.spectator.start(); e.spectator.failed = true;
   e.spectator.render(); assert.equal(e.idle.length, 0, 'a failing monitor must not retry GPU work on every headset frame');
-  failure = false; e.spectator.stop(); e.spectator.start(); e.spectator.render();
-  await e.idleStep(); await e.idleStep(); assert.equal(e.spectator.ready, true); assert.equal(e.creates, 1);
+  failure = false; e.spectator.stop(); e.main.xr.isPresenting = false;
+  const retried = e.spectator.prepare(); await e.idleStep(); await e.idleStep();
+  assert.equal(await retried, true); assert.equal(e.spectator.ready, true); assert.equal(e.creates, 1);
+});
+
+test('XR arriving before the first idle step prevents context allocation until desktop resume', async t => {
+  const e = environment(t), pending = e.spectator.prepare();
+  e.main.xr.isPresenting = true; e.spectator.start(); await e.idleStep();
+  assert.equal(await pending, false); assert.equal(e.creates, 0); assert.equal(e.idle.length, 0);
+  assert.equal(e.spectator.deferred, true); assert.equal(e.spectator.failed, false);
+  e.spectator.stop(); e.main.xr.isPresenting = false;
+  const resumed = e.spectator.resumePreparation(); await e.idleStep(); await e.idleStep();
+  assert.equal(await resumed, true); assert.ok(e.gpuStates.every(([, xr]) => !xr));
+});
+
+test('a compile begun on PC settles during XR without scheduling a warm draw or idle loop', async t => {
+  const first = deferred(); let count = 0;
+  const e = environment(t, { compile: () => ++count === 1 ? first.promise : Promise.resolve() });
+  const pending = e.spectator.prepare(); await e.idleStep();
+  e.main.xr.isPresenting = true; e.spectator.start(); first.resolve(); await flush();
+  assert.equal(await pending, false); assert.equal(e.count('render'), 0); assert.equal(e.idle.length, 0);
+  assert.equal(e.spectator.deferred, true); assert.equal(e.spectator.failed, false);
+  for (let i = 0; i < 30; i++) e.spectator.render();
+  assert.equal(e.idle.length, 0); assert.equal(e.count('compile'), 1);
+  e.spectator.stop(); e.main.xr.isPresenting = false;
+  const resumed = e.spectator.resumePreparation(); await e.idleStep(); await e.idleStep();
+  assert.equal(await resumed, true); assert.equal(e.creates, 1); assert.equal(e.count('compile'), 2);
+  assert.ok(e.gpuStates.every(([, xr]) => !xr));
+});
+
+test('XR arriving between shader readiness and the upload idle step postpones all geometry uploads', async t => {
+  const e = environment(t), pending = e.spectator.prepare(); await e.idleStep();
+  e.main.xr.isPresenting = true; e.spectator.start(); await e.idleStep();
+  assert.equal(await pending, false); assert.equal(e.count('render'), 0); assert.equal(e.idle.length, 0);
+  e.spectator.stop(); e.main.xr.isPresenting = false;
+  const resumed = e.spectator.resumePreparation(); await e.idleStep(); await e.idleStep();
+  assert.equal(await resumed, true); assert.equal(e.count('render'), 1); assert.ok(e.gpuStates.every(([, xr]) => !xr));
+});
+
+test('map revisions during XR resume only the latest source on the existing desktop context', async t => {
+  const first = deferred(); let count = 0, fresh;
+  const e = environment(t, { compile: () => ++count === 1 ? first.promise : Promise.resolve(),
+    render: () => assert.equal(fresh.frustumCulled, false, 'latest scene geometry participates in the only warm draw') });
+  const pending = e.spectator.prepare(); await e.idleStep();
+  e.main.xr.isPresenting = true; e.spectator.start();
+  fresh = e.world.clone(); e.scene.add(fresh);
+  assert.equal(await e.spectator.prepare(), false); first.resolve(); await flush(); assert.equal(await pending, false);
+  assert.equal(e.count('render'), 0);
+  e.spectator.stop(); e.main.xr.isPresenting = false;
+  const resumed = e.spectator.resumePreparation(); await e.idleStep(); await e.idleStep();
+  assert.equal(await resumed, true); assert.equal(e.creates, 1); assert.equal(e.count('compile'), 2); assert.equal(e.count('render'), 1);
+  assert.equal(fresh.frustumCulled, true); assert.ok(e.gpuStates.every(([, xr]) => !xr));
 });
 
 test('prepared monitor preserves its independent FOV, head leveling, smoothing, viewport and renderer settings', async t => {

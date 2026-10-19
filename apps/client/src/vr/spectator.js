@@ -23,6 +23,7 @@ export class Spectator {
     this.wanted = false;
     this.ready = false;
     this.failed = false;
+    this.deferred = false;
     this.revision = 0;
     this.preparing = null;
     this.n = 0;
@@ -36,6 +37,7 @@ export class Spectator {
     this.wanted = true;
     this.failed = false;
     this.fresh = true;
+    if (!this.ready) this.deferred = true;
     // sessionstart runs on the headset's startup path. Context creation,
     // shader compilation and uploads belong to prepare's idle work instead.
     if (this.ready) this.activate();
@@ -59,10 +61,28 @@ export class Spectator {
     this.revision++;
     this.ready = false;
     this.failed = false;
+    if (this.main.xr.isPresenting) return Promise.resolve(this.deferPreparation());
+    this.deferred = false;
     if (!this.preparing) {
       this.preparing = this.prepareLatest().finally(() => { this.preparing = null; });
     }
     return this.preparing;
+  }
+  deferPreparation() {
+    this.deferred = true;
+    this.ready = false;
+    this.active = false;
+    document.body.classList.remove('spectating');
+    return false;
+  }
+  resumePreparation() {
+    if (G.settings.spectator === false || this.main.xr.isPresenting) return Promise.resolve(false);
+    if (this.ready) return Promise.resolve(true);
+    if (!this.deferred) return Promise.resolve(false);
+    // An already-started compile cannot be cancelled. Its next checkpoint
+    // settles before desktop work resumes; no idle polling runs in XR.
+    if (this.preparing) return this.preparing.then(() => this.resumePreparation());
+    return this.prepare();
   }
   async prepareLatest() {
     try {
@@ -70,15 +90,19 @@ export class Spectator {
         const revision = this.revision;
         await idle();
         if (G.settings.spectator === false) return false;
+        if (this.main.xr.isPresenting) return this.deferPreparation();
         if (revision !== this.revision) continue;
         this.renderer ||= this.createRenderer();
         this.resize();
         this.updateCamera();
         this.copyRendererSettings();
         await this.renderer.compileAsync(this.scene, this.cam);
+        if (G.settings.spectator === false) return false;
+        if (this.main.xr.isPresenting) return this.deferPreparation();
         if (revision !== this.revision) continue;
         await idle();
         if (G.settings.spectator === false) return false;
+        if (this.main.xr.isPresenting) return this.deferPreparation();
         if (revision !== this.revision) continue;
         // compileAsync prepares programs, but not geometry/texture uploads.
         // Warm those with the canvas still hidden before exposing this view.
@@ -86,6 +110,7 @@ export class Spectator {
         this.copyRendererSettings();
         this.warmRenderer();
         this.ready = true;
+        this.deferred = false;
         this.activate();
         return true;
       }
@@ -150,10 +175,10 @@ export class Spectator {
   render() {
     if (!this.wanted || !this.main.xr.isPresenting || G.settings.spectator === false) return;
     if (!this.ready) {
-      // This runs after main.render in the frame loop. Even when no PC
-      // preparation was possible, the first headset draw never creates or
-      // compiles the second context; schedule that work for a later idle task.
-      if (!this.preparing && !this.failed) void this.prepare();
+      // An idle callback still runs on the main thread. A cold monitor view
+      // waits until desktop instead of uploading a second copy of the map
+      // between headset frames.
+      if (!this.failed) this.deferred = true;
       return;
     }
     if (!this.active || !this.renderer || (this.n++ & 1) === 1 || !this.updateCamera()) return;

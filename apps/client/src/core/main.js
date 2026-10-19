@@ -3,6 +3,8 @@ import * as THREE from 'three';
 import { G } from './globals.js';
 import { tr, fmtDate } from '../ui/i18n.js';
 import { createVRButton, prepareXR } from '../vr/vrbutton.js';
+import { renderWithXrStatus } from '../vr/frame-status.js';
+import { createXrStatus } from '../ui/xr-status.js';
 import { initAssets, loadFont, loadImage, fetchBinary, listFiles, hasFile } from '../data/assets.js';
 import { $data, loadDatabase, loadMapNames, destinationName } from '../data/data.js';
 import { MarshalReader } from '../data/marshal.js';
@@ -172,7 +174,12 @@ function freeXrTarget() {
 renderer.xr.addEventListener('sessionend', () => {
   viewMode.restoreDesktop();
 });
-document.getElementById('vrbtn').appendChild(createVRButton(renderer, {
+const vrContainer = document.getElementById('vrbtn');
+const vrStatus = createXrStatus(vrContainer, { onCancel: () => vrButton.cancelStartup() });
+const vrButton = createVRButton(renderer, {
+  waitForPose: true,
+  referenceSpaceType: 'local-floor',
+  onStatus: status => vrStatus.update(status),
   restoreView: () => viewMode.restoreDesktop(),
   // the headset shows something else (the SteamVR dashboard or desktop, the system menu, the headset is off):
   // the game waits, as it does behind a menu
@@ -186,7 +193,8 @@ document.getElementById('vrbtn').appendChild(createVRButton(renderer, {
     console.info('[xr] XR process reset:', JSON.stringify(j));
     return (j.ended || 0) > 0;
   },
-}));
+});
+vrContainer.prepend(vrButton);
 
 // ------------------------------------------------------------------ map presentation
 const view = { mesh: null, sprites: [], mapId: 0 };
@@ -665,7 +673,7 @@ function updatePlayerBalloon(head) {
 }
 let lastFrameError = '';
 function frame(_time, xrFrame) {
-  try { viewMode.beforeFrame(xrFrame); frameBody(); } catch (e) {
+  try { viewMode.beforeFrame(xrFrame); frameBody(xrFrame); } catch (e) {
     const msg = String(e?.message || e);
     if (msg !== lastFrameError) {
       lastFrameError = msg;
@@ -691,7 +699,7 @@ function updateLoopView(head) {
     c.obj.visible = Math.hypot(dx, dz) < reach;
   }
 }
-function frameBody() {
+function frameBody(xrFrame) {
   if (renderer.xr.isPresenting) { const rt = renderer.getRenderTarget(); if (rt?.isXRRenderTarget) xrTarget = rt; }
   const dt = Math.min(clock.getDelta(), 0.1);
   G.time += dt;
@@ -774,7 +782,7 @@ function frameBody() {
   G.audio.updateListener(camera);
   G.input.endFrame();
   G.screen.beginShake(G.three?.rig, dt);
-  renderer.render(scene, camera);
+  renderWithXrStatus(renderer, scene, camera, xrFrame, session => vrButton.notifyPose(session));
   spectator.render();
   G.screen.endShake(G.three?.rig);
 }

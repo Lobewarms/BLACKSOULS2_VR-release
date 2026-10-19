@@ -117,6 +117,7 @@ export class ViewMode {
     G.xrAway = false;
     this.releaseTarget();
     this.spectator?.stop();
+    if (wasActive || this.spectator?.deferred) void this.spectator?.resumePreparation?.();
     this.renderer.setRenderTarget?.(null);
     Object.assign(this.camera, this.desktopLens);
     this.camera.view = this.desktopView ? { ...this.desktopView } : null;

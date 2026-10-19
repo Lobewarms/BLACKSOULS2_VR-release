@@ -2039,3 +2039,58 @@ player save or Steam award is written. Original artwork/databases/saves, private
 metadata and controls remain outside Git. Forest is1280x720; other captures
 are1022x1004 from the normal browser viewport, without image edits. These are
 desktop previews, not a physical-headset playtest or new runtime release.
+
+
+## Bounded VR entry and first tracked render (0.2.34)
+
+Request immersive-vr synchronously inside the actual click activation. Never
+await GPU compatibility before that native permission request. Page-load and
+devicechange graphics warmup remains optional and bounded for desktop boot.
+After a grant, finish bounded GPU restoration and local-floor reference-space
+preflight before letting Three r170 own the session. Its manager captures the
+initial WebGL attributes, so it otherwise repeats makeXRCompatible even after
+successful warmup. During attachment only, serve that completed GPU request and
+the exact prepared reference-space type through temporary own methods on the
+native objects. Other reference types retain the original receiver. Restore
+exact own descriptors on every settlement, reject uncacheable methods before
+attachment, and never pass a proxy session to a native XR layer.
+
+Three r170 assumes its animation context exists when cleaning up an attached
+session. A genuinely pending setSession cannot safely be abandoned/reset and
+then allowed to attach over a new request. Retain ownership until settlement;
+show manual close/reopen guidance if it stalls. Late permission/preflight
+results cannot attach. Granted preflight failure closes its session before
+recovery. Cancellation closes only its owned grant. A slow native end permits
+EXIT VR retry for that session, never a competing request. Healthy short,
+hidden/dashboard and initially untracked sessions are not automatic failures.
+
+The localized bottom footer reports stages and cancellation without exposing
+exception strings or reloading unsaved play. Attachment success is distinct
+from a first rendered tracked pose. renderWithXrStatus draws first, checks the
+actual frame/session/reference and nonempty views, then notifies readiness once
+per native session. A null pose or failed main draw cannot clear the diagnostic
+wait. The 12-second tracking watchdog is informational, never an automatic end.
+
+A requestIdleCallback still executes on the main thread. An unprepared monitor
+renderer must not create a second context, compile or upload the whole map while
+XR presents. Check each preparation boundary and defer until desktop restoration;
+already-prepared spectator renderers are reused during VR. A pending compile
+settles before desktop resumption, without idle polling during VR.
+
+Regressions use fake native promises/timers, synthetic scenes and the actual
+pinned Three manager. They verify ownership, descriptor restoration, context
+loss, GPU-call deduplication, tracking, exit/re-entry and framebuffer/lens/DPR
+restoration. They do not prove hardware startup time or Quest 3 compatibility.
+
+Headset availability checks are bounded at 8 seconds with an explicit retry;
+post-reset support polling has a hard 15-second deadline even if a native query
+never settles. Quiet rechecks preserve failure/cancel guidance. Once an exit is
+requested, late tracking and its diagnostic timer cannot erase the exit status.
+See the WebXR specification's immersive-session user-activation requirement:
+https://www.w3.org/TR/webxr/#immersive-session-request-is-allowed
+
+Local gates: 867 JavaScript regressions pass (32 new), ESLint, Ruff, production
+build, 8 packaging regressions and 7 Python protocol regressions. The new coverage
+includes 25 lifecycle cases total, 6 rendered-frame readiness cases, 7 localized
+footer cases, and 10 spectator cases total; existing pinned-Three view-mode
+regressions also pass. No original assets/saves or private test controls added.
