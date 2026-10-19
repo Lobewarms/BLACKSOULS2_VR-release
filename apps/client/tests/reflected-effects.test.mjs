@@ -156,11 +156,11 @@ test('target skill cancellation applies to hostile hits without refunding an act
   enemy.b.gear.note = '<スキル無効:901>';
   const obj = spell(1, '100', [effect(12, 0, 0, -20), effect(21, 3), effect(31, 2, 2), effect(44, 40)],
     { hit_type: 1, scope: 1, repeats: 1, animation_id: 0, mp_cost: 10, tp_cost: 0, tp_gain: 5 });
-  Object.assign(combat, { heldBoss: () => false, directUse: true, skillCD: {},
+  Object.assign(combat, { heldBoss: () => false, skillCD: {},
     pickTargets: () => [enemy], castOrigin: () => new THREE.Vector3(), playerFollowUp() {},
   });
   G.input.haptic = () => {}; G.audio.playSe = () => {};
-  assert.equal(combat.performUsable(obj, 'skill'), true);
+  assert.equal(combat.performUsable(obj, 'skill', 'quick', { direct: true }), true);
   assert.equal(actor.mp, 90, 'a canceled impact does not undo its cast cost'); assert.deepEqual(globals, [901]);
   assert.equal(enemy.b.hp, 500); assert.equal(enemy.b.mp, 100); assert.equal(enemy.b.isState(3), false);
   assert.equal(enemy.b.buffs[2], 0); assert.equal(actor.tp, 0);

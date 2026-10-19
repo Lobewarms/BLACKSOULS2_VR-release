@@ -351,6 +351,7 @@ const ENTRIES = [
   ['사용', 'Use', '使う', '使用'],
   ['필드에서 퀵슬롯으로 사용합니다', 'Use it from the quick slots in the field', 'フィールドでクイックスロットから使います', '在场景中通过快捷栏使用'],
   ['메뉴를 닫고 스킬을 준비합니다. 겨누거나 무기를 휘둘러 사용합니다', 'Close the menu and ready this skill. Aim or strike to use it.', 'メニューを閉じてスキルを準備します。狙うか武器を振って使います。', '关闭菜单并准备技能。瞄准或挥动武器后使用。'],
+  ['가까이 보이는 적에게 바로 사용합니다. 대상이 없으면 소모하지 않습니다', 'Use immediately on a nearby visible enemy. No target means no cost.', '近くの見える敵にすぐ使います。対象がいなければ消費しません。', '立即对附近可见的敌人使用。没有目标时不会消耗。'],
   ['퀵슬롯 ({n}번에 등록됨)', 'Quick slot (in slot {n})', 'クイックスロット ({n}番に登録済み)', '快捷栏 (已登记在 {n} 号)'],
   ['퀵슬롯에 등록', 'Add to the quick slots', 'クイックスロットに登録', '登记到快捷栏'],
   ['퀵슬롯 버튼(VR: X, PC: Q)을 누른 채 손을 옮기고 떼면 사용', 'Hold the quick slot button (VR: X, PC: Q), move onto the slot and release to use', 'クイックスロットボタン (VR: X, PC: Q) を押したまま手を動かし、離すと使用', '按住快捷栏按钮 (VR: X, PC: Q) 移到格子上，松开即使用'],

@@ -2050,7 +2050,7 @@ export class CombatSystem {
     }
     return { ok: true, skill: effective, reason: '' };
   }
-  useQuickEntry(entry, from = 'quick') {
+  useQuickEntry(entry, from = 'quick', { direct = false } = {}) {
     let obj = entryData(entry);
     const actor = G.state.party.leader();
     if (!obj || !actor || this.playerDead) return false;
@@ -2073,7 +2073,7 @@ export class CombatSystem {
         G.player.wantDodge = true; return true;
       }
       // a weapon's own move takes the weapons up again (무장해제 ends)
-      if (this.disarmed && (this.isBreakSkill(obj) || this.isWeaponArt(obj))) this.toggleDisarm(false);
+      if (this.disarmed && (this.isBreakSkill(obj) || !direct && this.isWeaponArt(obj))) this.toggleDisarm(false);
       if (this.isBreakSkill(obj)) {
         if (/건 ?브레이크|ガン ?ブレイク|枪械?破防|\bgun ?break/i.test(obj.name || '')) { if ((this.breakCooldown || 0) <= G.time) this.fireGunBreak(obj); return true; }
         this.breakArm = { skill: obj, until: G.time + 3 };          // the next swing that lands within 3 s
@@ -2082,9 +2082,9 @@ export class CombatSystem {
       }
       // a physical blow on one enemy (일섬, 참수, 삼단 베기...): it goes onto the weapon, which glows red, and
       // comes out with the next blow that lands - MP and cool-down are paid then. X puts it away
-      if (this.isWeaponArt(obj)) { this.armSkill(obj); return true; }
+      if (!direct && this.isWeaponArt(obj)) { this.armSkill(obj); return true; }
     }
-    return this.performUsable(obj, entry.kind, from);
+    return this.performUsable(obj, entry.kind, from, { direct });
   }
   // HP damage on one enemy that is not a spell: RPG Maker's 물리 공격 (일섬, 참수...), or 필중 (sure hit) when it
   // hits by attack power / defence (혈도 찌르기, 거합베기, 월광도, 다리 쏘기, 피의 시련...) or comes with a weapon
@@ -2125,11 +2125,12 @@ export class CombatSystem {
     return s;
   }
   // Menu skills use the real field action without needing a registered slot.
-  // Friendly skills stay in the menu; aimed/battle actions return to gameplay.
+  // Friendly skills stay in the menu; offensive skills acquire a valid target
+  // and execute immediately. Quick slots retain their manual preparation.
   useSkillFromMenu(skill) {
     if (!skill) return false;
     const effective = this.skillByState(G.state.party.leader(), $data.skills[skill.id] || skill);
-    const used = this.useQuickEntry({ kind: 'skill', id: skill.id }, 'menu');
+    const used = this.useQuickEntry({ kind: 'skill', id: skill.id }, 'menu', { direct: true });
     if (used && G.ui.menuOpen && (effective.occasion === 1 || effective.scope >= 1 && effective.scope <= 6)) G.ui.closeMenu();
     return used;
   }
@@ -2167,24 +2168,33 @@ export class CombatSystem {
     const self = this.userEffectSkill(s);
     if (self) this.later(60, () => { if (!this.playerDead) this.applyUsableToActor(self, 'self', { battle }); });
   }
-  performUsable(obj, kind, from = 'quick') {
+  performUsable(obj, kind, from = 'quick', { direct = false } = {}) {
     const scope = obj.scope || 0;
     const name = stripEscapes(obj.name);
     // things aimed at enemies go into the right hand first; the attack button lets them go
-    if (scope >= 1 && scope <= 6 && !this.directUse) return this.readyUsable(obj, kind);
+    if (scope >= 1 && scope <= 6 && !direct) return this.readyUsable(obj, kind);
     if (scope >= 1 && scope <= 6) {
       const targets = this.pickTargets(obj, kind);
       if (!targets.length) { G.ui.toast(tr('{name}: 대상이 없습니다', { name }), obj.icon_index); G.audio?.playSystemSe(3); return false; }
+      this.cancelReady(); this.cancelHeld(); this.skillArm = null;
+      if (kind === 'skill' && this.disarmed && this.isWeaponArt(obj)) this.toggleDisarm(false);
       this.payUsable(obj, kind, targets[0]?.battle);
       const from = this.castOrigin();
       // thrown items and magic fly to the target; physical / sure-hit skills land at once
       const flies = kind === 'item' || obj.hit_type === 2;
       targets.forEach((e, i) => {
-        if (flies) this.later(i * 140, () => { if (e.alive) this.launchUsable(obj, kind, from, e); });
+        if (flies) {
+          const launch = () => { if (e.alive) this.launchUsable(obj, kind, from, e); };
+          if (i) this.later(i * 140, launch); else launch();
+        }
         else {
-          for (let r = 0; r < usableRepeats(obj); r++) this.later(r * 120, () => { if (e.alive) this.applyUsableToEnemy(e, obj, from); });
+          for (let r = 0; r < usableRepeats(obj); r++) {
+            const hit = () => { if (e.alive) this.applyUsableToEnemy(e, obj, from); };
+            if (r) this.later(r * 120, hit); else hit();
+          }
           const wp = e.worldPos(new THREE.Vector3()); wp.y += e.h * 0.5;
-          if (obj.animation_id > 0) G.screen.playAnimationOn(wp, obj.animation_id, { rate: 3, height: e.h });
+          const anim = obj.animation_id < 0 ? G.state.party.leader()?.weapons()[0]?.animation_id || 0 : obj.animation_id;
+          if (anim > 0) G.screen.playAnimationOn(wp, anim, { rate: 3, height: e.h });
           else G.audio?.playSe(G.seAt('Slash1', 90, 100), wp);
         }
       });
@@ -2820,9 +2830,11 @@ export class CombatSystem {
       const wp = e.worldPos(new THREE.Vector3());
       const to = new THREE.Vector3(wp.x - head.x, 0, wp.z - head.z);
       const d = to.length();
-      if (d - e.hr * T > range) continue;
+      if (![wp.x, wp.y, wp.z, e.fx, e.fy, d, e.hr].every(Number.isFinite) || d - e.hr * T > range) continue;
       if (!lineOfSight(pc.fx, pc.fy, e.fx, e.fy)) continue;
-      cands.push({ e, d, ang: d > 1e-3 ? to.normalize().angleTo(look) : 0 });
+      const ang = d > 1e-3 ? to.normalize().angleTo(look) : 0;
+      if (!Number.isFinite(ang) || (obj.scope === 2 ? !(ang < 1.7 || d < 3) : ang >= 0.6) || this.heldBoss(e)) continue;
+      cands.push({ e, d, ang });
     }
     if (obj.scope === 2) return cands.filter(c => c.ang < 1.7 || c.d < 3).map(c => c.e);
     const front = cands.filter(c => c.ang < 0.6).sort((a, b) => (a.ang * 4 + a.d * 0.08) - (b.ang * 4 + b.d * 0.08));

@@ -532,6 +532,7 @@ export class Input {
   // quick slots: VR = X (left) held, PC = Q held; PC number keys 1-8 use a slot directly
   quickHeld() { return G.vr ? this.xrHeld('left', 4) : this.key('KeyQ'); }
   mapPressed() { return !G.vr && this.keyPressed('KeyN'); }
+  skillMenuPressed() { return !G.vr && this.pageFocused !== false && !this.textInputFocused() && this.keyPressed('KeyR'); }
   quickPressed() { return G.vr ? this.xrPressed('left', 4) : this.keyPressed('KeyQ'); }
   // emotes (src/emotes.js): VR = B (right) held - the cancel button, nothing outside menus and messages, nor
   // any of the game's events but three scenes (which an emote never opens in); PC = T held

@@ -1048,11 +1048,22 @@ export class UI {
     if (!this.msg && !this.sceneBusy() && !this.remote?.shown && !this.prompt?.shown) this.backdrop.visible = false;
   }
   updateDialoguePresentation() {
-    if (this.dialogue && !this.dialogueContinuing()) this.clearDialoguePresentation();
+    const dialogue = this.dialogue;
+    if (dialogue && !this.dialogueContinuing()) {
+      const invalidSource = dialogue.map !== G.map || dialogue.mapId !== G.map?.mapId || G.map?.transferring
+        || dialogue.owner.executionId !== dialogue.executionId || !dialogue.owner.running();
+      if (this.msg) {
+        if (invalidSource) this.closeMessage();
+      } else this.clearDialoguePresentation();
+    }
     const held = this.heldMessage;
     // Retain the acknowledged page only until logic processes the answer. The
     // next page replaces it before rendering; deliberate waits can hide it.
     if (held && (held.source.executionId !== held.executionId || !held.source.running() || held.source.waitMode !== 'message')) this.hideHeldMessage();
+    if (!this.msg && !this.heldMessage && !this.remote?.shown) {
+      this.msgPanel.mesh.visible = false;
+      this.namePanel.mesh.visible = false;
+    }
   }
   sceneBusy() { return !!this.sceneOpen || this.menuOpen; }
   pointerBusy() {
@@ -1060,7 +1071,9 @@ export class UI {
   }
 
   showMessage(msg, source = null) {
-    this.heldMessage = null;
+    // An acknowledged page may still occupy the shared panel. A banner does
+    // not redraw that panel, so hide its previous owner before replacing it.
+    this.hideHeldMessage();
     const owner = source?.root || source;
     const previous = this.dialogue;
     const continuing = this.dialogueContinuing() && previous?.owner === owner && previous?.executionId === owner?.executionId;
@@ -1261,6 +1274,10 @@ export class UI {
   updateMessage() {
     const msg = this.msg;
     const input = G.input;
+    if (msg.state !== 'choice' && msg.state !== 'number' && this.msgPanel.mesh.visible) {
+      const pointer = this.pointerRay();
+      this.pointerTarget = !!pointer && !!this.msgPanel.hit(pointer);
+    }
     if (msg.state === 'typing') {
       if (input.advance()) { this.consumedConfirm = true; msg.skip = true; msg.wait = 0; }
       if (msg.wait > 0) { msg.wait--; return; }
@@ -2041,6 +2058,22 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- menus
+  toggleSkillsMenu() {
+    const interpreter = G.map?.interpreter;
+    if (!G.map || G.map.transferring || !G.state?.party.leader() || G.state.system.menuDisabled
+      || G.combat?.playerDead || this.sceneOpen || this.keyboard.visible || this.prompt?.shown || this.remote?.shown
+      || this.messageBusy() || this.dialogueActive()
+      || interpreter?.running() && interpreter.waitMode !== 'battle') return false;
+    if (this.menuOpen && this.menuSection === 'skills') { this.closeMenu(); return true; }
+    if (!this.menuOpen) {
+      G.pictures?.requestViewerCancel?.();
+      this.menuOpen = true; this.menuIndex = 1;
+      this.unlockPointer(); this.placeRoot(true);
+    }
+    this.onMenu('skills');
+    this.consumedConfirm = true;
+    return true;
+  }
   openMenu() {
     if (this.menuOpen) return;
     G.pictures?.requestViewerCancel?.();
@@ -2339,7 +2372,7 @@ export class UI {
     this.list.open(`${stripEscapes(s.name)}${cost ? `  (MP ${cost})` : hpCost ? `  (HP ${hpCost})` : ''}`, [
       { text: tr('사용'), id: 'use', enabled: !!status?.ok,
         desc: !status?.ok ? status?.reason || tr('사용할 수 없습니다') : aimed
-          ? tr('메뉴를 닫고 스킬을 준비합니다. 겨누거나 무기를 휘둘러 사용합니다') : s.description },
+          ? tr('가까이 보이는 적에게 바로 사용합니다. 대상이 없으면 소모하지 않습니다') : s.description },
       { text: slot >= 0 ? tr('퀵슬롯 ({n}번에 등록됨)', { n: slot + 1 }) : tr('퀵슬롯에 등록'), id: 'quick', enabled: s.occasion !== 3,
         desc: tr('퀵슬롯 버튼(VR: X, PC: Q)을 누른 채 손을 옮기고 떼면 사용') },
       { text: tr('취소'), id: 'back' },
@@ -3008,7 +3041,8 @@ export class UI {
       }
       this.drawBanner();
     }
-    if (this.msg) this.updateMessage();
+    if (G.input.skillMenuPressed?.() && this.toggleSkillsMenu()) this.consumedConfirm = true;
+    else if (this.msg) this.updateMessage();
     else if (this.menuOpen || this.sceneOpen) {
       if (this.navigation.open) this.updateMap();
       else if (this.keyboard.visible) this.keyboard.update(this.pointerRay());
@@ -3072,7 +3106,7 @@ export class UI {
   blocksTurning() { return this.menuOpen || !!this.sceneOpen || this.msg?.state === 'choice' || this.msg?.state === 'number' || !!this.prompt?.shown; }
   updatePointerLine() {
     const c = G.input.controllers.right;
-    const need = G.vr && c && (this.msg?.state === 'choice' || this.menuOpen || this.sceneOpen || this.prompt?.shown);
+    const need = G.vr && c && (this.msg || this.menuOpen || this.sceneOpen || this.prompt?.shown);
     if (!this.pointerLine && c) {
       const g = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -3)]);
       this.pointerLine = new THREE.Line(g, new THREE.LineBasicMaterial({ color: 0xe8d8a8, transparent: true, opacity: 0.6 }));

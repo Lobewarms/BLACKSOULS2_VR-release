@@ -50,9 +50,12 @@ In menus          Arrow keys (number input: left / right = digit, up / down = va
 
 USING SKILLS FROM THE MENU
 -------------------------
-Open Menu -> Skills, choose a skill, then Use. Healing and support take effect
-normally. Aimed spells prepare in your hand; aim and fire. Weapon arts prepare
-your next strike. Common-event skills return to the game to run their event.
+On PC, press R to open Skills directly; press R again to close it. E remains
+Examine/Talk. Face a nearby visible enemy, select a skill, then Use to cast or
+strike immediately. If no valid target is in view, nothing is spent. Quick slots
+still prepare spells and weapon arts for manual aiming/striking. Healing and
+support take effect normally. Dodge and manual Break retain their dedicated
+actions. Common-event skills return to the game to run their event.
 Costs, weapon requirements, seals and cooldowns still apply. Field-only utility
 skills cannot be used during combat. Quick-slot assignments stay as you set them.
 

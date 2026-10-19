@@ -1,18 +1,17 @@
-BLACK SOULS II VR 0.2.37
+BLACK SOULS II VR 0.2.38
 
-Buy larger quantities
-- Buy more than 99 items in one purchase, up to your available capacity and funds.
-- Your bag holds up to 9,999 of each item; storage keeps its own item limits.
-- Use +100 / -100 and +1,000 / -1,000 for larger batches, or choose Max.
-- Max respects Souls and every required exchange material. Selecting Max does not
-  buy immediately: confirm the quantity on the first row to complete the purchase.
+Skills shortcut and immediate use
+- Press R on PC to open Skills directly. Press R again to close it.
+- E remains Examine/Talk.
+- Face a nearby visible enemy, open Skills and choose Use to cast or strike
+  immediately. No valid target means no cost. Quick slots retain manual aiming.
+- Healing, support and utility skills keep their normal requirements. Dodge and
+  manual Break retain their dedicated actions.
 
-Use skills from the menu
-- Choose Skills, select a skill and choose Use without assigning a quick slot.
-- Heals and support skills use their normal effects. Aimed skills close the menu
-  and prepare your attack: aim and fire, or strike with a weapon art.
-- Costs, equipment requirements, seals and cooldowns keep their normal rules.
-  Field-only utility skills cannot run in combat.
+Dialogue cleanup
+- Clear an acknowledged dialogue page when a title banner replaces it, including
+  the intro poem before arriving in the Crash Chamber.
+- Click a plain dialogue box, or point and pull the VR trigger, to advance it.
 
 Install the update, then close and reopen the game window to load the changes.
 Your existing saves are retained. The original game is required and is not included.

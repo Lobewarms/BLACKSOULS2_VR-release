@@ -56,6 +56,60 @@ function environment(t) {
 }
 const text = panel => panel.canvas.record.texts.map(r => r.text);
 
+function skillShortcutEnvironment(t) {
+  const ui = environment(t), actor = G.state.party.leader();
+  Object.assign(actor, { allSkills: () => [{ id: 101, name: 'Synthetic skill', description: '', icon_index: 0 }],
+    skillMpCost: () => 0, skillHpCost: () => 0, skillTypeUsable: () => true, skillSealed: () => false });
+  G.state.quickSlots = Array(8).fill(null);
+  return ui;
+}
+
+test('R opens the real Skills grid, consumes the opening frame and toggles closed on a fresh press', t => {
+  const ui = skillShortcutEnvironment(t), input = G.input;
+  input.keys.add('KeyR'); input.keys.add('Enter'); ui.update(0.01);
+  assert.equal(ui.menuOpen, true); assert.equal(ui.menuSection, 'skills'); assert.equal(ui.grid.visible, true);
+  assert.equal(ui.grid.items[0].id, 101); assert.equal(ui.list.visible, false, 'the opening press cannot select a skill');
+  assert.equal(ui.consumedConfirm, true);
+  input.keysPrev = new Set(input.keys); ui.update(0.01);
+  assert.equal(ui.menuOpen, true, 'holding R must not close or reopen the menu');
+  input.keys.clear(); input.keysPrev.clear(); input.keys.add('KeyR'); ui.update(0.01);
+  assert.equal(ui.menuOpen, false); assert.equal(ui.grid.visible, false);
+});
+
+test('R jumps from the classic main menu directly to Skills and keeps E as Examine/Talk', t => {
+  const ui = skillShortcutEnvironment(t), input = G.input;
+  input.keys.add('KeyE'); assert.equal(input.interact(), true); assert.equal(input.skillMenuPressed(), false);
+  input.keys.clear(); ui.openMenu(); input.keys.add('KeyR'); ui.update(0.01);
+  assert.equal(ui.menuSection, 'skills'); assert.equal(ui.grid.visible, true);
+});
+
+for (const blocked of ['typing', 'unfocused', 'VR', 'dialogue', 'script', 'transfer', 'disabled', 'shop', 'prompt', 'dead']) {
+  test(`R cannot bypass ${blocked} while opening Skills`, t => {
+    const ui = skillShortcutEnvironment(t), input = G.input;
+    if (blocked === 'typing') document.activeElement = { tagName: 'TEXTAREA' };
+    if (blocked === 'unfocused') input.pageFocused = false;
+    if (blocked === 'VR') G.vr = true;
+    if (blocked === 'dialogue') ui.showMessage({ lines: ['Synthetic dialogue'], position: 2 });
+    if (blocked === 'script') G.map.interpreter.running = () => true;
+    if (blocked === 'transfer') G.map.transferring = true;
+    if (blocked === 'disabled') G.state.system.menuDisabled = true;
+    if (blocked === 'shop') ui.sceneOpen = 'shop';
+    if (blocked === 'prompt') ui.prompt = { shown: true, left: 10 };
+    if (blocked === 'dead') G.combat = { playerDead: true };
+    input.keys.add('KeyR');
+    // Exercise the same shortcut guard without advancing an unrelated modal.
+    if (input.skillMenuPressed()) assert.equal(ui.toggleSkillsMenu(), false);
+    assert.equal(ui.menuOpen, false); assert.equal(ui.grid.visible, false);
+  });
+}
+
+test('R remains available during the original interpreter battle wait', t => {
+  const ui = skillShortcutEnvironment(t);
+  G.map.interpreter = { running: () => true, waitMode: 'battle' };
+  G.input.keys.add('KeyR'); ui.update(0.01);
+  assert.equal(ui.menuSection, 'skills'); assert.equal(ui.grid.visible, true);
+});
+
 test('north-up projection centres tiles, preserves aspect ratio and clamps only non-looping windows', () => {
   const m = map(), rect = { x: 10, y: 20, w: 300, h: 200 };
   let v = mapProjection(m, rect, true);
