@@ -1570,7 +1570,7 @@ in an isolated test scene at75% HP with original Sleep/Poison icons. Its title
 is absent while both gauges/effects remain visible. The saved PNG was opened
 and inspected; it is not a claim that this creature normally spawns in that room.
 
-The public literal source diff is refreshed to runtime commit5788b62 (0.2.26):
+The previous0.2.26 source comparison used runtime commit5788b62:
 48 original modules,20 unchanged after import moves,28 modified,35 new,0 missing;
 2542 added/646 removed lines in modified originals after import normalization.
 Existing six comparison images remain explicitly labelled0.2.25.
@@ -1671,3 +1671,8 @@ Local verification passed602 JavaScript regressions, ESLint, Ruff, production
 build and8 packaging tests. The real UI speaker resolver also matched every169
 installed alias and the Polar Bear fallback in a private metadata-only audit.
 This does not claim a full story or physical-headset playthrough.
+
+The public literal runtime comparison now uses commit78b691e (0.2.27):48 original
+modules retained,17 unchanged after import moves,31 modified,35 new,0 missing;
+2708 added/671 removed lines in modified originals after import normalization.
+The six actual comparison images remain explicitly labelled0.2.25.

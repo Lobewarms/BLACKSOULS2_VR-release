@@ -65,14 +65,14 @@ reading a locally owned game. Original game artwork belongs to its rights holder
 It compares original ZIP entries with the committed fork files, matching moved
 modules by filename. The diff retains actual import-path changes and normalizes
 line endings. It includes new fork runtime modules and is intended for review.
-The current source comparison is version 0.2.26 at commit
-5788b62647c5e51a8397b7e87780afac293b5441; the captured image pairs above remain
+The current source comparison is version 0.2.27 at commit
+78b691eb5fdf8ce65e80b44398a7336e52e6d6d6; the captured image pairs above remain
 the labelled version 0.2.25 comparison.
 The complete PR also contains the launcher, build tools, tests and documentation.
 
 Ignoring relative import-path moves and line endings for the summary only:
-48 original modules retained, 20 unchanged, 28 modified, and 35 new fork modules.
-Modified original modules contain 2,542 added and 646 removed lines after those
+48 original modules retained, 17 unchanged, 31 modified, and 35 new fork modules.
+Modified original modules contain 2,708 added and 671 removed lines after those
 import-path moves are normalized.
 
 ## Launcher screenshot supplied by the fork maintainer
