@@ -2030,7 +2030,27 @@ export class CombatSystem {
   isBreakSkill(obj) {
     return /브레이크|ブレイク|破防|\bbreak/i.test(obj.name || '') && (obj.effects || []).some(e => e.code === 21 && (e.data_id === 7 || e.data_id === 8));
   }
-  useQuickEntry(entry) {
+  // The skill menu and quick slots must agree before any cost or preparation.
+  // State-selected stages need their own requirements as well as the root's.
+  skillUseStatus(skill) {
+    const actor = G.state.party.leader(), source = $data.skills[skill?.id];
+    const fail = (reason, selected = source || skill) => ({ ok: false, skill: selected, reason });
+    if (!actor || !source || this.playerDead || this.spectating || this.restrained) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
+    if (actor.hp <= 0 && !actor.stateResist(1)) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
+    if (this.healing) return fail(tr('다른 아이템을 쓰는 중'));
+    if (!actor.allSkills().some(s => s.id === source.id)) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
+    const effective = this.skillByState(actor, source);
+    for (const s of new Set([source, effective])) {
+      if (s.occasion === 3) return fail(tr('사용할 수 없습니다'), s);
+      if (s.occasion === 2 && this.inCombat) return fail(tr('전투 중에는 쓸 수 없습니다'), s);
+      if (actor.skillSealed(s.id) || !actor.skillTypeUsable(s)) return fail(tr('봉인되어 있습니다'), s);
+      if (!actor.skillCostPayable(s)) return fail(this.costShort(actor, s), s);
+      const cd = this.skillCooling(s);
+      if (cd > 0) return fail(tr('재사용 대기 {s}초', { s: cd.toFixed(1) }), s);
+    }
+    return { ok: true, skill: effective, reason: '' };
+  }
+  useQuickEntry(entry, from = 'quick') {
     let obj = entryData(entry);
     const actor = G.state.party.leader();
     if (!obj || !actor || this.playerDead) return false;
@@ -2044,16 +2064,9 @@ export class CombatSystem {
       if (this.inCombat && actor.itemSealed()) return fail(tr('봉인되어 있습니다'));
       if (G.state.party.itemCount('item', obj.id) <= 0) return fail(tr('남은 것이 없습니다'));
     } else {
-      if (!actor.allSkills().some(s => s.id === obj.id)) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
-      if (actor.skillSealed(obj.id) || !actor.skillTypeUsable(obj)) return fail(tr('봉인되어 있습니다'));
-      if (!actor.skillCostPayable(obj)) return fail(this.costShort(actor, obj));
-      const cd = this.skillCooling(obj);
-      if (cd > 0) return fail(tr('재사용 대기 {s}초', { s: cd.toFixed(1) }));
-      // (one a state of mine turns into another - script 195: that one is what is used, and it has to be ready)
-      obj = this.skillByState(actor, obj);
-      const cd2 = this.skillCooling(obj);
-      if (cd2 > 0) return fail(tr('재사용 대기 {s}초', { s: cd2.toFixed(1) }));
-      if (!actor.skillCostPayable(obj)) return fail(this.costShort(actor, obj));
+      const status = this.skillUseStatus(obj);
+      if (!status.ok) return fail(status.reason);
+      obj = status.skill;
       // the original battle commands that already have their own button here
       if (obj.id === 12) {
         if (G.player.dodge.cooldown > 0) return fail(tr('잠시 후에 다시'));
@@ -2071,7 +2084,7 @@ export class CombatSystem {
       // comes out with the next blow that lands - MP and cool-down are paid then. X puts it away
       if (this.isWeaponArt(obj)) { this.armSkill(obj); return true; }
     }
-    return this.performUsable(obj, entry.kind);
+    return this.performUsable(obj, entry.kind, from);
   }
   // HP damage on one enemy that is not a spell: RPG Maker's 물리 공격 (일섬, 참수...), or 필중 (sure hit) when it
   // hits by attack power / defence (혈도 찌르기, 거합베기, 월광도, 다리 쏘기, 피의 시련...) or comes with a weapon
@@ -2111,21 +2124,13 @@ export class CombatSystem {
     this.actorUserEffect(s, battle);
     return s;
   }
-  // skills used from the menu (heals, buffs, common events)
+  // Menu skills use the real field action without needing a registered slot.
+  // Friendly skills stay in the menu; aimed/battle actions return to gameplay.
   useSkillFromMenu(skill) {
-    const actor = G.state.party.leader();
-    if (!actor || !skill || this.spectating) return false;
-    if (this.restrained) { this.restrainedBuzz(); return false; }
-    skill = this.skillByState(actor, skill);
-    const ok = actor.skillCostPayable(skill) && !actor.skillSealed(skill.id) && actor.skillTypeUsable(skill) && this.skillCooling(skill) <= 0;
-    if (!ok || (skill.scope >= 1 && skill.scope <= 6) || skill.occasion === 1 || skill.occasion === 3) { G.audio?.playSystemSe(3); return false; }
-    if ((skill.scope === 9 || skill.scope === 10) && !this.actorSupportTargets(skill).length) { G.audio?.playSystemSe(3); return false; }
-    this.actorPays(actor, skill);
-    this.skillCD[skill.id] = G.time + this.coolSeconds(skill);
-    this.stageCool(skill);
-    const used = this.applyUsableToActor(skill, 'menu');
-    G.screen.playAnimationOn(G.map.playerChar, skill.animation_id);
-    this.actorUserEffect(skill);
+    if (!skill) return false;
+    const effective = this.skillByState(G.state.party.leader(), $data.skills[skill.id] || skill);
+    const used = this.useQuickEntry({ kind: 'skill', id: skill.id }, 'menu');
+    if (used && G.ui.menuOpen && (effective.occasion === 1 || effective.scope >= 1 && effective.scope <= 6)) G.ui.closeMenu();
     return used;
   }
   isDrink(obj) {
@@ -2162,7 +2167,7 @@ export class CombatSystem {
     const self = this.userEffectSkill(s);
     if (self) this.later(60, () => { if (!this.playerDead) this.applyUsableToActor(self, 'self', { battle }); });
   }
-  performUsable(obj, kind) {
+  performUsable(obj, kind, from = 'quick') {
     const scope = obj.scope || 0;
     const name = stripEscapes(obj.name);
     // things aimed at enemies go into the right hand first; the attack button lets them go
@@ -2198,7 +2203,7 @@ export class CombatSystem {
       return true;
     }
     if (kind === 'skill') { this.payUsable(obj, kind); this.playerFollowUp(obj, null, null); }
-    const used = this.applyUsableToActor(obj, 'quick');
+    const used = this.applyUsableToActor(obj, from);
     if (kind === 'item' && used && obj.consumable) G.state.party.gainItem('item', obj.id, -1);
     if (obj.animation_id > 0) G.screen.playAnimationOn(G.map.playerChar, obj.animation_id, { rate: 3 });
     else if (used) G.audio?.playSystemSe(22);

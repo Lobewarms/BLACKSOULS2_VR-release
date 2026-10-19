@@ -23,6 +23,7 @@ class Battler extends BattlerBase {
   paySkillCost(s) { return GameActor.prototype.paySkillCost.call(this, s); }
   skillSealed(s) { return GameActor.prototype.skillSealed.call(this, s); }
   skillTypeUsable() { return true; }
+  allSkills() { return GameActor.prototype.allSkills.call(this); }
 }
 function setup(t) {
   const saved = { ...G }, data = { ...$data };
@@ -114,6 +115,7 @@ test('self scope stays on caster, cancellation is per recipient, and death immun
 test('menu and quick casts pay once for all party recipients and repeats', t => {
   const { combat, actor, ally } = setup(t);
   const obj = skill(3, '100', [], { scope: 8, repeats: 3, mp_cost: 10, tp_cost: 0, occasion: 0, animation_id: 0 });
+  $data.skills[obj.id] = obj; actor.skills.push(obj.id);
   actor.mp = 100;
   assert.equal(combat.useSkillFromMenu(obj), true);
   assert.equal(actor.mp, 90); assert.equal(actor.hp, 1300); assert.equal(ally.hp, 1300);
@@ -214,6 +216,7 @@ test('dead-friend skills reject an explicit living recipient and cost nothing wh
   dead.hp = 1000; actor.mp = 100;
   const revive = skill(3, 'b.mhp / 2', [effect(22, 1), effect(44, 44)],
     { scope: 9, repeats: 1, mp_cost: 10, tp_cost: 0, occasion: 0, animation_id: 0 });
+  $data.skills[revive.id] = revive; actor.skills.push(revive.id);
   assert.equal(combat.applyUsableToActor(revive, 'quick', { target: ally }), false);
   assert.equal(combat.useSkillFromMenu(revive), false); assert.equal(combat.performUsable(revive, 'skill'), false);
   assert.equal(actor.mp, 100); assert.equal(combat.skillCD[revive.id], undefined); assert.deepEqual(globals, []);

@@ -2332,11 +2332,14 @@ export class UI {
     const back = () => { if (this.menuOpen) this.showSkills(keep); };
     const entry = { kind: 'skill', id: s.id };
     const slot = quickSlotOf(entry);
-    const canUse = this.menuUsable(s) && a.skillCostPayable(s) && !(G.combat?.skillCooling(s) > 0);
+    const status = G.combat?.skillUseStatus(s), effective = status?.skill || s;
+    const aimed = effective.scope >= 1 && effective.scope <= 6;
     this.grid.close();
-    const cost = a.skillMpCost(s), hpCost = a.skillHpCost(s);
+    const cost = a.skillMpCost(effective), hpCost = a.skillHpCost(effective);
     this.list.open(`${stripEscapes(s.name)}${cost ? `  (MP ${cost})` : hpCost ? `  (HP ${hpCost})` : ''}`, [
-      { text: tr('사용'), id: 'use', enabled: canUse, desc: this.menuUsable(s) ? s.description : tr('필드에서 퀵슬롯으로 사용합니다') },
+      { text: tr('사용'), id: 'use', enabled: !!status?.ok,
+        desc: !status?.ok ? status?.reason || tr('사용할 수 없습니다') : aimed
+          ? tr('메뉴를 닫고 스킬을 준비합니다. 겨누거나 무기를 휘둘러 사용합니다') : s.description },
       { text: slot >= 0 ? tr('퀵슬롯 ({n}번에 등록됨)', { n: slot + 1 }) : tr('퀵슬롯에 등록'), id: 'quick', enabled: s.occasion !== 3,
         desc: tr('퀵슬롯 버튼(VR: X, PC: Q)을 누른 채 손을 옮기고 떼면 사용') },
       { text: tr('취소'), id: 'back' },

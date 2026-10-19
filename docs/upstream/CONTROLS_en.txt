@@ -47,3 +47,17 @@ Emotes            Hold T and pick with the mouse
 Menu              Tab
 Cancel            Esc
 In menus          Arrow keys (number input: left / right = digit, up / down = value)
+
+USING SKILLS FROM THE MENU
+-------------------------
+Open Menu -> Skills, choose a skill, then Use. Healing and support take effect
+normally. Aimed spells prepare in your hand; aim and fire. Weapon arts prepare
+your next strike. Common-event skills return to the game to run their event.
+Costs, weapon requirements, seals and cooldowns still apply. Field-only utility
+skills cannot be used during combat. Quick-slot assignments stay as you set them.
+
+BUYING LARGER QUANTITIES
+-----------------------
+Use +/-100 or +/-1,000 when available, or choose Max. Max selects the affordable
+amount; confirm on the first row to buy. Your bag holds up to 9,999 per item.
+Storage uses its own limits, and exchanges still require their materials.

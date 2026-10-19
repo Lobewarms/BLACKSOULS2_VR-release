@@ -7,5 +7,12 @@ Buy larger quantities
 - Max respects Souls and every required exchange material. Selecting Max does not
   buy immediately: confirm the quantity on the first row to complete the purchase.
 
+Use skills from the menu
+- Choose Skills, select a skill and choose Use without assigning a quick slot.
+- Heals and support skills use their normal effects. Aimed skills close the menu
+  and prepare your attack: aim and fire, or strike with a weapon art.
+- Costs, equipment requirements, seals and cooldowns keep their normal rules.
+  Field-only utility skills cannot run in combat.
+
 Install the update, then close and reopen the game window to load the changes.
 Your existing saves are retained. The original game is required and is not included.
