@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: aff4cfac6663fbb919c68f8030fcc699967c19a9 (committed source)
+# Fork: 7d424de950f8f5899215bd982911e69cf95e2f48 (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -7931,13 +7931,21 @@
        index: at,
        onSelect: (i, it) => {
          at = i;
-@@ -2327,30 +2940,43 @@
+@@ -2321,36 +2934,52 @@
+       onCancel: back,
+     });
+   }
+-  // how many of a shop's goods can be bought at once: what the money pays for, up to 99 at a time (the
+-  // original's number window) and the bag's limit
++  // Buy as much as the destination can hold and the current money/materials
++  // cover. The port's larger bag does not need the original 99-unit batch cap.
+   shopMaxBuy(e) {
      const P = G.state.party;
      // (the storage mode: what the storage still takes; nothing it may not keep)
      const left = this.shopKeep ? (P.keepSealed(e.kind, e.d.id) ? 0 : P.keepLimit(e.kind, e.d.id) - P.keptCount(e.kind, e.d.id)) : BAG_MAX - P.itemCount(e.kind, e.d.id);
 -    return Math.max(0, Math.min(99, left, e.price > 0 ? Math.floor(P.gold / e.price) : 99));
 +    if (!Number.isSafeInteger(e.price) || e.price < 0) return 0;
-+    return Math.max(0, Math.min(99, left, e.price > 0 ? Math.floor(P.gold / e.price) : 99,
++    return Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, left, e.price > 0 ? Math.floor(P.gold / e.price) : Infinity,
 +      exchangeMax(this.shopRequirements(e), (kind, id) => this.shopCount(kind, id))));
    }
    shopBuy(e, n) {
@@ -7956,10 +7964,13 @@
      else P.gainItem(e.kind, e.d.id, n);
 +    if (this.shopKeep) G.map?.requestRefresh?.();
      G.audio?.playSystemSe(21);
+-  }
+-  // how many to buy: stick left / right (PC ←→) one at a time, or the rows (+1, +10, -1, -10, all); the first
+-  // row buys them
 +    return true;
-   }
-   // how many to buy: stick left / right (PC ←→) one at a time, or the rows (+1, +10, -1, -10, all); the first
-   // row buys them
++  }
++  // Stick left/right adjusts by one. Larger affordable batches also expose
++  // hundred/thousand steps; Max selects the current payable quantity.
    showShopQuantity(e, back, n = 1, index = 0) {
 -    const max = this.shopMaxBuy(e), unit = $data.system.currency_unit;
 +    const max = this.shopMaxBuy(e);
@@ -7971,6 +7982,9 @@
 +        desc: this.shopExchange() ? this.shopDescription(e, n) : tr('스틱 좌우(PC ←→)로 1개씩 · A/트리거로 구입 · B 취소') },
        { text: '+1', step: 1 }, { text: '+10', step: 10 }, { text: '−1', step: -1 }, { text: '−10', step: -10 },
 -      { text: tr('최대 ({n}개)', { n: max }), right: `${(e.price * max).toLocaleString()} ${unit}`, step: 'max' },
++      ...[100, 1000].filter(step => max >= step).flatMap(step => [
++        { text: `+${step.toLocaleString()}`, step }, { text: `−${step.toLocaleString()}`, step: -step },
++      ]),
 +      { text: tr('최대 ({n}개)', { n: max }), ...this.shopPrice(e, max), step: 'max' },
      ];
      this.list.open(tr('{name} 구입', { name: stripEscapes(e.d.name) }), items, {
@@ -7981,7 +7995,7 @@
          this.showShopQuantity(e, back, it.step === 'max' ? max : n + it.step, i);
        },
        onAdjust: dx => { this.showShopQuantity(e, back, n + dx, this.list.index); return true; },
-@@ -2362,8 +2988,10 @@
+@@ -2362,8 +2991,10 @@
    update(dt) {
      this.consumedConfirm = false;
      this.pointerTarget = false;
@@ -7993,7 +8007,7 @@
      if (anyPanel) this.placeRoot();
      if (this.banner) {
        this.banner.t += dt;
-@@ -2376,13 +3004,16 @@
+@@ -2376,13 +3007,16 @@
      }
      if (this.msg) this.updateMessage();
      else if (this.menuOpen || this.sceneOpen) {
@@ -8014,7 +8028,7 @@
      }
      this.updateBossPrompt(dt);
      this.updateRemote();
-@@ -2393,7 +3024,20 @@
+@@ -2393,7 +3027,20 @@
        if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
      }
      this.drawHud();
@@ -8035,7 +8049,7 @@
      this.updatePointerLine();
    }
    updateHudFollow() {
-@@ -2405,6 +3049,18 @@
+@@ -2405,6 +3052,18 @@
      const head = new THREE.Vector3();
      this.camera.getWorldPosition(head);
      this.hud.mesh.lookAt(head);

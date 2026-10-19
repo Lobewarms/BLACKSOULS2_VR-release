@@ -1702,7 +1702,8 @@ dialogue, artwork or raw audit reports are tracked or distributed.
 Show actual material names/icons, owned balance, per-unit and quantity totals.
 Respect NoDraw for all zero-money labels while retaining positive money costs.
 Clamp purchases by selected inventory capacity, money and every material. Keep
-the existing port's BAG_MAX and99-per-transaction limit; do not alter old saves.
+the existing port's BAG_MAX; the former 99-per-transaction limit was removed in
+0.2.37 at the user's request. Do not alter old saves.
 Revalidate a positive integer quantity against all current balances before any
 payment or reward. Deduct materials once, then money, then grant purchased goods.
 
@@ -2208,3 +2209,34 @@ Current source comparison: runtime aff4cfac6663fbb919c68f8030fcc699967c19a9 (0.2
 43 new and 0 missing; 3,713 added/874 removed lines in modified originals after
 import normalization. Paired screenshots remain 0.2.25 and initialized gameplay
 previews remain 0.2.33; no new hardware or gameplay screenshots are claimed.
+
+
+## Bulk shop purchases (0.2.37)
+
+The user explicitly requested buying more than 99. GameParty already holds up to
+BAG_MAX=9999 per bag item; the shop separately limited every transaction to 99.
+Remove that batch cap without changing inventory representation or save formats.
+shopMaxBuy uses remaining destination capacity, money and each exchange material,
+bounded to safe integers. Free money prices impose no extra quantity cap; material
+prices still apply. Storage retains native default, per-item limits and sealing.
+This supersedes the historical instruction to retain the shop's 99-unit batch cap.
+
+Expose +/-100 and +/-1000 rows only when the current maximum reaches those steps.
+The original small-quantity rows remain unchanged, and the list's existing scroll
+handles larger dialogs. Max selects a quantity without purchasing; the first row
+confirms. All paths revalidate balances/capacity before any debit or award, including
+an inventory change after the dialog opened. Selling and crafting are unchanged.
+
+Local gates: 905 JavaScript tests pass (9 additional bulk transaction cases),
+ESLint, production build, Ruff, 8 packaging and 7 Python tests. The real UI/party
+regressions cover paid/free purchases above 99, all exchange material kinds,
+exact currency costs, bag/storage/custom limits, stored exchange isolation,
+stale confirmation without partial mutation, larger steps/Max/cancel, and party
+save roundtrip. Existing small-dialog and ordinary exchange regressions still pass.
+No original game files or player saves were changed.
+
+Current source comparison: runtime 7d424de950f8f5899215bd982911e69cf95e2f48 (0.2.37),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,720 added/878 removed lines in modified originals after
+import normalization. Paired screenshots remain 0.2.25 and initialized gameplay
+previews remain 0.2.33; no new gameplay screenshots are claimed.
