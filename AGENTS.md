@@ -1931,3 +1931,28 @@ The literal source comparison now uses runtime a9b6649 (0.2.31): 48 original
 modules retained, 15 unchanged after import moves, 33 modified, 38 new, 0 missing;
 3,305 added/822 removed lines in modified originals after import normalization.
 The actual screenshot comparisons remain labelled 0.2.25.
+
+## Desktop Break readiness feedback (0.2.32)
+
+The held-Break glow was updated only inside updatePlayerAttack's VR branch.
+Desktop pressBreak supplied controller haptics and no visible readiness cue.
+Move the cue into the common combat frame after weapon pose/glow updates, so
+both desktop and VR receive it and paused frames can hide stale feedback.
+Use weaponSeg's rendered tip: PC visualLength includes viewmodel scaling while
+the physical/VR hit segment and combat reach retain their existing lengths.
+Desktop uses a smaller peripheral glow; VR retains its prior size. Hide the cue
+when paused, dead, disarmed, restrained, spectating, adjusting a grip or holding
+another action/item, when the weapon is invisible/detached/missing, and on reset.
+The original breakArmed result controls cooldowns and quick-slot arm expiry.
+
+Seven new synthetic regressions run real common combat frames, actual Input
+F/middle-mouse holds and releases, quick-slot arming/expiry, visible tip transforms,
+pause and hand transitions, plus real click/release Break swing dispatch. All
+seven failed against the unchanged prior runtime using private test tooling and
+pass with the repair. Holding the modifier alone still creates no attack or hit.
+Control guides in all four supported languages explain the ready glow and held
+modifier. No Break proc rates, costs, manual input rules or original assets are
+changed by this presentation repair. No GPU/headset playtest is claimed.
+
+Local verification passed 791 JavaScript regressions, ESLint, Ruff, production
+build, 8 packaging tests and 7 Python protocol tests.

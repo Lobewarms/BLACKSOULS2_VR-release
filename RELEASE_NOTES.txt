@@ -1,10 +1,9 @@
-BLACK SOULS II VR 0.2.31
+BLACK SOULS II VR 0.2.32
 
-Enemy artwork
-- Restore creatures drawn through the original battle backgrounds, including God's Odd Fish.
-- Restore related boss artwork and phase changes while keeping intentional invisible forms hidden.
-- Fix red placeholder bodies, failed texture caches and outdated loads after transformation or removal.
-- Keep encounter artwork correct for co-op players too.
+Desktop Break feedback
+- Holding F or middle mouse now shows a gold weapon-tip glow when Break is ready.
+- The glow follows the visible weapon and clears on release, cooldowns, menus and dialogue.
+- Clarify the PC Break controls in all four control guides: hold Break, then left-click and release to swing.
 
 Install the update, then close and reopen the game window to load the changes.
 Your existing saves are retained. The original game is required and is not included.

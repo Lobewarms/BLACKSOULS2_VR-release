@@ -178,6 +178,7 @@ test('gameplay frames hide cached PC equipment for a shop dialogue and restore i
   const weapon = combat.weapon, shield = combat.shield;
   G.map.grid = {}; G.map.interpreter = { running: () => false }; G.map.reservedCommon = [];
   G.input.disarmPressed = () => false;
+  G.input.breakHeld = () => false;
   combat.stamina = 1; combat.staminaDelay = 0; combat.rangedCooldown = 0;
   combat.fadingMarkers = []; combat.battles = []; combat.allies = { update() {} };
   for (const method of ['alignHeldToRay', 'updateGuard', 'updateQuick', 'updateReady', 'updateHeld', 'updateFx', 'updateAreaMarks', 'updatePlayerAttack',

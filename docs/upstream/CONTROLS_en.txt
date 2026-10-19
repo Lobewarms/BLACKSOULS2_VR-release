@@ -31,7 +31,9 @@ PC
 Move              W A S D (Shift: run)
 Look              Mouse (click the game view to lock it)
 Attack            Left click (hold and release: charged blow)
-Break             Hold F (or the wheel button) and left click
+Break             Hold F (or the wheel button), then left-click and release
+                  A gold weapon-tip glow shows Break is ready. Keep F held until
+                  the hit. F alone does not swing; shield-slot guns fire directly.
 Guard             Right click
 Dodge             Space
 Disarm            H

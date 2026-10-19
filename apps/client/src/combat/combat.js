@@ -732,6 +732,7 @@ export class CombatSystem {
   // ---- lifecycle -------------------------------------------------------------
   // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
   reset({ keepState = false, carry = false } = {}) {
+    if (this.breakGlow) this.breakGlow.visible = false;
     G.screen?.clearBattleTones?.();
     G.screen?.clearBattlePictures?.();
     // (carry - a map change: an event's run that is past its fight, in its win or lose branch, goes on on the new map as
@@ -4180,6 +4181,7 @@ export class CombatSystem {
     // (PC: whatever took the hands this frame - a blow, a cast, a drink - has the guard down before any blow lands)
     if (this.guardUp && this.handsBusy()) this.updateGuard();
     this.updateWeaponGlow();
+    this.updateBreakReady(paused);
     this.updateActorStates(dt, paused);
     this.updateGhost();
     this.updateWeaponFx(dt);
@@ -6881,7 +6883,6 @@ export class CombatSystem {
       }
       this.prevBase.copy(base); this.prevTip.copy(tip); this.prevRel.copy(rel); this.hasPrev = true;
       if (G.input.breakPressed() && !G.ui.consumedConfirm) this.pressBreak();
-      this.showBreakReady(tip);
       if (ranged && G.input.xrPressed('right', 0) && this.rangedCooldown <= 0 && !G.ui.pointerTarget) this.fireRanged();
     } else {
       // desktop: click to swing - hold the click to charge, the swing comes on letting go (ranged weapons shoot)
@@ -7321,9 +7322,15 @@ export class CombatSystem {
       G.input.haptic('right', 1, 160);
     } else G.audio?.playSystemSe(17);
   }
-  // while a swing would Break, a gold light sits on the weapon's tip
+  // Both PC and VR update the cue even while attacks are paused, so opening a
+  // menu or putting the weapon away cannot leave a stale glow in the world.
+  updateBreakReady(paused) {
+    const active = !paused && !this.playerDead && !this.gripAdjust && !this.ready && !this.held && !this.disarmed && !this.restrained && !this.spectating;
+    this.showBreakReady(active ? this.weaponSeg()?.tip : null);
+  }
+  // While a swing would Break, a gold light sits on the visible weapon's tip.
   showBreakReady(tip) {
-    const on = !!this.weapon && !!this.breakArmed();
+    const on = !!tip && !!this.weapon?.visible && !!this.breakArmed();
     if (!this.breakGlow) {
       if (!on) return;
       this.breakGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glowTexture(), color: 0xffc040, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
@@ -7335,7 +7342,7 @@ export class CombatSystem {
     if (this.breakGlow.parent !== this.root) this.root.add(this.breakGlow);
     this.breakGlow.position.copy(tip);
     const k = 0.75 + 0.25 * Math.sin(G.time * 12), b = Math.max(0.7, fxk());
-    this.breakGlow.scale.setScalar(0.16 * k);
+    this.breakGlow.scale.setScalar((G.vr ? 0.16 : 0.09) * k);
     this.breakGlow.material.color.setRGB(b, 0.75 * b, 0.25 * b);
   }
   // fire the shield-slot gun: its own shot sounds (the skill's animation), muzzle flash, tracer;
