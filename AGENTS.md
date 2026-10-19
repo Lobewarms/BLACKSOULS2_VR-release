@@ -2397,3 +2397,10 @@ after a failed roll. Field action progress, earned charge lifetime and live
 desktop guard lock remain paused through menus/dialogue/headset-away. A target
 leaving before the melee hit window cannot mint a charge, and an armed cooling
 skill cannot spend one. Utility growth/skill-learning effects alone are excluded.
+
+
+Current source comparison: runtime 37aa9b4745081ccedb00447f5b860d37024e80aa (0.2.39),
+48 original modules retained,15 unchanged after import moves,33 modified,
+43 new and0 missing;3,974 added/927 removed lines in modified originals after
+import normalization. The replaced passive helper and new charge manager leave
+the new-module count unchanged. Historical screenshot labels/pins remain intact.
