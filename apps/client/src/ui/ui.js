@@ -2934,14 +2934,14 @@ export class UI {
       onCancel: back,
     });
   }
-  // how many of a shop's goods can be bought at once: what the money pays for, up to 99 at a time (the
-  // original's number window) and the bag's limit
+  // Buy as much as the destination can hold and the current money/materials
+  // cover. The port's larger bag does not need the original 99-unit batch cap.
   shopMaxBuy(e) {
     const P = G.state.party;
     // (the storage mode: what the storage still takes; nothing it may not keep)
     const left = this.shopKeep ? (P.keepSealed(e.kind, e.d.id) ? 0 : P.keepLimit(e.kind, e.d.id) - P.keptCount(e.kind, e.d.id)) : BAG_MAX - P.itemCount(e.kind, e.d.id);
     if (!Number.isSafeInteger(e.price) || e.price < 0) return 0;
-    return Math.max(0, Math.min(99, left, e.price > 0 ? Math.floor(P.gold / e.price) : 99,
+    return Math.max(0, Math.min(Number.MAX_SAFE_INTEGER, left, e.price > 0 ? Math.floor(P.gold / e.price) : Infinity,
       exchangeMax(this.shopRequirements(e), (kind, id) => this.shopCount(kind, id))));
   }
   shopBuy(e, n) {
@@ -2962,8 +2962,8 @@ export class UI {
     G.audio?.playSystemSe(21);
     return true;
   }
-  // how many to buy: stick left / right (PC ←→) one at a time, or the rows (+1, +10, -1, -10, all); the first
-  // row buys them
+  // Stick left/right adjusts by one. Larger affordable batches also expose
+  // hundred/thousand steps; Max selects the current payable quantity.
   showShopQuantity(e, back, n = 1, index = 0) {
     const max = this.shopMaxBuy(e);
     n = Math.max(1, Math.min(max, n));
@@ -2971,6 +2971,9 @@ export class UI {
       { text: tr('◀  {n}개  ▶  구입', { n }), ...this.shopPrice(e, n), enabled: max > 0, step: 0,
         desc: this.shopExchange() ? this.shopDescription(e, n) : tr('스틱 좌우(PC ←→)로 1개씩 · A/트리거로 구입 · B 취소') },
       { text: '+1', step: 1 }, { text: '+10', step: 10 }, { text: '−1', step: -1 }, { text: '−10', step: -10 },
+      ...[100, 1000].filter(step => max >= step).flatMap(step => [
+        { text: `+${step.toLocaleString()}`, step }, { text: `−${step.toLocaleString()}`, step: -step },
+      ]),
       { text: tr('최대 ({n}개)', { n: max }), ...this.shopPrice(e, max), step: 'max' },
     ];
     this.list.open(tr('{name} 구입', { name: stripEscapes(e.d.name) }), items, {

@@ -5,7 +5,7 @@ import { G } from '../src/core/globals.js';
 globalThis.location = { search: '?lang=en' };
 globalThis.addEventListener ||= () => {};
 const { $data } = await import('../src/data/data.js');
-const { GameState, BAG_MAX } = await import('../src/game/state.js');
+const { GameState, GameParty, BAG_MAX } = await import('../src/game/state.js');
 const { Interpreter } = await import('../src/game/interpreter.js');
 const { UI } = await import('../src/ui/ui.js');
 const command = (code, parameters = []) => ({ code, indent: 0, parameters });
@@ -124,7 +124,7 @@ test('stored purchases consume all material kinds from their matching stored con
 
 test('ordinary shops and disabled exchange switches retain their normal money and free-item behavior', t => {
   const { ui, party, entry } = environment(t); G.state.setSw(72, false); entry.price = 17;
-  assert.equal(ui.shopMaxBuy(entry), 99); assert.equal(ui.shopBuy(entry, 2), true);
+  assert.equal(ui.shopMaxBuy(entry), BAG_MAX); assert.equal(ui.shopBuy(entry, 2), true);
   assert.equal(party.gold, 4999966); assert.equal(party.itemCount('item', 7), 0); assert.equal(party.itemCount('item', 19), 2);
   entry.price = 0; assert.equal(ui.shopBuy(entry, 1), true); assert.equal(party.gold, 4999966);
   G.scripts.exchangeShop = null; assert.equal(ui.shopPrice(entry).right, '0 Souls');
@@ -156,4 +156,95 @@ test('selling exchange-tagged goods keeps normal half-price Souls behavior and d
   const sale = ui.list.items[0]; ui.shopSell(sale, 1);
   assert.equal(party.itemCount('item', 19), 1); assert.equal(party.itemCount('item', 7), 0); assert.equal(party.gold, 5000050);
   assert.equal(product.price, 100);
+});
+
+test('paid and free purchases above 99 grant full batches and survive a party save roundtrip', t => {
+  const { ui, party, entry } = environment(t); G.state.setSw(72, false); entry.price = 17;
+  let returned = 0;
+  ui.showShopQuantity(entry, () => returned++, 125); pick(ui, 0);
+  assert.equal(party.itemCount('item', 19), 125); assert.equal(party.gold, 4997875);
+  entry.price = 0; ui.showShopQuantity(entry, () => returned++, 1000); pick(ui, 0);
+  assert.equal(party.itemCount('item', 19), 1125); assert.equal(party.gold, 4997875); assert.equal(returned, 2);
+  const restored = GameParty.fromJSON(JSON.parse(JSON.stringify(party.toJSON())));
+  assert.equal(restored.itemCount('item', 19), 1125); assert.equal(restored.gold, 4997875);
+});
+
+test('a bulk material exchange above 99 charges every material kind and money exactly once', t => {
+  const { ui, party, entry, product } = environment(t);
+  product.note = '<Trade:0,7,5>\n<Trade:1,8,2>\n<Trade:2,9,1>'; entry.price = 13;
+  party.gainItem('item', 7, 1005); party.gainItem('weapon', 8, 403); party.gainItem('armor', 9, 202);
+  assert.equal(ui.shopMaxBuy(entry), 201);
+  ui.showShopQuantity(entry, () => {}, 200);
+  assert.equal(ui.list.items[0].right, '1,000 Trade token + 400 Test blade + 200 Test coat + 2,600 Souls');
+  pick(ui, 0);
+  assert.equal(party.itemCount('item', 19), 200); assert.equal(party.itemCount('item', 7), 5);
+  assert.equal(party.itemCount('weapon', 8), 3); assert.equal(party.itemCount('armor', 9), 2);
+  assert.equal(party.gold, 4997400);
+});
+
+test('bulk maxima retain bag capacity, native storage limits and money affordability', t => {
+  const { ui, party, entry, product } = environment(t); G.state.setSw(72, false);
+  entry.price = 10; party.gold = 1507;
+  assert.equal(ui.shopMaxBuy(entry), 150);
+  entry.price = 0; party.items.set(19, BAG_MAX - 123);
+  assert.equal(ui.shopMaxBuy(entry), 123); assert.equal(ui.shopBuy(entry, 124), false);
+  assert.equal(ui.shopBuy(entry, 123), true); assert.equal(party.itemCount('item', 19), BAG_MAX);
+  assert.equal(ui.shopMaxBuy(entry), 0); assert.equal(party.gold, 1507);
+  ui.shopKeep = true;
+  assert.equal(ui.shopMaxBuy(entry), 999, 'storage uses its original limit, not the bag limit');
+  product.note = '<保存制限:321>'; party.kept.item.set(19, 200);
+  assert.equal(ui.shopMaxBuy(entry), 121); assert.equal(ui.shopBuy(entry, 122), false);
+  assert.equal(ui.shopBuy(entry, 121), true); assert.equal(party.keptCount('item', 19), 321);
+  assert.equal(party.itemCount('item', 19), BAG_MAX); assert.equal(party.gold, 1507);
+});
+
+test('bulk stored exchanges debit and receive only in storage without using bag materials', t => {
+  const { ui, party, entry, product } = environment(t); ui.shopKeep = true;
+  product.note = '<Trade:0,7,5>\n<保存制限:180>';
+  party.items.set(7, 9000); party.kept.item.set(7, 700); party.kept.item.set(19, 20);
+  assert.equal(ui.shopMaxBuy(entry), 140);
+  ui.showShopQuantity(entry, () => {}, 140); pick(ui, 0);
+  assert.equal(party.keptCount('item', 19), 160); assert.equal(party.keptCount('item', 7), 0);
+  assert.equal(party.itemCount('item', 7), 9000); assert.equal(party.itemCount('item', 19), 0);
+  assert.equal(ui.shopMaxBuy(entry), 0); assert.equal(party.gold, 5000000);
+});
+
+for (const change of ['materials', 'money', 'bag space', 'storage space']) {
+  test(`bulk confirmation rechecks changed ${change} without partially charging or granting`, t => {
+    const { ui, party, entry, product } = environment(t); entry.price = 10;
+    product.note = '<Trade:0,7,2>'; party.items.set(7, 1000);
+    if (change === 'storage space') { ui.shopKeep = true; party.kept.item.set(7, 800); }
+    assert.ok(ui.shopMaxBuy(entry) >= 200);
+    let returned = 0; ui.showShopQuantity(entry, () => returned++, 200);
+    if (change === 'materials') party.items.set(7, 399);
+    if (change === 'money') party.gold = 1999;
+    if (change === 'bag space') party.items.set(19, BAG_MAX - 199);
+    if (change === 'storage space') party.kept.item.set(19, 800);
+    const before = JSON.parse(JSON.stringify(party.toJSON()));
+    pick(ui, 0);
+    assert.equal(returned, 1); assert.deepEqual(party.toJSON(), before);
+  });
+}
+
+test('large quantity controls offer bounded hundreds/thousands and Max while cancel never purchases', t => {
+  const { ui, party, entry } = environment(t); G.state.setSw(72, false); entry.price = 10;
+  const chooseStep = step => {
+    const index = ui.list.items.findIndex(item => item.step === step);
+    assert.notEqual(index, -1, `quantity step ${step} is available`); pick(ui, index);
+  };
+  party.gold = 990; ui.showShopQuantity(entry, () => {});
+  assert.deepEqual(ui.list.items.map(item => item.step), [0, 1, 10, -1, -10, 'max'], 'small dialogs keep their original rows');
+  party.gold = 9990; ui.showShopQuantity(entry, () => {});
+  assert.ok(ui.list.items.some(item => item.step === 100)); assert.ok(ui.list.items.some(item => item.step === -100));
+  assert.equal(ui.list.items.some(item => Math.abs(item.step) === 1000), false);
+  party.gold = 10070; let returned = 0; ui.showShopQuantity(entry, () => returned++);
+  chooseStep(100); assert.equal(ui.list.items[0].right, '1,010 Souls');
+  chooseStep(1000); assert.equal(ui.list.items[0].right, '10,070 Souls', 'addition clamps to affordable Max');
+  chooseStep(-100); assert.equal(ui.list.items[0].right, '9,070 Souls');
+  chooseStep(-1000); assert.equal(ui.list.items[0].right, '10 Souls', 'subtraction clamps to one');
+  ui.list.onAdjust(-10000); assert.equal(ui.list.items[0].right, '10 Souls');
+  chooseStep('max'); assert.equal(ui.list.items[0].right, '10,070 Souls');
+  ui.list.onCancel(); assert.equal(returned, 1); assert.equal(party.gold, 10070); assert.equal(party.itemCount('item', 19), 0);
+  ui.showShopQuantity(entry, () => returned++); chooseStep('max'); pick(ui, 0);
+  assert.equal(party.itemCount('item', 19), 1007); assert.equal(party.gold, 0); assert.equal(returned, 2);
 });
