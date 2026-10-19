@@ -1835,3 +1835,30 @@ The public literal runtime comparison now uses commit9a69f17 (0.2.29):48 origina
 modules retained,16 unchanged after import moves,32 modified,37 new,0 missing;
 3203 added/808 removed lines in modified originals after import normalization.
 The six actual comparison images remain explicitly labelled0.2.25.
+
+## Weapon-triggered Break lifecycle (0.2.30)
+
+King Club's normal-attack state 7 trait reached addEnemyState, which could put an
+acting enemy into recover for 0.4 seconds. enemyRestricted deliberately excludes
+Break states 7/8 because their AI restriction belongs to the stagger lifecycle.
+Consequently the enemy could chase/attack while its Hard Break state was still
+active. The normal-attack trait path now calls breakEnemy for states 7/8 after the
+same stateEffectChance roll. This preserves native susceptibility, immunity and
+LUK, drops the current action marker, enters stagger for 3.2/2.2 seconds, and lets
+the existing AI clear Break at the end. Other attack states retain addEnemyState.
+Do not replace the native proc roll with the manual weapon-break roll or change
+the existing explicit-Break damage adapters as part of this lifecycle repair.
+
+Five synthetic regressions exercise the actual shared player/companion path,
+marker cleanup and enemy AI expiry, accuracy and native chance boundaries,
+Stun 60%/susceptibility/immunity, and the granted critical-buff skill. The original
+Hard Break state itself makes Stun immune, so a successful Hard Break suppresses
+the separate Stun effect on that hit. Combat Rush is an active battle-only skill,
+costs 4 MP, and grants 30 percentage points CRI; equipping the club alone does not
+apply its buff. Existing real-time buff/cooldown timing remains unchanged.
+Original database records and the independent pre-fix reproduction remain in
+private tooling; public fixtures contain neutral synthetic records. These are
+mechanic regressions, not a claim of physical-headset or full-story playtesting.
+
+Local verification passed 758 JavaScript regressions, ESLint, Ruff, the production
+build, 8 packaging tests and 7 Python protocol tests.

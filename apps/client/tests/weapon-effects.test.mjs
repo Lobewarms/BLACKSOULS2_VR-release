@@ -242,3 +242,87 @@ test('physical and magical penetration use their matching hit type, including or
   skill.note = '<ダメージ率貫通:2,5000>';
   assert.equal(combat.computeDamage(actor, enemy.b, skill), 100, 'malformed excessive percentages cannot amplify damage');
 });
+
+function hardBreakClub(t) {
+  const e = environment(t);
+  // Synthetic metadata for a club with Hard Break, Stun60% and a critical buff
+  // skill. These traits are the same mechanisms used by King Club #166.
+  $data.weapons[1].features.push(trait(32, 7, 1), trait(43, 110, 0), trait(32, 13, 0.6));
+  $data.states[7] = { id: 7, name: 'Hard Break', note: '', icon_index: 8, restriction: 4,
+    auto_removal_timing: 1, min_turns: 2, max_turns: 2,
+    features: [trait(23, 6, 3), trait(23, 7, 3), trait(13, 7, 0), trait(13, 8, 0), trait(14, 13, 0)] };
+  $data.states[8] = { id: 8, name: 'Break', note: '', restriction: 4, auto_removal_timing: 1,
+    min_turns: 2, max_turns: 2, features: [] };
+  Object.assign($data.states[13], { name: 'Stun', restriction: 4, auto_removal_timing: 1 });
+  Object.assign(e.enemy, { alertTime: 0, cooldown: 0, r: 0.4, timer: 1 });
+  e.combat.fadingMarkers = [];
+  return e;
+}
+
+test('weapon Hard Break enters the real stagger lifecycle and prevents AI recovery until its 3.2-second opening ends', t => {
+  const { actor, enemy, combat, hit } = hardBreakClub(t);
+  Object.assign(enemy, { state: 'windup', act: {}, move: 'charge', marker: {} });
+  hit();
+  assert.equal(enemy.b.isState(7), true); assert.equal(enemy.state, 'stagger'); assert.equal(enemy.timer, 3.2);
+  assert.equal(enemy.marker, null); assert.equal(combat.fadingMarkers.length, 1);
+  assert.equal(enemy.b.pdr, 3); assert.equal(enemy.b.mdr, 3);
+  assert.equal(combat.computeDamage(actor, enemy.b, $data.skills[1]), 300, 'the original native triple-damage vulnerability remains');
+  assert.equal(enemy.b.isState(13), false, 'Hard Break itself makes Stun immune, matching the original state metadata');
+  combat.enemyAI(enemy, 3.19, { fx: 0, fy: 0 }, 0);
+  assert.equal(enemy.state, 'stagger'); assert.equal(enemy.b.isState(7), true);
+  combat.enemyAI(enemy, 0.02, { fx: 0, fy: 0 }, 0);
+  assert.equal(enemy.state, 'chase'); assert.equal(enemy.b.isState(7), false); assert.equal(enemy.b.pdr, 1);
+});
+
+test('normal weapon Break procs retain native susceptibility, LUK, immunity and accuracy before entering stagger', t => {
+  const { enemy, hit } = hardBreakClub(t);
+  enemy.b.features = [trait(13, 7, 0.5), trait(14, 13, 0)]; enemy.b.values[7] = 600;
+  Math.random.mock.mockImplementation(() => 0.25); hit(); assert.equal(enemy.b.isState(7), false);
+  Math.random.mock.mockImplementation(() => 0.249); hit(); assert.equal(enemy.state, 'stagger');
+  enemy.b.removeState(7); enemy.state = 'chase';
+  enemy.b.features = [trait(14, 7, 0), trait(14, 13, 0)];
+  Math.random.mock.mockImplementation(() => 0); hit(); assert.equal(enemy.b.isState(7), false);
+  enemy.b.features = []; $data.weapons[1].features.push(trait(22, 0, -1));
+  Math.random.mock.mockImplementation(() => 0.5); hit(); assert.equal(enemy.b.isState(7), false); assert.equal(enemy.b.isState(13), false);
+});
+
+test('a companion weapon Break uses its own traits and the same stagger path rather than the leader traits', t => {
+  const { actor, enemy, combat } = hardBreakClub(t);
+  $data.actors[2] = { ...$data.actors[1], id: 2, name: 'Synthetic companion' };
+  const companion = G.state.actor(2); actor.equips[0].id = 0;
+  assert.deepEqual(actor.atkStates(), []); assert.deepEqual(companion.atkStates(), [7, 13]);
+  combat.applyUsableToEnemy(enemy, $data.skills[1], null, { by: companion });
+  assert.equal(enemy.state, 'stagger'); assert.equal(enemy.b.isState(7), true); assert.equal(enemy.timer, 3.2);
+  enemy.b.removeState(7); enemy.state = 'chase';
+  $data.weapons[1].features = [trait(32, 8, 1)];
+  combat.applyUsableToEnemy(enemy, $data.skills[1], null, { by: companion });
+  assert.equal(enemy.state, 'stagger'); assert.equal(enemy.b.isState(8), true); assert.equal(enemy.timer, 2.2);
+});
+
+test('club Stun60% still applies when Hard Break fails and respects susceptibility and immunity', t => {
+  const { enemy, hit } = hardBreakClub(t); enemy.b.features = [trait(13, 7, 0)];
+  Math.random.mock.mockImplementation(() => 0.6); hit(); assert.equal(enemy.b.isState(13), false);
+  Math.random.mock.mockImplementation(() => 0.59); hit(); assert.equal(enemy.b.isState(13), true);
+  assert.equal(enemy.stateTimers[13], 2);
+  enemy.b.removeState(13); enemy.b.features = [trait(13, 7, 0), trait(13, 13, 0.5)];
+  Math.random.mock.mockImplementation(() => 0.3); hit(); assert.equal(enemy.b.isState(13), false);
+  Math.random.mock.mockImplementation(() => 0.29); hit(); assert.equal(enemy.b.isState(13), true);
+  enemy.b.removeState(13); enemy.b.features = [trait(13, 7, 0), trait(14, 13, 0)];
+  Math.random.mock.mockImplementation(() => 0); hit(); assert.equal(enemy.b.isState(13), false);
+});
+
+test('the club critical buff skill grants its real 30-point CRI increase for the current adapted duration', t => {
+  const { actor, combat } = hardBreakClub(t);
+  $data.states[45] = { id: 45, name: 'Critical buff', note: '', restriction: 0,
+    auto_removal_timing: 1, min_turns: 3, max_turns: 3, features: [trait(22, 2, 0.3)] };
+  const skill = $data.skills[110] = attack(110, { scope: 11, hit_type: 0, note: '<クールタイム:3>', mp_cost: 4,
+    damage: { type: 0 }, effects: [{ code: 21, data_id: 45, value1: 1 }] });
+  combat.skillCD = {}; combat.battles = [];
+  assert.ok(actor.allSkills().includes(skill));
+  const beforeMp = actor.mp, beforeCri = actor.cri;
+  combat.payUsable(skill, 'skill'); combat.applyUsableToActor(skill, 'quick');
+  assert.equal(beforeMp - actor.mp, 4); assert.equal(actor.cri - beforeCri, 0.3);
+  assert.equal(G.state.system.stateTimers[45], 18); assert.equal(combat.skillCD[110] - G.time, 4.5);
+  combat.updateActorStates(18, false);
+  assert.equal(actor.isState(45), false); assert.equal(actor.cri, beforeCri);
+});

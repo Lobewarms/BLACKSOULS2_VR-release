@@ -2850,7 +2850,10 @@ export class CombatSystem {
         } else if (v > 0) { e.b.hp = Math.min(e.b.mhp, e.b.hp + v); e.drawBar(); }
       } else if (ef.code === 21 && ef.data_id === 0) {   // "normal attack" states: the attacker's own (poison blades...)
         for (const id of actor?.atkStates() || []) {
-          if (Math.random() < this.stateEffectChance(actor, e.b, obj, id, ef.value1 * actor.atkStatesRate(id))) this.addEnemyState(e, id);
+          if (Math.random() < this.stateEffectChance(actor, e.b, obj, id, ef.value1 * actor.atkStatesRate(id))) {
+            if (id === 7 || id === 8) this.breakEnemy(e, id);
+            else this.addEnemyState(e, id);
+          }
         }
         this.groggyHit(e, actor, obj, mult, blow);
       } else if (ef.code === 21 && ef.data_id === 1) {   // instant death (ouija board etc.)
