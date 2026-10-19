@@ -286,6 +286,125 @@ export function bonfireList(src) {
   }
   return out.sort((a, b) => a.index - b.index);
 }
+// Only literal arrays, numbers and picture names are needed by ShortMove.
+// Installed Ruby stays data: expressions and interpolated strings never run.
+function bonfireLiteral(source, start) {
+  const invalid = Symbol('invalid');
+  let at = start, nodes = 0;
+  const space = () => { while (/\s/.test(source[at] || '') && at < source.length) at++; };
+  const value = depth => {
+    space();
+    if (++nodes > 8192 || depth > 4) return invalid;
+    if (source[at] === '[') {
+      const result = []; at++; space();
+      while (source[at] !== ']') {
+        const entry = value(depth + 1);
+        if (entry === invalid) return invalid;
+        result.push(entry); space();
+        if (source[at] === ']') break;
+        if (source[at++] !== ',') return invalid;
+        space();
+      }
+      at++; return result;
+    }
+    if (source[at] === '"' || source[at] === "'") {
+      const begin = at, quote = source[at++];
+      while (at < source.length && at - begin <= 512) {
+        const c = source[at++];
+        if (c === '\\') { at++; continue; }
+        if (c === quote) {
+          const text = speakerString(source.slice(begin, at));
+          return text !== null && text.length <= 256 ? text : invalid;
+        }
+      }
+      return invalid;
+    }
+    if (/^nil\b/.test(source.slice(at, at + 4))) { at += 3; return null; }
+    const number = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?/i.exec(source.slice(at, at + 64));
+    if (!number) return invalid;
+    at += number[0].length;
+    const result = Number(number[0]);
+    return Number.isFinite(result) ? result : invalid;
+  };
+  const result = value(0);
+  // Reject suffixes such as string concatenation, method calls and modifiers.
+  return result === invalid || !/^[ \t]*(?:\r?\n|;|$)/.test(source.slice(at)) ? null : { value: result };
+}
+function bonfirePicture(value) {
+  return typeof value === 'string' && value.length <= 256 && !/[\0\r\n:]/.test(value)
+    && !/^[\\/]/.test(value) && !value.split(/[\\/]/).some(part => part === '.' || part === '..');
+}
+function bonfireMarker(row, player = false) {
+  if (!Array.isArray(row) || row.length < (player ? 3 : 5)) return null;
+  const [type, x, y] = row;
+  if (![0, 1, 2].includes(type) || ![x, y].every(n => typeof n === 'number' && Number.isFinite(n) && Math.abs(n) <= 16384)) return null;
+  const marker = { type, x, y }, data = row[player ? 3 : 5];
+  const positiveId = n => Number.isInteger(n) && n > 0 && n <= 999999;
+  if (!player) {
+    if (![row[3], row[4]].every(n => n === 0 || positiveId(n))) return null;
+    marker.showSwitch = row[3]; marker.hideSwitch = row[4];
+  }
+  if (type === 0) {
+    // The player's marker uses the current leader; static icons name an actor.
+    if (!player) { if (!positiveId(data)) return null; marker.actorId = data; }
+  } else if (type === 1) {
+    marker.size = 7; marker.color = [0, 0, 0];
+    if (data != null) {
+      if (!Array.isArray(data)) return null;
+      if (data[0] != null) {
+        if (!Number.isFinite(data[0]) || data[0] < 0 || data[0] > 1024) return null;
+        marker.size = data[0];
+      }
+      if ([1, 2, 3].every(i => data[i] != null)) {
+        const color = data.slice(1, 4);
+        if (color.length !== 3 || !color.every(n => Number.isFinite(n) && n >= 0 && n <= 255)) return null;
+        marker.color = color;
+      }
+    }
+  } else {
+    if (!bonfirePicture(data) || !data) return null;
+    marker.picture = data;
+  }
+  return marker;
+}
+export function bonfireMap(src) {
+  if (typeof src !== 'string' || src.length > 2_000_000) return null;
+  const source = speakerSource(src), players = {}, icons = new Map();
+  const assignment = /(?:^|[\n;])[ \t]*(?:\w+::)*(MAPDATA|PLAYER_ICON|ICONLIST)[ \t]*(?:\[[ \t]*(\d+)[ \t]*\])?[ \t]*=[ \t]*/g;
+  let picture, scanned = 0, quote = null;
+  for (const match of source.matchAll(assignment)) {
+    // A line resembling an assignment inside a quoted Ruby string is inert.
+    const keyword = match.index + match[0].indexOf(match[1]);
+    while (scanned < keyword) {
+      const c = source[scanned++];
+      if (quote) { if (c === '\\') scanned++; else if (c === quote) quote = null; }
+      else if (c === '"' || c === "'") quote = c;
+    }
+    if (quote || match[2] !== undefined && +match[2] > 4095) continue;
+    const literal = bonfireLiteral(source, match.index + match[0].length);
+    if (!literal) continue;
+    const data = literal.value;
+    if (match[1] === 'MAPDATA') {
+      if (match[2] === undefined && bonfirePicture(data)) picture = data;
+      continue;
+    }
+    if (match[2] === undefined) {
+      if (!Array.isArray(data)) continue;
+      if (match[1] === 'PLAYER_ICON') for (const index of Object.keys(players)) delete players[index];
+      else icons.clear();
+      data.slice(0, 4096).forEach((row, index) => {
+        const marker = bonfireMarker(row, match[1] === 'PLAYER_ICON');
+        if (marker) { if (match[1] === 'PLAYER_ICON') players[index] = marker; else icons.set(index, marker); }
+      });
+    } else {
+      const index = +match[2], player = match[1] === 'PLAYER_ICON', marker = bonfireMarker(data, player);
+      if (marker) { if (player) players[index] = marker; else icons.set(index, marker); }
+      else if (player) delete players[index];
+      else icons.delete(index);
+    }
+  }
+  return picture === undefined ? null : { picture, players, icons: [...icons].sort((a, b) => a[0] - b[0]).map(([, marker]) => marker) };
+}
 // which bonfires the travel list shows, and which of those can be picked - as the original's window has it
 // (Window_k_ShortMove_Command visible? / selectable?): one taken away (its switch on) is gone; one that can be taken away but is
 // not yet is there whatever else; else a switch of 0 shows it always, any other only when on. Picking it needs its switch (0: always)
@@ -310,7 +429,7 @@ export async function loadScriptData() {
 }
 // what the game's scripts set up, from their sections ([name, source] in the game's order)
 export function readScripts(entries) {
-  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null, regularWindow: null };
+  const out = { names: {}, nameAliases: {}, bonfires: [], bonfireMap: null, symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null, regularWindow: null };
   const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
   // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
   // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
@@ -347,6 +466,7 @@ export function readScripts(entries) {
     if (key === 'bonfire') {
       out.bonfires.push(...bonfireList(src));
       out.bonfires.sort((a, b) => a.index - b.index);
+      out.bonfireMap = bonfireMap(src) || out.bonfireMap;
     } else if (key === 'symbol') {
       const clean = src.split(/\r?\n/).map(l => l.replace(/#.*$/, '')).join('\n');
       const block = /SYMBOL_SETTING_LIST\s*=\s*\{([\s\S]*?)\n\s*\}/.exec(clean)?.[1] || '';

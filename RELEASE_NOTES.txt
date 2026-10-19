@@ -1,5 +1,15 @@
 BLACK SOULS II VR 0.2.39
 
+Bonfire travel map
+- Show the original world-map artwork beside the destinations, with the original
+  character marker following your selection and both description lines visible.
+- Keep the map and destination list readable in PC and VR, including smaller
+  windows. Missing artwork leaves travel available.
+
+Distant bow kills
+- Fix a dead enemy remaining as a standing silhouette when its battle starts
+  after a distant projectile kills it. Its death fade and cleanup now finish.
+
 Bonus Action charges
 - Bonus Action traits now roll for extra actions instead of passively speeding
   up attacks. Each source rolls separately: +50% is a 50% chance for one charge;

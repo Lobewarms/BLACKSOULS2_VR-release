@@ -75,3 +75,9 @@ shows the original source icon, charge count and time remaining.
 Costs, skill cooldowns, attack motion and burst spacing still apply. A bonus
 action cannot generate charges. Items and utility actions do not count.
 This works with PC, VR and skills used directly from the R menu.
+
+BONFIRE TRAVEL
+--------------
+Highlight a destination to see its position on the original world map and both
+description lines. Confirm to travel, or cancel to return. The map and list
+rearrange to fit smaller PC windows and keep the same selection when entering VR.

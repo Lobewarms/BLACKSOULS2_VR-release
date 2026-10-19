@@ -1233,7 +1233,11 @@ export class CombatSystem {
       let e;
       if (own?.m === m && sym?.enemy) {
         e = sym.enemy; sym.enemy = null;
-        e.battle = battle; e.state = 'chase'; e.alertTime = 0.4;
+        e.battle = battle;
+        // A distant hit may already have killed this field body before its event reaches
+        // Battle Processing. Keep its collapse (including an already finished fade).
+        if (e.alive) e.state = 'chase';
+        e.alertTime = 0.4;
       } else {
         const lateral = (k - (sorted.length - 1) / 2) * 1.1;
         let fx = ax + Math.cos(toP + Math.PI / 2) * lateral - Math.cos(toP) * 0.4;

@@ -2404,3 +2404,71 @@ Current source comparison: runtime 37aa9b4745081ccedb00447f5b860d37024e80aa (0.2
 43 new and0 missing;3,974 added/927 removed lines in modified originals after
 import normalization. The replaced passive helper and new charge manager leave
 the new-module count unchanged. Historical screenshot labels/pins remain intact.
+
+
+## Original bonfire travel map (0.2.39)
+
+Scene_ShortMove previously loaded MOVE_LIST/EXPLAN/CALL_COMMON but discarded
+MAPDATA/PLAYER_ICON/ICONLIST. Its UI rendered only a list and EXPLAN[0], so the
+original map preview was never implemented. A read-only native-script audit
+confirmed one shared Graphics/Pictures artwork with36 original-index leader
+markers, not a per-destination screenshot/minimap. The installed picture resolves
+case-insensitively. All36 parsed coordinates matched the original; optional
+ICONLIST is empty in the installed source. No original artwork/data is bundled.
+
+Read only bounded static literal configuration from the selected original script
+section, retaining named-section precedence. Missing config is null. Do not
+evaluate Ruby or invent filename aliases/default art. Marker type0 uses an
+original actor character sheet, idle front middle frame anchored centre/bottom;
+type1 is the authored centred square with optional size/colour; type2 is an
+original Picture anchored top-left. Keep native overlay switch gates and draw
+selected-player marker last. Filtered rows must use the original MOVE_LIST index.
+
+BonfireTravel owns a direct-root preview panel next to the existing destination
+ListPanel, fitting the entire artwork and all marker positions through one
+aspect-preserving transform. Both EXPLAN lines appear below it. Wide PC/VR uses
+two columns; narrow PC stacks the panels with fewer visible rows. Selection,
+scrolling, pointer geometry and view transitions retain their existing controls.
+Compact translated hints retain confirmation/cancellation guidance. Restore list
+dimensions and position only while its items array is still owned.
+
+Async assets bind generation, actual state/map identity, mapId, scene and list
+ownership. Late loads paint the current selection and cannot reopen/overwrite a
+new scene. Cancel/select/close/title invalidate synchronously; update also clears
+a stale bonfire scene/list after death, external transfer or state replacement.
+Null/rejected artwork leaves travel usable and does not retry every frame. Native
+switch eligibility and host/guest common-event authority are preserved, and a
+stale/double confirmation cannot transfer again or act on a replacement world.
+
+New synthetic coverage:4 parser cases,16 preview controller cases and7 actual
+UI/Input/Three scene cases. Tests cover original-index mapping, source character
+frames, optional native markers, both description lines, contain transforms,
+async ownership races, missing artwork, locked rows, once-only transfer/co-op
+common events, cancellation, ordinary menu restoration, readable projected
+bounds and PC/VR transitions. No physical-headset playtest is claimed.
+
+
+## Distant lethal projectile and field-symbol promotion (0.2.39)
+
+A distant bow hit can kill a dormant symbol body before its original event
+reaches command301/Battle Processing. startBattle reused that exact body and
+unconditionally changed its visual state from dying/dead to chase. Its battler
+retained Death, so AI/death checks skipped the nonliving body, but its standing
+billboard no longer entered collapse/fade cleanup. This explains the reported
+standing enemy silhouette without changing intentional shadow or phantom art.
+
+Promote a reused body to chase only while e.alive. Preserve already-partial or
+finished collapse, original HP, authored waits, event victory branches, disposal,
+rewards and unlocks. Three new regressions use real ActionEnemy materials, moving
+distant projectiles, symbol Interpreter command301, GameMap/GameState and actual
+Combat updates. Both immediate and authored-wait lethal cases failed before the
+fix and now finish the fade, dispose the billboard, execute the self switch and
+pay rewards once. A nonlethal control still chases with its actual reduced HP.
+No game records, player saves or private helpers enter these synthetic fixtures.
+
+Combined local gates after both additions:1,047 JavaScript tests pass (30 further
+cases:27 bonfire map and3 distant-death lifecycle), ESLint, production build,
+Ruff,8 packaging and7 Python tests. The preceding40 Bonus Action cases and all
+existing combat/UI regressions remain green. The earlier pending0.2.39 source
+checkpoint passed exact-head CI; final publication requires the new combined
+head to pass CI again. No physical-headset playtest is claimed.

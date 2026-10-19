@@ -19,6 +19,7 @@ import { desktopViewport, placeDesktopRoot, anchorDesktopPanel } from './desktop
 import { paintDesktopHud, bonusHudStatus } from './desktop-hud.js';
 import { RewardFeed } from './reward-feed.js';
 import { paintClassicMenu } from './classic-menu.js';
+import { BonfireTravel } from './bonfire-travel.js';
 
 export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
@@ -296,8 +297,9 @@ class ListPanel {
     this.items = []; this.index = 0; this.top = 0; this.title = '';
     this.scrollbar = new MenuScrollbar(this.panel);
   }
-  open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '', layout = null } = {}) {
+  open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '', layout = null, hint = null } = {}) {
     this.title = title; this.items = items; this.onSelect = onSelect; this.onCancel = onCancel; this.onAdjust = onAdjust;
+    this.hint = hint;
     this.classic = !!layout?.classic;
     if (!this.adaptive) {
       this.rows = layout?.rows || this.base.rows; this.rowTop = this.classic ? 24 : 100;
@@ -477,7 +479,10 @@ class ListPanel {
     } else if (this.adaptive && !G.vr && !this.footer) {
       ctx.font = `20px ${FONT}`;
       ctx.fillText(fitLabel(ctx, tr('Enter: 결정 · Esc: 뒤로'), canvas.width - 64 - (this.items.length > this.rows ? 100 : 0)), 32, canvas.height - 24);
-    } else ctx.fillText(tr(G.vr ? '스틱: 선택 · A / 트리거: 결정 · B: 뒤로' : '클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로'), 36, 84);
+    } else {
+      const hint = this.hint?.() || tr(G.vr ? '스틱: 선택 · A / 트리거: 결정 · B: 뒤로' : '클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로');
+      ctx.fillText(this.hint ? fitLabel(ctx, hint, canvas.width - 72) : hint, 36, 84);
+    }
     this.panel.commit();
   }
   update(raycaster) {
@@ -869,6 +874,7 @@ export class UI {
     this.root.add(this.choice.panel.mesh);
     this.list = new ListPanel(980, 8, 0.98);
     this.root.add(this.list.panel.mesh);
+    this.bonfireTravel = new BonfireTravel({ Panel, root: this.root, list: this.list, ui: this, font: FONT, windowBg, fitLabel });
     this.menuOverview = new Panel(960, 960, 0.96);
     this.root.add(this.menuOverview.mesh);
     this.grid = new GridPanel(1260, 3, 6, 1.2);
@@ -964,6 +970,7 @@ export class UI {
     if (this.list.visible) { this.list.hover = -2; this.list.draw(); }
     if (this.grid.visible) { this.grid.hover = undefined; this.grid.draw(); }
     if (this.keyboard.visible) { this.keyboard.draw(); this.keyboard.field(!vr); }
+    this.updateBonfireTravel();
     const message = this.msg || this.heldMessage?.message || (this.remote?.shown ? this.remote : null);
     if (message) this.drawMessage(message);
     if (this.msg?.state === 'number') this.drawNumber();
@@ -2101,9 +2108,10 @@ export class UI {
     this.showMainMenu();
   }
   closeMenu() {
+    this.bonfireTravel?.close();
     this.navigation.close();
     this.menuOverview.mesh.visible = false;
-    if (this.sceneOpen === 'map') this.sceneOpen = null;
+    if (this.sceneOpen === 'map' || this.sceneOpen === 'bonfire') this.sceneOpen = null;
     this.menuOpen = false;
     this.list.close();
     this.grid.close();
@@ -2247,6 +2255,7 @@ export class UI {
     }
   }
   showMap() {
+    this.bonfireTravel?.close();
     G.pictures?.requestViewerCancel?.();
     this.unlockPointer();
     this.mapReturnMenu = this.menuOpen;
@@ -2640,10 +2649,11 @@ export class UI {
     ];
     this.list.open(tr('상태'), items, { onSelect: () => {}, onCancel: () => this.reopenMain('status') });
   }
-  returnToTitle() { G.returnToTitle?.(); }
+  returnToTitle() { this.bonfireTravel?.close(); G.returnToTitle?.(); }
 
   // scenes requested by script calls
   openScene(name) {
+    if (name !== 'Scene_ShortMove') this.bonfireTravel?.close();
     if (name === 'Scene_ShortMove') { this.openBonfireWarp(); return; }
     if (name === 'Scene_ItemSynthesis') { this.openSynthesis(); return; }
     if (name === 'Scene_Keep' || name === 'Scene_Item_Keep') { this.openKeep(); return; }
@@ -2651,20 +2661,39 @@ export class UI {
     this.toast(tr('{label}: VR판에서는 아직 지원하지 않습니다', { label }));
   }
   openBonfireWarp() {
+    this.bonfireTravel?.close();
     const sw = id => G.state.sw(id);
     const list = (G.scripts.bonfires || []).filter(b => bonfireShown(b, sw));
     if (!list.length) { this.toast(tr('이동할 수 있는 화톳불이 없습니다')); return; }
     this.sceneOpen = 'bonfire';
-    this.placeRoot(true);
-    this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, desc: b.desc[0], enabled: bonfirePickable(b, sw) })), {
+    const state = G.state, map = G.map;
+    let closed = false;
+    const close = () => {
+      closed = true;
+      this.bonfireTravel?.close(); this.list.close(); this.sceneOpen = null;
+    };
+    this.list.panel?.mesh.position.set(0, 0, 0);
+    this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, enabled: bonfirePickable(b, sw) })), {
+      hint: () => tr(G.vr ? '스틱: 선택 · A: 결정 · B: 뒤로' : '↑↓: 선택 · Enter: 결정 · Esc: 뒤로'),
       onSelect: i => {
         const b = list[i];
-        this.list.close(); this.sceneOpen = null;
-        G.map.reserveTransfer(b.mapId, b.x, b.y, b.dir, 0);
-        if (!G.coop?.phantom) for (const ce of b.commons) G.map.reserveCommonEvent(ce);      // (a co-op guest's: the host's world's to run)
+        if (closed || this.sceneOpen !== 'bonfire' || state !== G.state || map !== G.map || map.transferring || G.combat?.playerDead) return;
+        if (!b || !bonfireShown(b, sw) || !bonfirePickable(b, sw)) { G.audio?.playSystemSe(3); return; }
+        close();
+        map.reserveTransfer(b.mapId, b.x, b.y, b.dir, 0);
+        if (!G.coop?.phantom) for (const ce of b.commons) map.reserveCommonEvent(ce);      // (a co-op guest's: the host's world's to run)
       },
-      onCancel: () => { this.list.close(); this.sceneOpen = null; },
+      onCancel: close,
     });
+    this.bonfireTravel?.open(list, G.scripts.bonfireMap);
+    this.placeRoot(true);
+  }
+  updateBonfireTravel() {
+    if (!this.bonfireTravel) return;
+    const owned = !!this.bonfireTravel.session;
+    if (!this.bonfireTravel.update() && owned && this.sceneOpen === 'bonfire') {
+      this.list.close(); this.sceneOpen = null;
+    }
   }
   // Select Key Item (104): which key item; the variable gets its id (0: cancelled)
   openKeyItemChoice(varId) {
@@ -3045,6 +3074,7 @@ export class UI {
     this.consumedConfirm = false;
     this.pointerTarget = false;
     this.updateDialoguePresentation();
+    this.updateBonfireTravel();
     if (this.sceneBusy() || this.dialogueActive() || this.keyboard.visible || this.prompt?.shown) this.unlockPointer();
     if (this.actionLockUntil && G.time < this.actionLockUntil) this.consumedConfirm = true;
     const anyPanel = this.dialogueActive() || this.menuOpen || this.sceneOpen || this.banner || this.toasts.length || this.remote?.shown || this.prompt?.shown;
@@ -3088,6 +3118,7 @@ export class UI {
     this.navigation.update(dt, this.hudPresent && !G.combat?.playerDead && !this.dialogueActive() && !this.banner?.blocking,
       !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
     this.updateDungeonStatus();
+    this.updateBonfireTravel();
     if (!G.vr) this.placeRoot();
     const rewardPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
     if (!this.hudPresent && this.rewardsHadPlayer) this.rewards.clear();
