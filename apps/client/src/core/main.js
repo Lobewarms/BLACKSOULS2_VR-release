@@ -4,12 +4,12 @@ import { G } from './globals.js';
 import { tr, fmtDate } from '../ui/i18n.js';
 import { createVRButton, prepareXR } from '../vr/vrbutton.js';
 import { initAssets, loadFont, loadImage, fetchBinary, listFiles, hasFile } from '../data/assets.js';
-import { $data, loadDatabase, mapName, loadMapNames, destinationName } from '../data/data.js';
+import { $data, loadDatabase, loadMapNames, destinationName } from '../data/data.js';
 import { MarshalReader } from '../data/marshal.js';
 import { billboardUniforms, T } from '../world/mapmesh.js';
 import { GameState } from '../game/state.js';
 import { readSaveSlots, readSaveState, writeSaveFile } from '../game/savefiles.js';
-import { prepareSaveLocations, saveLocation } from '../game/savepresentation.js';
+import { prepareSaveLocations, prepareOriginalSaveLocations, saveLocation } from '../game/savepresentation.js';
 import { showManualSaveMenu } from '../game/manual-save-menu.js';
 import { GameMap } from '../world/gamemap.js';
 import { Player } from '../entities/player.js';
@@ -327,7 +327,7 @@ async function performTransfer() {
     const changed = t.mapId !== m.mapId || !view.mesh;
     if (changed) {
       G.combat.reset({ carry: true });  // the old map's enemies leave with the old map (an event's run past its fight goes on)
-      setStatus(tr('맵 로딩: {map}', { map: mapName(t.mapId) }));
+      setStatus(tr('맵 로딩: {map}', { map: destinationName(t.mapId) }));
       G.screen.setBrightness(0);
       await m.load(t.mapId);
       await loadUserHints();            // (the map editor's rules as saved now - mapedit.html)
@@ -344,7 +344,7 @@ async function performTransfer() {
     m.transferring = false;
     m.requestRefresh();
     G.coop.onTransfer(m.mapId, t.x, t.y, t.dir);
-    setStatus(`${mapName(m.mapId)} (${m.mapId})`);
+    setStatus(destinationName(m.mapId));
     if (t.fade !== 2) G.screen.fadeIn(16);
     else G.screen.setBrightness(255);
     if (changed) autosave();
@@ -455,10 +455,10 @@ G.listRmSaves = async () => {
   for (const f of listFiles('save').filter(f => /^save\d+\.rvdata2$/i.test(f)).sort()) {
     try {
       const { header, contents } = await readRmSave(f);
-      out.push({ f, contents, label: f.replace('.rvdata2', ''), map: mapName(contents.get('map').map_id), time: header.get('playtime_s') || '' });
+      out.push({ f, contents, label: f.replace('.rvdata2', ''), time: header.get('playtime_s') || '' });
     } catch { /* (one that cannot be read is left out) */ }
   }
-  return out;
+  return prepareOriginalSaveLocations(out);
 };
 G.stateOfRm = (contents, label) => { const s = new GameState(); s.importRmSave(contents, label); return s; };
 async function readRmSave(file) {
@@ -609,11 +609,12 @@ async function showRmSaveMenu() {
   for (const f of files) {
     try {
       const { header, contents } = await readRmSave(f);
-      const map = contents.get('map'); const party = contents.get('party');
-      entries.push({ f, contents, label: f.replace('.rvdata2', ''), text: `${f.replace('.rvdata2', '')}  ${mapName(map.map_id)}`, right: header.get('playtime_s') || '', desc: `${party.gold} ${$data.system.currency_unit || ''}` });
+      const party = contents.get('party');
+      entries.push({ f, contents, label: f.replace('.rvdata2', ''), right: header.get('playtime_s') || '', desc: `${party.gold} ${$data.system.currency_unit || ''}` });
     } catch (e) { entries.push({ f, text: tr('{f} (읽기 실패)', { f }), enabled: false }); }
   }
-  G.ui.list.open(tr('원작 세이브'), entries, {
+  const located = await prepareOriginalSaveLocations(entries);
+  G.ui.list.open(tr('원작 세이브'), located.map(entry => entry.contents ? { ...entry, text: `${entry.label}  ${entry.map}` } : entry), {
     onSelect: (i, it) => { const s = new GameState(); s.importRmSave(it.contents, it.label); startGame(s); },
     onCancel: () => showTitle(),
   });

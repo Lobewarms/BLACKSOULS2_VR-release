@@ -4,7 +4,7 @@ import { bonfireShown, bonfirePickable } from '../data/scriptdata.js';
 import * as THREE from 'three';
 import { G } from '../core/globals.js';
 import { tr } from './i18n.js';
-import { $data, mapName } from '../data/data.js';
+import { $data, destinationName, loadMapNames } from '../data/data.js';
 import { loadCanvas } from '../data/assets.js';
 import { archivedIconCanvas, sheetForIcon } from '../data/iconfallback.js';
 import { itemData, spiritActorId, BAG_MAX } from '../game/state.js';
@@ -85,6 +85,14 @@ function windowBg(ctx, x, y, w, h, alpha = 0.82, frameAlpha = 1) {
 }
 
 // ------------------------------------------------------------------ text
+export function localSpeakerName(name) {
+  const raw = String(name ?? ''), aliases = G.scripts?.nameAliases || {}, names = G.scripts?.names || {};
+  if (Object.hasOwn(aliases, raw) && typeof aliases[raw] === 'string') return aliases[raw];
+  // A few direct overrides use a face-table key. Reuse that installed label,
+  // but never turn a literal override into an Actor[n] expression.
+  if (Object.hasOwn(names, raw) && typeof names[raw] === 'string' && !/^Actor\[/.test(names[raw])) return names[raw];
+  return raw;
+}
 export function convertEscapes(text) {
   let t = String(text ?? '').replace(/\\/g, '\x1b').replace(/\x1b\x1b/g, '\\');
   for (let i = 0; i < 2; i++) t = t.replace(/\x1bV\[(\d+)\]/gi, (_, n) => String(G.state.v(+n)));
@@ -1038,6 +1046,7 @@ export class UI {
     const banner = bannerOf(msg);
     if (banner) { this.showBanner(banner.text, banner.color, true); return; }
     this.msg = msg;
+    msg.name = this.speakerName(msg);
     msg.reveal = 0; msg.wait = 0; msg.fast = false; msg.state = 'typing';
     msg.ops = null;
     this.placeRoot(true);
@@ -1047,13 +1056,13 @@ export class UI {
     if (msg.lines.length === 0) msg.state = 'done-typing';
   }
   speakerName(msg) {
-    if (this.nextName) { const n = this.nextName; this.nextName = null; return n; }
+    if (this.nextName) { const n = this.nextName; this.nextName = null; return localSpeakerName(n).trim(); }
     if (!this.nameWindowEnabled || !msg.face) return '';
     const names = G.scripts.names || {};
     let n = names[`${msg.face}_${msg.faceIndex}`] ?? names[msg.face] ?? '';
     const am = /^Actor\[(\d+)\]/.exec(n);
-    if (am) n = G.state.actor(+am[1])?.name || '';
-    return n.trim();
+    if (am) return (G.state.actor(+am[1])?.name || '').trim();
+    return localSpeakerName(n).trim();
   }
   // The message box keeps the original window's proportions (BLACKSOULS II: a 640 px wide window, 12 px padding,
   // a 19 px font on 24 px lines, the face 96 px with the text 112 px in): every line takes the same share of the
@@ -1071,7 +1080,9 @@ export class UI {
     const L = this.messageLayout();
     msg.ops = layoutText(msg.lines, msg.face ? L.textX : L.left, L.top, L.k, ctx, L.font, L.right);
     msg.total = msg.ops.filter(o => o.k === 'ch' || o.k === 'icon').length;
-    msg.name = msg.remote ? msg.name || '' : this.speakerName(msg);
+    // Name overrides are consumed when the message opens, not again when its
+    // text reflows after a desktop/VR resize.
+    msg.name ||= '';
     if (msg.face) loadCanvas('Graphics/Faces', msg.face).then(c => { msg.faceCanvas = c; if (this.msg === msg || (this.remote === msg && msg.shown)) this.drawMessage(msg); });
   }
   drawMessage(msg = this.msg) {
@@ -1510,13 +1521,19 @@ export class UI {
   coopMembersRow() { return { text: tr('멤버 ({n}명)', { n: G.coop.members().length }), id: 'members', desc: tr('고르면 모두의 위치를 봅니다') }; }
   showCoopMembers(index = 0) {
     const c = G.coop;
-    const where = m => (m.map > 0 ? mapName(m.map) || `#${m.map}` : c.role === 'world' ? tr('오프닝·이동 중') : tr('이동 중'));
-    const items = c.members().map(m => ({ text: m.me ? tr('{name} (나)', { name: m.name }) : m.name, right: where(m), desc: m.host ? tr('호스트') : c.world && !m.me ? tr('고르면 아이템이나 소울을 줄 수 있습니다') : '', id: m.id, me: m.me }));
+    const where = m => (m.map > 0 ? destinationName(m.map) : c.role === 'world' ? tr('오프닝·이동 중') : tr('이동 중'));
+    const members = c.members();
+    const items = members.map(m => ({ text: m.me ? tr('{name} (나)', { name: m.name }) : m.name, right: where(m), desc: m.host ? tr('호스트') : c.world && !m.me ? tr('고르면 아이템이나 소울을 줄 수 있습니다') : '', id: m.id, me: m.me }));
     this.list.open(tr('멤버'), items, {
       index: Math.min(index, items.length - 1),
       // (the developer's world: another one - give it something; else looks again: where they are now)
       onSelect: (i, it) => { if (c.world && !it.me) this.showGiveItems(it.id, it.text, i); else this.showCoopMembers(i); },
       onCancel: () => this.showCoopMenu(0),
+    });
+    loadMapNames(members.map(member => member.map)).then(() => {
+      if (G.coop !== c || !this.list.visible || this.list.items !== items) return;
+      for (let i = 0; i < items.length; i++) items[i].right = where(members[i]);
+      this.list.draw();
     });
   }
   // (the developer's world) what of this bag may be given to that one: its things (not the key items), weapons and

@@ -1631,3 +1631,43 @@ paths so existing installations upgrade correctly; remove only the obsolete
 FORK_NOTICE.txt in addition to the two earlier superseded documents. Repository
 identity for live updates still comes from the build repository, and README
 release/issue links are relative so the same sources work in the main repository.
+
+## Installed-game speaker and area names (0.2.27)
+
+The reported Map276 nameplate was the Japanese direct override for Ghost
+Receptionist. The installed English game's name-window script translates it in
+show_name_window, after resolving the face/actor name. The port previously read
+only NAME_LIST and returned NW名前指定 overrides before those translations.
+
+Read static literal name aliases from that original method without evaluating
+Ruby. Keep aliases separate from the face table, preserve script order and
+if/elsif precedence, skip comments/interpolation/dynamic assignments, and support
+single/double quotes and literal OR branches. The original name-window method
+contains167 branches with169 source keys; independent private comparison found
+zero missing, extra or incorrect aliases, with all95 face-table entries retained.
+
+UI resolves literal overrides and face labels once when the message opens, so
+desktop/VR reflow cannot consume or erase a pending override twice. Apply aliases
+before the bounded non-Actor face-table fallback; five actual collision keys
+require that priority. The fallback covers the two remaining Polar Bear overrides.
+Preserve dynamic actor/custom names and authored garbled-name variants. Unknown
+labels retain their installed spelling; this restores the selected game's own
+localization rather than translating its entire story into the add-on UI language.
+No original translation table, database or scene artwork is shipped in tests.
+
+Co-op recognizes translated names only for speakers already allowlisted by the
+guest's installed data; legacy source labels use the same local resolver. Preserve
+validated player names, host-text limits and existing event-reference validation.
+
+Player-facing current/loading status, original-save rows, co-op member locations
+and exit analysis now use destinationName instead of mapName's editor labels.
+Map276's actual display_name is Mystery Maze. Original saves preload their names
+without mutating imported contents. Async co-op updates require the same active
+session, visible list and item-array identity before changing labels. Internal
+mapName remains available for developer tools; do not show editor suffixes/IDs
+in the normal current-area status.
+
+Local verification passed602 JavaScript regressions, ESLint, Ruff, production
+build and8 packaging tests. The real UI speaker resolver also matched every169
+installed alias and the Polar Bear fallback in a private metadata-only audit.
+This does not claim a full story or physical-headset playthrough.

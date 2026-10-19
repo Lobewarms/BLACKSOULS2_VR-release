@@ -9,7 +9,7 @@
 // (those same ones left out). The adult scenes are known here by their names alone: nothing in them is looked into.
 import { $data, loadMap } from '../data/data.js';
 import { G } from '../core/globals.js';
-import { convertEscapes, bannerOf } from '../ui/ui.js';
+import { convertEscapes, bannerOf, localSpeakerName } from '../ui/ui.js';
 
 export const NO_H_SWITCH = 20;
 const isI = (v, lo, hi) => Number.isInteger(v) && v >= lo && v <= hi;
@@ -172,14 +172,18 @@ export async function sayAt(ref, { names = null, vis = null, name = '' } = {}) {
   const banner = cmd.code === 101 ? bannerOf({ face: msg.face, choices: msg.choices, lines: raw }) : null;
   if (banner) return { banner };
   if (typeof name === 'string' && name && name.length <= 40) {
-    const ok = new Set(Object.values(nm));
+    const playerNames = new Set(Object.values(nm)), ok = new Set(playerNames);
     for (const v of Object.values(G.scripts?.names || {})) if (typeof v === 'string' && !/^Actor\[/.test(v)) ok.add(v.trim());
     for (const a of $data.actors || []) if (a?.name) ok.add(a.name);
     for (const c of list) {
       const t = (c.code === 108 || c.code === 408) && /^NW名前指定\s*(.+)$/.exec(String(c.parameters?.[0] ?? ''));
       if (t) ok.add(t[1].trim());
     }
-    if (ok.has(name)) msg.name = name;
+    const aliases = G.scripts?.nameAliases || {};
+    // Only translations of locally recognized speakers join the existing
+    // allowlist. An arbitrary host string is still not a speaker name.
+    for (const source of [...ok]) if (Object.hasOwn(aliases, source)) ok.add(aliases[source]);
+    if (ok.has(name)) msg.name = playerNames.has(name) ? name : localSpeakerName(name);
   }
   return msg;
 }

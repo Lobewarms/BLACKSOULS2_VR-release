@@ -101,6 +101,126 @@ const STR = String.raw`(?:"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')`;
 const MOVE_RE = new RegExp(String.raw`MOVE_LIST\s*\[\s*(\d+)\s*\]\s*=\s*\[\s*\[\s*${SQ}((?:\s*,\s*\d+)*)\s*\]\s*,\s*\[([\d\s,]*)\]\s*\]`, 'g');
 const EXPLAN_RE = new RegExp(String.raw`EXPLAN\s*\[\s*(\d+)\s*\]\s*=\s*\[\s*(${STR}(?:\s*,\s*${STR})*)\s*\]`, 'g');
 const CALL_RE = /CALL_COMMON\s*\[\s*(\d+)\s*\]\s*=\s*\[([\d,\s]*)\]/g;
+
+// Read static speaker configuration without evaluating any installed Ruby.
+// Comments may contain old translations; # inside a quoted name is real text.
+function speakerSource(source) {
+  let quote = null, block = false;
+  return source.split(/\r?\n/).map(line => {
+    if (!quote && /^=begin(?:\s|$)/.test(line)) { block = true; return ''; }
+    if (block) { if (/^=end(?:\s|$)/.test(line)) block = false; return ''; }
+    let live = '';
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (quote) {
+        live += c;
+        if (c === '\\' && i + 1 < line.length) live += line[++i];
+        else if (c === quote) quote = null;
+      } else if (c === '#') break;
+      else { live += c; if (c === '"' || c === "'") quote = c; }
+    }
+    return live;
+  }).join('\n');
+}
+function speakerString(token) {
+  if (!token) return null;
+  const value = token.slice(1, -1);
+  if (token[0] === "'") return value.replace(/\\([\\'])/g, '$1');
+  // An interpolated expression is not a static translation table entry.
+  for (let i = 0; i < value.length; i++) {
+    if (value[i] === '\\') i++;
+    else if (value[i] === '#' && value[i + 1] === '{') return null;
+  }
+  const escapes = { n: '\n', r: '\r', t: '\t', '"': '"', '\\': '\\', '#': '#' };
+  return value.replace(/\\([nrt"\\#])/g, (_match, char) => escapes[char]);
+}
+function readSpeakerTables(source, out) {
+  const assignment = new RegExp(String.raw`^[ \t]*(?:\w+::)*NAME_LIST\s*(?:\[\s*(${STR})\s*\])?\s*=\s*`, 'gm');
+  const pairs = new RegExp(String.raw`(${STR})\s*=>\s*(${STR})`, 'g');
+  for (const match of source.matchAll(assignment)) {
+    const start = match.index + match[0].length;
+    if (match[1]) {
+      const key = speakerString(match[1]), value = speakerString(new RegExp(`^${STR}`).exec(source.slice(start))?.[0]);
+      if (key !== null && value !== null) out.names[key] = value;
+      continue;
+    }
+    if (source[start] !== '{') continue;
+    let depth = 1, quote = null, end = start + 1;
+    for (; end < source.length && depth; end++) {
+      const c = source[end];
+      if (quote) { if (c === '\\') end++; else if (c === quote) quote = null; }
+      else if (c === '"' || c === "'") quote = c;
+      else if (c === '{') depth++;
+      else if (c === '}') depth--;
+    }
+    if (depth) continue;
+    const names = {};
+    for (const pair of source.slice(start + 1, end - 1).matchAll(pairs)) {
+      const key = speakerString(pair[1]), value = speakerString(pair[2]);
+      if (key !== null && value !== null) names[key] = value;
+    }
+    out.names = names; // a later Ruby constant assignment replaces the earlier hash
+  }
+}
+function aliasSources(condition) {
+  const part = new RegExp(String.raw`^name\s*==\s*(${STR})`), names = [];
+  let rest = condition.replace(/\s+then\s*$/, '').trim();
+  while (rest) {
+    const match = part.exec(rest), value = speakerString(match?.[1]);
+    if (!match || value === null) return null;
+    names.push(value); rest = rest.slice(match[0].length).trim();
+    if (!rest) return names;
+    const join = /^(?:\|\||or\b)\s*/.exec(rest);
+    if (!join) return null;
+    rest = rest.slice(join[0].length);
+  }
+  return null;
+}
+function readSpeakerAliases(source, out) {
+  let depth = 0, aliases, chain = null;
+  const finishBranch = () => {
+    if (!chain?.safe) return;
+    const assignment = chain.body.length === 1 ? new RegExp(String.raw`^name\s*=\s*(${STR})\s*;?$`).exec(chain.body[0]) : null;
+    const target = speakerString(assignment?.[1]);
+    for (const name of chain.names) {
+      if (!chain.seen.has(name) && target !== null) chain.pairs.set(name, target);
+      chain.seen.add(name); // the first matching if/elsif branch wins
+    }
+  };
+  const finishChain = () => {
+    finishBranch();
+    if (chain) {
+      // Separate consecutive if chains execute in sequence in the original.
+      const keys = new Set([...Object.keys(aliases), ...chain.pairs.keys()]);
+      for (const key of keys) { const value = aliases[key] ?? key; aliases[key] = chain.pairs.get(value) ?? value; }
+    }
+    chain = null;
+  };
+  for (const raw of source.split('\n')) {
+    const line = raw.trim(); if (!line) continue;
+    if (!depth) {
+      if (/^def\s+show_name_window(?:\s|\(|$)/.test(line)) { depth = 1; aliases = {}; }
+      continue;
+    }
+    if (/^end\b/.test(line)) {
+      if (depth === 2) finishChain();
+      if (--depth === 0) out.nameAliases = aliases; // last method definition wins
+      continue;
+    }
+    if (depth === 2 && chain && /^(?:elsif|else)\b/.test(line)) {
+      finishBranch();
+      const names = /^elsif\s+(.+)$/.exec(line);
+      chain.names = names ? aliasSources(names[1]) : null;
+      chain.safe &&= !!chain.names; chain.body = [];
+      continue;
+    }
+    if (depth === 1 && /^if\s+/.test(line)) {
+      const names = aliasSources(line.slice(3));
+      chain = { names, safe: !!names, seen: new Set(), pairs: new Map(), body: [] };
+    } else if (depth === 2 && chain) chain.body.push(line);
+    if (/^(?:if|unless|case|while|until|for|begin|def|class|module)\b/.test(line) || /\bdo(?:\s*\|[^|]*\|)?\s*$/.test(line)) depth++;
+  }
+}
 export function bonfireList(src) {
   const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
   const unq = (a, b) => (a ?? b ?? '').replace(/\\(.)/g, '$1');
@@ -139,7 +259,7 @@ export async function loadScriptData() {
 }
 // what the game's scripts set up, from their sections ([name, source] in the game's order)
 export function readScripts(entries) {
-  const out = { names: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null };
+  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null };
   const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
   // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
   // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
@@ -150,6 +270,8 @@ export function readScripts(entries) {
   };
   const byName = {}, byContent = {};
   for (const [name, src] of entries) {
+    const speakers = speakerSource(src);
+    readSpeakerTables(speakers, out); readSpeakerAliases(speakers, out);
     // font size / screen size: the last assignment in script order wins (comment lines skipped)
     const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
     for (const m of live.matchAll(/Font\.default_size\s*=\s*(\d+)/g)) out.fontSize = +m[1];
@@ -165,10 +287,7 @@ export function readScripts(entries) {
     }
   }
   for (const key of Object.keys(want)) for (const src of byName[key] || (byContent[key] ? [byContent[key]] : [])) {
-    if (key === 'name') {
-      const block = /NAME_LIST\s*=\s*\{([\s\S]*?)\n\s*\}/.exec(src)?.[1] || '';
-      for (const m of block.matchAll(/"([^"]*)"\s*=>\s*"([^"]*)"/g)) out.names[m[1]] = m[2];
-    } else if (key === 'bonfire') {
+    if (key === 'bonfire') {
       out.bonfires.push(...bonfireList(src));
       out.bonfires.sort((a, b) => a.index - b.index);
     } else if (key === 'symbol') {

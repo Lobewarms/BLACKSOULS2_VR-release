@@ -1,4 +1,4 @@
-BLACK SOULS II VR - 0.2.26
+BLACK SOULS II VR - 0.2.27
 
 GET STARTED
 Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
@@ -7,18 +7,16 @@ If it cannot find your game, click Browse to choose it.
 For VR, connect your headset to the PC first, then click ENTER VR in the game window.
 
 WHAT'S NEW
-- Repeated event choices open again correctly instead of reusing an earlier
-  answer. Victoria's heart meter keeps the original staged progression.
-- Pictures from battle events disappear when those events end, without
-  deleting unrelated map pictures.
-- Creatures without a name in the original game no longer display labels
-  such as "Enemy 157". Their health and status effects remain visible.
-- Named enemies continue to show their original game names. Changing into
-  an unnamed form clears the previous name instead of keeping a stale label.
+- NPC nameplates now use the translations in your installed game, including
+  Ghost Receptionist and other names previously left in Japanese.
+- Translated names remain visible when switching PC/VR layouts or resizing.
+- Area labels, original-save lists and co-op locations use game display names
+  instead of internal map editor labels.
+- The launcher, setup and player guides use the BLACK SOULS II VR project name.
 
 The natural area colours, VR/desktop switching, terrain, Steam achievements,
-clock-tower blinding, scenery, dialogue and gameplay fixes from previous updates
-are included.
+clock-tower blinding, scenery, dialogue, event choices, picture cleanup and
+gameplay fixes from previous updates are included.
 
 Close the game and previous launcher before installing, then reopen BLACK SOULS II VR
 from the Start menu.

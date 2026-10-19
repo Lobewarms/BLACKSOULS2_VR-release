@@ -2,7 +2,7 @@
 //  - fall zones (touch events or region common events that make the player plunge) -> pits
 //  - jump gaps (region "jump over" events)                                      -> pits
 //  - door cells and map exits (Transfer Player)                                  -> doorways / floor markers
-import { $data, mapName } from '../data/data.js';
+import { $data, destinationName } from '../data/data.js';
 import { F, isWallType } from './tiles.js';
 
 // common events that only send the player away after dying / items, not real exits
@@ -136,7 +136,7 @@ export function analyzeMap(map, grid, pageOf = ev => ev.pages[0]) {
     if (page.trigger > 2) continue;
     const t = transferOf(page.list);
     if (t) {
-      exits.push({ x: ev.x, y: ev.y, mapId: t.mapId, label: t.mapId && t.mapId !== map.__id ? mapName(t.mapId) : '', kind: 'event', eventId: ev.id, trigger: page.trigger });
+      exits.push({ x: ev.x, y: ev.y, mapId: t.mapId, label: t.mapId && t.mapId !== map.__id ? destinationName(t.mapId) : '', kind: 'event', eventId: ev.id, trigger: page.trigger });
       doors.add(idx(ev.x, ev.y));
     } else if (/^!/.test(g.character_name) && /door|扉|ドア/i.test(g.character_name)) doors.add(idx(ev.x, ev.y));
   }
@@ -164,7 +164,7 @@ export function analyzeMap(map, grid, pageOf = ev => ev.pages[0]) {
     }
     const t = transferOf(ce.list);
     if (t && cells.length <= 40) {
-      for (const [x, y] of cells) exits.push({ x, y, mapId: t.mapId, label: t.mapId && t.mapId !== map.__id ? mapName(t.mapId) : '', kind: 'region' });
+      for (const [x, y] of cells) exits.push({ x, y, mapId: t.mapId, label: t.mapId && t.mapId !== map.__id ? destinationName(t.mapId) : '', kind: 'region' });
     }
   }
   return { pits, falls, doors, doorPics, exits, jumps, gaps };
