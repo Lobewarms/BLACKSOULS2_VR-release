@@ -2341,3 +2341,59 @@ Current source comparison: runtime 91f884d1051f3f821ae86ad172c63fe1c062df5b (0.2
 48 original modules retained, 15 unchanged after import moves, 33 modified,
 43 new and 0 missing; 3,816 added/917 removed lines in modified originals after
 import normalization. Historical screenshot captions and image pins are unchanged.
+
+
+## Bonus Action charges (0.2.39)
+
+The user approved a charge-based real-time adaptation of feature61. This
+supersedes 0.2.16's passive expected-action recovery multiplier; remove its unused
+helper and do not stack both mechanics. AGI and all original formulas remain.
+Each positive finite source rolls independently once per completed eligible
+ordinary player action. Clamp probability to1, preserve the originating object
+icon, and retain separately earned charges. Guaranteed sources do not call RNG.
+Bonus actions consume one charge and cannot roll new charges. Duration is three
+active seconds; menus, dialogue and XR-away pause it. UI quantizes display only.
+
+Keep the manager on CombatSystem, never serialized GameState/system or battler
+states. Context includes actual actor/id, map/id and state identity. Reset,
+death, transfer, load/title, spectating and loss of all positive sources discard
+charges and invalidate old tickets. A death-state-immune zero-HP actor preserves
+existing deathless behavior. Snapshot trait sources when an action begins.
+
+One ticket belongs to one user action, not each target, repeat, volley round,
+automatic follow-up or counter. Direct menu skills retain R and original target
+validation. Pure common-event/ritual/field-only utility, items, invalid targets,
+failed costs and preparation do not earn or spend charges. Normal resources,
+seals, equipment requirements, skill cooldowns and deliberate charging remain.
+Keep the active swing/gesture and burst tail protected; a consumed bonus skips
+its own normal trailing recovery too, so it remains useful after a slow input.
+VR requires a fresh qualifying physical stroke and cannot repeat on a held pose.
+
+PC adds a peripheral original-icon charge/timer row below fixed resources only
+while active; VR fits it alongside the existing wrist HUD and keeps its minimap
+clear. Use the winning trait icon, a valid original attack-skill fallback, or
+text alone. Do not fabricate icons or inject an actor status. Four-language
+player guides explain charges and unchanged costs/cooldowns. No original game
+data, private audit helpers or saves are distributed.
+
+
+Read-only source audit: installed positive/zero feature61 records occur in8 actors,
+9 classes,6 weapons,5 armors and20 states (two zero-valued state records are
+ignored). Actor featureObjects also includes sworn-spirit sources. Public tests
+use synthetic metadata rather than original records.
+
+The complete suite passes1,017 JavaScript tests,40 new cases:15 pure manager,
+19 combat integration (including nested ordinary/failed-roll same-menu recovery)
+and6 HUD cases. Existing speed tests now verify no passive acceleration; old
+volley fixtures supply real camera/map/target geometry rather than weakening
+production aim validation. The focused combat aggregate passes127 cases. Lint,
+production build, Ruff,8 packaging and7 Python tests pass. This does not claim a
+physical-headset playtest or measured gameplay latency.
+
+Regression review reproduced and fixed two pause interactions. Instantaneous
+menu-origin support recovery uses its short0.3-second UI clock so an ordinary
+heal can be cast again without closing Skills, even without a Bonus trait or
+after a failed roll. Field action progress, earned charge lifetime and live
+desktop guard lock remain paused through menus/dialogue/headset-away. A target
+leaving before the melee hit window cannot mint a charge, and an armed cooling
+skill cannot spend one. Utility growth/skill-learning effects alone are excluded.

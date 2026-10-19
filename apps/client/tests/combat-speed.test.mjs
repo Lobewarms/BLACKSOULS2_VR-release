@@ -4,7 +4,6 @@ import * as THREE from 'three';
 import { G } from '../src/core/globals.js';
 import { $data } from '../src/data/data.js';
 import { GameState, GameActor, BattlerBase } from '../src/game/state.js';
-import { playerRecoveryRate } from '../src/combat/action-speed.js';
 
 globalThis.addEventListener ||= () => {};
 const { CombatSystem } = await import('../src/combat/combat.js');
@@ -20,7 +19,7 @@ function environment(t) {
     armors: [null, { id: 1, features: [{ code: 61, value: 0.5 }], params: Array(8).fill(0), note: '' }],
     states: [null, { id: 1, features: [] }, { id: 2, features: [{ code: 61, value: 1 }] },
       { id: 3, features: [{ code: 21, data_id: 6, value: 0.5 }] }],
-    skills: [null, { id: 1, repeats: 1, scope: 1, note: '' }],
+    skills: [null, { id: 1, repeats: 1, scope: 1, note: '', damage: { type: 1 } }],
   });
   const rig = new THREE.Group(), camera = new THREE.PerspectiveCamera(); rig.add(camera); camera.position.y = 1.6;
   Object.assign(G, { state: new GameState(), scripts: {}, time: 10, vr: false, audio: null, coop: null,
@@ -28,6 +27,7 @@ function environment(t) {
     player: { rig, headWorld: target => camera.getWorldPosition(target), forwardVec: () => new THREE.Vector3(0, 0, -1) },
   });
   const actor = new GameActor(1); actor.equips = []; G.state.actorMap.set(1, actor); G.state.party.actors = [1];
+  G.map = { mapId: 1, interpreter: { running: () => false } };
   let press = true, held = false;
   G.input = { attackPressed: () => press, mouseHeld: () => held, breakPressed: () => false,
     xrPressed: (hand, button) => press && hand === 'right' && button === 0, xrHeld: () => false, haptic() {} };
@@ -40,23 +40,21 @@ function environment(t) {
     pressBreak() {}, showBreakReady() {}, swingAtNpcs() {}, swingAtPlayers() {}, clashWithPlayers() {},
     fireShot: (...args) => shots.push(args), later: (ms, run) => scheduled.push({ ms, run }),
     actorPays: (...args) => costs.push(args), gunShotSkill: () => null, weaponLength: () => 1,
+    readyAim: () => ({ enemy, point: new THREE.Vector3(0, 0, -1) }),
   });
   combat.weapon.userData.length = 1;
   return { actor, enemy, combat, hits, shots, scheduled, costs,
     press: value => { press = value; }, held: value => { held = value; } };
 }
 
-test('bonus-action recovery reads live equipment and states without turning AGI into movement or attack cadence', t => {
-  const { actor } = environment(t);
-  assert.equal(playerRecoveryRate(actor), 1);
+test('extra-action equipment does not passively accelerate player swing animation or AGI', t => {
+  const { actor, combat } = environment(t);
   actor.equips = [{ kind: 'weapon', id: 1 }, { kind: 'armor', id: 1 }];
-  assert.equal(playerRecoveryRate(actor), 1.8);
-  actor.addState(2); assert.equal(playerRecoveryRate(actor), 2.8);
-  actor.removeState(2); assert.equal(playerRecoveryRate(actor), 1.8);
-  actor.equips = []; actor.addBuff(6, 3);
-  assert.equal(actor.agi, 50); assert.equal(playerRecoveryRate(actor), 1, 'AGI governs original formulas/order, not the extra-action recovery rule');
-  $data.actors[1].features = [{ code: 61, value: -2 }, { code: 61, value: Infinity }, { code: 61, value: 2 }];
-  assert.equal(playerRecoveryRate(actor), 2, 'each feature is a probability of at most one extra action');
+  actor.addState(2); assert.equal(combat.bonusStatus(), null, 'traits alone cannot mint a bonus before an action');
+  combat.updatePlayerAttack(0); assert.equal(combat.swing.duration, 0.32);
+  assert.equal(actor.agi, 40);
+  actor.equips = []; actor.addBuff(6, 3); assert.equal(actor.agi, 50);
+  assert.equal(combat.swing.duration, 0.32, 'AGI remains available to formulas without changing animation cadence');
 });
 
 test('speed equipment and expiring AGI effects change real damage formulas and enemy windups', t => {
@@ -76,38 +74,38 @@ test('speed equipment and expiring AGI effects change real damage formulas and e
   assert.ok(combat.windupTime({ b: actor }, { ...skill, speed: -40 }, 'melee') > normalWindup);
 });
 
-test('a fast desktop swing crosses its hit window at low frame rates, pays once and keeps guard down until recovery ends', t => {
+test('a desktop swing crosses its hit window at low frame rates, pays once and keeps guard down until recovery ends', t => {
   const e = environment(t); e.actor.addState(2); $data.states[2].features.push({ code: 61, value: 1 });
   let npcActions = 0; e.combat.swingAtNpcs = () => npcActions++;
   e.combat.updatePlayerAttack(0); e.press(false);
-  assert.ok(Math.abs(e.combat.swing.duration - 0.32 / 3) < 1e-12);
+  assert.equal(e.combat.swing.duration, 0.32);
   assert.equal(e.combat.stamina, 0.88); assert.equal(e.combat.handsBusy(), true);
-  e.combat.updatePlayerAttack(0.1);
+  G.time += 0.2; e.combat.updatePlayerAttack(0.2);
   assert.equal(e.hits.length, 1); assert.equal(npcActions, 1, 'the short active window cannot vanish between frames');
-  e.combat.updatePlayerAttack(0.1);
+  G.time += 0.2; e.combat.updatePlayerAttack(0.2);
   assert.equal(e.combat.swing, null); assert.equal(e.combat.handsBusy(), false);
   assert.equal(e.hits.length, 1); assert.equal(npcActions, 1); assert.equal(e.combat.stamina, 0.88);
 });
 
-test('recovery is sampled per action while the deliberate charge time remains unchanged', t => {
+test('the deliberate charge and active swing time remain unchanged by extra-action traits', t => {
   const e = environment(t); e.actor.addState(2); e.held(true);
   e.combat.updatePlayerAttack(0.01); assert.equal(e.combat.swing, undefined);
   G.time += 0.65; e.press(false); e.held(false); e.combat.updatePlayerAttack(0);
   assert.ok(Math.abs(e.combat.swing.charge - 0.5) < 1e-12); assert.equal(e.combat.stamina, 0.75);
-  assert.equal(e.combat.swing.duration, 0.16);
-  e.actor.removeState(2); e.combat.updatePlayerAttack(0.16); assert.equal(e.combat.swing, null);
+  assert.equal(e.combat.swing.duration, 0.32);
+  e.actor.removeState(2); G.time += 0.32; e.combat.updatePlayerAttack(0.32); assert.equal(e.combat.swing, null);
   e.press(true); e.combat.updatePlayerAttack(0);
-  assert.equal(e.combat.swing.duration, 0.32, 'removing the state changes the next action without changing an active swing mid-motion');
+  assert.equal(e.combat.swing.duration, 0.32, 'neither a state nor its removal changes the active animation');
 });
 
 for (const vr of [false, true]) test(`${vr ? 'VR' : 'PC'} ranged recovery observes cooldown and still requires a fresh attack input`, t => {
   const e = environment(t); G.vr = vr; e.actor.addState(2);
   e.combat.weapon.userData.ranged = true; e.combat.shotKind = 'gun';
   e.combat.updatePlayerAttack(0.01);
-  assert.equal(e.shots.length, 1); assert.equal(e.combat.rangedCooldown, 0.3);
+  assert.equal(e.shots.length, 1); assert.equal(e.combat.rangedCooldown, 0.6);
   assert.equal(e.combat.handsBusy(), !vr);
   e.combat.updatePlayerAttack(0.01); assert.equal(e.shots.length, 1, 'an active cooldown blocks another trigger edge');
-  e.press(false); e.combat.rangedCooldown = 0; e.combat.updatePlayerAttack(0.01);
+  e.press(false); G.time += 0.61; e.combat.rangedCooldown = 0; e.combat.updateBonusActions(0.61, false); e.combat.updatePlayerAttack(0.01);
   assert.equal(e.shots.length, 1, 'bonus actions cannot auto-fire when the player supplies no new input');
   e.press(true); e.combat.updatePlayerAttack(0.01); assert.equal(e.shots.length, 2);
 });
@@ -115,17 +113,17 @@ for (const vr of [false, true]) test(`${vr ? 'VR' : 'PC'} ranged recovery observ
 test('burst recovery keeps the original hit count and spacing rather than multiplying attacks', t => {
   const e = environment(t); e.actor.addState(2); e.combat.shotKind = 'gun'; e.combat.attackHits = () => 3;
   e.combat.fireRanged();
-  assert.ok(Math.abs(e.combat.rangedCooldown - 0.46) < 1e-12);
-  assert.ok(Math.abs(e.combat.deskActUntil - (G.time + 0.31)) < 1e-12);
+  assert.ok(Math.abs(e.combat.rangedCooldown - 0.76) < 1e-12);
+  assert.ok(Math.abs(e.combat.deskActUntil - (G.time + 0.46)) < 1e-12);
   assert.deepEqual(e.scheduled.map(s => s.ms), [80, 160]);
   e.scheduled.forEach(s => s.run()); assert.equal(e.shots.length, 3); assert.equal(e.costs.length, 0);
 });
 
-test('skill-shot recovery changes without changing payment or the skill turn cooldown', t => {
+test('skill-shot recovery stays at its base while payment and skill turn cooldown remain unchanged', t => {
   const e = environment(t); e.actor.addState(2);
   const skill = { id: 9, repeats: 3, scope: 1, mp_cost: 0, tp_cost: 0, note: '<クールタイム:3>' };
   e.combat.fireSkillShot(e.actor, skill);
-  assert.ok(Math.abs(e.combat.rangedCooldown - 0.46) < 1e-12);
+  assert.ok(Math.abs(e.combat.rangedCooldown - 0.76) < 1e-12);
   assert.equal(e.costs.length, 1); assert.equal(e.combat.skillCD[9], G.time + e.combat.coolSeconds(skill));
   e.scheduled.forEach(s => s.run()); assert.equal(e.shots.length, 3); assert.equal(e.costs.length, 1);
   e.combat.fireSkillShot(e.actor, skill); assert.equal(e.combat.rangedCooldown, 0.25); assert.equal(e.costs.length, 1);
@@ -134,9 +132,11 @@ test('skill-shot recovery changes without changing payment or the skill turn coo
 test('skill-shot bursts keep guard down through their tail while preserving the full default guard duration', t => {
   const e = environment(t), skill = { id: 9, repeats: 7, scope: 1, mp_cost: 0, tp_cost: 0, note: '' };
   e.combat.shotKind = 'gun'; e.combat.gunShotSkill = () => skill;
-  for (const [extra, expected] of [[0, 0.9], [1, 0.63], [2, 0.58]]) {
+  for (const extra of [0, 1, 2]) {
+    const expected = 0.9;
     $data.states[2].features = Array.from({ length: extra }, () => ({ code: 61, value: 1 }));
-    e.actor.addState(2); e.combat.deskActUntil = undefined; e.combat.fireRanged();
+    e.actor.addState(2); e.combat.deskActUntil = undefined; e.combat.rangedCooldown = 0;
+    e.combat.playerRecoveryUntil = e.combat.playerActiveUntil = 0; e.combat.fireRanged();
     assert.ok(Math.abs(e.combat.deskActUntil - (G.time + expected)) < 1e-12);
     G.time += 0.48; assert.equal(e.combat.handsBusy(), true, 'the last scheduled bullet cannot overlap an active guard');
     G.time += expected - 0.48 + 0.001; assert.equal(e.combat.handsBusy(), false);

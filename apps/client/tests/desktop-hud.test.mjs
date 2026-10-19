@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { paintDesktopHud } from '../src/ui/desktop-hud.js';
+import { paintDesktopHud, bonusHudStatus } from '../src/ui/desktop-hud.js';
 import { fitLabel, battlerEffects } from '../src/ui/battler-status.js';
 import { $data } from '../src/data/data.js';
 
@@ -26,7 +26,8 @@ function environment() {
   const recordOf = ctx => ctx === hud.ctx ? hud.record : status.record;
   const helpers = {
     FONT: 'GameFont', fitLabel, stripEscapes: text => String(text), textColor: index => `game-color-${index}`,
-    tr: key => ({ '플레이어': 'Player', '스태미나': 'Stamina', '전체 효과: 메뉴 → 상태': 'All effects: Menu → Status' })[key] || key,
+    tr: (key, vars = {}) => (({ '플레이어': 'Player', '스태미나': 'Stamina', '전체 효과: 메뉴 → 상태': 'All effects: Menu → Status',
+      '보너스 행동 ×{n}': 'Bonus Action ×{n}', '{s}초 남음': '{s}s left' })[key] || key).replace(/\{(\w+)\}/g, (match, name) => vars[name] ?? match),
     windowBg: (ctx, ...args) => recordOf(ctx).frames.push(args),
     drawIcon: (ctx, ...args) => recordOf(ctx).icons.push(args),
   };
@@ -165,4 +166,53 @@ test('PC battle header uses the actual selected eye strip while late or invalid 
   assert.equal(result.height, 256);
   options.leader.faceIndex = 0; options.leader.faceName = ''; paintDesktopHud(options);
   assert.equal(options.hud.record.images.length, 0, 'a blank live face name must not borrow a cached portrait');
+});
+
+test('bonus presentation hides spent/expired charges, quantizes its own clock and uses only valid original icons', () => {
+  for (const value of [null, {}, { count: 0, remaining: 2, duration: 3 }, { count: 1.5, remaining: 2, duration: 3 },
+    { count: 1, remaining: 0, duration: 3 }, { count: 1, remaining: -1, duration: 3 },
+    { count: 1, remaining: NaN, duration: 3 }, { count: 1, remaining: 2, duration: 0 }]) assert.equal(bonusHudStatus(value), null);
+  const first = bonusHudStatus({ count: 2, remaining: 2.98, duration: 3, icon: 77 });
+  const same = bonusHudStatus({ count: 2, remaining: 2.92, duration: 3, icon: 77 });
+  assert.equal(first.key, same.key); assert.equal(first.remaining, 3);
+  assert.notEqual(first.key, bonusHudStatus({ count: 1, remaining: 2.98, duration: 3, icon: 77 }).key);
+  assert.notEqual(first.key, bonusHudStatus({ count: 2, remaining: 2.89, duration: 3, icon: 77 }).key);
+  assert.equal(bonusHudStatus({ count: 2, remaining: 8, duration: 3 }).ratio, 1);
+  assert.equal(bonusHudStatus({ count: 1, remaining: 2, duration: 3, icon: -3 }, 91).icon, 91);
+  assert.equal(bonusHudStatus({ count: 1, remaining: 2, duration: 3, icon: 77 }, 91).icon, 77);
+  assert.equal(bonusHudStatus({ count: 1, remaining: 2, duration: 3, icon: NaN }, -1).icon, 0);
+});
+
+test('PC live charges add a compact original-icon row while every resource/currency position remains fixed', () => {
+  const options = environment(); paintDesktopHud(options);
+  const before = position(options.hud), effects = structuredClone(options.effects);
+  options.bonus = { count: 2, remaining: 2.4, duration: 3, icon: 77 };
+  const result = paintDesktopHud(options);
+  assert.equal(result.height, 312); assert.equal(result.statusVisible, false);
+  assert.deepEqual(position(options.hud).filter(row => row.y < 256), before);
+  assert.deepEqual(options.hud.record.icons, [[77, 24, 260, 28]]);
+  assert.ok(options.hud.record.texts.some(row => row.text === 'Bonus Action ×2' && row.y === 273));
+  assert.ok(options.hud.record.texts.some(row => row.text === '2.4s left' && row.align === 'right'));
+  const progress = options.hud.record.fills.filter(row => row.y === 294);
+  assert.equal(progress[0].w, 464); assert.ok(Math.abs(progress[1].w - 464 * 0.8) < 1e-8);
+  assert.deepEqual(options.effects, effects, 'charges are presentation, never a fabricated status effect');
+  options.bonus.remaining = 0;
+  assert.equal(paintDesktopHud(options).height, 256);
+  assert.deepEqual(position(options.hud), before); assert.deepEqual(options.hud.record.icons, []);
+});
+
+test('bonus labels fit every supported language and omit the icon slot when no original icon is available', () => {
+  for (const [label, timer] of [['보너스 행동 ×{n}', '{s}초 남음'], ['Bonus Action ×{n}', '{s}s left'],
+    ['追加行動 ×{n}', '残り{s}秒'], ['额外行动 ×{n}', '剩余 {s} 秒']]) {
+    const options = environment(); options.bonus = { count: 12, remaining: 2.4, duration: 3, icon: 0 };
+    const previous = options.helpers.tr;
+    options.helpers.tr = (key, vars) => key === '보너스 행동 ×{n}' ? label.replace('{n}', vars.n)
+      : key === '{s}초 남음' ? timer.replace('{s}', vars.s) : previous(key, vars);
+    paintDesktopHud(options);
+    const row = options.hud.record.texts.filter(text => text.y === 273);
+    assert.equal(row.length, 2); assert.equal(row[0].x, 24); assert.equal(options.hud.record.icons.length, 0);
+    assert.ok(row[0].text.includes('12'));
+    assert.ok(row[0].x + row[0].width < row[1].x - row[1].width);
+    assert.ok(row.every(text => Number.parseFloat(text.font) >= 22 && text.alpha === 1));
+  }
 });

@@ -130,7 +130,11 @@ test('enemy skill hit plans preserve seven and nine repeats plus random-target c
 });
 
 test('skill volleys preserve nine shots and keep every projectile a single hit', t => {
-  const { user, combat, flush } = environment(t); const shots = [];
+  const { user, enemy, combat, flush } = environment(t); const shots = [];
+  const camera = new THREE.PerspectiveCamera(); camera.position.set(0, 0.5, 0.5); camera.updateMatrixWorld();
+  G.three = { camera }; G.map = { mapId: 1, validW: () => true };
+  combat.allTargets = () => [enemy];
+  assert.equal(combat.readyAim().enemy, enemy, 'the skill volley starts with a real target in the camera ray');
   let charges = 0;
   user.skillCostPayable = () => true; user.skillSealed = () => false; user.skillTypeUsable = () => true;
   Object.assign(combat, { skillCooling: () => 0, actorPays: () => charges++, coolSeconds: () => 1, skillCD: {},

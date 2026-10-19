@@ -120,13 +120,58 @@ test('larger VR HUD leaves a physical gap below the wrist minimap and PC anchors
   assert.equal(ui.hud.widthM, 0.24); assert.deepEqual(ui.hud.mesh.scale.toArray(), [1, 1, 1]);
 });
 
+for (const vr of [false, true]) test(`${vr ? 'VR' : 'PC'} bonus charge row refreshes only quantized time/count/icon changes and clears on expiry`, t => {
+  const { ui, actor } = environment(t); G.vr = vr;
+  let bonus = null; G.combat.bonusStatus = () => bonus;
+  ui.drawHud(); const height = ui.hudPaintHeight, states = [...actor.states];
+  bonus = { count: 3, remaining: 3, duration: 3, icon: 77 };
+  ui.drawHud(); assert.equal(ui.hudPaintHeight, height + 56);
+  assert.ok(labels(ui).some(row => row.text === 'Bonus Action ×3'));
+  assert.ok(labels(ui).some(row => row.text === '3.0s left'));
+  let clears = ui.hud.canvas.record.clears;
+  bonus.remaining = 2.99; ui.drawHud(); assert.equal(ui.hud.canvas.record.clears, clears);
+  bonus.remaining = 2.89; ui.drawHud(); assert.equal(ui.hud.canvas.record.clears, ++clears);
+  assert.ok(labels(ui).some(row => row.text === '2.9s left'));
+  bonus.count = 2; ui.drawHud(); assert.equal(ui.hud.canvas.record.clears, ++clears);
+  assert.ok(labels(ui).some(row => row.text === 'Bonus Action ×2'));
+  G.time = 100; ui.menuOpen = true; ui.drawHud();
+  assert.equal(ui.hud.canvas.record.clears, clears, 'presentation must not run its own expiry clock while gameplay is paused');
+  assert.equal(ui.hud.mesh.visible, vr, 'desktop menu hides the resource card while the wrist remains readable');
+  bonus.icon = 0; G.combat.playerAttackSkill = () => ({ icon_index: 91 }); ui.drawHud();
+  assert.equal(ui.hud.canvas.record.clears, ++clears);
+  const iconLabel = labels(ui).find(row => row.text === 'Bonus Action ×2'); assert.ok(iconLabel.x > 24);
+  G.combat.playerAttackSkill = () => ({ icon_index: 0 }); ui.drawHud();
+  assert.equal(ui.hud.canvas.record.clears, ++clears);
+  assert.equal(labels(ui).find(row => row.text === 'Bonus Action ×2').x, 24, 'no blank or invented icon is drawn');
+  bonus = null; ui.drawHud(); assert.equal(ui.hudPaintHeight, height);
+  assert.ok(!labels(ui).some(row => /Bonus Action|s left/.test(row.text))); assert.deepEqual(actor.states, states);
+});
+
+test('full VR status pages and bonus charges fit the wrist canvas and leave the minimap clear across desktop transitions', t => {
+  const { ui, actor } = environment(t); actor.states = [2, 3, 4, 5, 6, 7, 8, 9];
+  G.combat.bonusStatus = () => ({ count: 2, remaining: 2.4, duration: 3, icon: 77 });
+  ui.attachHud(new THREE.Group()); ui.drawHud();
+  assert.equal(ui.hudPaintHeight, 568); assert.equal(ui.hud.canvas.height, 568);
+  assert.ok(labels(ui).every(row => row.y > 0 && row.y < ui.hud.canvas.height));
+  const miniBottom = ui.navigation.mini.mesh.position.y - ui.navigation.mini.heightM / 2;
+  assert.ok(Math.abs(miniBottom - ui.hud.heightM / 2 - 0.02) < 1e-8);
+  G.time = 4; ui.drawHud(); assert.ok(labels(ui).some(row => row.text === 'Effect 9'));
+  G.vr = false; ui.attachHud(null); ui.drawHud(); ui.placeRoot();
+  assert.equal(ui.hud.canvas.height, 512); assert.equal(ui.hudPaintHeight, 312);
+  ui.hud.mesh.updateWorldMatrix(true, false);
+  const y = ui.hud.heightM / 2 - ui.hud.heightM * ui.hudPaintHeight / ui.hud.canvas.height;
+  const bottom = ui.hud.mesh.localToWorld(new THREE.Vector3(0, y, 0)).project(ui.camera);
+  assert.ok(Math.abs((1 - bottom.y) * 360 - 700) < 0.1);
+});
+
 test('new HUD text is translated in every supported language', () => {
   const url = new URL('../src/ui/i18n.js', import.meta.url).href;
   for (const [lang, stamina] of [['ko', '스태미나'], ['en', 'Stamina'], ['ja', 'スタミナ'], ['zh', '耐力']]) {
-    const code = `globalThis.location={search:'?lang=${lang}'};const {tr}=await import(${JSON.stringify(url)});console.log(JSON.stringify([tr('스태미나'),tr('플레이어'),tr('전체 효과: 메뉴 → 상태')]));`;
+    const code = `globalThis.location={search:'?lang=${lang}'};const {tr}=await import(${JSON.stringify(url)});console.log(JSON.stringify([tr('스태미나'),tr('플레이어'),tr('전체 효과: 메뉴 → 상태'),tr('보너스 행동 ×{n}',{n:2}),tr('{s}초 남음',{s:'2.4'})]));`;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     const strings = JSON.parse(result.stdout); assert.equal(strings[0], stamina); assert.ok(strings.every(text => text.length));
+    assert.ok(strings[3].includes('2')); assert.ok(strings[4].includes('2.4')); assert.ok(!strings.some(text => /\{[ns]\}/.test(text)));
     if (lang !== 'ko') assert.ok(!strings.some(text => /[가-힣]/.test(text)));
   }
 });

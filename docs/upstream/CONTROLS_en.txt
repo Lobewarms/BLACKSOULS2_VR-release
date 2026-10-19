@@ -64,3 +64,14 @@ BUYING LARGER QUANTITIES
 Use +/-100 or +/-1,000 when available, or choose Max. Max selects the affordable
 amount; confirm on the first row to buy. Your bag holds up to 9,999 per item.
 Storage uses its own limits, and exchanges still require their materials.
+
+BONUS ACTION
+------------
+After a normal combat action, each Bonus Action trait rolls separately: +50% is
+a 50% chance for one charge, and +100% guarantees one. Sources can stack.
+Use your next attack or eligible combat skill within three seconds of active
+play to skip its normal recovery. Menus and dialogue pause the timer. The HUD
+shows the original source icon, charge count and time remaining.
+Costs, skill cooldowns, attack motion and burst spacing still apply. A bonus
+action cannot generate charges. Items and utility actions do not count.
+This works with PC, VR and skills used directly from the R menu.

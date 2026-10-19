@@ -16,7 +16,7 @@ import { NavigationMap } from './navigation-map.js';
 import { DungeonStatus } from './dungeon-status.js';
 import { setWindowSkin, drawGameWindow, drawGameCursor } from './window-skin.js';
 import { desktopViewport, placeDesktopRoot, anchorDesktopPanel } from './desktop-layout.js';
-import { paintDesktopHud } from './desktop-hud.js';
+import { paintDesktopHud, bonusHudStatus } from './desktop-hud.js';
 import { RewardFeed } from './reward-feed.js';
 import { paintClassicMenu } from './classic-menu.js';
 
@@ -1942,11 +1942,15 @@ export class UI {
     const page = Math.floor((G.time || 0) / 4) % pages;
     const shown = effects.slice(page * 4, page * 4 + 4), more = effects.length - shown.length;
     const stamina = G.combat?.stamina;
-    const currencyY = stamina === undefined ? 182 : 234, baseHeight = currencyY + 28;
+    const rawBonus = G.combat?.bonusStatus?.();
+    const bonus = bonusHudStatus(rawBonus, rawBonus?.count > 0 ? G.combat?.playerAttackSkill?.(leader)?.icon_index : 0);
+    const currencyY = stamina === undefined ? 182 : 234, baseHeight = currencyY + 28 + (bonus ? 56 : 0);
     const effectsTop = baseHeight + 32;
     this.hudPaintHeight = shown.length ? effectsTop + shown.length * 36 + (more ? 74 : 8) : baseHeight;
+    this.hud.resize(512, Math.max(512, this.hudPaintHeight));
+    if (this.hudFollow) this.navigation.mini.mesh.position.y = this.hud.heightM / 2 + this.navigation.mini.heightM / 2 + 0.02;
     const key = JSON.stringify(['vr', leader.name, leader.level, leader.hp, leader.mhp, leader.mp, leader.mmp,
-      G.state.party.gold, stamina?.toFixed?.(2), sen, mv, $data.system.currency_unit, effectsKey(effects), page, iconAssetRevision()]);
+      G.state.party.gold, stamina?.toFixed?.(2), sen, mv, $data.system.currency_unit, effectsKey(effects), page, bonus?.key, iconAssetRevision()]);
     if (key === this.lastHud) return;
     this.lastHud = key;
     const p = this.hud;
@@ -1990,6 +1994,16 @@ export class UI {
     const goldRoom = sen === null ? canvas.width - 48 : 292;
     write(goldText, 24, currencyY, goldRoom, 26, 'left', textColor(16));
     if (sen !== null) write(`${mv.label} ${sen}${mv.suffix || ''}`, canvas.width - 24, currencyY, canvas.width - 72 - goldRoom, 25, 'right');
+    if (bonus) {
+      const y = currencyY + 44, x = bonus.icon ? 62 : 24;
+      if (bonus.icon) drawIcon(ctx, bonus.icon, 24, y - 14, 28);
+      ctx.font = `25px ${FONT}`;
+      write(fitLabel(ctx, tr('보너스 행동 ×{n}', { n: bonus.count }), canvas.width - x - 150), x, y,
+        canvas.width - x - 150, 25, 'left', textColor(16));
+      write(tr('{s}초 남음', { s: bonus.remaining.toFixed(1) }), canvas.width - 24, y, 120, 22, 'right');
+      ctx.fillStyle = textColor(19); ctx.fillRect(24, y + 20, canvas.width - 48, 4);
+      ctx.fillStyle = textColor(21); ctx.fillRect(24, y + 20, (canvas.width - 48) * bonus.ratio, 4);
+    }
     if (shown.length) {
       write(tr('상태 효과'), 24, baseHeight + 14, 330, 24, 'left', textColor(16));
       write(`${page + 1}/${pages}`, canvas.width - 24, baseHeight + 14, 90, 24, 'right');
@@ -2019,13 +2033,16 @@ export class UI {
     const menuVar = G.scripts?.menuVar;
     const sen = menuVar && (!menuVar.switchId || G.state.sw(menuVar.switchId)) ? G.state.v(menuVar.variable) : null;
     const effects = battlerEffects(leader), stamina = G.combat?.stamina;
+    const rawBonus = G.combat?.bonusStatus?.();
+    const bonus = bonusHudStatus(rawBonus, rawBonus?.count > 0 ? G.combat?.playerAttackSkill?.(leader)?.icon_index : 0);
+    this.hud.resize(512, 512);
     const key = JSON.stringify(['pc', leader.name, leader.level, leader.hp, leader.mhp, leader.mp, leader.mmp,
       G.state.party.gold, stamina?.toFixed?.(2), sen, menuVar, $data.system.currency_unit, effectsKey(effects), iconAssetRevision(),
-      faceKey, leader.faceIndex, !!this.desktopFace]);
+      faceKey, leader.faceIndex, !!this.desktopFace, bonus?.key]);
     if (key === this.lastHud) return;
     this.lastHud = key;
     const result = paintDesktopHud({ hud: this.hud, status: this.statusPanel, leader, stamina, sen, menuVar, faceCanvas: this.desktopFace,
-      currency: { amount: G.state.party.gold, unit: $data.system.currency_unit }, effects,
+      currency: { amount: G.state.party.gold, unit: $data.system.currency_unit }, effects, bonus,
       helpers: { windowBg, drawIcon, textColor, fitLabel, stripEscapes, tr, FONT } });
     this.hudPaintHeight = result.height;
     this.desktopStatusVisible = result.statusVisible;

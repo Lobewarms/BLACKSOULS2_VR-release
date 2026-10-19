@@ -119,6 +119,7 @@ test('menu and quick casts pay once for all party recipients and repeats', t => 
   actor.mp = 100;
   assert.equal(combat.useSkillFromMenu(obj), true);
   assert.equal(actor.mp, 90); assert.equal(actor.hp, 1300); assert.equal(ally.hp, 1300);
+  G.time += 0.3; combat.updateBonusActions(0.3, false);
   assert.equal(combat.performUsable(obj, 'skill'), true);
   assert.equal(actor.mp, 80); assert.equal(actor.hp, 1600); assert.equal(ally.hp, 1600);
 });

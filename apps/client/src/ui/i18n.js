@@ -25,6 +25,8 @@ export function fmtDate(ms) { try { return new Date(ms).toLocaleString(LOCALES[c
 const ENTRIES = [
   ['플레이어', 'Player', 'プレイヤー', '玩家'],
   ['스태미나', 'Stamina', 'スタミナ', '耐力'],
+  ['보너스 행동 ×{n}', 'Bonus Action ×{n}', '追加行動 ×{n}', '额外行动 ×{n}'],
+  ['{s}초 남음', '{s}s left', '残り{s}秒', '剩余 {s} 秒'],
   ['전체 효과: 메뉴 → 상태', 'All effects: Menu → Status', '全効果: メニュー → ステータス', '全部效果：菜单 → 状态'],
   // Navigation map. Destination titles come from the installed game's translation.
   ['지도', 'Map', 'マップ', '地图'],

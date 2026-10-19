@@ -193,6 +193,11 @@ test('dagger repetitions and upgraded machine-gun traits deliver every real hit'
 
 test('a twelve-round ranged volley preserves one-hit projectile semantics and bounded queues', t => {
   const { actor, enemy, combat, flush, projectiles } = environment(t);
+  const camera = new THREE.PerspectiveCamera(); camera.position.set(0.75, 1, 1.5); camera.updateMatrixWorld();
+  G.three = { camera }; G.map = { mapId: 1, validW: () => true }; G.floorAt = () => 0;
+  enemy.hr = 0.2;
+  combat.allTargets = () => [enemy];
+  assert.equal(combat.readyAim().enemy, enemy, 'the ranged volley starts with a real target in the camera ray');
   $data.weapons[1].features.push(trait(34, 0, 9), trait(34, 0, 2));
   combat.fireRanged(); flush(); assert.equal(projectiles.length, 12);
   assert.ok(projectiles.every(p => p.one === true));

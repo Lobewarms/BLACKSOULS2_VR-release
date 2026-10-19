@@ -1,17 +1,15 @@
-BLACK SOULS II VR 0.2.38
+BLACK SOULS II VR 0.2.39
 
-Skills shortcut and immediate use
-- Press R on PC to open Skills directly. Press R again to close it.
-- E remains Examine/Talk.
-- Face a nearby visible enemy, open Skills and choose Use to cast or strike
-  immediately. No valid target means no cost. Quick slots retain manual aiming.
-- Healing, support and utility skills keep their normal requirements. Dodge and
-  manual Break retain their dedicated actions.
-
-Dialogue cleanup
-- Clear an acknowledged dialogue page when a title banner replaces it, including
-  the intro poem before arriving in the Crash Chamber.
-- Click a plain dialogue box, or point and pull the VR trigger, to advance it.
+Bonus Action charges
+- Bonus Action traits now roll for extra actions instead of passively speeding
+  up attacks. Each source rolls separately: +50% is a 50% chance for one charge;
+  +100% guarantees one. Multiple sources can award multiple charges.
+- Use the next attack or eligible combat skill within three seconds of active
+  play to skip normal action recovery. The timer pauses in menus and dialogue.
+- A small HUD indicator shows the original game icon, charges and time remaining.
+- Works with PC attacks, VR swings and skills used directly through the R menu.
+- Resource costs, skill cooldowns, active attack motion and burst spacing still
+  apply. Bonus actions cannot generate more charges; utility actions do not count.
 
 Install the update, then close and reopen the game window to load the changes.
 Your existing saves are retained. The original game is required and is not included.
