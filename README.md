@@ -17,6 +17,30 @@ Setup and controls are in the README / CONTROLS files inside the ZIP
 Run the installer, then open **BLACK SOULS II VR** from the Start menu.
 A desktop shortcut is optional during setup.
 
+## Gameplay screenshots
+
+Desktop previews from v0.2.25. These captures use a test character without a
+portrait; character stats and appearance depend on your save. Newer releases
+may look different.
+
+### First-person exploration
+
+Explore Nameless Forest near Hanover from a first-person view.
+
+![First-person exploration along a forest path near Hanover](docs/screenshots/actual-fork-0.2.25-forest.png)
+
+### HUD and area map
+
+Library Dream, with a translucent status HUD and circular minimap.
+
+![Library Dream gameplay with the translucent HUD and circular minimap](docs/screenshots/actual-fork-0.2.25-hud.png)
+
+### Familiar menus
+
+Manage items, skills and equipment through the original-style menu.
+
+![Original-style items, skills and equipment menu over the game world](docs/screenshots/actual-fork-0.2.25-menu.png)
+
 ## Gameplay video
 
 [![Watch the original BLACK SOULS II VR gameplay video](https://img.youtube.com/vi/J8WaV70g5cc/maxresdefault.jpg)](https://www.youtube.com/watch?v=J8WaV70g5cc)
