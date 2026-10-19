@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: 78b691eb5fdf8ce65e80b44398a7336e52e6d6d6 (committed source)
+# Fork: 74121ea053925347d3d9076cebc044359beae64c (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -1615,6 +1615,16 @@
    ['서약  ({name})', 'Oath  ({name})', '誓約  ({name})', '誓约  ({name})'],
    ['(서약 해제)', '(no oath)', '(誓約を解く)', '(解除誓约)'],
    ['{name} 구입', 'Buy {name}', '{name} を購入', '购买 {name}'],
+@@ -396,6 +441,9 @@
+   ['이동할 수 있는 화톳불이 없습니다', 'No bonfire to travel to', '移動できる篝火がありません', '没有可以传送的篝火'],
+   ['화톳불 전송', 'Bonfire travel', '篝火転送', '篝火传送'],
+   ['상점  (소지: {gold} {unit})', 'Shop  (you have: {gold} {unit})', 'ショップ  (所持: {gold} {unit})', '商店  (持有：{gold} {unit})'],
++  ['{name}  (소지: {gold} {unit})', '{name}  (you have: {gold} {unit})', '{name}  (所持: {gold} {unit})', '{name}  (持有：{gold} {unit})'],
++  ['교환', 'Exchange', '交換', '交换'],
++  ['구입할 수 없습니다', 'Cannot purchase', '購入できません', '无法购买'],
+   ['구입한다', 'Buy', '購入する', '购买'],
+   ['판다', 'Sell', '売却する', '出售'],
+   ['그만둔다', 'Leave', 'やめる', '离开'],
 --- upstream/app/src/input.js
 +++ fork/apps/client/src/core/input.js
 @@ -4,6 +4,8 @@
@@ -3998,7 +4008,39 @@
  import { loadRvdata } from './data.js';
  import { bytesToString } from './marshal.js';
  
-@@ -101,6 +101,126 @@
+@@ -83,6 +83,31 @@
+     .map(m => m[1].split(',').map(x => x.trim()).filter(Boolean).map(Number));
+   return rows.length >= 8 ? { variable, rows } : null;
+ }
++// EasyCompose adds item/weapon/armor requirements to ordinary shop purchases.
++// Its switch and note keyword belong to the selected game, not the port.
++function exchangeShop(src) {
++  const clean = speakerSource(src);
++  let result;
++  for (const block of clean.matchAll(/^[ \t]*module[ \t]+EasyCompose[ \t]*\n([\s\S]*?)^[ \t]*end\b/gm)) {
++    result = null;
++    const settings = new Map(), lines = block[1].split('\n').map(line => line.trim()).filter(Boolean);
++    // Conditional/runtime configuration cannot be inferred as constant data.
++    if (lines.some(line => !/^[A-Z]\w*\s*=/.test(line))) continue;
++    for (const line of lines) {
++      const assignment = /^([A-Z]\w*)\s*=\s*(.*?)\s*;?$/.exec(line);
++      if (assignment) settings.set(assignment[1], assignment[2]);
++    }
++    const string = key => {
++      const token = settings.get(key);
++      return token && new RegExp(`^${STR}$`).test(token) ? speakerString(token) : null;
++    };
++    const sid = settings.get('SID'), switchId = /^\d+$/.test(sid || '') ? Number(sid) : 0, word = string('Word');
++    if (!Number.isSafeInteger(switchId) || switchId <= 0 || !word) continue;
++    result = { switchId, word, commandName: string('Name') ?? '', materialTitle: string('Title') ?? '',
++      hideZeroPrice: settings.get('NoDraw') === 'true' };
++  }
++  return result;
++}
+ // the menu's variable window ("メニュー変数": the SEN under its title, shown unless a switch is off)
+ function menuVariable(src) {
+   const v = /Var_Num\s*=\s*(\d+)/.exec(src);
+@@ -101,6 +126,126 @@
  const MOVE_RE = new RegExp(String.raw`MOVE_LIST\s*\[\s*(\d+)\s*\]\s*=\s*\[\s*\[\s*${SQ}((?:\s*,\s*\d+)*)\s*\]\s*,\s*\[([\d\s,]*)\]\s*\]`, 'g');
  const EXPLAN_RE = new RegExp(String.raw`EXPLAN\s*\[\s*(\d+)\s*\]\s*=\s*\[\s*(${STR}(?:\s*,\s*${STR})*)\s*\]`, 'g');
  const CALL_RE = /CALL_COMMON\s*\[\s*(\d+)\s*\]\s*=\s*\[([\d,\s]*)\]/g;
@@ -4125,16 +4167,16 @@
  export function bonfireList(src) {
    const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
    const unq = (a, b) => (a ?? b ?? '').replace(/\\(.)/g, '$1');
-@@ -139,7 +259,7 @@
+@@ -139,7 +284,7 @@
  }
  // what the game's scripts set up, from their sections ([name, source] in the game's order)
  export function readScripts(entries) {
 -  const out = { names: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null };
-+  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null };
++  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null };
    const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
    // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
    // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
-@@ -150,6 +270,8 @@
+@@ -150,6 +295,8 @@
    };
    const byName = {}, byContent = {};
    for (const [name, src] of entries) {
@@ -4143,7 +4185,15 @@
      // font size / screen size: the last assignment in script order wins (comment lines skipped)
      const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
      for (const m of live.matchAll(/Font\.default_size\s*=\s*(\d+)/g)) out.fontSize = +m[1];
-@@ -165,10 +287,7 @@
+@@ -159,16 +306,15 @@
+     out.synthesis = synthesis(src) || out.synthesis;
+     out.keep = keeper(src) || out.keep;
+     out.difficulty = difficulty(src) || out.difficulty;
++    const exchange = exchangeShop(src);
++    if (exchange !== undefined) out.exchangeShop = exchange;
+     for (const k of Object.keys(want)) {
+       if (name === want[k]) (byName[k] ||= []).push(src);
+       else if (!byContent[k] && holds[k](src)) byContent[k] = src;
      }
    }
    for (const key of Object.keys(want)) for (const src of byName[key] || (byContent[key] ? [byContent[key]] : [])) {
@@ -4975,7 +5025,7 @@
  const CURTAIN_PIC = /^幕[１２３４５６７８]?$/;
 --- upstream/app/src/ui.js
 +++ fork/apps/client/src/ui/ui.js
-@@ -1,14 +1,22 @@
+@@ -1,14 +1,23 @@
 +import { bonfireShown, bonfirePickable } from '../data/scriptdata.js';
  // VR-friendly UI: message window (RPG Maker escape codes), choices, number input, HUD,
  // notifications, pause menu, shop, bonfire warp.
@@ -4990,6 +5040,7 @@
 +import { loadCanvas } from '../data/assets.js';
 +import { archivedIconCanvas, sheetForIcon } from '../data/iconfallback.js';
 +import { itemData, spiritActorId, BAG_MAX } from '../game/state.js';
++import { exchangeRequirements, exchangeMax, purchaseQuantityValid } from '../game/shop-exchange.js';
  import { quickSlots, quickSlotOf, assignQuickSlot, entryStatus } from './quickslots.js';
 -import { cleanName, NAME_LEN } from './coopnet.js';
 -import { bonfireShown, bonfirePickable } from './scriptdata.js';
@@ -5004,7 +5055,7 @@
  
  export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
  const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
-@@ -36,6 +44,23 @@
+@@ -36,6 +45,23 @@
      this.mesh.visible = false;
    }
    commit() { this.tex.needsUpdate = true; }
@@ -5028,7 +5079,7 @@
    clear() { this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
    // uv hit from a ray (VR pointer)
    hit(raycaster) {
-@@ -50,15 +75,24 @@
+@@ -50,15 +76,24 @@
    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
  }
@@ -5055,7 +5106,7 @@
  export function convertEscapes(text) {
    let t = String(text ?? '').replace(/\\/g, '\x1b').replace(/\x1b\x1b/g, '\\');
    for (let i = 0; i < 2; i++) t = t.replace(/\x1bV\[(\d+)\]/gi, (_, n) => String(G.state.v(+n)));
-@@ -94,10 +128,13 @@
+@@ -94,10 +129,13 @@
    return { text: plain, color: cm ? textColor(+cm[1]) : '#ddd' };
  }
  
@@ -5072,7 +5123,7 @@
    if (windowSkin) {
      const ctx = windowSkin.getContext('2d', { willReadFrequently: true });
      palette = [];
-@@ -108,11 +145,13 @@
+@@ -108,11 +146,13 @@
    }
  }
  export function textColor(n) { return palette[n] || '#fff'; }
@@ -5089,7 +5140,7 @@
  }
  
  // Layout converted text into drawable ops; s = canvas pixels per RM pixel, base = the game's font size
-@@ -183,25 +222,102 @@
+@@ -183,25 +223,102 @@
    }
  }
  
@@ -5198,7 +5249,7 @@
    // the title on one line - a long one (a co-op question with names in it) smaller, or on two lines at a sentence's end
    drawTitle(ctx, room) {
      const t = this.title || '';
-@@ -220,27 +336,93 @@
+@@ -220,27 +337,93 @@
      if (wide > room) ctx.font = `bold ${Math.max(18, Math.floor(30 * room / wide))}px ${FONT}`;
      ctx.fillText(a, 36, 32); ctx.fillText(b, 36, 72);
    }
@@ -5299,9 +5350,11 @@
        ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : '#f0f0f0';
        let rightW = 0;
        if (it.right) {
-@@ -250,8 +432,13 @@
+@@ -249,9 +432,15 @@
+         ctx.textAlign = 'right';
          ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : 'rgba(235,225,195,0.95)';
          ctx.fillText(it.right, canvas.width - 44, y + this.rowH / 2 - 2);
++        if (it.rightIcon) { drawIcon(ctx, it.rightIcon, canvas.width - 44 - rightW - 36, y + 6, 48); rightW += 60; }
          ctx.textAlign = 'left';
 -        ctx.font = `36px ${FONT}`;
 +        ctx.font = `${this.choiceFont || 36}px ${FONT}`;
@@ -5314,7 +5367,7 @@
        }
        let name = stripEscapes(it.text);
        const maxW = canvas.width - 44 - rightW - x;
-@@ -261,10 +448,14 @@
+@@ -261,10 +450,14 @@
        }
        ctx.fillText(name, x, y + this.rowH / 2 - 2);
      }
@@ -5330,7 +5383,7 @@
      }
      const desc = this.items[this.index]?.desc || this.footer;
      if (Array.isArray(desc)) {
-@@ -277,10 +468,27 @@
+@@ -277,10 +470,27 @@
        ctx.fillStyle = 'rgba(230,220,200,0.85)';
        ctx.fillText(stripEscapes(desc).slice(0, 60), 36, canvas.height - 30);
      }
@@ -5358,7 +5411,7 @@
      let changed = false;
      const ny = input.navY();
      // (from no row: down picks the first, up the last - 誤選択防止 1.01)
-@@ -292,17 +500,19 @@
+@@ -292,17 +502,19 @@
        let hover = -1;
        if (uv) {
          const py = (1 - uv.y) * this.panel.canvas.height;
@@ -5382,7 +5435,7 @@
      }
      if (changed) { this.draw(); G.audio?.playSystemSe(0); }
      if (input.confirm()) {
-@@ -312,7 +522,6 @@
+@@ -312,7 +524,6 @@
        else G.audio?.playSystemSe(3);
        return true;
      }
@@ -5390,7 +5443,7 @@
      return false;
    }
  }
-@@ -334,18 +543,31 @@
+@@ -334,18 +545,31 @@
      this.gridTop = 150;
      this.panel = new Panel(widthPx, this.gridTop + rows * this.cellH + 120, widthM);
      this.tabs = []; this.tab = 0; this.index = 0; this.top = 0; this.focusTabs = false;
@@ -5423,7 +5476,7 @@
    setItems(tabIndex, items) { this.tabs[tabIndex].items = items; this.index = Math.min(this.index, Math.max(0, items.length - 1)); this.draw(); }
    draw() {
      const { ctx, canvas } = this.panel;
-@@ -369,15 +591,18 @@
+@@ -369,15 +593,18 @@
      const row = Math.floor(this.index / this.cols);
      if (row < this.top) this.top = row;
      if (row >= this.top + this.rows) this.top = row - this.rows + 1;
@@ -5445,7 +5498,7 @@
        }
        drawIcon(ctx, it.icon, x + 10, y + 14, 48);
        ctx.font = `29px ${FONT}`;
-@@ -394,6 +619,7 @@
+@@ -394,6 +621,7 @@
        }
      }
      const totalRows = Math.ceil(items.length / this.cols);
@@ -5453,7 +5506,7 @@
      if (totalRows > this.rows) {
        ctx.font = `26px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.45)';
        ctx.textAlign = 'right'; ctx.fillText(`${row + 1}/${totalRows}`, canvas.width - 36, 50); ctx.textAlign = 'left';
-@@ -414,6 +640,12 @@
+@@ -414,6 +642,12 @@
    }
    update(raycaster) {
      const input = G.input;
@@ -5466,7 +5519,7 @@
      let changed = false;
      const items = this.items;
      const dx = input.navX(), dy = input.navY();
-@@ -429,18 +661,18 @@
+@@ -429,18 +663,18 @@
        const uv = this.panel.hit(raycaster);
        let hover = null;                          // 't3' = tab 3, 'c12' = cell 12
        if (uv) {
@@ -5489,7 +5542,7 @@
        }
        const apply = h => {
          if (h[0] === 't') { const t = +h.slice(1); if (t !== this.tab || !this.focusTabs) { this.tab = t; this.focusTabs = true; this.index = 0; this.top = 0; changed = true; } }
-@@ -449,17 +681,17 @@
+@@ -449,17 +683,17 @@
        // the laser moves the cursor only when it moves onto another tab / cell; the trigger picks it
        if (this.hover === undefined) this.hover = hover;   // just opened: remember, don't jump
        else if (hover !== this.hover) { this.hover = hover; if (hover) apply(hover); }
@@ -5510,7 +5563,7 @@
      return false;
    }
  }
-@@ -599,15 +831,15 @@
+@@ -599,15 +833,15 @@
        const uv = this.panel.hit(raycaster);
        let hover = null;
        if (uv) {
@@ -5528,7 +5581,7 @@
      }
      if (changed) { this.draw(); G.audio?.playSystemSe(0); }
      if (G.vr && input.xrPressed('right', 4)) { this.press(this.keysOf(this.row)[this.col]); return true; }   // A: the key picked
-@@ -622,14 +854,20 @@
+@@ -622,14 +856,20 @@
      this.scene = scene; this.camera = camera; this.rig = rig;
      this.root = new THREE.Group();          // world-space anchor in front of the user
      scene.add(this.root);
@@ -5550,7 +5603,7 @@
      this.grid = new GridPanel(1260, 3, 6, 1.2);
      this.root.add(this.grid.panel.mesh);
      this.keyboard = new KeyboardPanel();
-@@ -637,12 +875,22 @@
+@@ -637,12 +877,22 @@
      this.bannerPanel = new Panel(1600, 260, 2.2);
      this.root.add(this.bannerPanel.mesh);
      this.toastPanel = new Panel(900, 300, 0.75);
@@ -5575,7 +5628,7 @@
      this.menuOpen = false;
      this.sceneOpen = null;
      this.prompt = null;                     // (co-op) join the boss fight? - askBossJoin
-@@ -654,6 +902,9 @@
+@@ -654,6 +904,9 @@
      this.numberRange = null;
      this.consumedConfirm = false;
      this.anchorYaw = null;
@@ -5585,7 +5638,7 @@
      this.hudDirty = true;
      this.lastHud = '';
    }
-@@ -661,6 +912,24 @@
+@@ -661,6 +914,24 @@
    // ---------------------------------------------------------------- placement
    // keep UI in front of the user; re-centre when they look away
    placeRoot(force = false) {
@@ -5610,7 +5663,7 @@
      const head = new THREE.Vector3();
      this.camera.getWorldPosition(head);
      const q = new THREE.Quaternion();
-@@ -677,30 +946,107 @@
+@@ -677,30 +948,107 @@
      this.root.rotation.set(0, a, 0);
    }
  
@@ -5705,12 +5758,11 @@
 +    if (held && (held.source.executionId !== held.executionId || !held.source.running() || held.source.waitMode !== 'message')) this.hideHeldMessage();
 +  }
    sceneBusy() { return !!this.sceneOpen || this.menuOpen; }
--
--  showMessage(msg) {
 +  pointerBusy() {
 +    return this.sceneBusy() || this.messageBusy() || this.dialogueActive() || this.list.visible || this.grid.visible || this.keyboard.visible || this.choice.visible;
 +  }
-+
+ 
+-  showMessage(msg) {
 +  showMessage(msg, source = null) {
 +    this.heldMessage = null;
 +    const owner = source?.root || source;
@@ -5722,7 +5774,7 @@
      msg.reveal = 0; msg.wait = 0; msg.fast = false; msg.state = 'typing';
      msg.ops = null;
      this.placeRoot(true);
-@@ -710,13 +1056,13 @@
+@@ -710,13 +1058,13 @@
      if (msg.lines.length === 0) msg.state = 'done-typing';
    }
    speakerName(msg) {
@@ -5739,7 +5791,7 @@
    }
    // The message box keeps the original window's proportions (BLACKSOULS II: a 640 px wide window, 12 px padding,
    // a 19 px font on 24 px lines, the face 96 px with the text 112 px in): every line takes the same share of the
-@@ -734,7 +1080,9 @@
+@@ -734,7 +1082,9 @@
      const L = this.messageLayout();
      msg.ops = layoutText(msg.lines, msg.face ? L.textX : L.left, L.top, L.k, ctx, L.font, L.right);
      msg.total = msg.ops.filter(o => o.k === 'ch' || o.k === 'icon').length;
@@ -5750,7 +5802,7 @@
      if (msg.face) loadCanvas('Graphics/Faces', msg.face).then(c => { msg.faceCanvas = c; if (this.msg === msg || (this.remote === msg && msg.shown)) this.drawMessage(msg); });
    }
    drawMessage(msg = this.msg) {
-@@ -742,7 +1090,11 @@
+@@ -742,7 +1092,11 @@
      const p = this.msgPanel;
      const { ctx, canvas } = p;
      p.clear();
@@ -5763,7 +5815,7 @@
      if (msg.faceCanvas) {
        const fi = msg.faceIndex || 0, L = this.messageLayout();
        ctx.imageSmoothingEnabled = true;
-@@ -757,11 +1109,14 @@
+@@ -757,11 +1111,14 @@
      p.commit();
      // name tab
      const np = this.namePanel;
@@ -5780,7 +5832,7 @@
        np.commit();
        np.mesh.visible = this.msgPanel.mesh.visible;
      } else np.mesh.visible = false;
-@@ -772,13 +1127,28 @@
+@@ -772,13 +1129,28 @@
      const y = pos === 0 ? 0.22 : pos === 1 ? -0.05 : -0.32;
      this.msgPanel.mesh.position.set(0, y, 0);
      this.namePanel.mesh.position.set(-this.msgPanel.widthM / 2 + this.namePanel.widthM / 2 + 0.02, y + this.msgPanel.heightM / 2 + this.namePanel.heightM / 2 - 0.005, 0);
@@ -5812,7 +5864,7 @@
      this.choice.close();
      this.consumedConfirm = true;
      this.actionLockUntil = G.time + 0.25;
-@@ -803,7 +1173,7 @@
+@@ -803,7 +1175,7 @@
    updateBossPrompt(dt) {
      const p = this.prompt;
      if (!p) return;
@@ -5821,7 +5873,7 @@
      if ((p.left -= dt) <= 0) { this.closeBossPrompt(); p.answer(false); return; }
      if (!p.shown) {
        p.shown = true;
-@@ -836,7 +1206,7 @@
+@@ -836,7 +1208,7 @@
    updateRemote() {
      const r = this.remote;
      if (!r) return;
@@ -5830,7 +5882,7 @@
        if (r.shown) {
          if (!this.msg) { this.msgPanel.mesh.visible = false; this.namePanel.mesh.visible = false; }
          if (r.choiceUp && this.msg?.state !== 'choice' && !this.prompt?.shown) this.choice.close();
-@@ -854,7 +1224,7 @@
+@@ -854,7 +1226,7 @@
      if (r.reveal < r.total) { r.reveal = Math.min(r.total, r.reveal + 2); this.drawMessage(r); }
      else if (r.choices && !r.choiceUp) {
        r.choiceUp = true;
@@ -5839,7 +5891,7 @@
        this.choice.panel.mesh.visible = true;
        this.layoutPanels(r);
      }
-@@ -893,7 +1263,7 @@
+@@ -893,7 +1265,7 @@
        if (msg.choices) {
          msg.state = 'choice';
          this.choice.open('', msg.choices.map(c => ({ text: c.text, enabled: c.enabled })), {
@@ -5848,7 +5900,7 @@
            onSelect: i => { msg.onChoice?.(i); this.closeMessage(); },
            onCancel: () => { if (msg.cancelable) { msg.onChoice?.(-1); this.closeMessage(); } },
          });
-@@ -985,11 +1355,11 @@
+@@ -985,11 +1357,11 @@
      if (ray) {
        const uv = this.choice.panel.hit(ray);
        if (uv) {
@@ -5863,7 +5915,7 @@
          }
        }
      }
-@@ -1151,13 +1521,19 @@
+@@ -1151,13 +1523,19 @@
    coopMembersRow() { return { text: tr('멤버 ({n}명)', { n: G.coop.members().length }), id: 'members', desc: tr('고르면 모두의 위치를 봅니다') }; }
    showCoopMembers(index = 0) {
      const c = G.coop;
@@ -5885,7 +5937,7 @@
      });
    }
    // (the developer's world) what of this bag may be given to that one: its things (not the key items), weapons and
-@@ -1213,12 +1589,12 @@
+@@ -1213,12 +1591,12 @@
      if (kind === 'world') {
        for (const s of ((await G.listSaves?.('world')) || []).sort((a, b) => a.slot - b.slot)) {
          const m = G.saveMeta(s.meta);
@@ -5900,7 +5952,7 @@
        }
        for (const s of (await G.listRmSaves?.()) || []) items.push({ text: `${tr('원작')} ${s.label}  ${s.map}`, right: String(s.time), rm: s });
      }
-@@ -1227,7 +1603,7 @@
+@@ -1227,7 +1605,7 @@
      this.list.open(kind === 'world' ? tr('서버 세이브 불러오기') : tr('세이브 불러오기'), items, {
        onSelect: async (i, it) => {
          const st = it.rm ? G.stateOfRm(it.rm.contents, it.rm.label) : await G.loadSave(it.slot, it.kind);
@@ -5909,7 +5961,7 @@
          this.closeMenu();
          c.worldLoad(st);
        },
-@@ -1451,9 +1827,9 @@
+@@ -1451,9 +1829,9 @@
    notifyGain(kind, id, n) {
      const d = itemData(kind, id);
      if (!d) return;
@@ -5922,7 +5974,7 @@
    // SEN went up or down (BLACKSOULS II's SEN reminder, from its own script): its strip and its sound
    notifySen(delta) {
      const sen = G.scripts?.sen;
-@@ -1492,7 +1868,7 @@
+@@ -1492,7 +1870,7 @@
        ctx.globalAlpha = a;
        const y = 10 + i * 72;
        if (t.sen) { this.drawSenStrip(ctx, p.canvas.width, y, t); ctx.globalAlpha = 1; return; }
@@ -5931,7 +5983,7 @@
        let x = 24;
        if (t.icon) { drawIcon(ctx, t.icon, x, y + 8, 48); x += 60; }
        ctx.font = `34px ${FONT}`; ctx.fillStyle = t.color; ctx.textBaseline = 'middle';
-@@ -1503,66 +1879,129 @@
+@@ -1503,66 +1881,129 @@
      });
      p.commit();
      p.mesh.visible = this.toasts.length > 0;
@@ -6058,7 +6110,7 @@
 +      }
      }
      p.commit();
-   }
++  }
 +  drawDesktopHud(leader) {
 +    const faceKey = leader.faceName || '';
 +    if (this.desktopFaceKey !== faceKey) {
@@ -6082,7 +6134,7 @@
 +    this.hudPaintHeight = result.height;
 +    this.desktopStatusVisible = result.statusVisible;
 +    this.statusPanel.mesh.visible = result.statusVisible;
-+  }
+   }
  
    // ---------------------------------------------------------------- pointer
 +  unlockPointer() {
@@ -6103,7 +6155,7 @@
      const c = G.input.controllers.right;
      if (!G.vr || !c) return null;
      const m = c.ray.matrixWorld;
-@@ -1574,68 +2013,137 @@
+@@ -1574,68 +2015,137 @@
    // ---------------------------------------------------------------- menus
    openMenu() {
      if (this.menuOpen) return;
@@ -6267,7 +6319,7 @@
        case 'coop': this.showCoopMenu(); break;
        case 'turn':
          if (s.snapTurn && s.snapAngle === 30) s.snapAngle = 45;
-@@ -1650,8 +2158,42 @@
+@@ -1650,8 +2160,42 @@
        case 'diff':
          s.difficulty = s.difficulty >= 1.5 ? 0.5 : +(s.difficulty + 0.25).toFixed(2);
          G.saveSettings?.(); this.reopenMain('diff'); break;
@@ -6311,7 +6363,7 @@
      }
    }
    // an item / skill does something (effects or a damage formula)
-@@ -1779,23 +2321,27 @@
+@@ -1779,23 +2323,27 @@
    }
  
    // ---- equipment ----
@@ -6347,7 +6399,7 @@
      const P = $data.system.terms.params;
      const parts = [0, 2, 3, 4, 5, 6, 7].filter(i => after[i] !== before[i])
        .map(i => `${P[i]} ${after[i] > before[i] ? '+' : '−'}${Math.abs(after[i] - before[i])}`);
-@@ -1807,7 +2353,8 @@
+@@ -1807,7 +2355,8 @@
      this.grid.close();
      const slots = a.equips.map((e, slot) => {
        const d = itemData(e.kind, e.id);
@@ -6357,7 +6409,7 @@
      });
      this.list.open(tr('장비  ({name})', { name: a.name || '' }), slots, {
        index,
-@@ -1819,7 +2366,8 @@
+@@ -1819,7 +2368,8 @@
    // pointed at - what it changes, then what it is
    showEquipChoices(slot) {
      const a = G.state.party.leader();
@@ -6367,7 +6419,7 @@
      const party = G.state.party;
      const cands = [{ text: tr('(장비 해제)'), id: 0, desc: this.paramDelta(a, slot, kind, 0) }];
      for (const [id, n] of party.container(kind)) {
-@@ -1832,7 +2380,10 @@
+@@ -1832,7 +2382,10 @@
      this.grid.open(tr('{slot} 변경', { slot: this.slotName(slot) }), [{ label: this.slotName(slot), items: cands }], {
        tab: 0,
        onSelect: (it) => {
@@ -6379,7 +6431,7 @@
          G.combat.equipKey = null;
          G.audio?.playSystemSe(4);
          this.showEquipSlots(slot);
-@@ -1892,6 +2443,7 @@
+@@ -1892,6 +2445,7 @@
      const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
      const items = [
        { text: tr('VR 이동 속도'), id: 'vrSpeed', right: `×${s.vrSpeed ?? 2}`, desc: tr('스틱으로 걷는 속도 배율 (VR에서만)') },
@@ -6387,7 +6439,7 @@
        { text: tr('휘두르기 판정'), id: 'swing', right: SWING[s.swingLevel ?? 2], desc: tr('이 정도 세기로 휘둘러야 공격이 들어갑니다 (VR)') },
        { text: tr('이펙트 밝기'), id: 'fx', right: `${Math.round((s.fxBrightness ?? 0.5) * 100)}%`, desc: tr('번쩍임·빛·스킬 애니메이션의 밝기') },
        { text: tr('스킬 애니메이션'), id: 'anims', right: ANIMS[s.skillAnims || 'all'], desc: tr('원작 스킬·공격 애니메이션을 대상 위치에 재생합니다') },
-@@ -1909,6 +2461,7 @@
+@@ -1909,6 +2463,7 @@
        index,
        onSelect: (i, it) => {
          if (it.id === 'vrSpeed') s.vrSpeed = cycle([1, 1.5, 2, 2.5, 3], s.vrSpeed ?? 2);
@@ -6395,7 +6447,7 @@
          if (it.id === 'swing') s.swingLevel = ((s.swingLevel ?? 2) + 1) % 4;
          if (it.id === 'fx') s.fxBrightness = cycle([0.25, 0.5, 0.75, 1], s.fxBrightness ?? 0.5);
          if (it.id === 'anims') s.skillAnims = cycle(['all', 'skills', 'off'], s.skillAnims || 'all');
-@@ -1996,11 +2549,13 @@
+@@ -1996,11 +2551,13 @@
      const items = [
        { text: `${a.name || '???'}  Lv ${a.level}`, right: $data.classes[a.classId]?.name || '' },
        { text: `HP ${a.hp}/${a.mhp}`, right: `MP ${a.mp}/${a.mmp}` },
@@ -6410,7 +6462,7 @@
    }
    returnToTitle() { G.returnToTitle?.(); }
  
-@@ -2013,14 +2568,9 @@
+@@ -2013,14 +2570,9 @@
      this.toast(tr('{label}: VR판에서는 아직 지원하지 않습니다', { label }));
    }
    openBonfireWarp() {
@@ -6426,7 +6478,126 @@
      this.sceneOpen = 'bonfire';
      this.placeRoot(true);
      this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, desc: b.desc[0], enabled: bonfirePickable(b, sw) })), {
-@@ -2362,8 +2912,10 @@
+@@ -2212,9 +2764,8 @@
+   }
+   closeShop() { this.list.close(); this.sceneOpen = null; this.shopKeep = false; }
+   showShopCommand(entries, index = 0) {
+-    const P = G.state.party;
+-    this.list.open(tr('상점  (소지: {gold} {unit})', { gold: P.gold, unit: $data.system.currency_unit }), [
+-      { text: tr('구입한다'), id: 'buy' }, { text: tr('판다'), id: 'sell' }, { text: tr('그만둔다'), id: 'leave' },
++    this.list.open(this.shopTitle(entries), [
++      { text: this.shopExchange()?.commandName || tr('구입한다'), id: 'buy' }, { text: tr('판다'), id: 'sell' }, { text: tr('그만둔다'), id: 'leave' },
+     ], {
+       index,
+       onSelect: (i, it) => {
+@@ -2236,17 +2787,51 @@
+     const msg = this.shopKeep ? K.toKeep : K.toBag;
+     if (msg) this.toast(msg);
+   }
++  // EasyCompose is enabled by the authored event switch. Other shops, even ones
++  // selling these same database objects, keep their ordinary money prices.
++  shopExchange() {
++    const config = G.scripts?.exchangeShop;
++    return config && G.state.sw(config.switchId) ? config : null;
++  }
++  shopRequirements(e) { return exchangeRequirements(e.d, this.shopExchange(), itemData); }
++  shopCount(kind, id) { const P = G.state.party; return this.shopKeep ? P.keptCount(kind, id) : P.itemCount(kind, id); }
++  shopTitle(entries) {
++    const config = this.shopExchange(), P = G.state.party;
++    if (!config) return tr('상점  (소지: {gold} {unit})', { gold: P.gold, unit: $data.system.currency_unit });
++    const materials = new Map();
++    for (const e of entries) for (const m of this.shopRequirements(e).materials) materials.set(`${m.kind}:${m.id}`, m);
++    const only = materials.size === 1 && entries.every(e => e.price === 0) ? materials.values().next().value : null;
++    return tr('{name}  (소지: {gold} {unit})', { name: config.commandName || tr('교환'),
++      gold: only ? this.shopCount(only.kind, only.id) : P.gold,
++      unit: only ? stripEscapes(only.data.name) : $data.system.currency_unit });
++  }
++  shopPrice(e, n = 1) {
++    const config = this.shopExchange(), needs = this.shopRequirements(e);
++    if (!needs.valid) return { right: '—' };
++    const parts = needs.materials.map(m => `${(m.count * n).toLocaleString()} ${stripEscapes(m.data.name)}`);
++    if (e.price > 0 || !config?.hideZeroPrice) parts.push(`${(e.price * n).toLocaleString()} ${$data.system.currency_unit}`);
++    return { right: parts.join(' + '), rightIcon: needs.materials.length === 1 && parts.length === 1 ? needs.materials[0].data.icon_index : 0 };
++  }
++  shopDescription(e, n = 1) {
++    const needs = this.shopRequirements(e);
++    if (!needs.valid) return tr('구입할 수 없습니다');
++    if (!needs.materials.length) return e.d.description;
++    const label = this.shopExchange()?.materialTitle || tr('필요 소재');
++    const costs = needs.materials.map(m => `${(m.count * n).toLocaleString()}/${this.shopCount(m.kind, m.id).toLocaleString()} ${stripEscapes(m.data.name)}`);
++    return `${label.replace(/[:：]\s*$/, '')}: ${costs.join(' + ')} · ${stripEscapes(e.d.description || '')}`;
++  }
+   showShopBuy(entries, back) {
+     let at = 0;
+     const K = G.scripts?.keep, P = G.state.party;
+     const canKeep = this.shopCanKeep();
+     const draw = () => {
+-      const rows = entries.map(e => ({
+-        text: e.d.name, icon: e.d.icon_index, enabled: this.shopMaxBuy(e) > 0, desc: e.d.description,
+-        right: `${e.price} ${$data.system.currency_unit}  [${this.shopKeep ? `${K.keepLabel || tr('창고')} ${P.keptCount(e.kind, e.d.id)}` : P.itemCount(e.kind, e.d.id)}]`,
+-      }));
++      const rows = entries.map(e => {
++        const price = this.shopPrice(e);
++        return { text: e.d.name, icon: e.d.icon_index, enabled: this.shopMaxBuy(e) > 0, desc: this.shopDescription(e), ...price,
++          right: `${price.right}  [${this.shopKeep ? `${K.keepLabel || tr('창고')} ${P.keptCount(e.kind, e.d.id)}` : P.itemCount(e.kind, e.d.id)}]` };
++      });
+       if (canKeep) rows.unshift({ text: this.shopKeep ? tr('산 물건 → 창고') : tr('산 물건 → 소지품'), toggle: true, desc: tr('A/트리거: 산 물건을 넣을 곳 바꾸기') });
+-      this.list.open(tr('상점  (소지: {gold} {unit})', { gold: P.gold, unit: $data.system.currency_unit }), rows, {
++      this.list.open(this.shopTitle(entries), rows, {
+       index: at,
+       onSelect: (i, it) => {
+         at = i;
+@@ -2327,30 +2912,43 @@
+     const P = G.state.party;
+     // (the storage mode: what the storage still takes; nothing it may not keep)
+     const left = this.shopKeep ? (P.keepSealed(e.kind, e.d.id) ? 0 : P.keepLimit(e.kind, e.d.id) - P.keptCount(e.kind, e.d.id)) : BAG_MAX - P.itemCount(e.kind, e.d.id);
+-    return Math.max(0, Math.min(99, left, e.price > 0 ? Math.floor(P.gold / e.price) : 99));
++    if (!Number.isSafeInteger(e.price) || e.price < 0) return 0;
++    return Math.max(0, Math.min(99, left, e.price > 0 ? Math.floor(P.gold / e.price) : 99,
++      exchangeMax(this.shopRequirements(e), (kind, id) => this.shopCount(kind, id))));
+   }
+   shopBuy(e, n) {
++    // Quantity dialogs can outlive an inventory change. Validate the complete
++    // transaction again before charging anything or granting the selected goods.
++    if (!purchaseQuantityValid(n, this.shopMaxBuy(e))) { G.audio?.playSystemSe(3); return false; }
+     const P = G.state.party;
++    for (const m of this.shopRequirements(e).materials) {
++      if (this.shopKeep) {
++        const left = P.keptCount(m.kind, m.id) - m.count * n;
++        if (left) P.kept[m.kind].set(m.id, left); else P.kept[m.kind].delete(m.id);
++      } else P.gainItem(m.kind, m.id, -m.count * n);
++    }
+     P.gainGold(-e.price * n);
+     if (this.shopKeep) P.kept[e.kind].set(e.d.id, P.keptCount(e.kind, e.d.id) + n);
+     else P.gainItem(e.kind, e.d.id, n);
++    if (this.shopKeep) G.map?.requestRefresh?.();
+     G.audio?.playSystemSe(21);
++    return true;
+   }
+   // how many to buy: stick left / right (PC ←→) one at a time, or the rows (+1, +10, -1, -10, all); the first
+   // row buys them
+   showShopQuantity(e, back, n = 1, index = 0) {
+-    const max = this.shopMaxBuy(e), unit = $data.system.currency_unit;
++    const max = this.shopMaxBuy(e);
+     n = Math.max(1, Math.min(max, n));
+     const items = [
+-      { text: tr('◀  {n}개  ▶  구입', { n }), right: `${(e.price * n).toLocaleString()} ${unit}`, step: 0,
+-        desc: tr('스틱 좌우(PC ←→)로 1개씩 · A/트리거로 구입 · B 취소') },
++      { text: tr('◀  {n}개  ▶  구입', { n }), ...this.shopPrice(e, n), enabled: max > 0, step: 0,
++        desc: this.shopExchange() ? this.shopDescription(e, n) : tr('스틱 좌우(PC ←→)로 1개씩 · A/트리거로 구입 · B 취소') },
+       { text: '+1', step: 1 }, { text: '+10', step: 10 }, { text: '−1', step: -1 }, { text: '−10', step: -10 },
+-      { text: tr('최대 ({n}개)', { n: max }), right: `${(e.price * max).toLocaleString()} ${unit}`, step: 'max' },
++      { text: tr('최대 ({n}개)', { n: max }), ...this.shopPrice(e, max), step: 'max' },
+     ];
+     this.list.open(tr('{name} 구입', { name: stripEscapes(e.d.name) }), items, {
+       index,
+       onSelect: (i, it) => {
+-        if (it.step === 0) { if (n <= this.shopMaxBuy(e)) this.shopBuy(e, n); back(); return; }
++        if (it.step === 0) { this.shopBuy(e, n); back(); return; }
+         this.showShopQuantity(e, back, it.step === 'max' ? max : n + it.step, i);
+       },
+       onAdjust: dx => { this.showShopQuantity(e, back, n + dx, this.list.index); return true; },
+@@ -2362,8 +2960,10 @@
    update(dt) {
      this.consumedConfirm = false;
      this.pointerTarget = false;
@@ -6438,7 +6609,7 @@
      if (anyPanel) this.placeRoot();
      if (this.banner) {
        this.banner.t += dt;
-@@ -2376,13 +2928,16 @@
+@@ -2376,13 +2976,16 @@
      }
      if (this.msg) this.updateMessage();
      else if (this.menuOpen || this.sceneOpen) {
@@ -6459,7 +6630,7 @@
      }
      this.updateBossPrompt(dt);
      this.updateRemote();
-@@ -2393,7 +2948,19 @@
+@@ -2393,7 +2996,19 @@
        if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
      }
      this.drawHud();
@@ -7346,6 +7517,53 @@
 +  const mapId = entry => entry.contents?.get('map')?.map_id;
 +  await loadMapNames(entries.map(mapId).filter(id => Number.isInteger(id) && id > 0));
 +  return entries.map(entry => entry.contents ? { ...entry, map: destinationName(mapId(entry)) } : entry);
++}
+--- /dev/null
++++ fork/apps/client/src/game/shop-exchange.js
+@@ -0,0 +1,44 @@
++const KINDS = ['item', 'weapon', 'armor'];
++const positiveInteger = value => Number.isSafeInteger(value) && value > 0;
++
++// EasyCompose's note prices are separate from a shop's gold price. Resolve only
++// existing database materials; the caller chooses the active inventory container.
++export function exchangeRequirements(item, config, lookup) {
++  if (!config || config.active === false) return { materials: [], valid: true };
++  if (typeof config.word !== 'string' || !config.word) return { materials: [], valid: false };
++  const word = config.word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
++  const tag = new RegExp(`<${word}[:：]([^>]*)>`);
++  const materials = new Map();
++  let valid = true;
++  for (const line of String(item?.note || '').split(/\r?\n/)) {
++    // The original reads only the first matching tag on each note line.
++    const match = tag.exec(line);
++    if (!match) continue;
++    const fields = match[1].split(',').map(value => value.trim());
++    if (!/^[012]$/.test(fields[0]) || !/^\d+$/.test(fields[1] || '')) continue;
++    const kind = KINDS[Number(fields[0])], id = Number(fields[1]);
++    if (!positiveInteger(id)) continue;
++    const data = lookup(kind, id);
++    if (!data) continue;
++    const raw = fields[2], count = raw === undefined ? 1 : /^\d+$/.test(raw) ? Number(raw) : NaN;
++    if (!positiveInteger(count)) { valid = false; continue; }
++    materials.set(`${kind}:${id}`, { kind, id, count, data });
++  }
++  return { materials: [...materials.values()], valid };
++}
++
++export function exchangeMax(requirements, countFn) {
++  if (!requirements?.valid || !Array.isArray(requirements.materials)) return 0;
++  let max = Infinity;
++  for (const material of requirements.materials) {
++    if (!positiveInteger(material.count)) return 0;
++    const owned = countFn(material.kind, material.id);
++    if (!Number.isSafeInteger(owned) || owned < 0) return 0;
++    max = Math.min(max, Math.floor(owned / material.count));
++  }
++  return max;
++}
++
++export function purchaseQuantityValid(n, max) {
++  return positiveInteger(n) && typeof max === 'number' && n <= max;
 +}
 --- /dev/null
 +++ fork/apps/client/src/game/steam-achievements.js

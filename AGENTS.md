@@ -1722,3 +1722,8 @@ Local verification passed648 JavaScript regressions, ESLint, Ruff, production
 build,8 packaging tests and7 Python protocol tests. These checks verify the
 exchange logic and metadata; they do not claim a complete story or physical
 headset playthrough. Existing inventory is not retroactively edited.
+
+The public literal runtime comparison now uses commit74121ea (0.2.28):48 original
+modules retained,17 unchanged after import moves,31 modified,36 new,0 missing;
+2800 added/685 removed lines in modified originals after import normalization.
+The six actual comparison images remain explicitly labelled0.2.25.
