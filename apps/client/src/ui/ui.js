@@ -8,6 +8,7 @@ import { $data, destinationName, loadMapNames } from '../data/data.js';
 import { loadCanvas } from '../data/assets.js';
 import { archivedIconCanvas, sheetForIcon } from '../data/iconfallback.js';
 import { itemData, spiritActorId, BAG_MAX } from '../game/state.js';
+import { exchangeRequirements, exchangeMax, purchaseQuantityValid } from '../game/shop-exchange.js';
 import { quickSlots, quickSlotOf, assignQuickSlot, entryStatus } from './quickslots.js';
 import { cleanName, NAME_LEN } from '../network/coopnet.js';
 import { battlerEffects, effectsKey, fitLabel } from './battler-status.js';
@@ -431,6 +432,7 @@ class ListPanel {
         ctx.textAlign = 'right';
         ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : 'rgba(235,225,195,0.95)';
         ctx.fillText(it.right, canvas.width - 44, y + this.rowH / 2 - 2);
+        if (it.rightIcon) { drawIcon(ctx, it.rightIcon, canvas.width - 44 - rightW - 36, y + 6, 48); rightW += 60; }
         ctx.textAlign = 'left';
         ctx.font = `${this.choiceFont || 36}px ${FONT}`;
         ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : '#f0f0f0';
@@ -2762,9 +2764,8 @@ export class UI {
   }
   closeShop() { this.list.close(); this.sceneOpen = null; this.shopKeep = false; }
   showShopCommand(entries, index = 0) {
-    const P = G.state.party;
-    this.list.open(tr('상점  (소지: {gold} {unit})', { gold: P.gold, unit: $data.system.currency_unit }), [
-      { text: tr('구입한다'), id: 'buy' }, { text: tr('판다'), id: 'sell' }, { text: tr('그만둔다'), id: 'leave' },
+    this.list.open(this.shopTitle(entries), [
+      { text: this.shopExchange()?.commandName || tr('구입한다'), id: 'buy' }, { text: tr('판다'), id: 'sell' }, { text: tr('그만둔다'), id: 'leave' },
     ], {
       index,
       onSelect: (i, it) => {
@@ -2786,17 +2787,51 @@ export class UI {
     const msg = this.shopKeep ? K.toKeep : K.toBag;
     if (msg) this.toast(msg);
   }
+  // EasyCompose is enabled by the authored event switch. Other shops, even ones
+  // selling these same database objects, keep their ordinary money prices.
+  shopExchange() {
+    const config = G.scripts?.exchangeShop;
+    return config && G.state.sw(config.switchId) ? config : null;
+  }
+  shopRequirements(e) { return exchangeRequirements(e.d, this.shopExchange(), itemData); }
+  shopCount(kind, id) { const P = G.state.party; return this.shopKeep ? P.keptCount(kind, id) : P.itemCount(kind, id); }
+  shopTitle(entries) {
+    const config = this.shopExchange(), P = G.state.party;
+    if (!config) return tr('상점  (소지: {gold} {unit})', { gold: P.gold, unit: $data.system.currency_unit });
+    const materials = new Map();
+    for (const e of entries) for (const m of this.shopRequirements(e).materials) materials.set(`${m.kind}:${m.id}`, m);
+    const only = materials.size === 1 && entries.every(e => e.price === 0) ? materials.values().next().value : null;
+    return tr('{name}  (소지: {gold} {unit})', { name: config.commandName || tr('교환'),
+      gold: only ? this.shopCount(only.kind, only.id) : P.gold,
+      unit: only ? stripEscapes(only.data.name) : $data.system.currency_unit });
+  }
+  shopPrice(e, n = 1) {
+    const config = this.shopExchange(), needs = this.shopRequirements(e);
+    if (!needs.valid) return { right: '—' };
+    const parts = needs.materials.map(m => `${(m.count * n).toLocaleString()} ${stripEscapes(m.data.name)}`);
+    if (e.price > 0 || !config?.hideZeroPrice) parts.push(`${(e.price * n).toLocaleString()} ${$data.system.currency_unit}`);
+    return { right: parts.join(' + '), rightIcon: needs.materials.length === 1 && parts.length === 1 ? needs.materials[0].data.icon_index : 0 };
+  }
+  shopDescription(e, n = 1) {
+    const needs = this.shopRequirements(e);
+    if (!needs.valid) return tr('구입할 수 없습니다');
+    if (!needs.materials.length) return e.d.description;
+    const label = this.shopExchange()?.materialTitle || tr('필요 소재');
+    const costs = needs.materials.map(m => `${(m.count * n).toLocaleString()}/${this.shopCount(m.kind, m.id).toLocaleString()} ${stripEscapes(m.data.name)}`);
+    return `${label.replace(/[:：]\s*$/, '')}: ${costs.join(' + ')} · ${stripEscapes(e.d.description || '')}`;
+  }
   showShopBuy(entries, back) {
     let at = 0;
     const K = G.scripts?.keep, P = G.state.party;
     const canKeep = this.shopCanKeep();
     const draw = () => {
-      const rows = entries.map(e => ({
-        text: e.d.name, icon: e.d.icon_index, enabled: this.shopMaxBuy(e) > 0, desc: e.d.description,
-        right: `${e.price} ${$data.system.currency_unit}  [${this.shopKeep ? `${K.keepLabel || tr('창고')} ${P.keptCount(e.kind, e.d.id)}` : P.itemCount(e.kind, e.d.id)}]`,
-      }));
+      const rows = entries.map(e => {
+        const price = this.shopPrice(e);
+        return { text: e.d.name, icon: e.d.icon_index, enabled: this.shopMaxBuy(e) > 0, desc: this.shopDescription(e), ...price,
+          right: `${price.right}  [${this.shopKeep ? `${K.keepLabel || tr('창고')} ${P.keptCount(e.kind, e.d.id)}` : P.itemCount(e.kind, e.d.id)}]` };
+      });
       if (canKeep) rows.unshift({ text: this.shopKeep ? tr('산 물건 → 창고') : tr('산 물건 → 소지품'), toggle: true, desc: tr('A/트리거: 산 물건을 넣을 곳 바꾸기') });
-      this.list.open(tr('상점  (소지: {gold} {unit})', { gold: P.gold, unit: $data.system.currency_unit }), rows, {
+      this.list.open(this.shopTitle(entries), rows, {
       index: at,
       onSelect: (i, it) => {
         at = i;
@@ -2877,30 +2912,43 @@ export class UI {
     const P = G.state.party;
     // (the storage mode: what the storage still takes; nothing it may not keep)
     const left = this.shopKeep ? (P.keepSealed(e.kind, e.d.id) ? 0 : P.keepLimit(e.kind, e.d.id) - P.keptCount(e.kind, e.d.id)) : BAG_MAX - P.itemCount(e.kind, e.d.id);
-    return Math.max(0, Math.min(99, left, e.price > 0 ? Math.floor(P.gold / e.price) : 99));
+    if (!Number.isSafeInteger(e.price) || e.price < 0) return 0;
+    return Math.max(0, Math.min(99, left, e.price > 0 ? Math.floor(P.gold / e.price) : 99,
+      exchangeMax(this.shopRequirements(e), (kind, id) => this.shopCount(kind, id))));
   }
   shopBuy(e, n) {
+    // Quantity dialogs can outlive an inventory change. Validate the complete
+    // transaction again before charging anything or granting the selected goods.
+    if (!purchaseQuantityValid(n, this.shopMaxBuy(e))) { G.audio?.playSystemSe(3); return false; }
     const P = G.state.party;
+    for (const m of this.shopRequirements(e).materials) {
+      if (this.shopKeep) {
+        const left = P.keptCount(m.kind, m.id) - m.count * n;
+        if (left) P.kept[m.kind].set(m.id, left); else P.kept[m.kind].delete(m.id);
+      } else P.gainItem(m.kind, m.id, -m.count * n);
+    }
     P.gainGold(-e.price * n);
     if (this.shopKeep) P.kept[e.kind].set(e.d.id, P.keptCount(e.kind, e.d.id) + n);
     else P.gainItem(e.kind, e.d.id, n);
+    if (this.shopKeep) G.map?.requestRefresh?.();
     G.audio?.playSystemSe(21);
+    return true;
   }
   // how many to buy: stick left / right (PC ←→) one at a time, or the rows (+1, +10, -1, -10, all); the first
   // row buys them
   showShopQuantity(e, back, n = 1, index = 0) {
-    const max = this.shopMaxBuy(e), unit = $data.system.currency_unit;
+    const max = this.shopMaxBuy(e);
     n = Math.max(1, Math.min(max, n));
     const items = [
-      { text: tr('◀  {n}개  ▶  구입', { n }), right: `${(e.price * n).toLocaleString()} ${unit}`, step: 0,
-        desc: tr('스틱 좌우(PC ←→)로 1개씩 · A/트리거로 구입 · B 취소') },
+      { text: tr('◀  {n}개  ▶  구입', { n }), ...this.shopPrice(e, n), enabled: max > 0, step: 0,
+        desc: this.shopExchange() ? this.shopDescription(e, n) : tr('스틱 좌우(PC ←→)로 1개씩 · A/트리거로 구입 · B 취소') },
       { text: '+1', step: 1 }, { text: '+10', step: 10 }, { text: '−1', step: -1 }, { text: '−10', step: -10 },
-      { text: tr('최대 ({n}개)', { n: max }), right: `${(e.price * max).toLocaleString()} ${unit}`, step: 'max' },
+      { text: tr('최대 ({n}개)', { n: max }), ...this.shopPrice(e, max), step: 'max' },
     ];
     this.list.open(tr('{name} 구입', { name: stripEscapes(e.d.name) }), items, {
       index,
       onSelect: (i, it) => {
-        if (it.step === 0) { if (n <= this.shopMaxBuy(e)) this.shopBuy(e, n); back(); return; }
+        if (it.step === 0) { this.shopBuy(e, n); back(); return; }
         this.showShopQuantity(e, back, it.step === 'max' ? max : n + it.step, i);
       },
       onAdjust: dx => { this.showShopQuantity(e, back, n + dx, this.list.index); return true; },

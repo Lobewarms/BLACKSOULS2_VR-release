@@ -83,6 +83,31 @@ function difficulty(src) {
     .map(m => m[1].split(',').map(x => x.trim()).filter(Boolean).map(Number));
   return rows.length >= 8 ? { variable, rows } : null;
 }
+// EasyCompose adds item/weapon/armor requirements to ordinary shop purchases.
+// Its switch and note keyword belong to the selected game, not the port.
+function exchangeShop(src) {
+  const clean = speakerSource(src);
+  let result;
+  for (const block of clean.matchAll(/^[ \t]*module[ \t]+EasyCompose[ \t]*\n([\s\S]*?)^[ \t]*end\b/gm)) {
+    result = null;
+    const settings = new Map(), lines = block[1].split('\n').map(line => line.trim()).filter(Boolean);
+    // Conditional/runtime configuration cannot be inferred as constant data.
+    if (lines.some(line => !/^[A-Z]\w*\s*=/.test(line))) continue;
+    for (const line of lines) {
+      const assignment = /^([A-Z]\w*)\s*=\s*(.*?)\s*;?$/.exec(line);
+      if (assignment) settings.set(assignment[1], assignment[2]);
+    }
+    const string = key => {
+      const token = settings.get(key);
+      return token && new RegExp(`^${STR}$`).test(token) ? speakerString(token) : null;
+    };
+    const sid = settings.get('SID'), switchId = /^\d+$/.test(sid || '') ? Number(sid) : 0, word = string('Word');
+    if (!Number.isSafeInteger(switchId) || switchId <= 0 || !word) continue;
+    result = { switchId, word, commandName: string('Name') ?? '', materialTitle: string('Title') ?? '',
+      hideZeroPrice: settings.get('NoDraw') === 'true' };
+  }
+  return result;
+}
 // the menu's variable window ("メニュー変数": the SEN under its title, shown unless a switch is off)
 function menuVariable(src) {
   const v = /Var_Num\s*=\s*(\d+)/.exec(src);
@@ -259,7 +284,7 @@ export async function loadScriptData() {
 }
 // what the game's scripts set up, from their sections ([name, source] in the game's order)
 export function readScripts(entries) {
-  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null };
+  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null };
   const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
   // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
   // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
@@ -281,6 +306,8 @@ export function readScripts(entries) {
     out.synthesis = synthesis(src) || out.synthesis;
     out.keep = keeper(src) || out.keep;
     out.difficulty = difficulty(src) || out.difficulty;
+    const exchange = exchangeShop(src);
+    if (exchange !== undefined) out.exchangeShop = exchange;
     for (const k of Object.keys(want)) {
       if (name === want[k]) (byName[k] ||= []).push(src);
       else if (!byContent[k] && holds[k](src)) byContent[k] = src;

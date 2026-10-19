@@ -1,28 +1,10 @@
-BLACK SOULS II VR - 0.2.27
+BLACK SOULS II VR 0.2.28
 
-GET STARTED
-Run the Windows setup EXE, then open BLACK SOULS II VR from the Start menu.
-The app looks for your game automatically. Confirm the folder and click Launch.
-If it cannot find your game, click Browse to choose it.
-For VR, connect your headset to the PC first, then click ENTER VR in the game window.
+White Crow exchange
+- Show the original Candy costs, Candy icon and available balance instead of misleading zero-Souls prices.
+- Require and consume the correct Candy amount for every purchase and quantity.
+- Storage mode uses stored Candy and puts purchases in storage, as in the original game.
+- Check balances again before confirming a purchase. Canceling does not spend anything.
 
-WHAT'S NEW
-- NPC nameplates now use the translations in your installed game, including
-  Ghost Receptionist and other names previously left in Japanese.
-- Translated names remain visible when switching PC/VR layouts or resizing.
-- Area labels, original-save lists and co-op locations use game display names
-  instead of internal map editor labels.
-- The launcher, setup and player guides use the BLACK SOULS II VR project name.
-
-The natural area colours, VR/desktop switching, terrain, Steam achievements,
-clock-tower blinding, scenery, dialogue, event choices, picture cleanup and
-gameplay fixes from previous updates are included.
-
-Close the game and previous launcher before installing, then reopen BLACK SOULS II VR
-from the Start menu.
-
-VR mod by Lobewarms.
-
-You need your own copy of BLACK SOULS II; no original game files are included.
-Free distribution only, under the original LICENSE. Third-party license notices
-are included with the application.
+Install the update, then close and reopen the game window to load the changes.
+Your existing saves are retained. The original game is required and is not included.

@@ -1676,3 +1676,49 @@ The public literal runtime comparison now uses commit78b691e (0.2.27):48 origina
 modules retained,17 unchanged after import moves,31 modified,35 new,0 missing;
 2708 added/671 removed lines in modified originals after import normalization.
 The six actual comparison images remain explicitly labelled0.2.25.
+
+
+## Original material exchanges (0.2.28)
+
+White Crow's original Map152/event35 enables EasyCompose, opens its purchase-only
+shop, and resets that switch when the shop closes. Its 21 offers have zero money
+prices and item-material requirements. The port previously ignored those notes,
+so it displayed zero Souls and granted purchases without paying the material.
+
+Read the original EasyCompose module's SID, Word, Name, Title and NoDraw literals
+without executing Ruby. Gate material prices with that authored switch; do not
+hardcode the NPC, map, switch or Candy ID into production code. Preserve first
+matching tag per note line and last assignment for a repeated kind/ID. Support
+item, weapon and armor materials, omitted count1 and both colon forms; unknown
+kinds or absent database entries are skipped like the original. Malformed
+nonpositive or unsafe material counts block purchases rather than granting goods.
+
+A private read-only audit using real readScripts and exchangeRequirements matched
+all22 tagged database objects and all21 White Crow offers, with zero cost errors.
+The installed exchange uses Candy (item49/icon340): Rabbit Key5, Ore Slab10,
+Mysterious Shard5 and Goddess' Blood1. No original databases, script bodies,
+dialogue, artwork or raw audit reports are tracked or distributed.
+
+Show actual material names/icons, owned balance, per-unit and quantity totals.
+Respect NoDraw for all zero-money labels while retaining positive money costs.
+Clamp purchases by selected inventory capacity, money and every material. Keep
+the existing port's BAG_MAX and99-per-transaction limit; do not alter old saves.
+Revalidate a positive integer quantity against all current balances before any
+payment or reward. Deduct materials once, then money, then grant purchased goods.
+
+The original storage script aliases Game_Party.item_container, item_number and
+max_item_number while its shop mode is active. Both material payment and received
+goods therefore use storage in that mode; ordinary mode uses the bag. Equipped
+materials are excluded. Respect storage sealing and limits, reset mode on shop
+close, and refresh dependent events after stored transactions. Selling retains
+its existing half-price money behavior and does not refund exchange materials.
+
+Public regressions use neutral synthetic records and the real UI/GameState/
+Interpreter paths for switch activation, scene wait/cancel, quantity selection,
+insufficient materials despite ample money, stored materials, mixed material kinds,
+combined money/material payment, stale confirmations and ordinary-shop behavior.
+
+Local verification passed648 JavaScript regressions, ESLint, Ruff, production
+build,8 packaging tests and7 Python protocol tests. These checks verify the
+exchange logic and metadata; they do not claim a complete story or physical
+headset playthrough. Existing inventory is not retroactively edited.
