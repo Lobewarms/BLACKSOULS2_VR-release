@@ -2013,3 +2013,29 @@ The literal source comparison now uses runtime32bd81b (0.2.33):48 original
 modules retained,15 unchanged after import moves,33 modified,41 new,0 missing;
 3,413 added/827 removed lines in modified originals after import normalization.
 Actual comparison images remain labelled0.2.25.
+
+## Initialized portrait and combat README previews (0.2.33)
+
+The main README gallery now uses four current standalone captures rather than
+the old direct-map placeholder actor. The production bundle is from runtime
+32bd81b, with actual initialized actor8, level54, face073b/index0 from a private
+save read into an isolated preview. All four captures verified desktopFace;
+the menu also verified menuFace. Preserve the v0.2.25 paired upstream images
+and their placeholder-portrait caveat; these are separate new gameplay samples.
+
+Combat preview: Map31, original event37 encounter and Fungi from Yuggoth106.
+Owned Fairy Powder24 was used through useQuickEntry/updateReady/fireReady;
+the real projectile and native item effect applied Sleep6 (original icon22).
+Automatic pause on a real enemy state retained the result for camera framing.
+The final native enemies have4200HP, one states[6] and one states[], with the
+normal name/health/status labels and selected player portrait visible. No
+enemy state, HP, portrait texture or HUD label was fabricated for the image.
+
+The private capture controls stage camera/map/actions, pause, and synchronously
+copy the freshly rendered canvas before awaiting network writes. Only the
+selected application PNGs enter docs/screenshots. The localhost preview blocks
+all API writes, holds selected saves in memory, and uses dev launches so no
+player save or Steam award is written. Original artwork/databases/saves, private
+metadata and controls remain outside Git. Forest is1280x720; other captures
+are1022x1004 from the normal browser viewport, without image edits. These are
+desktop previews, not a physical-headset playtest or new runtime release.

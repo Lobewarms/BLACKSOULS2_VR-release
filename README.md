@@ -19,27 +19,33 @@ A desktop shortcut is optional during setup.
 
 ## Gameplay screenshots
 
-Desktop previews from v0.2.25. These captures use a test character without a
-portrait; character stats and appearance depend on your save. Newer releases
-may look different.
+Actual desktop captures from v0.2.33, with an initialized character and player
+portrait. Character stats and appearance depend on your save.
 
 ### First-person exploration
 
 Explore Nameless Forest near Hanover from a first-person view.
 
-![First-person exploration along a forest path near Hanover](docs/screenshots/actual-fork-0.2.25-forest.png)
+![First-person exploration near Hanover with the player portrait visible in the HUD](docs/screenshots/gameplay-0.2.33-forest.png)
 
 ### HUD and area map
 
 Library Dream, with a translucent status HUD and circular minimap.
 
-![Library Dream gameplay with the translucent HUD and circular minimap](docs/screenshots/actual-fork-0.2.25-hud.png)
+![Library Dream gameplay with the player portrait, translucent HUD and circular minimap](docs/screenshots/gameplay-0.2.33-hud.png)
+
+### Combat and status effects
+
+Facing Fungi from Yuggoth in Carroll River. Fairy Powder puts an enemy to Sleep;
+the game's status icon appears beneath its health bar.
+
+![Combat in Carroll River with enemy names, health bars, the Sleep status icon and the player portrait](docs/screenshots/gameplay-0.2.33-combat.png)
 
 ### Familiar menus
 
 Manage items, skills and equipment through the original-style menu.
 
-![Original-style items, skills and equipment menu over the game world](docs/screenshots/actual-fork-0.2.25-menu.png)
+![Original-style menu showing the full player portrait, items, skills and equipment](docs/screenshots/gameplay-0.2.33-menu.png)
 
 ## Gameplay video
 

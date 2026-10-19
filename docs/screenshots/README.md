@@ -1,5 +1,31 @@
 # Actual upstream versus community version
 
+## Current gameplay previews (v0.2.33)
+
+The main README uses these newer standalone gameplay captures. They use the
+v0.2.33 production renderer at runtime commit
+32bd81b1dd6d81416a0f2858dbd78a8f0edac82b with an initialized level54 character,
+including its selected original-game portrait. They replace the placeholder
+character screenshots in the main README; the paired v0.2.25 comparisons below
+retain their original capture state and labels.
+
+- [Forest exploration with player portrait](gameplay-0.2.33-forest.png)
+- [Library Dream HUD and minimap](gameplay-0.2.33-hud.png)
+- [Carroll River combat and Sleep](gameplay-0.2.33-combat.png)
+- [Original-style menu with full portrait](gameplay-0.2.33-menu.png)
+
+These examples were staged in an isolated session reading an initialized save.
+Private controls position the camera, change areas, invoke owned actions and
+pause for capture; the production renderer, lighting, materials and HUD drawing
+remain unchanged. The combat example uses owned Fairy Powder through the normal
+quick-item/projectile path, applying the original Sleep state to a real enemy.
+Enemy health, names and status icons are game-rendered, not image overlays.
+The forest capture is1280x720; the other captures are1022x1004, following the
+browser's current viewport. No original game files, saves or private controls
+are distributed; these are application screenshots, not headset playtests.
+
+## Paired upstream comparisons (v0.2.25)
+
 These comparisons run two different clients against the same locally owned game:
 
 | Client | Verified source |
