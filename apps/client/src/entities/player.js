@@ -4,6 +4,7 @@ import { G } from '../core/globals.js';
 import { T } from '../world/mapmesh.js';
 import { movementSpeedRate } from '../game/movement-speed.js';
 import { eventActionPosition } from './event-position.js';
+import { DialogueCamera } from './dialogue-camera.js';
 
 const R = 0.22;          // body radius in tiles (~0.33 m)
 const EVENT_R = 0.24;    // blocking event radius in tiles (about a person, like the player)
@@ -33,6 +34,7 @@ export class Player {
     this.rig = rig;
     this.camera = camera;
     this.yaw = 0; this.pitch = 0;           // desktop look
+    this.dialogueCamera = new DialogueCamera(this);
     this.lastTile = { x: -999, y: -999 };
     this.bumpCooldown = 0;
     this.dodge = { t: 0, dx: 0, dy: 0, cooldown: 0 };
@@ -68,6 +70,7 @@ export class Player {
   // place the player (head) at the center of tile (tx, ty)
   teleportTo(tx, ty, dir) {
     if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
+    this.dialogueCamera.cancel();
     const head = this.headWorld(new THREE.Vector3());
     if (!Number.isFinite(head.x) || !Number.isFinite(head.z)) {
       // no valid head pose yet (XR session starting): put the rig itself on the tile
@@ -134,6 +137,7 @@ export class Player {
   faceDirection(dir) {
     const yaw = { 2: Math.PI, 4: Math.PI / 2, 6: -Math.PI / 2, 8: 0 }[dir];
     if (yaw === undefined) return;
+    this.dialogueCamera.cancel();
     if (G.vr) {
       // rotate the rig around the head so the user faces `dir`
       const f = this.forward2D();
@@ -188,6 +192,7 @@ export class Player {
     this.dodging = false;             // (moving in a dodge this frame - its last step too: enemies let it through)
 
     // ---- view rotation ----
+    this.dialogueCamera.update(dt);
     if (G.vr) {
       const t = G.ui.blocksTurning?.() ? 0 : input.turnAxis();
       if (s.snapTurn) {

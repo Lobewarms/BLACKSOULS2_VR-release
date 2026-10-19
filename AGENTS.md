@@ -1961,3 +1961,50 @@ The literal source comparison now uses runtime dea954d (0.2.32): 48 original
 modules retained, 15 unchanged after import moves, 33 modified, 38 new, 0 missing;
 3,316 added/826 removed lines in modified originals after import normalization.
 Actual comparison images remain labelled 0.2.25.
+
+## Dialogue camera and native dungeon counter (0.2.33)
+
+Desktop conversation introductions use the initiating main event, map identity and
+interpreter execution, not a nearby name match. Turn smoothly for 0.38 seconds
+toward the visible standing sprite's upper body, respecting displaced sprites,
+looping maps, transparent margins and rig transforms. Pending sheets use the
+existing layMode classifier. Skip invisible/floor props, distant events and
+unowned narration. Manual motion or right-drag immediately cancels the turn;
+later pages and common-event children never recenter it. Ending/replacing an
+execution, transfers, death, menus, focus loss and VR discard it. VR head pose
+is never changed by this feature.
+
+Desktop dialogue keeps its cursor for choices. An unlocked, canvas-origin right
+drag feeds the existing finite/spike-filtered mouse look, suppressing pointer
+hover/confirm and gameplay mouse buttons. Leave, blur, text input, closing UI and
+view transitions flush held actions. A normal release retains accepted motion
+until endFrame so a quick drag/release still takes precedence over autofocus.
+The message footer and all four controls guides describe this interaction.
+
+The installed script142 module W_REGULAR configures the original persistent
+Layer indicator: map enabled by switch859, selector variable0, row variable119
+and item switch859 with native label color16. Read static literal configuration
+without executing Ruby; selectors, labels, suffixes, colors, icons and scene
+flags remain installed data. Unsupported replacements fail closed. The added
+panel is independent of the minimap toggle, below the desktop mini or adjacent
+to the wrist health panel. Hide it through dialogue/menu/death/transfers/title
+and honor the original battle-window settings. Do not guess membership from map
+names or reset/clamp the saved counter. CE276 increments119 on floor advance;
+depth117 is separate progression, incremented with difficulty60 by CE284, and
+shown in original resume/boss text, not a persistent W_REGULAR row.
+
+The right-hand Space-Time route deliberately calls CE266 to unequip actors1..10
+before storing their bag counts, CE267 to remove the stored bag, and starts a
+temporary actor11. CE269 death and CE288 allowed exit restore counts through268
+and restore the original actor without re-equipping slots. An isolated read-only
+actual-command inventory replay covered30 equipped copies and31 stored entries:
+both paths returned every original item to the bag with no quantity differences,
+errors or warnings. This is inventory/control replay, not a full story run.
+Preserve that native rule; no auto re-equip or item duplication workaround added.
+Public inventory regressions use neutral synthetic event sequences only.
+
+Local verification passed835 JavaScript regressions (44 new:10 camera,13 drag
+input,14 native counter,3 full-UI integration,4 inventory), ESLint, Ruff,
+production build,8 packaging tests and7 Python protocol tests. Tests exercise
+actual Input/Player/UI/Interpreter paths with synthetic data and canvas adapters;
+no GPU screenshot or physical-headset playtest is claimed.

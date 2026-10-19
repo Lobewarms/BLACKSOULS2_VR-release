@@ -37,6 +37,7 @@ const ENTRIES = [
   ['타이틀로 돌아갈까요?', 'Return to title?', 'タイトルに戻りますか？', '返回标题画面？'],
   ['↑↓ / 스틱 · Enter / A: 선택 · Esc / B: 뒤로', '↑↓ / stick · Enter / A: Select · Esc / B: Back', '↑↓ / スティック・Enter / A: 決定・Esc / B: 戻る', '↑↓ / 摇杆 · Enter / A：选择 · Esc / B：返回'],
   ['클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로', 'Click / ↑↓: Select · Enter: Confirm · Esc: Back', 'クリック / ↑↓: 選択・Enter: 決定・Esc: 戻る', '点击 / ↑↓：选择 · Enter：确定 · Esc：返回'],
+  ['오른쪽 버튼을 누른 채 드래그: 둘러보기', 'Hold right mouse and drag: look around', '右ボタンを押しながらドラッグ：見回す', '按住鼠标右键拖动：环顾四周'],
   ['스틱: 선택 · A / 트리거: 결정 · B: 뒤로', 'Stick: Select · A / trigger: Confirm · B: Back', 'スティック: 選択・A / トリガー: 決定・B: 戻る', '摇杆：选择 · A / 扳机：确定 · B：返回'],
   ['N: 지도 · Tab: 메뉴', 'N: Map · Tab: Menu', 'N: マップ・Tab: メニュー', 'N：地图 · Tab：菜单'],
   ['Y: 메뉴 → 지도', 'Y: Menu → Map', 'Y: メニュー → マップ', 'Y：菜单 → 地图'],

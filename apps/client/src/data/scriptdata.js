@@ -5,6 +5,7 @@
 import { G } from '../core/globals.js';
 import { loadRvdata } from './data.js';
 import { bytesToString } from './marshal.js';
+import { readRegularWindow } from './regular-window.js';
 
 async function inflate(bytes) {
   const ds = new DecompressionStream('deflate');
@@ -309,7 +310,7 @@ export async function loadScriptData() {
 }
 // what the game's scripts set up, from their sections ([name, source] in the game's order)
 export function readScripts(entries) {
-  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null };
+  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null, regularWindow: null };
   const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
   // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
   // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
@@ -335,6 +336,8 @@ export function readScripts(entries) {
     if (exchange !== undefined) out.exchangeShop = exchange;
     const guts = gutsSettings(src);
     if (guts !== undefined) out.guts = guts;
+    const regularWindow = readRegularWindow(src);
+    if (regularWindow !== undefined) out.regularWindow = regularWindow;
     for (const k of Object.keys(want)) {
       if (name === want[k]) (byName[k] ||= []).push(src);
       else if (!byContent[k] && holds[k](src)) byContent[k] = src;

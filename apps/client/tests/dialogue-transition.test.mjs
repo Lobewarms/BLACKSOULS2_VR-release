@@ -12,6 +12,7 @@ import { desktopEquipmentHidden } from '../src/combat/desktop-weapon.js';
 globalThis.location = { search: '?lang=en' };
 globalThis.addEventListener ||= () => {};
 const { UI } = await import('../src/ui/ui.js');
+const { tr } = await import('../src/ui/i18n.js');
 const { CombatSystem } = await import('../src/combat/combat.js');
 
 const command = (code, parameters = [], indent = 0) => ({ code, parameters, indent });
@@ -98,6 +99,62 @@ function exploration(frame) {
   assert.equal(frame.hud, true); assert.equal(frame.mini, true); assert.equal(frame.backdrop, false);
   assert.equal(frame.equipmentHidden, false); assert.equal(frame.pointerPaused, false);
 }
+
+test('desktop speaker focus starts once per real conversation and leaves later pages under manual control', t => {
+  const { ui, map, frame, waitInput } = environment(t), calls = [];
+  G.player.dialogueCamera = { begin(source) { calls.push(source); }, cancel() {} };
+  map.interpreter.setup([...message('The first page.'), ...message('A second page.'), end()]);
+  frame(); assert.deepEqual(calls, [map.interpreter]);
+  assert.equal(ui.dialogueLookAllowed(), true);
+  waitInput(); frame(['Enter']); frame();
+  assert.deepEqual(calls, [map.interpreter], 'a new page must not pull the view back after the player looks away');
+  waitInput(); frame(); frame(['Enter']); frame();
+  assert.equal(ui.dialogueLookAllowed(), false);
+  map.interpreter.setup([...message('Another conversation.'), end()]); frame();
+  assert.equal(calls.length, 2, 'a fresh event execution can introduce its speaker again');
+  G.vr = true; assert.equal(ui.dialogueLookAllowed(), false);
+  G.vr = false; ui.menuOpen = true; assert.equal(ui.dialogueLookAllowed(), false);
+  ui.menuOpen = false; ui.msg.number = {}; assert.equal(ui.dialogueLookAllowed(), false);
+});
+
+test('dragging to look cannot hover a dialogue choice, and the hint occupies the message bottom margin', t => {
+  const { ui, input, map, frame } = environment(t);
+  map.interpreter.setup([...message('One.\nTwo.\nThree.\nFour.'), end()]); frame();
+  const p = ui.msgPanel, hint = tr('오른쪽 버튼을 누른 채 드래그: 둘러보기');
+  assert.ok(p.canvas.record.texts.includes(hint));
+  const L = ui.messageLayout();
+  assert.ok(L.top + 4 * 24 * L.k < p.canvas.height - 36, 'the normal four-line block leaves space above the hint');
+  input.pointer = { x: 640, y: 360, seen: true };
+  input.dialogueLooking = () => true;
+  assert.equal(ui.pointerRay(), null);
+  input.dialogueLooking = () => false;
+  assert.ok(ui.pointerRay());
+});
+
+test('the native dungeon counter updates through the real UI, independently of the minimap setting, and hides at native transitions', t => {
+  const { ui, frame } = environment(t);
+  let show = true, layer = 8;
+  G.scripts.regularWindow = { map: { enabled: true, switchId: 88 }, battle: { enabled: false, switchId: 90 },
+    typeVariable: 0, items: { 0: [{ variable: 18, switchId: 88, label: 'Layer:', suffix: '', color: 16 }] } };
+  G.state.sw = id => id === 88 && show;
+  G.state.v = id => id === 18 ? layer : 0;
+  const panel = ui.dungeonStatus.panel;
+  frame(); assert.equal(panel.mesh.visible, true); assert.ok(panel.canvas.record.texts.includes('8'));
+  const top = mesh => mesh.position.y + mesh.geometry.parameters.height * mesh.scale.y / 2;
+  const bottom = mesh => mesh.position.y - mesh.geometry.parameters.height * mesh.scale.y / 2;
+  assert.ok(top(panel.mesh) < bottom(ui.navigation.mini.mesh), 'counter sits below the map without covering it');
+  layer = 9; frame(); assert.ok(panel.canvas.record.texts.includes('9')); assert.ok(!panel.canvas.record.texts.includes('8'));
+  G.settings.minimap = false; frame();
+  assert.equal(ui.navigation.mini.mesh.visible, false); assert.equal(panel.mesh.visible, true);
+  assert.equal(panel.mesh.parent, ui.camera);
+  G.combat.inCombat = true; frame(); assert.equal(panel.mesh.visible, false);
+  G.combat.inCombat = false; frame(); assert.equal(panel.mesh.visible, true);
+  show = false; frame(); assert.equal(panel.mesh.visible, false);
+  show = true; G.vr = true; const wrist = new THREE.Group(); ui.scene.add(wrist); ui.attachHud(wrist); frame();
+  assert.equal(panel.mesh.parent, ui.hud.mesh); assert.equal(panel.mesh.visible, true);
+  assert.ok(panel.mesh.position.x - panel.widthM / 2 > ui.hud.widthM / 2, 'wrist counter leaves the health panel readable');
+  G.combat.playerDead = true; frame(); assert.equal(panel.mesh.visible, false);
+});
 
 test('consecutive real event messages never expose the HUD, map, equipment or resumed mouse look between UI and map frames', t => {
   const env = environment(t), { ui, map, frame, waitInput } = env;

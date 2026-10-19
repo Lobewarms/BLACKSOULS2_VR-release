@@ -13,6 +13,7 @@ import { quickSlots, quickSlotOf, assignQuickSlot, entryStatus } from './quicksl
 import { cleanName, NAME_LEN } from '../network/coopnet.js';
 import { battlerEffects, effectsKey, fitLabel } from './battler-status.js';
 import { NavigationMap } from './navigation-map.js';
+import { DungeonStatus } from './dungeon-status.js';
 import { setWindowSkin, drawGameWindow, drawGameCursor } from './window-skin.js';
 import { desktopViewport, placeDesktopRoot, anchorDesktopPanel } from './desktop-layout.js';
 import { paintDesktopHud } from './desktop-hud.js';
@@ -888,6 +889,8 @@ export class UI {
       drawIcon, fitLabel, assetRevision: iconAssetRevision, cleanName: stripEscapes,
       moreLabel: n => tr('추가 획득 {n}건', { n }) });
     this.navigation = new NavigationMap(Panel, this.root, camera, this.hud.mesh, FONT, { textColor });
+    this.dungeonStatus = new DungeonStatus(Panel, { font: FONT, textColor, windowBg, drawIcon, fitLabel });
+    this.camera.add(this.dungeonStatus.mesh);
     this.raycaster = new THREE.Raycaster();
     this.pointerLine = null;
     this.msg = null;
@@ -926,6 +929,12 @@ export class UI {
         const miniWidth = Math.max(1, Math.min(220, viewport.width - 48, (viewport.height - 48) * 384 / 440));
         anchorDesktopPanel(this.navigation.mini, this.camera, viewport, { width: miniWidth, x: 'right', y: 'top' });
       }
+      const statusWidth = Math.max(1, Math.min(220, viewport.width - 48));
+      anchorDesktopPanel(this.dungeonStatus.panel, this.camera, viewport, { width: statusWidth, x: 'right', y: 'top' });
+      if (this.navigation.mini.mesh.visible) {
+        const pixels = this.dungeonStatus.mesh.scale.y * this.dungeonStatus.panel.widthM / statusWidth;
+        this.dungeonStatus.mesh.position.y -= this.navigation.mini.heightM * this.navigation.mini.mesh.scale.y + 8 * pixels;
+      }
       if (this.toastPanel.mesh.parent !== this.camera) this.camera.add(this.toastPanel.mesh);
       const toastWidth = Math.max(1, Math.min(360, viewport.width - 40));
       anchorDesktopPanel(this.toastPanel, this.camera, viewport, { width: toastWidth, x: 'left', y: 'top' });
@@ -963,6 +972,7 @@ export class UI {
     this.updateBackdrop();
     this.navigation.update(0, this.hudPresent && !G.combat?.playerDead && !this.dialogueActive() && !this.banner?.blocking,
       !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
+    this.updateDungeonStatus();
     const rewardsAllowed = this.rewards.place({ vr, viewport: desktopViewport(G.input, G.three?.renderer) });
     const rewardsPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || this.remote?.shown || this.prompt?.shown || G.combat?.playerDead;
     this.rewards.mesh.visible = !!(rewardsAllowed && !rewardsPaused && this.hudPresent && !this.banner && this.rewards.rows.length);
@@ -984,6 +994,9 @@ export class UI {
   attachHud(target) {
     this.navigation.attach(!!target);
     this.rewards.attach(!!target);
+    (target ? this.hud.mesh : this.camera).add(this.dungeonStatus.mesh);
+    this.dungeonStatus.mesh.rotation.set(0, 0, 0);
+    this.dungeonStatus.mesh.scale.setScalar(1);
     if (target) { this.root.add(this.toastPanel.mesh); this.toastPanel.mesh.scale.setScalar(1); this.toastPanel.mesh.position.set(0, -0.62, 0.02); }
     else this.camera.add(this.toastPanel.mesh);
     if (this.hud.mesh.parent) this.hud.mesh.parent.remove(this.hud.mesh);
@@ -1016,6 +1029,10 @@ export class UI {
     return true;
   }
   dialogueActive() { return !!this.msg || this.dialogueContinuing(); }
+  dialogueLookAllowed() {
+    return !G.vr && this.dialogueActive() && !this.sceneBusy() && !this.keyboard.visible
+      && !this.prompt?.shown && !this.remote?.shown && !this.banner?.blocking && !this.msg?.number && !G.combat?.playerDead;
+  }
   hideHeldMessage() {
     if (!this.heldMessage) return;
     this.heldMessage = null;
@@ -1026,6 +1043,7 @@ export class UI {
   }
   clearDialoguePresentation() {
     this.dialogue = null;
+    G.player?.dialogueCamera?.cancel();
     this.hideHeldMessage();
     if (!this.msg && !this.sceneBusy() && !this.remote?.shown && !this.prompt?.shown) this.backdrop.visible = false;
   }
@@ -1044,10 +1062,13 @@ export class UI {
   showMessage(msg, source = null) {
     this.heldMessage = null;
     const owner = source?.root || source;
+    const previous = this.dialogue;
+    const continuing = this.dialogueContinuing() && previous?.owner === owner && previous?.executionId === owner?.executionId;
     this.dialogue = owner ? { owner, source, executionId: owner.executionId, map: G.map, mapId: G.map?.mapId } : null;
     const banner = bannerOf(msg);
     if (banner) { this.showBanner(banner.text, banner.color, true); return; }
     this.msg = msg;
+    if (!continuing) G.player?.dialogueCamera?.begin(source);
     msg.name = this.speakerName(msg);
     msg.reveal = 0; msg.wait = 0; msg.fast = false; msg.state = 'typing';
     msg.ops = null;
@@ -1103,6 +1124,12 @@ export class UI {
       ctx.drawImage(msg.faceCanvas, (fi % 4) * 96, Math.floor(fi / 4) * 96, 96, 96, L.left, L.top, L.face, L.face);
     }
     drawOps(ctx, msg.ops, Math.floor(msg.reveal));
+    if (this.dialogueLookAllowed() && msg === this.msg) {
+      ctx.save(); ctx.font = `22px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#d2d0c8';
+      ctx.fillText(fitLabel(ctx, tr('오른쪽 버튼을 누른 채 드래그: 둘러보기'), canvas.width - 120), 36, canvas.height - 24);
+      ctx.restore();
+    }
     if (msg.state === 'waitInput' || msg.state === 'pause') {
       ctx.fillStyle = 'rgba(230,210,160,' + (0.5 + 0.5 * Math.sin(G.time * 6)) + ')';
       ctx.beginPath(); ctx.moveTo(canvas.width - 50, canvas.height - 40); ctx.lineTo(canvas.width - 30, canvas.height - 40);
@@ -1999,6 +2026,7 @@ export class UI {
   pointerRay() {
     if (!G.vr) {
       const input = G.input, p = input.pointer, rect = input.dom?.getBoundingClientRect?.();
+      if (input.dialogueLooking?.()) return null;
       if (!p?.seen || input.pointerLocked || !rect?.width || !rect?.height || p.x < rect.left || p.x > rect.right || p.y < rect.top || p.y > rect.bottom) return null;
       this.camera.updateMatrixWorld(true); this.root.updateMatrixWorld(true);
       this.raycaster.setFromCamera(new THREE.Vector2((p.x - rect.left) / rect.width * 2 - 1, -(p.y - rect.top) / rect.height * 2 + 1), this.camera);
@@ -3002,6 +3030,7 @@ export class UI {
     this.updateHudFollow();
     this.navigation.update(dt, this.hudPresent && !G.combat?.playerDead && !this.dialogueActive() && !this.banner?.blocking,
       !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
+    this.updateDungeonStatus();
     if (!G.vr) this.placeRoot();
     const rewardPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
     if (!this.hudPresent && this.rewardsHadPlayer) this.rewards.clear();
@@ -3020,6 +3049,18 @@ export class UI {
     const head = new THREE.Vector3();
     this.camera.getWorldPosition(head);
     this.hud.mesh.lookAt(head);
+  }
+  updateDungeonStatus() {
+    const allowed = this.hudPresent && !G.map?.transferring && !G.combat?.playerDead && !this.sceneBusy()
+      && !this.dialogueActive() && !this.remote?.shown && !this.prompt?.shown && !this.banner?.blocking;
+    this.dungeonStatus.update(G.scripts?.regularWindow, G.state,
+      { scene: G.scripts?.regularWindow && G.combat?.inCombat ? 'battle' : 'map', visible: allowed, assetRevision: iconAssetRevision() });
+    if (this.hudFollow) {
+      const p = this.dungeonStatus.panel;
+      // Wrist: keep the native counter next to the map rather than over health.
+      this.dungeonStatus.mesh.position.set((this.hud.widthM + p.widthM) / 2 + 0.012,
+        this.hud.heightM / 2 - p.heightM / 2, 0.001);
+    }
   }
   // snap turning stays off while a menu / choice uses the right stick
   blocksTurning() { return this.menuOpen || !!this.sceneOpen || this.msg?.state === 'choice' || this.msg?.state === 'number' || !!this.prompt?.shown; }

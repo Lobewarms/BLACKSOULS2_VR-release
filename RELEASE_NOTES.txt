@@ -1,9 +1,13 @@
-BLACK SOULS II VR 0.2.32
+BLACK SOULS II VR 0.2.33
 
-Desktop Break feedback
-- Holding F or middle mouse now shows a gold weapon-tip glow when Break is ready.
-- The glow follows the visible weapon and clears on release, cooldowns, menus and dialogue.
-- Clarify the PC Break controls in all four control guides: hold Break, then left-click and release to swing.
+Conversations and dungeon progress
+- Desktop dialogue smoothly turns toward a nearby speaker once when the conversation starts.
+- Hold right mouse and drag to look around during dialogue; release it to click choices.
+- Restore the original dungeon Layer counter below the minimap, or beside the wrist HUD in VR.
+- The counter follows the installed game's labels and dungeon rules, even with the minimap turned off.
+
+Space-Time Dungeon intentionally returns your original equipment to your bag after a run,
+leaving its equipment slots empty. Re-equip it from the menu; this matches the original game.
 
 Install the update, then close and reopen the game window to load the changes.
 Your existing saves are retained. The original game is required and is not included.

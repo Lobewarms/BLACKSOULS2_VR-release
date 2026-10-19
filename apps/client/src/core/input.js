@@ -21,6 +21,7 @@ export class Input {
     this.desktopLookWanted = false;
     this.pointerUiPaused = false;
     this.softLook = false;
+    this.dialogueDrag = false;
     this.lockPending = false;
     this.scriptUnlockPending = false;
     this.pageFocused = document.hasFocus?.() ?? true;
@@ -66,13 +67,26 @@ export class Input {
     addEventListener('focus', () => { this.pageFocused = true; });
     dom.addEventListener('mousedown', e => {
       this.trackPointer(e);
+      if (this.dialogueLooking()) { e.preventDefault?.(); return; }
+      if (e.button === 2 && this.dialogueLookAllowed() && this.onCanvas(e)) {
+        this.suspendPointerForUi();
+        this.releaseMouse();
+        this.dialogueDrag = true;
+        this.lockFresh = 2;
+        this.updateCursor();
+        e.preventDefault?.();
+        return;
+      }
       const button = 1 << e.button;
       if (!(this.mouse.buttons & button)) this.mousePresses |= button;
       this.mouse.buttons |= button;
       const busy = this.pointerBusy();
       if (!this.pointerLocked && !G.vr && !busy) this.lockPointer();
     });
-    addEventListener('mouseup', e => { this.mouse.buttons &= ~(1 << e.button); });
+    addEventListener('mouseup', e => {
+      if (this.dialogueLooking() && e.button === 2) { this.endDialogueLook(true); return; }
+      this.mouse.buttons &= ~(1 << e.button);
+    });
     dom.addEventListener('contextmenu', e => e.preventDefault());
     addEventListener('mousemove', e => this.onMouseMove(e));
     addEventListener('wheel', e => { this.mouse.wheel += Math.sign(e.deltaY); }, { passive: true });
@@ -115,12 +129,37 @@ export class Input {
       this.updateCursor();
     });
     document.addEventListener('pointerlockerror', () => { this.lockPending = false; this.enableSoftLook(); });
-    dom.addEventListener('mouseleave', () => { if (!this.pointerLocked) { this.mouse.dx = this.mouse.dy = 0; this.lockFresh = 2; } });
+    dom.addEventListener('mouseleave', () => {
+      if (!this.pointerLocked) {
+        if (this.dialogueDrag) this.endDialogueLook();
+        this.mouse.dx = this.mouse.dy = 0; this.lockFresh = 2;
+      }
+    });
   }
 
   pointerBusy() { return !!(G.ui?.pointerBusy?.() ?? (G.ui?.sceneBusy?.() || G.ui?.messageBusy?.())); }
   textInputFocused() { const active = document.activeElement; return !!active?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active?.tagName || ''); }
-  updateCursor() { if (this.dom?.style) this.dom.style.cursor = this.softLook && !this.pointerUiPaused ? 'none' : this.normalCursor || ''; }
+  onCanvas(e) {
+    const rect = this.dom?.getBoundingClientRect?.();
+    return !!rect && (!e.target || e.target === this.dom) && Number.isFinite(e.clientX) && Number.isFinite(e.clientY) &&
+      e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
+  }
+  dialogueLookAllowed() {
+    return !!(!G.vr && !this.pointerLocked && this.pageFocused !== false && document.hasFocus?.() !== false &&
+      !this.textInputFocused() && G.ui?.dialogueLookAllowed?.());
+  }
+  dialogueLooking() {
+    if (!this.dialogueDrag) return false;
+    if (!this.dialogueLookAllowed()) { this.endDialogueLook(); return false; }
+    return true;
+  }
+  endDialogueLook(keepMotion = false) {
+    const { dx, dy } = this.mouse;
+    this.releaseMouse();
+    if (keepMotion) { this.mouse.dx = dx; this.mouse.dy = dy; }
+    this.updateCursor();
+  }
+  updateCursor() { if (this.dom?.style) this.dom.style.cursor = this.softLook && !this.pointerUiPaused && !this.dialogueDrag ? 'none' : this.normalCursor || ''; }
   stopDesktopLook() {
     this.lockEpoch = (this.lockEpoch || 0) + 1;
     this.desktopLookWanted = false; this.pointerUiPaused = false; this.softLook = false;
@@ -144,6 +183,7 @@ export class Input {
   // Resume once per UI transition. A denied lock keeps in-canvas mouse look
   // available until a fresh movement-key gesture can obtain pointer lock.
   syncPointerUi(busy) {
+    this.dialogueLooking();
     if (G.vr) { this.stopDesktopLook(); return; }
     if (busy || this.textInputFocused()) { this.suspendPointerForUi(); return; }
     if (!this.pointerUiPaused) return;
@@ -156,6 +196,7 @@ export class Input {
   }
 
   releaseMouse() {
+    this.dialogueDrag = false;
     this.mouse.buttons = 0; this.mouse.prevButtons = 0;
     this.mousePresses = 0;
     this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0;
@@ -205,7 +246,7 @@ export class Input {
   // movement comes as a jump of the cursor: the view whipped round. Where raw movement is not supported, the usual lock
   lockPointer() {
     const dom = this.dom;
-    if (G.vr || this.lockPending || this.pageFocused === false || document.hasFocus?.() === false || !dom?.requestPointerLock) return;
+    if (G.vr || this.dialogueLookAllowed() || this.lockPending || this.pageFocused === false || document.hasFocus?.() === false || !dom?.requestPointerLock) return;
     this.desktopLookWanted = true; this.lockPending = true;
     const epoch = this.lockEpoch = (this.lockEpoch || 0) + 1;
     const failed = () => { if (epoch === this.lockEpoch) { this.lockPending = false; this.enableSoftLook(); } };
@@ -227,11 +268,13 @@ export class Input {
   // movements and goes on, so after one drop the next is always taken)
   onMouseMove(e) {
     this.trackPointer(e);
+    let dialogue = this.dialogueLooking();
+    if (dialogue && Number.isFinite(e.buttons) && !(e.buttons & 2)) { this.endDialogueLook(); dialogue = false; }
     if (!this.pointerLocked) {
-      if (!this.softLook || G.vr || this.pageFocused === false || document.hasFocus?.() === false || this.pointerBusy()) return;
+      if (!(dialogue || this.softLook) || G.vr || this.pageFocused === false || document.hasFocus?.() === false || !dialogue && this.pointerBusy()) return;
       const rect = this.dom?.getBoundingClientRect?.();
       if (!rect || e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom ||
-        e.target && e.target !== this.dom) return;
+        e.target && e.target !== this.dom) { if (dialogue) this.endDialogueLook(); return; }
     }
     if (!Number.isFinite(e.movementX) || !Number.isFinite(e.movementY)) return;
     const m = Math.max(Math.abs(e.movementX), Math.abs(e.movementY));
@@ -344,6 +387,7 @@ export class Input {
 
   // call once per rendered frame before game logic
   update() {
+    this.dialogueLooking();
     this.btnPrev.left = this.btn.left; this.btnPrev.right = this.btn.right;
     this.btn = { left: [], right: [] };
     this.axes = { left: [0, 0], right: [0, 0] };
