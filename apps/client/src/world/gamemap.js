@@ -61,6 +61,7 @@ export class GameMap {
   constructor() {
     this.mapId = 0;
     this.map = null;
+    this.battlebacks = ['', ''];
     this.grid = null;
     this.events = {};
     this.eventList = [];
@@ -114,6 +115,7 @@ export class GameMap {
     this.loading = true;
     this.mapId = mapId;
     this.map = map;
+    this.battlebacks = map.specify_battleback ? [map.battleback1_name || '', map.battleback2_name || ''] : ['', ''];
     this.grid = new MapGrid(map, $data.tilesets[map.tileset_id]);
     // RPG Maker's looping maps (scroll type 1 vertical, 2 horizontal, 3 both): walking off one edge comes in at
     // the other, so a position past an edge is the cell on the other side (wrapX / wrapY)

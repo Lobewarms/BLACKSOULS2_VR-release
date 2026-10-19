@@ -251,7 +251,13 @@ export class Theater {
     if (!(this.active || e.inPlay) || !this.isPart(e)) return null;
     const i = ((e.memberIndex ?? 0) % PIECES.length + PIECES.length) % PIECES.length;
     const key = `piece${i}`;
-    if (!this.tex.has(key)) this.tex.set(key, this.tornPiece(i));
+    if (!this.tex.has(key)) {
+      const pending = this.tornPiece(i).catch(error => { console.warn('stage piece texture failed', error); return null; }).then(t => {
+        if (!t && this.tex.get(key) === pending) this.tex.delete(key);
+        return t;
+      });
+      this.tex.set(key, pending);
+    }
     return this.tex.get(key);
   }
   // a torn piece of the machine's picture: its crop, cut out along a ragged edge, drawn bigger

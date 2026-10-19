@@ -1867,3 +1867,62 @@ The literal upstream runtime comparison now uses commit 39953da (0.2.30):
 48 original modules retained, 16 unchanged after import moves, 32 modified,
 37 new, 0 missing; 3,206 added/808 removed lines in modified originals after
 import normalization. Actual comparison images remain labelled 0.2.25.
+
+## Authored creature battlebacks and enemy artwork (0.2.31)
+
+God's Odd Fish has an intentionally empty battler_name. All 16 directly authored
+encounters select its original transparent creature artwork with command 283
+before starting the troop. The port discarded that command outside the theater
+and fabricated a red plane for any null texture. Original Cache.load_bitmap
+returns a transparent empty_bitmap for empty filenames; no replacement image is
+implied. Bellman, Infinite Food and a Winterbell phase use the same backdrop-art
+mechanism. Reuse the installed files; never ship the source images or guess art
+from translated creature names.
+
+GameMap retains both current battleback layers and resets them to the new map's
+specified defaults on load. An event root captures its own change for the next
+battle; the battle stores a separate snapshot. Troop/common-event changes address
+their actual live owner through battleOf. Ended owners cannot alter another fight.
+The original engine has one fight and map-wide battleback settings; this port can
+run several fights. As an explicit concurrency adaptation, live troop changes
+stay on their battle and do not seed future unrelated encounters. Independent
+map events prepare future artwork without replacing an active theater backdrop.
+A troop's sole initially visible member is eligible for a backdrop body, including
+a later blank transformation; subsequent hidden-minion appearances do not change
+that original eligibility. Two-body mount encounters remain on their existing
+shared-art path. Only blank battlers may reuse a nonempty authored image with at
+least 1% fully transparent pixels and some alpha above the existing alpha-test
+threshold. Opaque scenery and empty images are never creature bodies. Both layer
+folders remain distinct. A validated backdrop phase takes precedence over generic
+sky inheritance; genuine aerial forms retain their previous art/sky behavior.
+The theater's explicit body overrides retain priority.
+
+Material visibility hides empty or failed bodies without hiding the battle,
+nameplate or hit dimensions, and survives unpair/revival/color/opacity animation.
+Failed texture promises are evicted, including stage pieces, so later requests
+can retry. Shared successful textures remain cached. Each asynchronous body build
+captures a generation and group identity; remove, same-ID revival and A-to-B-to-A
+transformations invalidate older continuations before they allocate a body.
+Optional co-op art metadata preserves the legacy 15/17-field tuples and validates
+bounded names against the recipient's fixed local battleback folders. Same-ID art
+changes rebuild once; legacy omitted metadata clears stale overrides. Deferred
+loads cannot resurrect art from an older snapshot.
+
+Private read-only audit covered 601 enemy records: 78 empty battler names, with
+4 initial production controllers, 1 debug-only controller and 4 transform-only
+forms among static troop/map references. Of 413 distinct nonempty battler names,
+412 resolve; the sole missing installed image belongs to a record without static
+initial/transform encounter references. All five creature backdrop variants were
+verified from the installed assets. Private actual-event reproduction exercised
+Map11 event32 command283/301 and troop331 through the real interpreter and combat
+constructor: one visible original 700x500 texture, alive controller, sky=false.
+It used a CPU canvas adapter and original read-only bytes, not GPU/headset play.
+Original databases, images, numeric audits and temporary review controls stay
+outside Git and release allowlists. Public regressions use neutral synthetic art.
+
+Local JavaScript verification passed 784 regressions, including 26 new cases for
+blank/art-backed bodies, retry caches, stale generations, live ownership,
+transformations, minions, mounts and real guest rendering/network validation.
+
+ESLint, Ruff, production build, 8 packaging tests and 7 Python protocol tests
+also passed locally for the enemy-artwork update.

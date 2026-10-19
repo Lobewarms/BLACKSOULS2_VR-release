@@ -31,6 +31,7 @@ export class Interpreter {
     this.saveRequest = null;
     this.indent = 0; this.params = null; this.choiceGroup = null; this.battle = null;
     this.battleBgmBefore = undefined;
+    this.battlebacks = undefined;
     this.undo = null;
   }
   // what an event's run changed (switches, variables, self switches: key -> the value before), kept on its root so a
@@ -692,8 +693,21 @@ export class Interpreter {
   // ---------------------------------------------------------------- map
   c281() { return true; }
   c282() { G.map.changeTileset?.(this.params[0]); return true; }
-  // Change Battle Back: the fight stands on the map itself; a stage play hangs it as the act's scenery (src/theater.js)
-  c283() { G.theater?.battleBack(this.params[0]); return true; }
+  // Keep both authored layers. A troop owns its live changes; other events set
+  // future encounters without replacing artwork in an unrelated ongoing fight.
+  c283() {
+    const root = this.root || this, troop = root.troop;
+    const battle = troop ? G.combat?.battleOf?.(this) : root.battle;
+    if (troop && (!battle || battle.done)) return true;
+    const names = [this.params[0] || '', this.params[1] || ''];
+    if (!troop) {
+      G.map.battlebacks = names.slice();
+      root.battlebacks = names.slice();
+    }
+    if (battle && !battle.done) G.combat?.changeBattleBack?.(battle, names);
+    if (!G.theater?.active || G.theater.battle === battle) G.theater?.battleBack(names[0]);
+    return true;
+  }
   c284() { G.map.changeParallax?.(this.params[0]); return true; }
   c285() {
     const [varId, type, desig, px, py] = this.params;

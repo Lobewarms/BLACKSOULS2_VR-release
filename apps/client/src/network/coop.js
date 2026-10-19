@@ -34,6 +34,7 @@ import { exitOf } from '../game/interpreter.js';
 import { tr } from '../ui/i18n.js';
 import { packEnemyBuffs, readEnemyBuffs } from './enemy-status.js';
 import { packEnemyMp, readEnemyMp } from './enemy-resources.js';
+import { packEnemyArt, readEnemyArt } from './enemy-art.js';
 import { NO_H_SWITCH, refOf, indexMap, isRef, sayAt, pictureAt, soundAt, animationAt, musicOk, guard } from './coopguard.js';
 
 const PROTO = 11;
@@ -944,7 +945,7 @@ export class Coop {
     if (!this.ready()) return;
     const m = G.map.mapId, list = [], fights = [];
     const syms = new Map([...G.combat.symbols.values()].filter(s => s.enemy).map(s => [s.enemy, s]));
-    const enemies = G.combat.netEnemies(), buffs = packEnemyBuffs(enemies), mp = packEnemyMp(enemies);
+    const enemies = G.combat.netEnemies(), buffs = packEnemyBuffs(enemies), mp = packEnemyMp(enemies), art = packEnemyArt(enemies);
     for (const e of enemies) {
       list.push(this.enemyEntry(e, e.battle ? null : syms.get(e)));
       fights.push(e.battle?.coopIn ? e.battle : null);
@@ -956,7 +957,7 @@ export class Coop {
       const key = JSON.stringify(mine);
       if (key === p.enKey && !mine.length) continue;          // (nothing there, as last told)
       p.enKey = key;
-      this.send({ t: 'en', m, e: mine, buffs, mp }, p.id);
+      this.send({ t: 'en', m, e: mine, buffs, mp, art }, p.id);
     }
   }
   enemyEntry(e, sym = null) {
@@ -2038,6 +2039,7 @@ export class Coop {
       }
       e.statusBuffs = readEnemyBuffs(m.buffs, e.id);
       e.mp = readEnemyMp(m.mp, e.id);
+      e.battlebacks = readEnemyArt(m.art, e.id);
       list.push(e);
     }
     G.combat.applyPuppets(list);
@@ -2598,7 +2600,7 @@ export class Coop {
       const k = JSON.stringify(list);
       if (k === p.henKey && !list.length) continue;
       p.henKey = k;
-      this.send({ t: 'hen', m, e: list, buffs: packEnemyBuffs(enemies), mp: packEnemyMp(enemies) }, p.id);
+      this.send({ t: 'hen', m, e: list, buffs: packEnemyBuffs(enemies), mp: packEnemyMp(enemies), art: packEnemyArt(enemies) }, p.id);
     }
   }
   onHallEnemies(m, from) {
@@ -2613,6 +2615,7 @@ export class Coop {
       e.hallKey = key;
       e.statusBuffs = readEnemyBuffs(m.buffs, e.id);
       e.mp = readEnemyMp(m.mp, e.id);
+      e.battlebacks = readEnemyArt(m.art, e.id);
       list.push(e);
     }
     G.combat.applyPuppets(list, from);

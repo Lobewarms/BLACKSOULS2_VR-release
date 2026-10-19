@@ -223,17 +223,31 @@ class EnemyBattler extends BattlerBase {
 
 // ------------------------------------------------------------------ textures
 const battlerCache = new Map();
-function battlerTexture(name, hue) {
-  const key = `${name}#${hue}`;
+function battlerTexture(name, hue, folder = 'Graphics/Battlers') {
+  if (!name) return Promise.resolve(null); // VX Ace's empty_bitmap has no visible pixels.
+  const key = `${folder}/${name}#${hue}`;
   if (!battlerCache.has(key)) {
-    battlerCache.set(key, loadCanvas('Graphics/Battlers', name, hue).then(c => {
+    const pending = loadCanvas(folder, name, hue).then(c => {
       if (!c) return null;
+      const core = drawnHalfWidth(c);
+      const pixels = c.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, c.width, c.height).data;
+      let clear = 0, drawn = 0;
+      for (let i = 3; i < pixels.length; i += 4) {
+        if (pixels[i] === 0) clear++;
+        if (pixels[i] > 64) drawn++;
+      }
       const tex = new THREE.CanvasTexture(c);
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.minFilter = THREE.LinearMipmapLinearFilter;
       tex.anisotropy = 4;
-      return { tex, w: c.width, h: c.height, core: drawnHalfWidth(c) };
-    }));
+      // Only a visible cutout can stand in for a blank controller. Opaque
+      // scenery and fully transparent backgrounds are never enemy bodies.
+      return { tex, w: c.width, h: c.height, core, cutout: clear >= c.width * c.height * 0.01 && drawn > 0 };
+    }).catch(error => { console.warn('battler texture failed', folder, name, error); return null; }).then(t => {
+      if (!t && battlerCache.get(key) === pending) battlerCache.delete(key);
+      return t;
+    });
+    battlerCache.set(key, pending);
   }
   return battlerCache.get(key);
 }
@@ -473,22 +487,47 @@ export class ActionEnemy {
     if (opts.inPlay) { this.inPlay = true; this.memberIndex = opts.memberIndex; }
     // (a form gone up into the sky - bossmoves.js skyHold: drawn as the form it was, out of sight up there)
     this.lookAs = opts.lookAs || 0; this.sky = !!opts.lookAs;
+    this.memberIndex = opts.memberIndex;
+    this._battlebacks = opts.battlebacks ?? null;
     this.group = new THREE.Group();
     sys.root.add(this.group);
     this.ready = this.build();
   }
   get data() { return this.b.data; }
+  get battlebacks() {
+    return this._battlebacks ?? (Number.isInteger(this.battle?.artMember) && this.memberIndex === this.battle.artMember ? this.battle.battlebacks : null) ?? [];
+  }
+  set battlebacks(names) { this._battlebacks = names; }
+  async artwork(look) {
+    const stage = G.theater?.battlerTexture?.(this);
+    if (stage) {
+      try { const t = await stage; if (t) return t; }
+      catch (error) { console.warn('stage battler texture failed', error); }
+    }
+    // Some original encounters draw the creature in a battleback instead of
+    // its battler. Keep that authored art on the initial sole controller even
+    // after hidden minions appear. Shared rider/mount pictures keep their path.
+    if (!this.data.battler_name && this.battlebacks.some(Boolean)) {
+      for (let i = 0; i < 2; i++) {
+        const t = await battlerTexture(this.battlebacks[i], 0, `Graphics/Battlebacks${i + 1}`);
+        if (t?.cutout) return { ...t, backdrop: true };
+      }
+    }
+    return battlerTexture(look.battler_name, look.battler_hue);
+  }
   get alive() { return !this.b.dead && this.state !== 'dying' && this.state !== 'dead'; }
   // 対象不可 in its note: nothing can be aimed at it - no blow, shot or spell of the player's or a companion's
   // reaches it (the dark stage machine above 그랑・기뇰's last act, until its last form)
   get untargetable() { if (this.noTarget || this.sys.skyHidden(this)) return true; const d = this.data; return !!d && (d._untargetable ??= /対象不可/.test(d.note || '')); }
   async build() {
+    const group = this.group, revision = this.buildRevision = (this.buildRevision || 0) + 1;
     this.group.userData.enemy = true;          // (a reset sweeps up any enemy body left behind)
     const d = this.data, id = this.b.enemyId;
     // (a stage play draws some bodies its own way - src/theater.js)
     const look = (this.lookAs && $data.enemies[this.lookAs]) || d;
-    const t = await (G.theater?.battlerTexture?.(this) || battlerTexture(look.battler_name, look.battler_hue));
-    if (this.b.enemyId !== id) return;             // changed into something else meanwhile: that build is the one
+    const t = await this.artwork(look);
+    if (this.buildRevision !== revision || this.group !== group || this.b.enemyId !== id) return;
+    if (t?.backdrop) { this.sky = false; this.lookAs = 0; this.diving = false; this.lift = 0; }
     this.picW = t?.w || 0;
     let w = 1, h = 1.8;
     if (t) {
@@ -505,7 +544,7 @@ export class ActionEnemy {
     this.hr = THREE.MathUtils.clamp(core, 0.25, 1.8) / T;
     const geo = new THREE.PlaneGeometry(w, h);
     geo.translate(0, h / 2, 0);
-    this.mat = new THREE.MeshLambertMaterial({ map: t?.tex || null, color: t ? 0xffffff : 0x884444, transparent: true, alphaTest: 0.25, side: THREE.DoubleSide, emissive: 0x000000 });
+    this.mat = new THREE.MeshLambertMaterial({ map: t?.tex || null, color: 0xffffff, visible: !!t, transparent: true, alphaTest: 0.25, side: THREE.DoubleSide, emissive: 0x000000 });
     this.mesh = new THREE.Mesh(geo, this.mat);
     this.mesh.rotation.order = 'YXZ';              // (turned to the player, then leant - in its own plane, or toward them)
     this.group.add(this.mesh);
@@ -597,6 +636,7 @@ export class ActionEnemy {
   // (lift: off the floor - a boss in the middle of a leap)
   worldPos(target = new THREE.Vector3()) { return target.set((this.fx + 0.5) * T, (G.floorAt ? G.floorAt(this.fx, this.fy) : 0) + (this.lift || 0), (this.fy + 0.5) * T); }
   remove() {
+    this.buildRevision = (this.buildRevision || 0) + 1;
     this.sys.root.remove(this.group);
     this.mesh?.geometry.dispose(); this.mat?.dispose();
     this.barTex?.dispose(); this.bar?.material.dispose();
@@ -618,6 +658,8 @@ class Battle {
     this.done = false; this.result = -1;
     this.time = 0; this.escapeTimer = 0;
     this.troop = $data.troops[opts.troopId];
+    const visible = this.troop?.members?.map((m, i) => ({ m, i })).filter(({ m }) => !m.hidden) || [];
+    this.artMember = visible.length === 1 ? visible[0].i : null;
     this.pageDone = new Set();
   }
   get alive() { return this.enemies.filter(e => e.alive && !e.hidden); }
@@ -1084,7 +1126,8 @@ export class CombatSystem {
     // starts it again from the same event (never idle in between), after its lose branch brought the party back
     if (this.playerDead && (G.state.party.leader()?.hp || 0) > 0) { this.playerDead = false; this.deathHandled = false; }
     const sym = event ? this.symbols.get(event) : null;
-    const battle = new Battle(this, { troopId, canEscape, canLose, event, interpreter, symbol: sym, private: !!sym?.private, hallKey: sym?.hallKey || null });
+    const battlebacks = ((interpreter?.root || interpreter)?.battlebacks ?? G.map.battlebacks ?? []).slice();
+    const battle = new Battle(this, { troopId, canEscape, canLose, event, interpreter, battlebacks, symbol: sym, private: !!sym?.private, hallKey: sym?.hallKey || null });
     this.battles.push(battle);
     G.state.system.battleCount++;
     const members = battle.troop?.members || [];
@@ -1115,10 +1158,11 @@ export class CombatSystem {
         let fx = ax + Math.cos(toP + Math.PI / 2) * lateral - Math.cos(toP) * 0.4;
         let fy = ay + Math.sin(toP + Math.PI / 2) * lateral - Math.sin(toP) * 0.4;
         [fx, fy] = resolveCircle(fx, fy, 0.35);
-        e = new ActionEnemy(this, battle, m.enemy_id, fx, fy, { hidden: m.hidden });
+        e = new ActionEnemy(this, battle, m.enemy_id, fx, fy, { hidden: m.hidden, memberIndex: members.indexOf(m) });
         e.alertTime = 0.8 + k * 0.3;
       }
       e.memberIndex = members.indexOf(m);
+      if (own?.m === m && !e.data.battler_name && e.battlebacks.some(Boolean)) this.rebuildEnemyArt(e);
       if (battle.private) this.makePrivate(e, battle.hallKey);
       battle.enemies.push(e);
       this.enemies.push(e);
@@ -1361,6 +1405,17 @@ export class CombatSystem {
       if (p.list === interp.list || p.span !== 2 || !c.switch_valid || c.turn_valid || c.enemy_valid || c.actor_valid || c.turn_ending) continue;
       if (!p.list.some(x => x.code === 336 && x.parameters[0] === member)) continue;
       if (G.state.sw(c.switch_id)) G.state.setSw(c.switch_id, false);
+    }
+  }
+  rebuildEnemyArt(e) {
+    e.remove(); e.group = new THREE.Group(); this.root.add(e.group); e.ready = e.build();
+  }
+  changeBattleBack(battle, names) {
+    if (!battle || battle.done || !this.battles.includes(battle)) return;
+    if (JSON.stringify(battle.battlebacks) === JSON.stringify(names)) return;
+    battle.battlebacks = names.slice();
+    for (const e of battle.enemies) {
+      if (e.memberIndex === battle.artMember && !e.data.battler_name) this.rebuildEnemyArt(e);
     }
   }
   // Enemy Transform: the new form's picture, and its own moves - none of the old form's left half done
@@ -6590,10 +6645,15 @@ export class CombatSystem {
       const inPlay = !!(n.flags & 8);
       if (e && (!!e.inPlay !== inPlay || (inPlay && e.memberIndex !== n.mi))) { e.remove(); e = null; }
       if (!e) {
-        e = new ActionEnemy(this, null, n.enemyId, n.fx, n.fy, { dormant: true, inPlay, memberIndex: n.mi, lookAs });
+        e = new ActionEnemy(this, null, n.enemyId, n.fx, n.fy, { dormant: true, inPlay, memberIndex: n.mi, lookAs, battlebacks: n.battlebacks });
         e.puppet = true; e.netId = n.id;
         if (src) { e.src = src; e.private = true; }
         this.puppets.set(keyOf(n.id), e);
+      }
+      const battlebacks = n.battlebacks ?? null;
+      if (JSON.stringify(e._battlebacks ?? null) !== JSON.stringify(battlebacks)) {
+        e.battlebacks = battlebacks;
+        this.rebuildEnemyArt(e);
       }
       if (src) e.hallKey = n.hallKey;
       e.netFlags = n.flags;
