@@ -2008,3 +2008,8 @@ input,14 native counter,3 full-UI integration,4 inventory), ESLint, Ruff,
 production build,8 packaging tests and7 Python protocol tests. Tests exercise
 actual Input/Player/UI/Interpreter paths with synthetic data and canvas adapters;
 no GPU screenshot or physical-headset playtest is claimed.
+
+The literal source comparison now uses runtime32bd81b (0.2.33):48 original
+modules retained,15 unchanged after import moves,33 modified,41 new,0 missing;
+3,413 added/827 removed lines in modified originals after import normalization.
+Actual comparison images remain labelled0.2.25.

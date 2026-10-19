@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: dea954d1990a9bf5017bd07e542edd2ccf9e71b1 (committed source)
+# Fork: 32bd81b1dd6d81416a0f2858dbd78a8f0edac82b (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -2528,7 +2528,7 @@
  // the ray's origin, so the pointer comes out of the pointing finger
 --- upstream/app/src/i18n.js
 +++ fork/apps/client/src/ui/i18n.js
-@@ -23,13 +23,46 @@
+@@ -23,13 +23,47 @@
  
  // [Korean, English, Japanese, Chinese (simplified)]
  const ENTRIES = [
@@ -2546,6 +2546,7 @@
 +  ['타이틀로 돌아갈까요?', 'Return to title?', 'タイトルに戻りますか？', '返回标题画面？'],
 +  ['↑↓ / 스틱 · Enter / A: 선택 · Esc / B: 뒤로', '↑↓ / stick · Enter / A: Select · Esc / B: Back', '↑↓ / スティック・Enter / A: 決定・Esc / B: 戻る', '↑↓ / 摇杆 · Enter / A：选择 · Esc / B：返回'],
 +  ['클릭 / ↑↓: 선택 · Enter: 결정 · Esc: 뒤로', 'Click / ↑↓: Select · Enter: Confirm · Esc: Back', 'クリック / ↑↓: 選択・Enter: 決定・Esc: 戻る', '点击 / ↑↓：选择 · Enter：确定 · Esc：返回'],
++  ['오른쪽 버튼을 누른 채 드래그: 둘러보기', 'Hold right mouse and drag: look around', '右ボタンを押しながらドラッグ：見回す', '按住鼠标右键拖动：环顾四周'],
 +  ['스틱: 선택 · A / 트리거: 결정 · B: 뒤로', 'Stick: Select · A / trigger: Confirm · B: Back', 'スティック: 選択・A / トリガー: 決定・B: 戻る', '摇杆：选择 · A / 扳机：确定 · B：返回'],
 +  ['N: 지도 · Tab: 메뉴', 'N: Map · Tab: Menu', 'N: マップ・Tab: メニュー', 'N：地图 · Tab：菜单'],
 +  ['Y: 메뉴 → 지도', 'Y: Menu → Map', 'Y: メニュー → マップ', 'Y：菜单 → 地图'],
@@ -2575,7 +2576,7 @@
    ['지금은 저장할 수 없습니다', "You can't save right now", '今はセーブできません', '现在无法保存'],
    ['슬롯 {n}', 'Slot {n}', 'スロット {n}', '存档位 {n}'],
    ['(비어 있음)', '(empty)', '(空き)', '(空)'],
-@@ -259,11 +292,23 @@
+@@ -259,11 +293,23 @@
    ['스틱 좌우: 자릿수 · 상하: 값 · A/트리거: 결정', 'Stick left/right: digit · up/down: value · A / trigger: OK', 'スティック左右: 桁 · 上下: 値 · A/トリガー: 決定', '摇杆左右：位数 · 上下：数值 · A/扳机：确定'],
    ['←→ 자릿수 · ↑↓ 값 · Home 최대 · End 0 · Enter 결정', '←→ digit · ↑↓ value · Home max · End 0 · Enter OK', '←→ 桁 · ↑↓ 値 · Home 最大 · End 0 · Enter 決定', '←→ 位数 · ↑↓ 数值 · Home 最大 · End 0 · Enter 确定'],
    ['{name} 획득', 'Got {name}', '{name} を入手', '获得 {name}'],
@@ -2599,7 +2600,7 @@
    ['무기·방패 모양 조정', 'Adjust weapon / shield', '武器・盾の持ち方調整', '调整武器 / 盾牌'],
    ['VR 세이브', 'VR save', 'VRセーブ', 'VR 存档'],
    ['VR 로드', 'VR load', 'VRロード', 'VR 读档'],
-@@ -296,7 +341,7 @@
+@@ -296,7 +342,7 @@
    ['몸|equip', 'Body', '体', '身体'],
    ['장신구|equip', 'Accessory', '装飾品', '饰品'],
    ['장비  ({name})', 'Equipment  ({name})', '装備  ({name})', '装备  ({name})'],
@@ -2608,7 +2609,7 @@
    ['서약  ({name})', 'Oath  ({name})', '誓約  ({name})', '誓约  ({name})'],
    ['(서약 해제)', '(no oath)', '(誓約を解く)', '(解除誓约)'],
    ['{name} 구입', 'Buy {name}', '{name} を購入', '购买 {name}'],
-@@ -396,6 +441,9 @@
+@@ -396,6 +442,9 @@
    ['이동할 수 있는 화톳불이 없습니다', 'No bonfire to travel to', '移動できる篝火がありません', '没有可以传送的篝火'],
    ['화톳불 전송', 'Bonfire travel', '篝火転送', '篝火传送'],
    ['상점  (소지: {gold} {unit})', 'Shop  (you have: {gold} {unit})', 'ショップ  (所持: {gold} {unit})', '商店  (持有：{gold} {unit})'],
@@ -2629,7 +2630,7 @@
  
  export class Input {
    constructor(renderer, dom) {
-@@ -11,8 +13,19 @@
+@@ -11,8 +13,20 @@
      this.dom = dom;
      this.keys = new Set();
      this.keysPrev = new Set();
@@ -2641,6 +2642,7 @@
 +    this.desktopLookWanted = false;
 +    this.pointerUiPaused = false;
 +    this.softLook = false;
++    this.dialogueDrag = false;
 +    this.lockPending = false;
 +    this.scriptUnlockPending = false;
 +    this.pageFocused = document.hasFocus?.() ?? true;
@@ -2649,7 +2651,7 @@
      this.lockFresh = 0;                              // movements right after the lock still to be checked
      this.lastMoves = [];                             // sizes of the last few movements taken
      this.dropNext = true;                            // (never two drops in a row: a fast flick is many big movements)
-@@ -22,29 +35,169 @@
+@@ -22,29 +36,209 @@
      this.btnPrev = { left: [], right: [] };
      this.axes = { left: [0, 0], right: [0, 0] };
      this.controllers = {};                           // three.js controller spaces
@@ -2688,13 +2690,27 @@
 -      this.mouse.buttons |= 1 << e.button;
 -      if (!this.pointerLocked && !G.vr) this.lockPointer();
 +      this.trackPointer(e);
++      if (this.dialogueLooking()) { e.preventDefault?.(); return; }
++      if (e.button === 2 && this.dialogueLookAllowed() && this.onCanvas(e)) {
++        this.suspendPointerForUi();
++        this.releaseMouse();
++        this.dialogueDrag = true;
++        this.lockFresh = 2;
++        this.updateCursor();
++        e.preventDefault?.();
++        return;
++      }
 +      const button = 1 << e.button;
 +      if (!(this.mouse.buttons & button)) this.mousePresses |= button;
 +      this.mouse.buttons |= button;
 +      const busy = this.pointerBusy();
 +      if (!this.pointerLocked && !G.vr && !busy) this.lockPointer();
      });
-     addEventListener('mouseup', e => { this.mouse.buttons &= ~(1 << e.button); });
+-    addEventListener('mouseup', e => { this.mouse.buttons &= ~(1 << e.button); });
++    addEventListener('mouseup', e => {
++      if (this.dialogueLooking() && e.button === 2) { this.endDialogueLook(true); return; }
++      this.mouse.buttons &= ~(1 << e.button);
++    });
      dom.addEventListener('contextmenu', e => e.preventDefault());
      addEventListener('mousemove', e => this.onMouseMove(e));
      addEventListener('wheel', e => { this.mouse.wheel += Math.sign(e.deltaY); }, { passive: true });
@@ -2738,12 +2754,37 @@
 +      this.updateCursor();
      });
 +    document.addEventListener('pointerlockerror', () => { this.lockPending = false; this.enableSoftLook(); });
-+    dom.addEventListener('mouseleave', () => { if (!this.pointerLocked) { this.mouse.dx = this.mouse.dy = 0; this.lockFresh = 2; } });
++    dom.addEventListener('mouseleave', () => {
++      if (!this.pointerLocked) {
++        if (this.dialogueDrag) this.endDialogueLook();
++        this.mouse.dx = this.mouse.dy = 0; this.lockFresh = 2;
++      }
++    });
 +  }
 +
 +  pointerBusy() { return !!(G.ui?.pointerBusy?.() ?? (G.ui?.sceneBusy?.() || G.ui?.messageBusy?.())); }
 +  textInputFocused() { const active = document.activeElement; return !!active?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active?.tagName || ''); }
-+  updateCursor() { if (this.dom?.style) this.dom.style.cursor = this.softLook && !this.pointerUiPaused ? 'none' : this.normalCursor || ''; }
++  onCanvas(e) {
++    const rect = this.dom?.getBoundingClientRect?.();
++    return !!rect && (!e.target || e.target === this.dom) && Number.isFinite(e.clientX) && Number.isFinite(e.clientY) &&
++      e.clientX >= rect.left && e.clientX <= rect.right && e.clientY >= rect.top && e.clientY <= rect.bottom;
++  }
++  dialogueLookAllowed() {
++    return !!(!G.vr && !this.pointerLocked && this.pageFocused !== false && document.hasFocus?.() !== false &&
++      !this.textInputFocused() && G.ui?.dialogueLookAllowed?.());
++  }
++  dialogueLooking() {
++    if (!this.dialogueDrag) return false;
++    if (!this.dialogueLookAllowed()) { this.endDialogueLook(); return false; }
++    return true;
++  }
++  endDialogueLook(keepMotion = false) {
++    const { dx, dy } = this.mouse;
++    this.releaseMouse();
++    if (keepMotion) { this.mouse.dx = dx; this.mouse.dy = dy; }
++    this.updateCursor();
++  }
++  updateCursor() { if (this.dom?.style) this.dom.style.cursor = this.softLook && !this.pointerUiPaused && !this.dialogueDrag ? 'none' : this.normalCursor || ''; }
 +  stopDesktopLook() {
 +    this.lockEpoch = (this.lockEpoch || 0) + 1;
 +    this.desktopLookWanted = false; this.pointerUiPaused = false; this.softLook = false;
@@ -2767,6 +2808,7 @@
 +  // Resume once per UI transition. A denied lock keeps in-canvas mouse look
 +  // available until a fresh movement-key gesture can obtain pointer lock.
 +  syncPointerUi(busy) {
++    this.dialogueLooking();
 +    if (G.vr) { this.stopDesktopLook(); return; }
 +    if (busy || this.textInputFocused()) { this.suspendPointerForUi(); return; }
 +    if (!this.pointerUiPaused) return;
@@ -2779,6 +2821,7 @@
 +  }
 +
 +  releaseMouse() {
++    this.dialogueDrag = false;
 +    this.mouse.buttons = 0; this.mouse.prevButtons = 0;
 +    this.mousePresses = 0;
 +    this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0;
@@ -2824,7 +2867,7 @@
    }
    // PC mouse look: raw movement where the browser gives it (unadjustedMovement - the mouse's own counts, no Windows
    // pointer acceleration). Chrome on Windows otherwise works the movement out from its hidden cursor, which it keeps
-@@ -52,17 +205,35 @@
+@@ -52,17 +246,37 @@
    // movement comes as a jump of the cursor: the view whipped round. Where raw movement is not supported, the usual lock
    lockPointer() {
      const dom = this.dom;
@@ -2833,7 +2876,7 @@
 -      const p = dom.requestPointerLock?.({ unadjustedMovement: true });
 -      if (p?.catch) p.catch(err => { if (err?.name === 'NotSupportedError') plain(); });
 -    } catch { plain(); }
-+    if (G.vr || this.lockPending || this.pageFocused === false || document.hasFocus?.() === false || !dom?.requestPointerLock) return;
++    if (G.vr || this.dialogueLookAllowed() || this.lockPending || this.pageFocused === false || document.hasFocus?.() === false || !dom?.requestPointerLock) return;
 +    this.desktopLookWanted = true; this.lockPending = true;
 +    const epoch = this.lockEpoch = (this.lockEpoch || 0) + 1;
 +    const failed = () => { if (epoch === this.lockEpoch) { this.lockPending = false; this.enableSoftLook(); } };
@@ -2856,17 +2899,19 @@
    onMouseMove(e) {
 -    if (!this.pointerLocked) return;
 +    this.trackPointer(e);
++    let dialogue = this.dialogueLooking();
++    if (dialogue && Number.isFinite(e.buttons) && !(e.buttons & 2)) { this.endDialogueLook(); dialogue = false; }
 +    if (!this.pointerLocked) {
-+      if (!this.softLook || G.vr || this.pageFocused === false || document.hasFocus?.() === false || this.pointerBusy()) return;
++      if (!(dialogue || this.softLook) || G.vr || this.pageFocused === false || document.hasFocus?.() === false || !dialogue && this.pointerBusy()) return;
 +      const rect = this.dom?.getBoundingClientRect?.();
 +      if (!rect || e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom ||
-+        e.target && e.target !== this.dom) return;
++        e.target && e.target !== this.dom) { if (dialogue) this.endDialogueLook(); return; }
 +    }
 +    if (!Number.isFinite(e.movementX) || !Number.isFinite(e.movementY)) return;
      const m = Math.max(Math.abs(e.movementX), Math.abs(e.movementY));
      const recent = this.lastMoves.length ? Math.max(...this.lastMoves) : 0;
      const fresh = this.lockFresh > 0;
-@@ -81,27 +252,94 @@
+@@ -81,31 +295,99 @@
  
    setupXR(scene, rig) {
      const xr = this.renderer.xr;
@@ -2905,8 +2950,8 @@
        rig.add(ctrl);
        rig.add(grip);
      }
-+  }
-+
+   }
+ 
 +  disconnectGrabSource(ctrl, grip, source) {
 +    const hand = ctrl.userData.hand;
 +    if (hand && this.hands[hand]?.source === source && this.controllers[hand]?.ray === ctrl) {
@@ -2963,10 +3008,15 @@
 +  grabPressed(hand) {
 +    if (!this.grabAllowed()) { this.clearGrabEdges(); return false; }
 +    return !!this.grabs?.[hand]?.pressed;
-   }
- 
++  }
++
    // call once per rendered frame before game logic
-@@ -114,12 +352,21 @@
+   update() {
++    this.dialogueLooking();
+     this.btnPrev.left = this.btn.left; this.btnPrev.right = this.btn.right;
+     this.btn = { left: [], right: [] };
+     this.axes = { left: [0, 0], right: [0, 0] };
+@@ -114,12 +396,21 @@
        for (const src of session.inputSources) {
          if (!src.gamepad || !src.handedness || src.handedness === 'none') continue;
          const hand = src.handedness;
@@ -2992,7 +3042,7 @@
          if (this.hands[hand]) this.hands[hand].gamepad = gp;
        }
      }
-@@ -132,18 +379,20 @@
+@@ -132,18 +423,20 @@
      if (Math.abs(ry) > 0.7 && Math.abs(ry) > Math.abs(rx) * 1.3) {
        if (this.rFlickReady) { this.rFlick = ry < 0 ? -1 : 1; this.rFlickReady = false; }
      } else if (Math.abs(ry) < 0.35) this.rFlickReady = true;
@@ -3014,7 +3064,7 @@
    xrHeld(hand, i) { return !!this.btn[hand][i]; }
    xrPressed(hand, i) { return !!this.btn[hand][i] && !this.btnPrev[hand][i]; }
    xrReleased(hand, i) { return !this.btn[hand][i] && !!this.btnPrev[hand][i]; }
-@@ -174,6 +423,10 @@
+@@ -174,6 +467,10 @@
      const [x, y] = this.axes.right;
      return Math.abs(x) > Math.abs(y) ? x : 0;
    }
@@ -3025,7 +3075,7 @@
    // menu navigation (up/down) for UI lists: -1, 0, 1 edge-triggered
    navY() {
      if (G.vr) {
-@@ -199,7 +452,8 @@
+@@ -199,7 +496,8 @@
    }
    confirm() {
      if (G.vr) return this.xrPressed('right', 4) || this.xrPressed('right', 0) && G.ui?.pointerTarget;
@@ -3035,7 +3085,7 @@
    }
    // world interaction (talk / examine): VR = right stick down
    interact() {
-@@ -233,6 +487,7 @@
+@@ -233,6 +531,7 @@
    }
    // quick slots: VR = X (left) held, PC = Q held; PC number keys 1-8 use a slot directly
    quickHeld() { return G.vr ? this.xrHeld('left', 4) : this.key('KeyQ'); }
@@ -3043,7 +3093,7 @@
    quickPressed() { return G.vr ? this.xrPressed('left', 4) : this.keyPressed('KeyQ'); }
    // emotes (src/emotes.js): VR = B (right) held - the cancel button, nothing outside menus and messages, nor
    // any of the game's events but three scenes (which an emote never opens in); PC = T held
-@@ -260,7 +515,14 @@
+@@ -260,7 +559,14 @@
    attackPressed() { return !G.vr && this.mousePressed(0); }
    // RPG Maker's own buttons, held down (events check them with "Button is being pressed"): the
    // opening's "press down to get out of bed", "B closes the picture", the date talk on X...
@@ -3714,17 +3764,18 @@
    if (G.map) { G.map.interpreter.clear(); G.map.reservedCommon = []; }
    if (gameOverPanel) gameOverPanel.visible = false;
    G.state = null; mode = 'title'; showTitle();
-@@ -523,7 +529,9 @@
+@@ -523,7 +529,10 @@
  }
  G.gameOver = async () => {
    if (mode !== 'game') return;
 +  G.ui.clearDialoguePresentation();
    mode = 'gameover';
 +  G.ui.navigation.hide();
++  G.ui.dungeonStatus.hide();
    gameOverReady = false;
    G.ui.closeMenu?.(); G.ui.list.close();
    if (G.map) { G.map.interpreter.clear(); G.map.reservedCommon = []; }
-@@ -532,7 +540,7 @@
+@@ -532,7 +541,7 @@
    G.screen.fadeOut(60);
    await waitFrames(62);
    if (mode !== 'gameover') return;
@@ -3733,7 +3784,7 @@
    G.ui.hud.mesh.visible = false;
    const panel = await gameOverArt();
    const head = G.player.headWorld(new THREE.Vector3()), fwd = G.player.forwardVec();
-@@ -543,7 +551,7 @@
+@@ -543,7 +552,7 @@
    await waitFrames(30);
    gameOverReady = mode === 'gameover';
  };
@@ -3742,15 +3793,16 @@
  
  let titlePanel = null;
  async function showTitleArt(on) {
-@@ -565,6 +573,7 @@
+@@ -565,6 +574,8 @@
  
  async function showTitle() {
    mode = 'title';
 +  G.ui.navigation.close(); G.ui.navigation.hide();
++  G.ui.dungeonStatus.hide();
    rig.position.set(0, 0, 0); rig.rotation.set(0, 0, 0);
    G.player.yaw = 0; G.player.pitch = 0;
    G.screen.setBrightness(255);
-@@ -573,9 +582,9 @@
+@@ -573,9 +584,9 @@
    const vrSlots = await listVrSaves();
    const auto = vrSlots.find(s => s.slot === 0);
    const items = [];
@@ -3762,7 +3814,7 @@
    // (a developer-server save played on here, in the game itself - saved as its own saves from then on)
    const worldSlots = await listVrSaves('world');
    if (worldSlots.length) items.push({ text: tr('개발자 서버 세이브 불러오기'), id: 'world', desc: tr('개발자 서버의 진행을 본편으로 가져옵니다') });
-@@ -600,11 +609,12 @@
+@@ -600,11 +611,12 @@
    for (const f of files) {
      try {
        const { header, contents } = await readRmSave(f);
@@ -3778,7 +3830,7 @@
      onSelect: (i, it) => { const s = new GameState(); s.importRmSave(it.contents, it.label); startGame(s); },
      onCancel: () => showTitle(),
    });
-@@ -612,8 +622,11 @@
+@@ -612,8 +624,11 @@
  async function showVrLoadMenu(back, kind = 'vr') {
    const slots = (await listVrSaves(kind)).sort((a, b) => a.slot - b.slot);
    G.ui.menuOpen = G.ui.menuOpen || mode === 'game';
@@ -3792,7 +3844,7 @@
      onCancel: back,
    });
  }
-@@ -649,8 +662,8 @@
+@@ -649,8 +664,8 @@
    b.over.update(b.emote ? pc.balloonId : 0, pc.balloonTime, 0);
  }
  let lastFrameError = '';
@@ -3803,7 +3855,7 @@
      const msg = String(e?.message || e);
      if (msg !== lastFrameError) {
        lastFrameError = msg;
-@@ -711,7 +724,7 @@
+@@ -711,7 +726,7 @@
      const m = G.map;
      if (m.transferring && !transferBusy) performTransfer();
      // the headset shows something else (SteamVR dashboard, desktop, system menu): the map and the fights wait
@@ -3812,7 +3864,7 @@
      if (m.grid && view.mesh) {
        if (!away) acc += dt;
        let steps = 0;
-@@ -739,12 +752,15 @@
+@@ -739,12 +754,15 @@
        const alpha = acc / STEP;
        layoutTilePictures(view.sprites, view.mapInfo);
        for (const s of view.sprites) s.update(head, alpha);
@@ -4693,7 +4745,7 @@
        const sx = pic.zx / 100, sy = pic.zy / 100;
 --- upstream/app/src/player.js
 +++ fork/apps/client/src/entities/player.js
-@@ -1,7 +1,9 @@
+@@ -1,7 +1,10 @@
  // First-person player: free locomotion with grid-edge collision, event triggers, VR rig handling.
  import * as THREE from 'three';
 -import { G } from './globals.js';
@@ -4702,10 +4754,43 @@
 +import { T } from '../world/mapmesh.js';
 +import { movementSpeedRate } from '../game/movement-speed.js';
 +import { eventActionPosition } from './event-position.js';
++import { DialogueCamera } from './dialogue-camera.js';
  
  const R = 0.22;          // body radius in tiles (~0.33 m)
  const EVENT_R = 0.24;    // blocking event radius in tiles (about a person, like the player)
-@@ -246,13 +248,14 @@
+@@ -31,6 +34,7 @@
+     this.rig = rig;
+     this.camera = camera;
+     this.yaw = 0; this.pitch = 0;           // desktop look
++    this.dialogueCamera = new DialogueCamera(this);
+     this.lastTile = { x: -999, y: -999 };
+     this.bumpCooldown = 0;
+     this.dodge = { t: 0, dx: 0, dy: 0, cooldown: 0 };
+@@ -66,6 +70,7 @@
+   // place the player (head) at the center of tile (tx, ty)
+   teleportTo(tx, ty, dir) {
+     if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
++    this.dialogueCamera.cancel();
+     const head = this.headWorld(new THREE.Vector3());
+     if (!Number.isFinite(head.x) || !Number.isFinite(head.z)) {
+       // no valid head pose yet (XR session starting): put the rig itself on the tile
+@@ -132,6 +137,7 @@
+   faceDirection(dir) {
+     const yaw = { 2: Math.PI, 4: Math.PI / 2, 6: -Math.PI / 2, 8: 0 }[dir];
+     if (yaw === undefined) return;
++    this.dialogueCamera.cancel();
+     if (G.vr) {
+       // rotate the rig around the head so the user faces `dir`
+       const f = this.forward2D();
+@@ -186,6 +192,7 @@
+     this.dodging = false;             // (moving in a dodge this frame - its last step too: enemies let it through)
+ 
+     // ---- view rotation ----
++    this.dialogueCamera.update(dt);
+     if (G.vr) {
+       const t = G.ui.blocksTurning?.() ? 0 : input.turnAxis();
+       if (s.snapTurn) {
+@@ -246,13 +253,14 @@
        const f = this.forward2D();
        // stick y negative = forward
        const fwd = -mv.y, side = mv.x;
@@ -4722,7 +4807,7 @@
          this.wantDodge = false;
          let dx = f.x * fwd - f.z * side, dy = f.z * fwd + f.x * side;
          const l = Math.hypot(dx, dy);
-@@ -401,43 +404,70 @@
+@@ -401,43 +409,70 @@
    askBossAction() {
      const pc = G.map.playerChar, d = this.facingDir();
      const dx = d === 4 ? -1 : d === 6 ? 1 : 0, dy = d === 8 ? -1 : d === 2 ? 1 : 0;
@@ -5027,7 +5112,7 @@
        this.flashSphere.visible = k > 0.003;
 --- upstream/app/src/scriptdata.js
 +++ fork/apps/client/src/data/scriptdata.js
-@@ -2,7 +2,7 @@
+@@ -2,9 +2,10 @@
  // name-window speaker names, bonfire warp list, symbol-encounter settings, the SEN reminder and the menu's SEN
  // window, and the message font size and screen size (BLACKSOULS II: Font.default_size = 19 in Scene_Base,
  // Graphics.resize_screen(640, 480)).
@@ -5035,8 +5120,11 @@
 +import { G } from '../core/globals.js';
  import { loadRvdata } from './data.js';
  import { bytesToString } from './marshal.js';
++import { readRegularWindow } from './regular-window.js';
  
-@@ -83,6 +83,56 @@
+ async function inflate(bytes) {
+   const ds = new DecompressionStream('deflate');
+@@ -83,6 +84,56 @@
      .map(m => m[1].split(',').map(x => x.trim()).filter(Boolean).map(Number));
    return rows.length >= 8 ? { variable, rows } : null;
  }
@@ -5093,7 +5181,7 @@
  // the menu's variable window ("メニュー変数": the SEN under its title, shown unless a switch is off)
  function menuVariable(src) {
    const v = /Var_Num\s*=\s*(\d+)/.exec(src);
-@@ -101,6 +151,126 @@
+@@ -101,6 +152,126 @@
  const MOVE_RE = new RegExp(String.raw`MOVE_LIST\s*\[\s*(\d+)\s*\]\s*=\s*\[\s*\[\s*${SQ}((?:\s*,\s*\d+)*)\s*\]\s*,\s*\[([\d\s,]*)\]\s*\]`, 'g');
  const EXPLAN_RE = new RegExp(String.raw`EXPLAN\s*\[\s*(\d+)\s*\]\s*=\s*\[\s*(${STR}(?:\s*,\s*${STR})*)\s*\]`, 'g');
  const CALL_RE = /CALL_COMMON\s*\[\s*(\d+)\s*\]\s*=\s*\[([\d,\s]*)\]/g;
@@ -5220,16 +5308,16 @@
  export function bonfireList(src) {
    const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
    const unq = (a, b) => (a ?? b ?? '').replace(/\\(.)/g, '$1');
-@@ -139,7 +309,7 @@
+@@ -139,7 +310,7 @@
  }
  // what the game's scripts set up, from their sections ([name, source] in the game's order)
  export function readScripts(entries) {
 -  const out = { names: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null };
-+  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null };
++  const out = { names: {}, nameAliases: {}, bonfires: [], symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null, regularWindow: null };
    const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
    // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
    // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
-@@ -150,6 +320,8 @@
+@@ -150,6 +321,8 @@
    };
    const byName = {}, byContent = {};
    for (const [name, src] of entries) {
@@ -5238,7 +5326,7 @@
      // font size / screen size: the last assignment in script order wins (comment lines skipped)
      const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
      for (const m of live.matchAll(/Font\.default_size\s*=\s*(\d+)/g)) out.fontSize = +m[1];
-@@ -159,16 +331,17 @@
+@@ -159,16 +332,19 @@
      out.synthesis = synthesis(src) || out.synthesis;
      out.keep = keeper(src) || out.keep;
      out.difficulty = difficulty(src) || out.difficulty;
@@ -5246,6 +5334,8 @@
 +    if (exchange !== undefined) out.exchangeShop = exchange;
 +    const guts = gutsSettings(src);
 +    if (guts !== undefined) out.guts = guts;
++    const regularWindow = readRegularWindow(src);
++    if (regularWindow !== undefined) out.regularWindow = regularWindow;
      for (const k of Object.keys(want)) {
        if (name === want[k]) (byName[k] ||= []).push(src);
        else if (!byContent[k] && holds[k](src)) byContent[k] = src;
@@ -6124,7 +6214,7 @@
    // a torn piece of the machine's picture: its crop, cut out along a ragged edge, drawn bigger
 --- upstream/app/src/ui.js
 +++ fork/apps/client/src/ui/ui.js
-@@ -1,14 +1,23 @@
+@@ -1,14 +1,24 @@
 +import { bonfireShown, bonfirePickable } from '../data/scriptdata.js';
  // VR-friendly UI: message window (RPG Maker escape codes), choices, number input, HUD,
  // notifications, pause menu, shop, bonfire warp.
@@ -6146,6 +6236,7 @@
 +import { cleanName, NAME_LEN } from '../network/coopnet.js';
 +import { battlerEffects, effectsKey, fitLabel } from './battler-status.js';
 +import { NavigationMap } from './navigation-map.js';
++import { DungeonStatus } from './dungeon-status.js';
 +import { setWindowSkin, drawGameWindow, drawGameCursor } from './window-skin.js';
 +import { desktopViewport, placeDesktopRoot, anchorDesktopPanel } from './desktop-layout.js';
 +import { paintDesktopHud } from './desktop-hud.js';
@@ -6154,7 +6245,7 @@
  
  export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
  const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
-@@ -36,6 +45,23 @@
+@@ -36,6 +46,23 @@
      this.mesh.visible = false;
    }
    commit() { this.tex.needsUpdate = true; }
@@ -6178,7 +6269,7 @@
    clear() { this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height); }
    // uv hit from a ray (VR pointer)
    hit(raycaster) {
-@@ -50,15 +76,24 @@
+@@ -50,15 +77,24 @@
    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
  }
@@ -6205,7 +6296,7 @@
  export function convertEscapes(text) {
    let t = String(text ?? '').replace(/\\/g, '\x1b').replace(/\x1b\x1b/g, '\\');
    for (let i = 0; i < 2; i++) t = t.replace(/\x1bV\[(\d+)\]/gi, (_, n) => String(G.state.v(+n)));
-@@ -94,10 +129,13 @@
+@@ -94,10 +130,13 @@
    return { text: plain, color: cm ? textColor(+cm[1]) : '#ddd' };
  }
  
@@ -6222,7 +6313,7 @@
    if (windowSkin) {
      const ctx = windowSkin.getContext('2d', { willReadFrequently: true });
      palette = [];
-@@ -108,11 +146,13 @@
+@@ -108,11 +147,13 @@
    }
  }
  export function textColor(n) { return palette[n] || '#fff'; }
@@ -6239,7 +6330,7 @@
  }
  
  // Layout converted text into drawable ops; s = canvas pixels per RM pixel, base = the game's font size
-@@ -183,25 +223,102 @@
+@@ -183,25 +224,102 @@
    }
  }
  
@@ -6348,7 +6439,7 @@
    // the title on one line - a long one (a co-op question with names in it) smaller, or on two lines at a sentence's end
    drawTitle(ctx, room) {
      const t = this.title || '';
-@@ -220,27 +337,93 @@
+@@ -220,27 +338,93 @@
      if (wide > room) ctx.font = `bold ${Math.max(18, Math.floor(30 * room / wide))}px ${FONT}`;
      ctx.fillText(a, 36, 32); ctx.fillText(b, 36, 72);
    }
@@ -6449,7 +6540,7 @@
        ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : '#f0f0f0';
        let rightW = 0;
        if (it.right) {
-@@ -249,9 +432,15 @@
+@@ -249,9 +433,15 @@
          ctx.textAlign = 'right';
          ctx.fillStyle = it.enabled === false ? 'rgba(255,255,255,0.35)' : 'rgba(235,225,195,0.95)';
          ctx.fillText(it.right, canvas.width - 44, y + this.rowH / 2 - 2);
@@ -6466,7 +6557,7 @@
        }
        let name = stripEscapes(it.text);
        const maxW = canvas.width - 44 - rightW - x;
-@@ -261,10 +450,14 @@
+@@ -261,10 +451,14 @@
        }
        ctx.fillText(name, x, y + this.rowH / 2 - 2);
      }
@@ -6482,7 +6573,7 @@
      }
      const desc = this.items[this.index]?.desc || this.footer;
      if (Array.isArray(desc)) {
-@@ -277,10 +470,27 @@
+@@ -277,10 +471,27 @@
        ctx.fillStyle = 'rgba(230,220,200,0.85)';
        ctx.fillText(stripEscapes(desc).slice(0, 60), 36, canvas.height - 30);
      }
@@ -6510,7 +6601,7 @@
      let changed = false;
      const ny = input.navY();
      // (from no row: down picks the first, up the last - 誤選択防止 1.01)
-@@ -292,17 +502,19 @@
+@@ -292,17 +503,19 @@
        let hover = -1;
        if (uv) {
          const py = (1 - uv.y) * this.panel.canvas.height;
@@ -6534,7 +6625,7 @@
      }
      if (changed) { this.draw(); G.audio?.playSystemSe(0); }
      if (input.confirm()) {
-@@ -312,7 +524,6 @@
+@@ -312,7 +525,6 @@
        else G.audio?.playSystemSe(3);
        return true;
      }
@@ -6542,7 +6633,7 @@
      return false;
    }
  }
-@@ -334,18 +545,31 @@
+@@ -334,18 +546,31 @@
      this.gridTop = 150;
      this.panel = new Panel(widthPx, this.gridTop + rows * this.cellH + 120, widthM);
      this.tabs = []; this.tab = 0; this.index = 0; this.top = 0; this.focusTabs = false;
@@ -6575,7 +6666,7 @@
    setItems(tabIndex, items) { this.tabs[tabIndex].items = items; this.index = Math.min(this.index, Math.max(0, items.length - 1)); this.draw(); }
    draw() {
      const { ctx, canvas } = this.panel;
-@@ -369,15 +593,18 @@
+@@ -369,15 +594,18 @@
      const row = Math.floor(this.index / this.cols);
      if (row < this.top) this.top = row;
      if (row >= this.top + this.rows) this.top = row - this.rows + 1;
@@ -6597,7 +6688,7 @@
        }
        drawIcon(ctx, it.icon, x + 10, y + 14, 48);
        ctx.font = `29px ${FONT}`;
-@@ -394,6 +621,7 @@
+@@ -394,6 +622,7 @@
        }
      }
      const totalRows = Math.ceil(items.length / this.cols);
@@ -6605,7 +6696,7 @@
      if (totalRows > this.rows) {
        ctx.font = `26px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.45)';
        ctx.textAlign = 'right'; ctx.fillText(`${row + 1}/${totalRows}`, canvas.width - 36, 50); ctx.textAlign = 'left';
-@@ -414,6 +642,12 @@
+@@ -414,6 +643,12 @@
    }
    update(raycaster) {
      const input = G.input;
@@ -6618,7 +6709,7 @@
      let changed = false;
      const items = this.items;
      const dx = input.navX(), dy = input.navY();
-@@ -429,18 +663,18 @@
+@@ -429,18 +664,18 @@
        const uv = this.panel.hit(raycaster);
        let hover = null;                          // 't3' = tab 3, 'c12' = cell 12
        if (uv) {
@@ -6641,7 +6732,7 @@
        }
        const apply = h => {
          if (h[0] === 't') { const t = +h.slice(1); if (t !== this.tab || !this.focusTabs) { this.tab = t; this.focusTabs = true; this.index = 0; this.top = 0; changed = true; } }
-@@ -449,17 +683,17 @@
+@@ -449,17 +684,17 @@
        // the laser moves the cursor only when it moves onto another tab / cell; the trigger picks it
        if (this.hover === undefined) this.hover = hover;   // just opened: remember, don't jump
        else if (hover !== this.hover) { this.hover = hover; if (hover) apply(hover); }
@@ -6662,7 +6753,7 @@
      return false;
    }
  }
-@@ -599,15 +833,15 @@
+@@ -599,15 +834,15 @@
        const uv = this.panel.hit(raycaster);
        let hover = null;
        if (uv) {
@@ -6680,7 +6771,7 @@
      }
      if (changed) { this.draw(); G.audio?.playSystemSe(0); }
      if (G.vr && input.xrPressed('right', 4)) { this.press(this.keysOf(this.row)[this.col]); return true; }   // A: the key picked
-@@ -622,14 +856,20 @@
+@@ -622,14 +857,20 @@
      this.scene = scene; this.camera = camera; this.rig = rig;
      this.root = new THREE.Group();          // world-space anchor in front of the user
      scene.add(this.root);
@@ -6702,7 +6793,7 @@
      this.grid = new GridPanel(1260, 3, 6, 1.2);
      this.root.add(this.grid.panel.mesh);
      this.keyboard = new KeyboardPanel();
-@@ -637,12 +877,22 @@
+@@ -637,12 +878,24 @@
      this.bannerPanel = new Panel(1600, 260, 2.2);
      this.root.add(this.bannerPanel.mesh);
      this.toastPanel = new Panel(900, 300, 0.75);
@@ -6719,6 +6810,8 @@
 +      drawIcon, fitLabel, assetRevision: iconAssetRevision, cleanName: stripEscapes,
 +      moreLabel: n => tr('추가 획득 {n}건', { n }) });
 +    this.navigation = new NavigationMap(Panel, this.root, camera, this.hud.mesh, FONT, { textColor });
++    this.dungeonStatus = new DungeonStatus(Panel, { font: FONT, textColor, windowBg, drawIcon, fitLabel });
++    this.camera.add(this.dungeonStatus.mesh);
      this.raycaster = new THREE.Raycaster();
      this.pointerLine = null;
      this.msg = null;
@@ -6727,7 +6820,7 @@
      this.menuOpen = false;
      this.sceneOpen = null;
      this.prompt = null;                     // (co-op) join the boss fight? - askBossJoin
-@@ -654,6 +904,9 @@
+@@ -654,6 +907,9 @@
      this.numberRange = null;
      this.consumedConfirm = false;
      this.anchorYaw = null;
@@ -6737,7 +6830,7 @@
      this.hudDirty = true;
      this.lastHud = '';
    }
-@@ -661,6 +914,24 @@
+@@ -661,6 +917,30 @@
    // ---------------------------------------------------------------- placement
    // keep UI in front of the user; re-centre when they look away
    placeRoot(force = false) {
@@ -6753,6 +6846,12 @@
 +        const miniWidth = Math.max(1, Math.min(220, viewport.width - 48, (viewport.height - 48) * 384 / 440));
 +        anchorDesktopPanel(this.navigation.mini, this.camera, viewport, { width: miniWidth, x: 'right', y: 'top' });
 +      }
++      const statusWidth = Math.max(1, Math.min(220, viewport.width - 48));
++      anchorDesktopPanel(this.dungeonStatus.panel, this.camera, viewport, { width: statusWidth, x: 'right', y: 'top' });
++      if (this.navigation.mini.mesh.visible) {
++        const pixels = this.dungeonStatus.mesh.scale.y * this.dungeonStatus.panel.widthM / statusWidth;
++        this.dungeonStatus.mesh.position.y -= this.navigation.mini.heightM * this.navigation.mini.mesh.scale.y + 8 * pixels;
++      }
 +      if (this.toastPanel.mesh.parent !== this.camera) this.camera.add(this.toastPanel.mesh);
 +      const toastWidth = Math.max(1, Math.min(360, viewport.width - 40));
 +      anchorDesktopPanel(this.toastPanel, this.camera, viewport, { width: toastWidth, x: 'left', y: 'top' });
@@ -6762,7 +6861,7 @@
      const head = new THREE.Vector3();
      this.camera.getWorldPosition(head);
      const q = new THREE.Quaternion();
-@@ -677,30 +948,107 @@
+@@ -677,30 +957,119 @@
      this.root.rotation.set(0, a, 0);
    }
  
@@ -6781,6 +6880,7 @@
 +    this.updateBackdrop();
 +    this.navigation.update(0, this.hudPresent && !G.combat?.playerDead && !this.dialogueActive() && !this.banner?.blocking,
 +      !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
++    this.updateDungeonStatus();
 +    const rewardsAllowed = this.rewards.place({ vr, viewport: desktopViewport(G.input, G.three?.renderer) });
 +    const rewardsPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || this.remote?.shown || this.prompt?.shown || G.combat?.playerDead;
 +    this.rewards.mesh.visible = !!(rewardsAllowed && !rewardsPaused && this.hudPresent && !this.banner && this.rewards.rows.length);
@@ -6802,6 +6902,9 @@
    attachHud(target) {
 +    this.navigation.attach(!!target);
 +    this.rewards.attach(!!target);
++    (target ? this.hud.mesh : this.camera).add(this.dungeonStatus.mesh);
++    this.dungeonStatus.mesh.rotation.set(0, 0, 0);
++    this.dungeonStatus.mesh.scale.setScalar(1);
 +    if (target) { this.root.add(this.toastPanel.mesh); this.toastPanel.mesh.scale.setScalar(1); this.toastPanel.mesh.position.set(0, -0.62, 0.02); }
 +    else this.camera.add(this.toastPanel.mesh);
      if (this.hud.mesh.parent) this.hud.mesh.parent.remove(this.hud.mesh);
@@ -6836,6 +6939,10 @@
 +    return true;
 +  }
 +  dialogueActive() { return !!this.msg || this.dialogueContinuing(); }
++  dialogueLookAllowed() {
++    return !G.vr && this.dialogueActive() && !this.sceneBusy() && !this.keyboard.visible
++      && !this.prompt?.shown && !this.remote?.shown && !this.banner?.blocking && !this.msg?.number && !G.combat?.playerDead;
++  }
 +  hideHeldMessage() {
 +    if (!this.heldMessage) return;
 +    this.heldMessage = null;
@@ -6846,6 +6953,7 @@
 +  }
 +  clearDialoguePresentation() {
 +    this.dialogue = null;
++    G.player?.dialogueCamera?.cancel();
 +    this.hideHeldMessage();
 +    if (!this.msg && !this.sceneBusy() && !this.remote?.shown && !this.prompt?.shown) this.backdrop.visible = false;
 +  }
@@ -6865,15 +6973,18 @@
 +  showMessage(msg, source = null) {
 +    this.heldMessage = null;
 +    const owner = source?.root || source;
++    const previous = this.dialogue;
++    const continuing = this.dialogueContinuing() && previous?.owner === owner && previous?.executionId === owner?.executionId;
 +    this.dialogue = owner ? { owner, source, executionId: owner.executionId, map: G.map, mapId: G.map?.mapId } : null;
      const banner = bannerOf(msg);
      if (banner) { this.showBanner(banner.text, banner.color, true); return; }
      this.msg = msg;
++    if (!continuing) G.player?.dialogueCamera?.begin(source);
 +    msg.name = this.speakerName(msg);
      msg.reveal = 0; msg.wait = 0; msg.fast = false; msg.state = 'typing';
      msg.ops = null;
      this.placeRoot(true);
-@@ -710,13 +1058,13 @@
+@@ -710,13 +1079,13 @@
      if (msg.lines.length === 0) msg.state = 'done-typing';
    }
    speakerName(msg) {
@@ -6890,7 +7001,7 @@
    }
    // The message box keeps the original window's proportions (BLACKSOULS II: a 640 px wide window, 12 px padding,
    // a 19 px font on 24 px lines, the face 96 px with the text 112 px in): every line takes the same share of the
-@@ -734,7 +1082,9 @@
+@@ -734,7 +1103,9 @@
      const L = this.messageLayout();
      msg.ops = layoutText(msg.lines, msg.face ? L.textX : L.left, L.top, L.k, ctx, L.font, L.right);
      msg.total = msg.ops.filter(o => o.k === 'ch' || o.k === 'icon').length;
@@ -6901,7 +7012,7 @@
      if (msg.face) loadCanvas('Graphics/Faces', msg.face).then(c => { msg.faceCanvas = c; if (this.msg === msg || (this.remote === msg && msg.shown)) this.drawMessage(msg); });
    }
    drawMessage(msg = this.msg) {
-@@ -742,7 +1092,11 @@
+@@ -742,13 +1113,23 @@
      const p = this.msgPanel;
      const { ctx, canvas } = p;
      p.clear();
@@ -6914,7 +7025,19 @@
      if (msg.faceCanvas) {
        const fi = msg.faceIndex || 0, L = this.messageLayout();
        ctx.imageSmoothingEnabled = true;
-@@ -757,11 +1111,14 @@
+       ctx.drawImage(msg.faceCanvas, (fi % 4) * 96, Math.floor(fi / 4) * 96, 96, 96, L.left, L.top, L.face, L.face);
+     }
+     drawOps(ctx, msg.ops, Math.floor(msg.reveal));
++    if (this.dialogueLookAllowed() && msg === this.msg) {
++      ctx.save(); ctx.font = `22px ${FONT}`; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
++      ctx.fillStyle = '#d2d0c8';
++      ctx.fillText(fitLabel(ctx, tr('오른쪽 버튼을 누른 채 드래그: 둘러보기'), canvas.width - 120), 36, canvas.height - 24);
++      ctx.restore();
++    }
+     if (msg.state === 'waitInput' || msg.state === 'pause') {
+       ctx.fillStyle = 'rgba(230,210,160,' + (0.5 + 0.5 * Math.sin(G.time * 6)) + ')';
+       ctx.beginPath(); ctx.moveTo(canvas.width - 50, canvas.height - 40); ctx.lineTo(canvas.width - 30, canvas.height - 40);
+@@ -757,11 +1138,14 @@
      p.commit();
      // name tab
      const np = this.namePanel;
@@ -6931,7 +7054,7 @@
        np.commit();
        np.mesh.visible = this.msgPanel.mesh.visible;
      } else np.mesh.visible = false;
-@@ -772,13 +1129,28 @@
+@@ -772,13 +1156,28 @@
      const y = pos === 0 ? 0.22 : pos === 1 ? -0.05 : -0.32;
      this.msgPanel.mesh.position.set(0, y, 0);
      this.namePanel.mesh.position.set(-this.msgPanel.widthM / 2 + this.namePanel.widthM / 2 + 0.02, y + this.msgPanel.heightM / 2 + this.namePanel.heightM / 2 - 0.005, 0);
@@ -6963,7 +7086,7 @@
      this.choice.close();
      this.consumedConfirm = true;
      this.actionLockUntil = G.time + 0.25;
-@@ -803,7 +1175,7 @@
+@@ -803,7 +1202,7 @@
    updateBossPrompt(dt) {
      const p = this.prompt;
      if (!p) return;
@@ -6972,7 +7095,7 @@
      if ((p.left -= dt) <= 0) { this.closeBossPrompt(); p.answer(false); return; }
      if (!p.shown) {
        p.shown = true;
-@@ -836,7 +1208,7 @@
+@@ -836,7 +1235,7 @@
    updateRemote() {
      const r = this.remote;
      if (!r) return;
@@ -6981,7 +7104,7 @@
        if (r.shown) {
          if (!this.msg) { this.msgPanel.mesh.visible = false; this.namePanel.mesh.visible = false; }
          if (r.choiceUp && this.msg?.state !== 'choice' && !this.prompt?.shown) this.choice.close();
-@@ -854,7 +1226,7 @@
+@@ -854,7 +1253,7 @@
      if (r.reveal < r.total) { r.reveal = Math.min(r.total, r.reveal + 2); this.drawMessage(r); }
      else if (r.choices && !r.choiceUp) {
        r.choiceUp = true;
@@ -6990,7 +7113,7 @@
        this.choice.panel.mesh.visible = true;
        this.layoutPanels(r);
      }
-@@ -893,7 +1265,7 @@
+@@ -893,7 +1292,7 @@
        if (msg.choices) {
          msg.state = 'choice';
          this.choice.open('', msg.choices.map(c => ({ text: c.text, enabled: c.enabled })), {
@@ -6999,7 +7122,7 @@
            onSelect: i => { msg.onChoice?.(i); this.closeMessage(); },
            onCancel: () => { if (msg.cancelable) { msg.onChoice?.(-1); this.closeMessage(); } },
          });
-@@ -985,11 +1357,11 @@
+@@ -985,11 +1384,11 @@
      if (ray) {
        const uv = this.choice.panel.hit(ray);
        if (uv) {
@@ -7014,7 +7137,7 @@
          }
        }
      }
-@@ -1151,13 +1523,19 @@
+@@ -1151,13 +1550,19 @@
    coopMembersRow() { return { text: tr('멤버 ({n}명)', { n: G.coop.members().length }), id: 'members', desc: tr('고르면 모두의 위치를 봅니다') }; }
    showCoopMembers(index = 0) {
      const c = G.coop;
@@ -7036,7 +7159,7 @@
      });
    }
    // (the developer's world) what of this bag may be given to that one: its things (not the key items), weapons and
-@@ -1213,12 +1591,12 @@
+@@ -1213,12 +1618,12 @@
      if (kind === 'world') {
        for (const s of ((await G.listSaves?.('world')) || []).sort((a, b) => a.slot - b.slot)) {
          const m = G.saveMeta(s.meta);
@@ -7051,7 +7174,7 @@
        }
        for (const s of (await G.listRmSaves?.()) || []) items.push({ text: `${tr('원작')} ${s.label}  ${s.map}`, right: String(s.time), rm: s });
      }
-@@ -1227,7 +1605,7 @@
+@@ -1227,7 +1632,7 @@
      this.list.open(kind === 'world' ? tr('서버 세이브 불러오기') : tr('세이브 불러오기'), items, {
        onSelect: async (i, it) => {
          const st = it.rm ? G.stateOfRm(it.rm.contents, it.rm.label) : await G.loadSave(it.slot, it.kind);
@@ -7060,7 +7183,7 @@
          this.closeMenu();
          c.worldLoad(st);
        },
-@@ -1451,9 +1829,9 @@
+@@ -1451,9 +1856,9 @@
    notifyGain(kind, id, n) {
      const d = itemData(kind, id);
      if (!d) return;
@@ -7073,7 +7196,7 @@
    // SEN went up or down (BLACKSOULS II's SEN reminder, from its own script): its strip and its sound
    notifySen(delta) {
      const sen = G.scripts?.sen;
-@@ -1492,7 +1870,7 @@
+@@ -1492,7 +1897,7 @@
        ctx.globalAlpha = a;
        const y = 10 + i * 72;
        if (t.sen) { this.drawSenStrip(ctx, p.canvas.width, y, t); ctx.globalAlpha = 1; return; }
@@ -7082,7 +7205,7 @@
        let x = 24;
        if (t.icon) { drawIcon(ctx, t.icon, x, y + 8, 48); x += 60; }
        ctx.font = `34px ${FONT}`; ctx.fillStyle = t.color; ctx.textBaseline = 'middle';
-@@ -1503,66 +1881,129 @@
+@@ -1503,66 +1908,130 @@
      });
      p.commit();
      p.mesh.visible = this.toasts.length > 0;
@@ -7246,6 +7369,7 @@
    pointerRay() {
 +    if (!G.vr) {
 +      const input = G.input, p = input.pointer, rect = input.dom?.getBoundingClientRect?.();
++      if (input.dialogueLooking?.()) return null;
 +      if (!p?.seen || input.pointerLocked || !rect?.width || !rect?.height || p.x < rect.left || p.x > rect.right || p.y < rect.top || p.y > rect.bottom) return null;
 +      this.camera.updateMatrixWorld(true); this.root.updateMatrixWorld(true);
 +      this.raycaster.setFromCamera(new THREE.Vector2((p.x - rect.left) / rect.width * 2 - 1, -(p.y - rect.top) / rect.height * 2 + 1), this.camera);
@@ -7254,7 +7378,7 @@
      const c = G.input.controllers.right;
      if (!G.vr || !c) return null;
      const m = c.ray.matrixWorld;
-@@ -1574,68 +2015,137 @@
+@@ -1574,68 +2043,137 @@
    // ---------------------------------------------------------------- menus
    openMenu() {
      if (this.menuOpen) return;
@@ -7418,7 +7542,7 @@
        case 'coop': this.showCoopMenu(); break;
        case 'turn':
          if (s.snapTurn && s.snapAngle === 30) s.snapAngle = 45;
-@@ -1650,8 +2160,42 @@
+@@ -1650,8 +2188,42 @@
        case 'diff':
          s.difficulty = s.difficulty >= 1.5 ? 0.5 : +(s.difficulty + 0.25).toFixed(2);
          G.saveSettings?.(); this.reopenMain('diff'); break;
@@ -7462,7 +7586,7 @@
      }
    }
    // an item / skill does something (effects or a damage formula)
-@@ -1779,23 +2323,27 @@
+@@ -1779,23 +2351,27 @@
    }
  
    // ---- equipment ----
@@ -7498,7 +7622,7 @@
      const P = $data.system.terms.params;
      const parts = [0, 2, 3, 4, 5, 6, 7].filter(i => after[i] !== before[i])
        .map(i => `${P[i]} ${after[i] > before[i] ? '+' : '−'}${Math.abs(after[i] - before[i])}`);
-@@ -1807,7 +2355,8 @@
+@@ -1807,7 +2383,8 @@
      this.grid.close();
      const slots = a.equips.map((e, slot) => {
        const d = itemData(e.kind, e.id);
@@ -7508,7 +7632,7 @@
      });
      this.list.open(tr('장비  ({name})', { name: a.name || '' }), slots, {
        index,
-@@ -1819,7 +2368,8 @@
+@@ -1819,7 +2396,8 @@
    // pointed at - what it changes, then what it is
    showEquipChoices(slot) {
      const a = G.state.party.leader();
@@ -7518,7 +7642,7 @@
      const party = G.state.party;
      const cands = [{ text: tr('(장비 해제)'), id: 0, desc: this.paramDelta(a, slot, kind, 0) }];
      for (const [id, n] of party.container(kind)) {
-@@ -1832,7 +2382,10 @@
+@@ -1832,7 +2410,10 @@
      this.grid.open(tr('{slot} 변경', { slot: this.slotName(slot) }), [{ label: this.slotName(slot), items: cands }], {
        tab: 0,
        onSelect: (it) => {
@@ -7530,7 +7654,7 @@
          G.combat.equipKey = null;
          G.audio?.playSystemSe(4);
          this.showEquipSlots(slot);
-@@ -1892,6 +2445,7 @@
+@@ -1892,6 +2473,7 @@
      const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
      const items = [
        { text: tr('VR 이동 속도'), id: 'vrSpeed', right: `×${s.vrSpeed ?? 2}`, desc: tr('스틱으로 걷는 속도 배율 (VR에서만)') },
@@ -7538,7 +7662,7 @@
        { text: tr('휘두르기 판정'), id: 'swing', right: SWING[s.swingLevel ?? 2], desc: tr('이 정도 세기로 휘둘러야 공격이 들어갑니다 (VR)') },
        { text: tr('이펙트 밝기'), id: 'fx', right: `${Math.round((s.fxBrightness ?? 0.5) * 100)}%`, desc: tr('번쩍임·빛·스킬 애니메이션의 밝기') },
        { text: tr('스킬 애니메이션'), id: 'anims', right: ANIMS[s.skillAnims || 'all'], desc: tr('원작 스킬·공격 애니메이션을 대상 위치에 재생합니다') },
-@@ -1909,6 +2463,7 @@
+@@ -1909,6 +2491,7 @@
        index,
        onSelect: (i, it) => {
          if (it.id === 'vrSpeed') s.vrSpeed = cycle([1, 1.5, 2, 2.5, 3], s.vrSpeed ?? 2);
@@ -7546,7 +7670,7 @@
          if (it.id === 'swing') s.swingLevel = ((s.swingLevel ?? 2) + 1) % 4;
          if (it.id === 'fx') s.fxBrightness = cycle([0.25, 0.5, 0.75, 1], s.fxBrightness ?? 0.5);
          if (it.id === 'anims') s.skillAnims = cycle(['all', 'skills', 'off'], s.skillAnims || 'all');
-@@ -1996,11 +2551,13 @@
+@@ -1996,11 +2579,13 @@
      const items = [
        { text: `${a.name || '???'}  Lv ${a.level}`, right: $data.classes[a.classId]?.name || '' },
        { text: `HP ${a.hp}/${a.mhp}`, right: `MP ${a.mp}/${a.mmp}` },
@@ -7561,7 +7685,7 @@
    }
    returnToTitle() { G.returnToTitle?.(); }
  
-@@ -2013,14 +2570,9 @@
+@@ -2013,14 +2598,9 @@
      this.toast(tr('{label}: VR판에서는 아직 지원하지 않습니다', { label }));
    }
    openBonfireWarp() {
@@ -7577,7 +7701,7 @@
      this.sceneOpen = 'bonfire';
      this.placeRoot(true);
      this.list.open(tr('화톳불 전송'), list.map(b => ({ text: b.name, desc: b.desc[0], enabled: bonfirePickable(b, sw) })), {
-@@ -2212,9 +2764,8 @@
+@@ -2212,9 +2792,8 @@
    }
    closeShop() { this.list.close(); this.sceneOpen = null; this.shopKeep = false; }
    showShopCommand(entries, index = 0) {
@@ -7589,7 +7713,7 @@
      ], {
        index,
        onSelect: (i, it) => {
-@@ -2236,17 +2787,51 @@
+@@ -2236,17 +2815,51 @@
      const msg = this.shopKeep ? K.toKeep : K.toBag;
      if (msg) this.toast(msg);
    }
@@ -7646,7 +7770,7 @@
        index: at,
        onSelect: (i, it) => {
          at = i;
-@@ -2327,30 +2912,43 @@
+@@ -2327,30 +2940,43 @@
      const P = G.state.party;
      // (the storage mode: what the storage still takes; nothing it may not keep)
      const left = this.shopKeep ? (P.keepSealed(e.kind, e.d.id) ? 0 : P.keepLimit(e.kind, e.d.id) - P.keptCount(e.kind, e.d.id)) : BAG_MAX - P.itemCount(e.kind, e.d.id);
@@ -7696,7 +7820,7 @@
          this.showShopQuantity(e, back, it.step === 'max' ? max : n + it.step, i);
        },
        onAdjust: dx => { this.showShopQuantity(e, back, n + dx, this.list.index); return true; },
-@@ -2362,8 +2960,10 @@
+@@ -2362,8 +2988,10 @@
    update(dt) {
      this.consumedConfirm = false;
      this.pointerTarget = false;
@@ -7708,7 +7832,7 @@
      if (anyPanel) this.placeRoot();
      if (this.banner) {
        this.banner.t += dt;
-@@ -2376,13 +2976,16 @@
+@@ -2376,13 +3004,16 @@
      }
      if (this.msg) this.updateMessage();
      else if (this.menuOpen || this.sceneOpen) {
@@ -7729,7 +7853,7 @@
      }
      this.updateBossPrompt(dt);
      this.updateRemote();
-@@ -2393,7 +2996,19 @@
+@@ -2393,7 +3024,20 @@
        if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
      }
      this.drawHud();
@@ -7739,6 +7863,7 @@
      this.updateHudFollow();
 +    this.navigation.update(dt, this.hudPresent && !G.combat?.playerDead && !this.dialogueActive() && !this.banner?.blocking,
 +      !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
++    this.updateDungeonStatus();
 +    if (!G.vr) this.placeRoot();
 +    const rewardPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
 +    if (!this.hudPresent && this.rewardsHadPlayer) this.rewards.clear();
@@ -7749,6 +7874,25 @@
      this.updatePointerLine();
    }
    updateHudFollow() {
+@@ -2405,6 +3049,18 @@
+     const head = new THREE.Vector3();
+     this.camera.getWorldPosition(head);
+     this.hud.mesh.lookAt(head);
++  }
++  updateDungeonStatus() {
++    const allowed = this.hudPresent && !G.map?.transferring && !G.combat?.playerDead && !this.sceneBusy()
++      && !this.dialogueActive() && !this.remote?.shown && !this.prompt?.shown && !this.banner?.blocking;
++    this.dungeonStatus.update(G.scripts?.regularWindow, G.state,
++      { scene: G.scripts?.regularWindow && G.combat?.inCombat ? 'battle' : 'map', visible: allowed, assetRevision: iconAssetRevision() });
++    if (this.hudFollow) {
++      const p = this.dungeonStatus.panel;
++      // Wrist: keep the native counter next to the map rather than over health.
++      this.dungeonStatus.mesh.position.set((this.hud.widthM + p.widthM) / 2 + 0.012,
++        this.hud.heightM / 2 - p.heightM / 2, 0.001);
++    }
+   }
+   // snap turning stays off while a menu / choice uses the right stick
+   blocksTurning() { return this.menuOpen || !!this.sceneOpen || this.msg?.state === 'choice' || this.msg?.state === 'number' || !!this.prompt?.shown; }
 --- upstream/app/src/vrbutton.js
 +++ fork/apps/client/src/vr/vrbutton.js
 @@ -12,8 +12,9 @@
@@ -8192,6 +8336,142 @@
 +  return cellHasPixels(primary, index) === false && cellHasPixels(fallback, index) === true ? fallback : primary;
 +}
 --- /dev/null
++++ fork/apps/client/src/data/regular-window.js
+@@ -0,0 +1,133 @@
++// Static configuration for the installed W_REGULAR variable window. Never
++// evaluate Ruby: a translated label or changed variable ID is ordinary data.
++function uncomment(source) {
++  let quote = null, block = false;
++  return String(source).split(/\r?\n/).map(line => {
++    if (!quote && /^=begin(?:\s|$)/.test(line)) { block = true; return ''; }
++    if (block) { if (/^=end(?:\s|$)/.test(line)) block = false; return ''; }
++    let live = '';
++    for (let i = 0; i < line.length; i++) {
++      const char = line[i];
++      if (quote) {
++        live += char;
++        if (char === '\\' && i + 1 < line.length) live += line[++i];
++        else if (char === quote) quote = null;
++      } else if (char === '#') break;
++      else { live += char; if (char === '"' || char === "'") quote = char; }
++    }
++    return live;
++  }).join('\n');
++}
++
++// The settings use only numbers, booleans, strings, arrays and symbol-keyed
++// hashes. Restrict the grammar so calls, interpolation and conditional settings
++// cannot masquerade as installed constants.
++function literal(source) {
++  let offset = 0;
++  const space = () => { while (/\s/.test(source[offset] || '') && offset < source.length) offset++; };
++  const read = (depth = 0) => {
++    if (depth > 8) throw Error('nested setting');
++    space(); const char = source[offset];
++    if (char === '"' || char === "'") {
++      const quote = char; offset++; let text = '';
++      while (offset < source.length) {
++        const next = source[offset++];
++        if (next === quote) return text;
++        if (quote === '"' && next === '#' && source[offset] === '{') throw Error('interpolation');
++        if (next !== '\\') { text += next; continue; }
++        const escape = source[offset++];
++        if (escape === undefined) break;
++        if (quote === "'") text += /['\\]/.test(escape) ? escape : '\\' + escape;
++        else {
++          const escapes = { n: '\n', r: '\r', t: '\t', '"': '"', '\\': '\\', '#': '#' };
++          if (!(escape in escapes)) throw Error('unsupported escape');
++          text += escapes[escape];
++        }
++      }
++      throw Error('unterminated string');
++    }
++    if (char === '[' || char === '{') {
++      const array = char === '[', end = array ? ']' : '}', result = array ? [] : Object.create(null);
++      offset++; space();
++      while (source[offset] !== end) {
++        if (offset >= source.length) throw Error('unterminated collection');
++        if (array) result.push(read(depth + 1));
++        else {
++          const key = /^:([a-z]\w*)\s*=>/.exec(source.slice(offset));
++          if (!key) throw Error('nonliteral key');
++          offset += key[0].length; result[key[1]] = read(depth + 1);
++        }
++        space();
++        if (source[offset] !== ',') break;
++        offset++; space();
++      }
++      if (source[offset++] !== end) throw Error('collection delimiter');
++      return result;
++    }
++    const token = /^(true|false|-?\d+(?:\.\d+)?)(?![\w.])/.exec(source.slice(offset));
++    if (!token) throw Error('nonliteral value');
++    offset += token[0].length;
++    return token[1] === 'true' ? true : token[1] === 'false' ? false : Number(token[1]);
++  };
++  const result = read(); space();
++  if (offset !== source.length) throw Error('trailing expression');
++  return result;
++}
++const integer = (value, min = 0, max = 1000000) => Number.isSafeInteger(value) && value >= min && value <= max;
++const tableNames = ['M_W_X', 'M_W_Y', 'B_W_X', 'B_W_Y', 'WIDTH', 'HEIGHT', 'FSIZE', 'ITEM'];
++function settings(body) {
++  const values = {}, tables = Object.fromEntries(tableNames.map(key => [key, {}]));
++  const assignments = [...body.matchAll(/^[ \t]*([A-Z]\w*)(?:\s*\[\s*(\d+)\s*\])?\s*=/gm)];
++  if (!assignments.length || body.slice(0, assignments[0].index).trim()) throw Error('runtime configuration');
++  for (let i = 0; i < assignments.length; i++) {
++    const match = assignments[i], [, key, index] = match;
++    const expression = body.slice(match.index + match[0].length, assignments[i + 1]?.index ?? body.length);
++    const value = literal(expression.trim().replace(/;$/, '').trim());
++    if (index !== undefined) {
++      if (!tableNames.includes(key) || !integer(+index, 0, 1024)) throw Error('unknown indexed setting');
++      tables[key][index] = value;
++    } else if (tableNames.includes(key)) {
++      if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length) throw Error('nonempty table initializer');
++      tables[key] = {};
++    } else if (['M_USE', 'M_SID', 'B_USE', 'B_SID', 'VID'].includes(key)) values[key] = value;
++    else throw Error('unknown setting');
++  }
++  if (typeof values.M_USE !== 'boolean' || typeof values.B_USE !== 'boolean'
++    || !['M_SID', 'B_SID', 'VID'].every(key => integer(values[key]))) throw Error('incomplete settings');
++  const items = {};
++  for (const [type, rows] of Object.entries(tables.ITEM)) {
++    if (!Array.isArray(rows) || rows.length > 32) throw Error('invalid rows');
++    items[type] = rows.map(row => {
++      if (!row || Array.isArray(row) || !integer(row.variable_id) || !integer(row.y, -8192, 8192)
++        || (row.switch_id !== undefined && !integer(row.switch_id))
++        || ['name', 'afterword'].some(key => row[key] !== undefined && typeof row[key] !== 'string')
++        || ['icon_id', 'name_c'].some(key => row[key] !== undefined && !integer(row[key]))
++        || (row.no_value !== undefined && typeof row.no_value !== 'boolean')
++        || (row.font_size !== undefined && !integer(row.font_size, 8, 128))
++        || (row.x !== undefined && !integer(row.x, -8192, 8192))
++        || (row.width !== undefined && !integer(row.width, 1, 8192))
++        || Object.keys(row).some(key => key.startsWith('gauge_'))) throw Error('unsupported row');
++      return { variable: row.variable_id, switchId: row.switch_id ?? null, label: row.name ?? '', suffix: row.afterword ?? '',
++        icon: row.icon_id ?? 0, color: row.name_c ?? 0, noValue: row.no_value ?? false,
++        x: row.x ?? 0, y: row.y, width: row.width ?? null, fontSize: row.font_size ?? null };
++    });
++  }
++  if (!Object.keys(items).length) throw Error('missing rows');
++  for (const key of tableNames.filter(key => key !== 'ITEM')) for (const value of Object.values(tables[key])) {
++    if (!integer(value, key === 'WIDTH' || key === 'HEIGHT' || key === 'FSIZE' ? 1 : -65536, 65536)) throw Error('invalid layout');
++  }
++  return { map: { enabled: values.M_USE, switchId: values.M_SID }, battle: { enabled: values.B_USE, switchId: values.B_SID },
++    typeVariable: values.VID, items, layout: { mapX: tables.M_W_X, mapY: tables.M_W_Y, battleX: tables.B_W_X,
++      battleY: tables.B_W_Y, width: tables.WIDTH, height: tables.HEIGHT, fontSize: tables.FSIZE } };
++}
++
++// undefined means this script does not configure the window; null explicitly
++// disables an unsupported replacement, rather than reusing an older definition.
++export function readRegularWindow(source) {
++  const clean = uncomment(source);
++  let result;
++  for (const match of clean.matchAll(/^[ \t]*module[ \t]+W_REGULAR[ \t]*\n([^]*?)^[ \t]*end\b/gm)) {
++    try { result = settings(match[1]); } catch { result = null; }
++  }
++  return result;
++}
+--- /dev/null
 +++ fork/apps/client/src/entities/character-props.js
 @@ -0,0 +1,76 @@
 +import * as THREE from 'three';
@@ -8269,6 +8549,83 @@
 +  const geometry = mergeGeometries(parts); parts.forEach(part => part.dispose());
 +  geometry.userData = { source: 'character-prop-frame', frame: [frame.x, frame.y, frame.width, frame.height], supportHeight: height };
 +  return geometry;
++}
+--- /dev/null
++++ fork/apps/client/src/entities/dialogue-camera.js
+@@ -0,0 +1,74 @@
++// A short desktop introduction to the event that is speaking. It never tracks
++// the speaker after the turn or competes with the player's own mouse movement.
++import * as THREE from 'three';
++import { G } from '../core/globals.js';
++import { T } from '../world/mapmesh.js';
++import { eventActionPosition } from './event-position.js';
++
++const TURN_SECONDS = 0.38;
++const angle = a => Math.atan2(Math.sin(a), Math.cos(a));
++
++function speakerPosition(event, player) {
++  if (!event || event.erased || event.transparent || event.opacity === 0 || event.tileId > 0 || !event.characterName) return null;
++  const position = eventActionPosition(event);
++  if (!position) return null;
++  const sprite = G.view?.sprites?.find(s => s.ch === event);
++  const mode = sprite?.mode ?? sprite?.layMode?.();
++  if (sprite && (sprite.hiddenNow || sprite.group?.visible === false || mode !== 'stand')) return null;
++  // Use the visible sprite's upper body, including its floor/wall placement and
++  // transparent margins. A not-yet-built sheet uses an ordinary speaking height.
++  let y;
++  if (sprite?.mesh && Number.isFinite(sprite.bodySize?.[1])) {
++    const base = sprite.mesh.getWorldPosition(new THREE.Vector3());
++    y = base.y + (sprite.bodySize[1] - (sprite.headDrop || 0)) * sprite.mesh.scale.y * 0.82;
++  } else {
++    const floor = Number.isFinite(event.viewPos?.y) ? event.viewPos.y : G.floorAt?.(position.x, position.y) || 0;
++    y = floor + 1.3;
++  }
++  const target = new THREE.Vector3((position.x + 0.5) * T, y, (position.y + 0.5) * T);
++  if (!target.toArray().every(Number.isFinite)) return null;
++  // Remote narration and map-wide autoruns should not swivel the view across an
++  // area. This still covers a conversation across a counter or elevated desk.
++  if (target.distanceTo(player.headWorld(new THREE.Vector3())) > 6 * T) return null;
++  return target;
++}
++
++export class DialogueCamera {
++  constructor(player) { this.player = player; this.focus = null; }
++  cancel() { this.focus = null; }
++  begin(source) {
++    this.cancel();
++    const map = G.map, owner = source?.root || source;
++    if (G.vr || !map || map.transferring || !owner?.main || !owner.running() || owner.mapId !== map.mapId) return false;
++    const event = source.event?.() || owner.event?.();
++    if (!event || map.events?.[event.id] !== event || !speakerPosition(event, this.player)) return false;
++    this.focus = { map, owner, event, executionId: owner.executionId,
++      yaw: this.player.yaw, pitch: this.player.pitch, time: 0 };
++    return true;
++  }
++  update(dt) {
++    const f = this.focus;
++    if (!f) return;
++    const input = G.input, ui = G.ui, player = this.player;
++    if (G.vr || G.map !== f.map || f.map.transferring || !f.owner.running() || f.owner.executionId !== f.executionId
++      || f.map.events?.[f.event.id] !== f.event || G.combat?.playerDead || input?.pageFocused === false
++      || input?.mouse?.dx || input?.mouse?.dy || input?.dialogueLooking?.() || input?.textInputFocused?.()
++      || ui?.sceneBusy?.() || ui?.keyboard?.visible || ui?.prompt?.shown || !ui?.dialogueContinuing?.()) {
++      this.cancel(); return;
++    }
++    const target = speakerPosition(f.event, player);
++    if (!target) { this.cancel(); return; }
++    // Desktop rotation is local to the rig. Converting the target also handles
++    // a rig that was turned in VR before returning to desktop play.
++    player.rig.worldToLocal(target);
++    const dx = target.x - player.camera.position.x, dz = target.z - player.camera.position.z;
++    const distance = Math.hypot(dx, dz);
++    if (distance < 0.05 || !Number.isFinite(dt) || dt < 0) { this.cancel(); return; }
++    const yaw = Math.atan2(-dx, -dz), pitch = THREE.MathUtils.clamp(Math.atan2(target.y - G.settings.eyeHeight, distance), -1.1, 1.1);
++    f.time = Math.min(TURN_SECONDS, f.time + Math.min(dt, 0.1));
++    const t = f.time / TURN_SECONDS, ease = t * t * (3 - 2 * t);
++    player.yaw = f.yaw + angle(yaw - f.yaw) * ease;
++    player.pitch = f.pitch + (pitch - f.pitch) * ease;
++    if (f.time >= TURN_SECONDS) this.cancel();
++  }
 +}
 --- /dev/null
 +++ fork/apps/client/src/entities/event-position.js
@@ -9324,6 +9681,62 @@
 +  panel.mesh.scale.set(scale * pixels.x / pixels.y, scale, scale);
 +  panel.mesh.position.set((left + width / 2 - viewport.width / 2) * pixels.x,
 +    (viewport.height / 2 - top - fullHeight / 2) * pixels.y, -1);
++}
+--- /dev/null
++++ fork/apps/client/src/ui/dungeon-status.js
+@@ -0,0 +1,53 @@
++// The original persistent dungeon indicator is a W_REGULAR row. Its label,
++// variable and visibility come from the selected game's installed scripts.
++export function dungeonStatus(config, state, { scene = 'map' } = {}) {
++  const mode = config?.[scene];
++  if (!mode?.enabled || !state || !state.sw(mode.switchId)) return null;
++  const type = state.v(config.typeVariable);
++  if (!Number.isSafeInteger(type)) return null;
++  const rows = (config.items[type] || []).filter(row => row.switchId === null || state.sw(row.switchId)).map(row => {
++    const raw = state.v(row.variable), value = row.noValue ? '' : String(raw ?? 0) + row.suffix;
++    return { ...row, value, text: [row.label, value].filter(Boolean).join(' ') };
++  });
++  if (!rows.length) return null;
++  const text = rows.map(row => row.text).join(' · ');
++  return { type, rows, text, key: JSON.stringify([scene, type, rows]) };
++}
++
++// Placement is left to the UI's minimap/wrist anchors. This class does not read
++// globals or infer dungeon membership from names, maps, difficulty or save data.
++export class DungeonStatus {
++  constructor(Panel, { font = 'sans-serif', textColor = () => '#fff', windowBg, drawIcon = () => {}, fitLabel = (_ctx, text) => text } = {}) {
++    this.panel = new Panel(512, 80, 0.22);
++    this.mesh = this.panel.mesh;
++    this.helpers = { font, textColor, windowBg, drawIcon, fitLabel };
++    this.key = null;
++  }
++  update(config, state, { scene = 'map', visible = true, assetRevision = 0 } = {}) {
++    const status = visible ? dungeonStatus(config, state, { scene }) : null;
++    this.mesh.visible = !!status;
++    if (!status) return null;
++    const key = `${assetRevision}/${status.key}`;
++    if (this.key === key) return status;
++    this.key = key;
++    const { panel } = this, { ctx, canvas } = panel, { font, textColor, windowBg, drawIcon, fitLabel } = this.helpers;
++    const height = Math.max(80, status.rows.length * 56 + 24);
++    panel.resize(512, height); panel.clear();
++    windowBg?.(ctx, 0, 0, canvas.width, canvas.height, 0.15, 0.4);
++    ctx.save(); ctx.textBaseline = 'middle'; ctx.lineWidth = 4; ctx.strokeStyle = '#08080b';
++    status.rows.forEach((row, index) => {
++      const y = 40 + index * 56, x = row.icon ? 64 : 24;
++      if (row.icon) drawIcon(ctx, row.icon, 22, y - 16, 32);
++      ctx.font = `32px ${font}`;
++      const value = fitLabel(ctx, row.value, 220), valueWidth = ctx.measureText(value).width;
++      const label = fitLabel(ctx, row.label, Math.max(0, 464 - x - valueWidth));
++      ctx.textAlign = 'left'; ctx.fillStyle = textColor(row.color);
++      ctx.strokeText(label, x, y); ctx.fillText(label, x, y);
++      ctx.textAlign = 'right'; ctx.fillStyle = textColor(0);
++      ctx.strokeText(value, 488, y); ctx.fillText(value, 488, y);
++    });
++    ctx.restore(); panel.commit();
++    return status;
++  }
++  hide() { this.mesh.visible = false; }
 +}
 --- /dev/null
 +++ fork/apps/client/src/ui/navigation-map.js
