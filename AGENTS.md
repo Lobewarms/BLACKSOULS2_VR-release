@@ -2548,3 +2548,8 @@ Local gates:1,076 JavaScript tests pass, ESLint, production build, Ruff,
 8 packaging tests and7 Python protocol tests. Original command352 was verified
 to guard only against battle context before opening Scene_Save; save_disabled
 is not its gate. No player save was modified or written during these tests.
+
+Current source comparison: runtimec8b3e29dc41c8d5ad88d35d7d320945faa67ef4a (0.2.41),
+48 originals,15 unchanged after import moves,33 modified,44 new and0 missing;
+4,168 added/937 removed lines in modified originals after import normalization.
+Historical image versions and source pins are unchanged.

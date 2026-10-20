@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: 97378d0a936a46743b98bcc929d639d19b6c1143 (committed source)
+# Fork: c8b3e29dc41c8d5ad88d35d7d320945faa67ef4a (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -9998,7 +9998,7 @@
 +}
 --- /dev/null
 +++ fork/apps/client/src/game/manual-save-menu.js
-@@ -0,0 +1,72 @@
+@@ -0,0 +1,74 @@
 +import { G } from '../core/globals.js';
 +import { tr } from '../ui/i18n.js';
 +import { saveLocation } from './savepresentation.js';
@@ -10019,7 +10019,9 @@
 +  const title = () => kind === 'world' ? tr('개발자 서버 세이브 — 저장할 슬롯') : tr('세이브 — 저장할 슬롯');
 +  const showSlots = async () => {
 +    if (!current()) { complete(false); return; }
-+    if (state?.system.saveDisabled || G.coop.phantom || (kind === 'world' && !G.coop.world)) {
++    // VX Ace command352 opens the authored save scene independently of the
++    // ordinary menu's save_disabled flag (e.g. Chaos Dungeon skull checkpoints).
++    if ((!event && state?.system.saveDisabled) || G.coop.phantom || (kind === 'world' && !G.coop.world)) {
 +      ui.toast(tr('지금은 저장할 수 없습니다')); back(); return;
 +    }
 +    if (event) { ui.menuOpen = true; ui.list.close(); }
