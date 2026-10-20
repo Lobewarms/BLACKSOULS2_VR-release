@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: 4a82c174e1a17aab689dea8df17866619b45fd9c (committed source)
+# Fork: 457d5c625cbe95480d4004c7a1df9c22e9ee1df6 (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -367,7 +367,7 @@
 +import { BonusActions } from './bonus-actions.js';
 +import { usableRepeats, randomTargetCount } from './usable-counts.js';
 +import { withActorEquipment } from '../game/actor-equipment.js';
-+import { menuSkills, menuWeaponCandidates } from './menu-weapon-skills.js';
++import { menuSkills, menuWeaponCandidates, menuKnowsSkill } from './menu-weapon-skills.js';
 +import { battlerEffects, effectsKey, fitLabel } from '../ui/battler-status.js';
 +import { openFights } from '../world/maphints.js';
 +import { personalPage } from '../network/coopworld.js';
@@ -1298,7 +1298,7 @@
 +    if (!actor || !source || this.playerDead || this.spectating || this.restrained) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
 +    if (actor.hp <= 0 && !actor.stateResist(1)) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
 +    if (this.healing) return fail(tr('다른 아이템을 쓰는 중'));
-+    if (!actor.allSkills().some(s => s.id === source.id)) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
++    if (!menuKnowsSkill(actor, source.id)) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
 +    const effective = this.skillByState(actor, source);
 +    for (const s of new Set([source, effective])) {
 +      if (s.occasion === 3) return fail(tr('사용할 수 없습니다'), s);
@@ -4909,7 +4909,7 @@
  export function openFights(mapId) { return !!MAP_HINTS[mapId]?.openFights; }
 --- upstream/app/src/mapmesh.js
 +++ fork/apps/client/src/world/mapmesh.js
-@@ -11,11 +11,16 @@
+@@ -11,11 +11,17 @@
    TileDrawer, TS, F, DIR_BIT, TILE, isWallType, isWallSide, isWallTop, isRoof, isA1, isA2,
    isVisible, autotileKind, isWater,
  } from './tiles.js';
@@ -4926,10 +4926,28 @@
 +import { isBridgeDeckTile } from './bridges.js';
 +import { isAuthoredFloorAutotile } from './floor-autotiles.js';
 +import { completePassagePockets, gradePassageChains } from './passage-grades.js';
++import { billboardGeometryChunks, ordinaryGeometryChunks } from './map-geometry.js';
  
  export const T = 1.5; // meters per tile
  
-@@ -225,9 +230,14 @@
+@@ -189,6 +195,16 @@
+     g.computeBoundingSphere();
+     return g;
+   }
++  geometries() {
++    if (!this.center && this.n < 2048 * 4) return [this.geometry()];
++    const attributes = {
++      position: { array: this.pos, itemSize: 3 }, uv: { array: this.uv, itemSize: 2 },
++      color: { array: this.col, itemSize: 3 }, normal: { array: this.nrm, itemSize: 3 },
++    };
++    if (!this.center) return ordinaryGeometryChunks(attributes, this.idx, 32 * T);
++    attributes.center = { array: this.center, itemSize: 3 };
++    return billboardGeometryChunks(attributes, this.idx, 32 * T, 2048);
++  }
+ }
+ 
+ // Shared uniform: viewer (head) position for cylindrical billboards
+@@ -225,9 +241,14 @@
  }
  
  export async function buildMapMesh(grid, opts = {}) {
@@ -4945,7 +4963,7 @@
    const { w, h } = grid;
    const flatTiles = opts.flatPictures ? new Set(opts.flatPictures) : null;   // maphints: pictures kept facing south
    // maphints terraces: a terraced town's stairs drawn as floor tiles (their edge pieces too)
-@@ -392,9 +402,13 @@
+@@ -392,9 +413,13 @@
      const ctx = c.getContext('2d', { willReadFrequently: true });
      drawer.draw(ctx, id, 0, 0, 0);
      const d = ctx.getImageData(0, 0, TS, TS).data;
@@ -4961,7 +4979,7 @@
      tileAvgs.set(id, avg);
      return avg;
    };
-@@ -407,9 +421,11 @@
+@@ -407,9 +432,11 @@
  
    // ---- upper layer objects: 0 none, 1 flat decal, 2 solid (blocks some direction), 3 star
    const objType = new Uint8Array(w * h);
@@ -4973,7 +4991,7 @@
      const f = grid.flag(t2);
      if (f & F.STAR) objType[idx(x, y)] = 3;
      else if ((f & F.ALL) !== 0) objType[idx(x, y)] = 2;
-@@ -483,6 +499,19 @@
+@@ -483,6 +510,19 @@
      const ids = [0, 1, 2].map(z => grid.tile(x, y, z)).filter(isVisible);
      if (ids.length && ids.every(t => tileAvg(t).cover === 0)) clear[idx(x, y)] = 1;
    }
@@ -4993,7 +5011,7 @@
    // over an open void, impassable upper-layer tiles with nothing under them are railings / bridge edges
    if (openVoid) for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
      const i = idx(x, y);
-@@ -581,8 +610,7 @@
+@@ -581,8 +621,7 @@
    // walls with the blankets on their faces
    const lyingTile = new Set();
    for (let t = 0; t < 1024; t++) {
@@ -5003,7 +5021,7 @@
    }
    const cand = new Uint8Array(w * h);
    // (maphints solids: cells the map leaves walkable or draws as water that are part of a block - a facade's columns drawn
-@@ -655,7 +683,10 @@
+@@ -655,7 +694,10 @@
    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
      const i = idx(x, y);
      if (forcedSolid[i] && !solid[i] && !empty[i]) { pit[i] = 0; cand[i] = 1; continue; }
@@ -5015,7 +5033,7 @@
      if (lyingTile.has(grid.tile(x, y, 2))) continue;
      if (isWaterTop(x, y) || grid.isTableTop(x, y) || !Number.isNaN(lipH[i])) continue; // water/lava, counters, ledges stay low
      if (onStairTile(x, y)) continue;                     // (a stair's edge piece goes with its stairs)
-@@ -786,7 +817,7 @@
+@@ -786,7 +828,7 @@
    // ones (a hole, an open grave) stay pictures on the floor
    const LOW_H = 0.5;                                    // tiles
    for (let i = 0; i < w * h; i++) {
@@ -5024,7 +5042,7 @@
      if (!Number.isNaN(lipH[i])) { solid[i] = SOLID_LOW; height[i] = lipH[i]; continue; }     // (maphints lips)
      const x = i % w, y = (i / w) | 0;
      if (grid.anyPassable(x, y) || isWaterTop(x, y) || onStairTile(x, y)) continue;
-@@ -818,13 +849,19 @@
+@@ -818,13 +860,19 @@
      const i = idx(x, y);
      if (empty[i] || solid[i] === SOLID_MASS || solid[i] === SOLID_VOID) continue;
      const t0 = grid.tile(x, y, 0), t1 = grid.tile(x, y, 1);
@@ -5046,7 +5064,7 @@
      const x = j % w, y = (j / w) | 0, nx = k % w, ny = (k / w) | 0;
      const d = nx > x ? 6 : nx < x ? 4 : ny > y ? 2 : 8;
      return grid.passable(x, y, d) && grid.passable(nx, ny, 10 - d);
-@@ -1008,11 +1045,28 @@
+@@ -1008,11 +1056,28 @@
        constrained[a] = adj[a].length ? 1 : 0;
      }
    } else {
@@ -5075,7 +5093,7 @@
        // a plain wall between two places is only a cliff when stairs / a fall lip prove it,
        // or when both sides are real areas (not a decorative strip on top of a wall)
        if (!b.stairs && !b.fall && (areaOf(A) < BIG_AREA || areaOf(B) < BIG_AREA)) continue;
-@@ -1023,7 +1077,7 @@
+@@ -1023,7 +1088,7 @@
      const adj = compCells.map(() => []);
      for (const [key, ks] of edges) {
        const [A, B] = key.split('>').map(Number);
@@ -5084,7 +5102,7 @@
        const tally = {};
        for (const k of ks) tally[k] = (tally[k] || 0) + 1;
        const k = +Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0];
-@@ -1283,6 +1337,15 @@
+@@ -1283,6 +1348,15 @@
    if (opts.falls?.some(f => f.dir === 1)) {
      const tower = !!opts.sideView;
      const walk = i => !solid[i] && !empty[i] && !pit[i] && grid.anyPassable(i % w, (i / w) | 0);
@@ -5100,7 +5118,7 @@
      // the player can step between the two cells (each passable toward the other, as in the original)
      const OPP_DIR = { 2: 8, 4: 6, 6: 4, 8: 2 };
      const link = (x, y, dx, dy, d) => {
-@@ -1301,7 +1364,7 @@
+@@ -1301,7 +1375,7 @@
          x = x1;
        }
      }
@@ -5109,7 +5127,7 @@
      const node = new Int32Array(w * h).fill(-1);
      const nodeSize = [], nodeRows = [];
      for (let s0 = 0; s0 < w * h; s0++) {
-@@ -1465,16 +1528,18 @@
+@@ -1465,16 +1539,18 @@
        for (let x = 0; x < w; x++) {
          let y = 0;
          while (y < h) {
@@ -5131,7 +5149,7 @@
          }
        }
        // the falls first: each group of falls tied together keeps its biggest landing area where it is
-@@ -1500,7 +1565,7 @@
+@@ -1500,7 +1576,7 @@
          for (const r of runs) {
            if (r.top < 0 || r.bot < 0 || r.y1 - r.y0 + 1 > maxLen) continue;
            const tc = idx(r.x, r.y0 - 1), bc = idx(r.x, r.y1 + 1);
@@ -5140,7 +5158,7 @@
            const tb = rise ? floorE0[bc] + rise - floorE0[tc] : 0;     // delta(top) - delta(bottom)
            if (delta.has(r.top) && !delta.has(r.bot)) { delta.set(r.bot, delta.get(r.top) - tb); changed = true; }
            else if (delta.has(r.bot) && !delta.has(r.top)) { delta.set(r.top, delta.get(r.bot) + tb); changed = true; }
-@@ -1517,7 +1582,9 @@
+@@ -1517,7 +1593,9 @@
          const L = r.y1 - r.y0 + 1;
          if (dt !== undefined && db !== undefined) {
            // between two placed areas: a ramp from the one to the other (a ladder down to a lower floor)
@@ -5151,7 +5169,7 @@
            for (let k = 0; k < L; k++) {
              const j = idx(r.x, r.y0 + k);
              surfNArr[j] = hT + (hB - hT) * k / L;
-@@ -1527,10 +1594,22 @@
+@@ -1527,10 +1605,22 @@
            }
            continue;
          }
@@ -5175,7 +5193,7 @@
            for (let k = 0; k < L1; k++) {
              const j = idx(r.x, r.y0 + k);
              if (dt !== undefined) { surfNArr[j] = end - k; surfSArr[j] = end - k - 1; }
-@@ -1550,6 +1629,16 @@
+@@ -1550,6 +1640,16 @@
            if (Math.abs(surfNArr[j] - surfSArr[j]) > 0.01) slope[j] = 1;
          }
        }
@@ -5192,7 +5210,7 @@
        // floor that cannot be walked on (under furniture, behind counters) moves with what is beside it
        {
          const moved = new Uint8Array(w * h), q = [];
-@@ -1794,8 +1883,8 @@
+@@ -1794,8 +1894,8 @@
      const key = upperId + ':' + lowerId;
      if (connCache.has(key)) return connCache.get(key);
      sctx.clearRect(0, 0, TS, TS * 2);
@@ -5203,7 +5221,7 @@
      const a = sctx.getImageData(0, TS - 1, TS, 2).data;
      let both = 0, any = 0;
      for (let i = 0; i < TS; i++) {
-@@ -1815,8 +1904,8 @@
+@@ -1815,8 +1915,8 @@
      const key = leftId + ':' + rightId;
      if (hconnCache.has(key)) return hconnCache.get(key);
      hctx.clearRect(0, 0, TS * 2, TS);
@@ -5214,7 +5232,7 @@
      const a = hctx.getImageData(TS - 1, 0, 2, TS).data;
      let both = 0, any = 0;
      for (let i = 0; i < TS; i++) {
-@@ -2188,13 +2277,14 @@
+@@ -2188,13 +2288,14 @@
        if (boxOf.has(st)) continue;
        const cols = [st];
        for (;;) {
@@ -5231,7 +5249,7 @@
        // a map hint keeps some small pictures facing as in 2D (the croquet hoops)
        const flat = !fixed && !!flatTiles && cols.every(c => c.tiles.every(t => flatTiles.has(t)));
        // low and wide - 2 to 4 tiles across and wider than tall (a row of barrels, a bench, a low fence): turning
-@@ -2235,25 +2325,32 @@
+@@ -2235,25 +2336,32 @@
      gapCv.width = gapCv.height = TS;
      const gapCtx = gapCv.getContext('2d', { willReadFrequently: true });
      const gaps = new Map();
@@ -5271,7 +5289,7 @@
        for (const st of pcs) st.drop = drop;
      }
    }
-@@ -2345,6 +2442,7 @@
+@@ -2345,6 +2453,7 @@
        stacks: stacks.map(st => ({ x: st.x, y: st.cellY, top: st.topY, foot: st.footY, elev: st.elev, againstWall: st.againstWall, drop: st.drop || 0, tiles: st.tiles, joined: !!st.joined, arch: st.arch ? (st.archFlat ? 'flat' : 'turning') : '' })),
        footShadows: [...footShadowAt.entries()].map(([i, t]) => [i % w, (i / w) | 0, t]),
        lying: lyingCols.map(c => ({ x: c.x, y: c.y1, top: c.y0, tiles: c.pieces })),
@@ -5279,7 +5297,7 @@
        boxes: boxes.map(b => b.line ? { line: b.line.map(st => [st.x, st.cellY, st.footY]), fixed: true } : { x0: b.x0, n: b.n, cy: b.cy, fixed: b.fixed, slab: !!b.slab }),
        stats: { invisibleCells: invisibleCells.map(i => [i % w, (i / w) | 0]), falls: fallStats,
          // (walls drawn between two walkable places that ended at one level: a terraced place laid flat?)
-@@ -2956,6 +3054,42 @@
+@@ -2956,6 +3065,42 @@
  
    const group = new THREE.Group();
    group.name = 'map';
@@ -5322,7 +5340,23 @@
    const staticTex = pixelTexture(staticAtlas.canvas);
    const animTex = pixelTexture(animAtlas.canvas);
    animTex.wrapS = THREE.RepeatWrapping;
-@@ -3024,7 +3158,7 @@
+@@ -2984,10 +3129,11 @@
+   ];
+   for (const [buf, mat] of meshes) {
+     if (!buf.n) continue;
+-    const mesh = new THREE.Mesh(buf.geometry(), mat);
+-    mesh.frustumCulled = buf.center === null;
+-    mesh.matrixAutoUpdate = false;
+-    group.add(mesh);
++    for (const geometry of buf.geometries()) {
++      const mesh = new THREE.Mesh(geometry, mat);
++      mesh.matrixAutoUpdate = false;
++      group.add(mesh);
++    }
+   }
+   // the low wide pictures standing still: the edges of their pixels, as small blocks, in one mesh
+   if (slabPieces.length) {
+@@ -3024,7 +3170,7 @@
    let parallaxFloor = null;
    if (pname && !opts.openSky) {                          // (open sky: the picture is the sky round the map - sky.js - with nothing under it)
      let img = await loadImage('Graphics/Parallaxes', pname);
@@ -5331,7 +5365,7 @@
      if (backdrop) {
        // (a sky over the sea, drawn as a view: only the sea under the horizon lies under the map)
        const c = document.createElement('canvas');
-@@ -3067,6 +3201,7 @@
+@@ -3067,6 +3213,7 @@
      const x = Math.round(fx), y = Math.round(fy);
      if (!valid(x, y)) return 0;
      const i = idx(x, y);
@@ -5339,7 +5373,7 @@
      if (pit[i]) return pitE[i];
      if (slope[i]) {
        const v = THREE.MathUtils.clamp(fy - (y - 0.5), 0, 1);
-@@ -3237,9 +3372,10 @@
+@@ -3237,9 +3384,10 @@
        }
      },
      dispose() {
@@ -5353,7 +5387,7 @@
  }
 --- upstream/app/src/markers.js
 +++ fork/apps/client/src/world/markers.js
-@@ -1,9 +1,11 @@
+@@ -1,9 +1,61 @@
  // Floor markers for map exits (Transfer Player events and region exits): a soft glowing ring,
  // a faint light column, and the destination name when the player comes close.
  import * as THREE from 'three';
@@ -5364,10 +5398,67 @@
 +import { FONT } from '../ui/ui.js';
 +import { transferOf } from './mapanalysis.js';
 +import { exitEventPosition } from './exit-routes.js';
++import { $data } from '../data/data.js';
++
++// Native command lists are static records. Reuse their structural analysis while
++// watching page/list replacements, appended commands and referenced common-event
++// data. Keep transfer parameters live, including the unresolved variable mode.
++function exitRoute(markers, page) {
++  const cached = markers.routes.get(page);
++  let current = !!cached;
++  if (cached) for (const check of cached.checks) {
++    if (check.object?.[check.key] !== check.value) { current = false; break; }
++  }
++  if (current) return cached.route;
++  const checks = [], seen = new WeakMap();
++  const watch = (object, key) => {
++    const value = object?.[key]; checks.push({ object, key, value }); return value;
++  };
++  const commonEvents = watch($data, 'commonEvents');
++  watch(G, 'map'); watch(G.map, 'exitRevision');
++  const inspect = (list, depth) => {
++    if (!Array.isArray(list) || (seen.get(list) ?? Infinity) <= depth) return;
++    seen.set(list, depth); watch(list, 'length');
++    for (let i = 0; i < list.length; i++) {
++      const command = list[i], code = command.code;
++      if (![102, 117, 201, 205].includes(code)) continue;
++      watch(list, i); watch(command, 'code');
++      const parameters = watch(command, 'parameters');
++      if (code === 201) for (let p = 0; p < 4; p++) watch(parameters, p);
++      else if (code === 117 && depth < 3) {
++        // transferOf checks one called event; its fall guard can inspect two
++        // further levels of common events before deciding it is a usable exit.
++        const id = watch(parameters, 0), event = watch(commonEvents, id);
++        inspect(watch(event, 'list'), depth + 1);
++      } else if (code === 205) {
++        watch(parameters, 0);
++        const route = watch(parameters, 1), steps = watch(route, 'list');
++        if (!Array.isArray(steps)) continue;
++        watch(steps, 'length');
++        for (let step = 0; step < steps.length; step++) {
++          const move = watch(steps, step); watch(move, 'code');
++          const args = watch(move, 'parameters'); watch(args, 'length');
++          for (let p = 0; p < (args?.length || 0); p++) watch(args, p);
++        }
++      }
++    }
++  };
++  inspect(watch(page, 'list'), 0);
++  const route = transferOf(page.list);
++  markers.routes.set(page, { checks, route });
++  return route;
++}
  
  function ringTexture() {
    const c = document.createElement('canvas');
-@@ -70,12 +72,21 @@
+@@ -64,18 +116,29 @@
+     this.group.name = 'exit-markers';
+     scene.add(this.group);
+     this.items = [];
++    this.routes = new WeakMap();
+     this.ringTex = ringTexture();
+     this.colTex = columnTexture();
+   }
    clear() {
      for (const it of this.items) {
        this.group.remove(it.root);
@@ -5382,6 +5473,7 @@
 +      });
      }
      this.items = [];
++    this.routes = new WeakMap();
    }
    build(exits) {
      this.clear();
@@ -5390,7 +5482,7 @@
      const floor = (x, y) => (G.floorAt ? G.floorAt(x, y) : 0);
      // region exits: one glow per cell, one label per destination cluster
      const clusters = new Map();
-@@ -90,7 +101,7 @@
+@@ -90,7 +153,7 @@
        ring.renderOrder = 900;
        root.add(ring);
        this.group.add(root);
@@ -5399,7 +5491,7 @@
        this.items.push(item);
        if (ex.label) {
          const key = ex.kind === 'event' ? `e${ex.eventId}` : `r${ex.mapId}`;
-@@ -119,27 +130,32 @@
+@@ -119,27 +182,32 @@
      }
    }
    update(dt, head) {
@@ -5418,7 +5510,7 @@
 -        const ev = G.map.events[it.ex.eventId];
 -        it.root.visible = !!ev && !!ev.page && !ev.erased;
 +        const ev = G.map.events[it.ex.eventId], position = exitEventPosition(G.map, ev);
-+        const route = ev && !ev.erased && ev.page?.trigger <= 2 ? transferOf(ev.page.list) : null;
++        const route = ev && !ev.erased && ev.page?.trigger <= 2 ? exitRoute(this, ev.page) : null;
 +        it.root.visible = !!position && !!route && route.mapId === it.ex.mapId;
 +        if (!it.root.visible || ev.page.trigger !== it.ex.trigger) changed = true;
 +        if (position && (position.x !== it.ex.x || position.y !== it.ex.y)) {
@@ -5443,13 +5535,15 @@
        if (it.label && pc) {
          const d = Math.hypot(G.map.nearX(it.ex.x, pc.fx) - pc.fx, G.map.nearY(it.ex.y, pc.fy) - pc.fy);
          it.label.visible = d < 4.5;
-@@ -147,5 +163,6 @@
+@@ -147,5 +215,6 @@
        }
      }
      void head; void dt;
+-  }
+-}
 +    return changed;
-   }
- }
++  }
++}
 --- upstream/app/src/marshal.js
 +++ fork/apps/client/src/data/marshal.js
 @@ -75,7 +75,7 @@
@@ -7068,16 +7162,57 @@
      const bx = info.single ? 0 : (c.characterIndex % 4) * 3;
      const by = info.single ? 0 : Math.floor(c.characterIndex / 4) * 4;
      const tex = mat.map;
-@@ -533,7 +611,7 @@
+@@ -525,18 +603,41 @@
+ // still facing south with some thickness (turning to the viewer, it looked like a board swinging round); the
+ // rest (square or taller than wide) turns to the viewer as one picture. A lone tile keeps its own way of
+ // standing. Worked out again only when such events appear, vanish, move or change tiles
++const tilePictureLayouts = new WeakMap();
++const isTilePicture = s => s.ch.isEvent && s.ch.tileId > 0 && s.mesh && s.hiddenNow === false && (s.mode === 'stand' || s.mode === 'over');
++function sameTilePictures(previous, sprites, mapInfo) {
++  if (!previous || previous.map !== G.map || previous.width !== G.map.width || previous.mapInfo !== mapInfo ||
++      previous.revision !== mapInfo.revision || previous.isWall !== mapInfo.isWall || previous.joinsBelow !== mapInfo.joinsBelow ||
++      previous.joinsBeside !== mapInfo.joinsBeside || previous.tileFlag !== mapInfo.tileFlag || previous.names !== mapInfo.tilesetNames) return false;
++  const names = mapInfo.tilesetNames;
++  if (names?.length !== previous.nameValues?.length) return false;
++  for (let i = 0; i < (names?.length || 0); i++) if (names[i] !== previous.nameValues[i]) return false;
++  let index = 0;
++  for (const sprite of sprites) {
++    if (!isTilePicture(sprite)) continue;
++    const old = previous.items[index++], c = sprite.ch;
++    if (!old || old.sprite !== sprite || old.character !== c || old.mesh !== sprite.mesh || old.x !== c.x || old.y !== c.y ||
++        old.tileId !== c.tileId || old.mode !== sprite.mode || old.priority !== c.priorityType || old.through !== !!c.through) return false;
++  }
++  return index === previous.items.length;
++}
+ export function layoutTilePictures(sprites, mapInfo) {
+   const w = G.map.width;
+-  const ups = new Map();
+-  let key = '';
++  const previous = tilePictureLayouts.get(sprites);
++  if (sameTilePictures(previous, sprites, mapInfo)) return;
++  if (previous) for (const item of previous.items) item.sprite.tp = null;
++  const ups = new Map(), items = [];
+   for (const s of sprites) {
      const c = s.ch;
-     if (!c.isEvent || !(c.tileId > 0) || !s.mesh || s.hiddenNow !== false || (s.mode !== 'stand' && s.mode !== 'over')) continue;
-     ups.set(c.x + c.y * w, s);
+-    if (!c.isEvent || !(c.tileId > 0) || !s.mesh || s.hiddenNow !== false || (s.mode !== 'stand' && s.mode !== 'over')) continue;
+-    ups.set(c.x + c.y * w, s);
 -    key += c.x + ',' + c.y + ',' + c.tileId + ';';
-+    key += `${c.x},${c.y},${c.tileId},${s.mode},${c.priorityType},${!!c.through};`;
-   }
-   if (key === sprites.tileLayoutKey) return;
-   sprites.tileLayoutKey = key;
-@@ -565,7 +643,9 @@
+-  }
+-  if (key === sprites.tileLayoutKey) return;
+-  sprites.tileLayoutKey = key;
++    if (!isTilePicture(s)) continue;
++    const x = c.x, y = c.y;
++    ups.set(x + y * w, s);
++    items.push({ sprite: s, character: c, mesh: s.mesh, x, y, tileId: c.tileId,
++      mode: s.mode, priority: c.priorityType, through: !!c.through });
++  }
++  tilePictureLayouts.set(sprites, { map: G.map, width: w, mapInfo, revision: mapInfo.revision,
++    isWall: mapInfo.isWall, joinsBelow: mapInfo.joinsBelow, joinsBeside: mapInfo.joinsBeside, tileFlag: mapInfo.tileFlag,
++    names: mapInfo.tilesetNames, nameValues: mapInfo.tilesetNames ? Array.from(mapInfo.tilesetNames) : undefined, items });
+   for (const s of sprites) s.tp = null;
+   const meets = (upper, lower) => (mapInfo.joinsBelow ? mapInfo.joinsBelow(upper.ch.tileId, lower.ch.tileId) : true);
+   // RPG Maker lets nobody into its cell: the same priority as characters, or below them with a tile that blocks
+@@ -565,7 +666,9 @@
      const group = [f];
      done.add(f);
      for (;;) {
@@ -7088,7 +7223,7 @@
        if (!b || done.has(b)) break;
        const ca = cols.get(a), cb = cols.get(b);
        if (!ca.some((t, k) => t && cb[k] && (mapInfo.joinsBeside ? mapInfo.joinsBeside(t.ch.tileId, cb[k].ch.tileId) : true))) break;
-@@ -573,9 +653,10 @@
+@@ -573,9 +676,10 @@
        done.add(b);
      }
      const n = group.length, tall = Math.max(...group.map(g => cols.get(g).length));
@@ -9189,8 +9324,8 @@
    }
  
    // ---------------------------------------------------------------- frame
-+  updateSkillProfile() {
-+    if (this.skillsBrowser?.session) this.skillsBrowser.update();
++  updateSkillProfile({ refreshBrowser = true, positionSearch = true } = {}) {
++    if (refreshBrowser && this.skillsBrowser?.session) this.skillsBrowser.update({ positionSearch });
 +    if (!this.skillProfile?.session) return;
 +    if (!this.skillProfile.update()) {
 +      if (this.menuOpen && this.menuSection === 'skills') this.closeMenu();
@@ -9225,7 +9360,7 @@
      this.pointerTarget = false;
 +    this.updateDialoguePresentation();
 +    this.updateBonfireTravel();
-+    this.updateSkillProfile();
++    this.updateSkillProfile({ positionSearch: false });
 +    if (this.sceneBusy() || this.dialogueActive() || this.keyboard.visible || this.prompt?.shown) this.unlockPointer();
      if (this.actionLockUntil && G.time < this.actionLockUntil) this.consumedConfirm = true;
 -    const anyPanel = this.msg || this.menuOpen || this.sceneOpen || this.banner || this.toasts.length || this.remote?.shown || this.prompt?.shown;
@@ -9260,7 +9395,7 @@
      }
      this.updateBossPrompt(dt);
      this.updateRemote();
-@@ -2393,7 +3172,23 @@
+@@ -2393,7 +3172,26 @@
        if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
      }
      this.drawHud();
@@ -9272,7 +9407,10 @@
 +      !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
 +    this.updateDungeonStatus();
 +    this.updateBonfireTravel();
-+    this.updateSkillProfile();
++    // Input handlers rebuild browser rows when they change them. Refresh the
++    // selected profile after input without evaluating every skill a second time.
++    // Casting still performs its own fresh combat-authority checks.
++    this.updateSkillProfile({ refreshBrowser: false });
 +    if (!G.vr) this.placeRoot();
 +    this.skillsBrowser?.positionSearch();
 +    const rewardPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
@@ -9284,7 +9422,7 @@
      this.updatePointerLine();
    }
    updateHudFollow() {
-@@ -2406,11 +3201,23 @@
+@@ -2406,11 +3204,23 @@
      this.camera.getWorldPosition(head);
      this.hud.mesh.lookAt(head);
    }
@@ -10014,13 +10152,43 @@
 +}
 --- /dev/null
 +++ fork/apps/client/src/combat/menu-weapon-skills.js
-@@ -0,0 +1,66 @@
+@@ -0,0 +1,104 @@
 +import { $data } from '../data/data.js';
-+import { withActorEquipment } from '../game/actor-equipment.js';
++import { actorEquipment, withActorEquipment } from '../game/actor-equipment.js';
 +
 +const grants = (weapon, id) => (weapon?.features || []).some(f => f.code === 43 && f.data_id === id);
++const previews = new WeakMap();
++
++function previewFor(actor, party) {
++  const preview = actor && previews.get(actor);
++  return preview && preview.equips === actorEquipment(actor) && (party === undefined || preview.party === party) ? preview : null;
++}
++
++// Only synchronous, read-only menu enumeration shares these equipment facts.
++// Every refresh gets a new scope. Costs, states, cooldowns and actual casts keep
++// their live authority; a borrowed equipment overlay never uses normal grants.
++export function withMenuSkillPreview(actor, party, run) {
++  if (!actor) return run();
++  const previous = previews.get(actor);
++  const skills = actor.allSkills();
++  const gear = collectOwnedGear(actor, party);
++  previews.set(actor, { party, equips: actorEquipment(actor), skills, known: new Set(skills.map(s => s.id)), gear, equipment: new Map() });
++  try { return run(); }
++  finally { if (previous) previews.set(actor, previous); else previews.delete(actor); }
++}
++
++export function menuKnowsSkill(actor, id) {
++  const preview = previewFor(actor);
++  return preview ? preview.known.has(id) : !!actor?.allSkills?.().some(skill => skill.id === id);
++}
 +
 +export function menuOwnedGear(actor, party) {
++  const preview = previewFor(actor, party);
++  if (preview) return preview.gear;
++  return collectOwnedGear(actor, party);
++}
++
++function collectOwnedGear(actor, party) {
 +  const out = [];
 +  for (const kind of ['weapon', 'armor']) {
 +    const ids = new Set((actor?.equips || []).filter(e => e.kind === kind && e.id).map(e => e.id));
@@ -10034,7 +10202,7 @@
 +}
 +
 +export function menuSkills(actor, party) {
-+  const skills = new Map((actor?.allSkills?.() || []).map(skill => [skill.id, skill]));
++  const skills = new Map((previewFor(actor, party)?.skills || actor?.allSkills?.() || []).map(skill => [skill.id, skill]));
 +  for (const { weapon } of menuOwnedGear(actor, party)) for (const feature of weapon.features || []) {
 +    const skill = feature.code === 43 && $data.skills[feature.data_id];
 +    if (skill?.name) skills.set(skill.id, skill);
@@ -10045,6 +10213,14 @@
 +// A quick action must not silently drop a shield, ring or second weapon. Match
 +// the native equip permissions, including permissions lost with the old weapon.
 +export function menuWeaponEquipment(actor, weapon, kind) {
++  const preview = previewFor(actor), key = `${kind}:${weapon.id}`;
++  if (preview?.equipment.has(key)) return preview.equipment.get(key);
++  const equips = compatibleEquipment(actor, weapon, kind);
++  if (preview) preview.equipment.set(key, equips);
++  return equips;
++}
++
++function compatibleEquipment(actor, weapon, kind) {
 +  const slot = kind === 'weapon' ? 0 : 1;
 +  if (!actor?.equipChangeOk?.(slot) || !actor.canEquipItem(kind, weapon)) return null;
 +  const equips = actor.equips.map(e => ({ ...e }));
@@ -10059,7 +10235,7 @@
 +}
 +
 +export function menuWeaponCandidates(actor, party, source, effective) {
-+  const known = actor?.allSkills?.().some(skill => skill.id === source?.id);
++  const known = menuKnowsSkill(actor, source?.id);
 +  const required = [source?.required_wtype_id1, source?.required_wtype_id2,
 +    effective?.required_wtype_id1, effective?.required_wtype_id2].filter(id => id > 0);
 +  const candidates = menuOwnedGear(actor, party).filter(({ weapon, kind }) => grants(weapon, source?.id)
@@ -12106,11 +12282,12 @@
 +}
 --- /dev/null
 +++ fork/apps/client/src/ui/skill-browser.js
-@@ -0,0 +1,368 @@
+@@ -0,0 +1,373 @@
 +import * as THREE from 'three';
 +import { G } from '../core/globals.js';
 +import { $data } from '../data/data.js';
 +import { tr } from './i18n.js';
++import { withMenuSkillPreview } from '../combat/menu-weapon-skills.js';
 +
 +export const SKILL_TABS = ['favorites', 'all', 'weapon', 'attack', 'healing', 'buffs', 'debuffs'];
 +const LABELS = ['즐겨찾기', '전체', '무기 기술', '공격', '회복', '강화', '약화'];
@@ -12208,6 +12385,9 @@
 +    G.settings ||= {}; G.settings.skillBrowser = saved; G.saveSettings?.();
 +  }
 +  rows() {
++    return withMenuSkillPreview(this.session.actor, G.state?.party, () => this.previewRows());
++  }
++  previewRows() {
 +    const s = this.session, query = normalized(s.prefs.query.trim());
 +    const favorites = new Set(s.prefs.favorites);
 +    const known = new Set(s.actor.allSkills().map(skill => skill.id));
@@ -12258,7 +12438,7 @@
 +    this.grid.index = Math.max(0, rows.findIndex(row => row.id === id));
 +    this.grid.hover = this.hover = undefined; this.drawKey = null;
 +  }
-+  update() {
++  update({ positionSearch = true } = {}) {
 +    if (!this.session) return false;
 +    if (!this.owns()) { this.close(); return false; }
 +    if (this.session.mode !== 'browser') return true;
@@ -12267,7 +12447,8 @@
 +    const key = JSON.stringify([this.rowsKey, this.grid.index, this.grid.top, this.session.prefs, G.vr,
 +      this.grid.panel.canvas.width, this.grid.panel.canvas.height, this.assetRevision()]);
 +    if (key !== this.drawKey) { this.drawKey = key; this.draw(); }
-+    this.positionSearch(); return true;
++    if (positionSearch) this.positionSearch();
++    return true;
 +  }
 +  setTab(tab) {
 +    if (!this.active || !SKILL_TABS.includes(tab) || tab === this.session.prefs.tab) return;
@@ -13617,6 +13798,82 @@
 +    if (tile) ctx.drawImage(tile, x, y);
 +    else super.draw(ctx, id, x, y, frame);
 +  }
++}
+--- /dev/null
++++ fork/apps/client/src/world/map-geometry.js
+@@ -0,0 +1,73 @@
++import * as THREE from 'three';
++
++// Billboard positions are offsets, not map coordinates. The shader rotates each
++// local x offset around its center in XZ and adds local y without rotating it.
++// Keep a complete quad in its center's chunk, including pictures wider than the
++// chunk. Bounds therefore follow the artwork, rather than the chunk cell edges.
++// A minimum allows small buffers to keep one draw, with the same valid bounds.
++export function billboardGeometryChunks(attributes, indices, chunkSize, minimumQuads = 0) {
++  return quadGeometryChunks(attributes, indices, chunkSize, true, minimumQuads);
++}
++
++// Ordinary map quads use their real vertices. A wide wall/floor remains intact
++// in its centroid's chunk, with bounds covering every vertex beyond that cell.
++export function ordinaryGeometryChunks(attributes, indices, chunkSize, minimumQuads = 0) {
++  return quadGeometryChunks(attributes, indices, chunkSize, false, minimumQuads);
++}
++
++function quadGeometryChunks(attributes, indices, chunkSize, billboard, minimumQuads) {
++  if (!(chunkSize > 0) || !Number.isFinite(chunkSize)) throw new RangeError('Invalid map chunk size');
++  if (!Number.isSafeInteger(minimumQuads) || minimumQuads < 0) throw new RangeError('Invalid minimum quad count');
++  const position = attributes.position, center = attributes.center;
++  const count = position.array.length / position.itemSize;
++  if (position.itemSize !== 3 || (billboard && center?.itemSize !== 3) || count % 4 || indices.length !== count / 4 * 6 ||
++    Object.values(attributes).some(attribute => attribute.array.length !== count * attribute.itemSize))
++    throw new RangeError('Map geometry must contain complete indexed quads');
++  const chunks = new Map();
++  for (let first = 0; first < count; first += 4) {
++    let x = 0, z = 0;
++    if (billboard) { x = center.array[first * 3]; z = center.array[first * 3 + 2]; }
++    else for (let i = first * 3; i < (first + 4) * 3; i += 3) { x += position.array[i] / 4; z += position.array[i + 2] / 4; }
++    const key = count / 4 < minimumQuads ? 'all' : `${Math.floor(x / chunkSize)},${Math.floor(z / chunkSize)}`;
++    let chunk = chunks.get(key);
++    if (!chunk) {
++      chunk = { attributes: Object.fromEntries(Object.keys(attributes).map(name => [name, []])), indices: [], count: 0 };
++      chunks.set(key, chunk);
++    }
++    for (const [name, attribute] of Object.entries(attributes)) {
++      const values = chunk.attributes[name], size = attribute.itemSize;
++      for (let i = first * size; i < (first + 4) * size; i++) values.push(attribute.array[i]);
++    }
++    for (let i = first / 4 * 6; i < first / 4 * 6 + 6; i++) {
++      const local = indices[i] - first;
++      if (local < 0 || local >= 4 || !Number.isInteger(local)) throw new RangeError('Map indices cross a quad');
++      chunk.indices.push(chunk.count + local);
++    }
++    chunk.count += 4;
++  }
++  return [...chunks.values()].map(chunk => {
++    const geometry = new THREE.BufferGeometry();
++    for (const [name, attribute] of Object.entries(attributes))
++      geometry.setAttribute(name, new THREE.Float32BufferAttribute(chunk.attributes[name], attribute.itemSize));
++    geometry.setIndex(chunk.indices);
++    if (!billboard) {
++      geometry.computeBoundingBox();
++      geometry.computeBoundingSphere();
++      geometry.boundingSphere.radius += Math.max(1, geometry.boundingSphere.radius) * 1e-6;
++      return geometry;
++    }
++    const box = new THREE.Box3(), p = geometry.getAttribute('position'), c = geometry.getAttribute('center');
++    for (let i = 0; i < p.count; i++) {
++      const radius = Math.abs(p.getX(i)), x = c.getX(i), y = c.getY(i) + p.getY(i), z = c.getZ(i);
++      box.min.x = Math.min(box.min.x, x - radius); box.max.x = Math.max(box.max.x, x + radius);
++      box.min.y = Math.min(box.min.y, y); box.max.y = Math.max(box.max.y, y);
++      box.min.z = Math.min(box.min.z, z - radius); box.max.z = Math.max(box.max.z, z + radius);
++    }
++    // Include float32 shader arithmetic at the map's coordinate magnitude.
++    const magnitude = Math.max(1, ...box.min.toArray().map(Math.abs), ...box.max.toArray().map(Math.abs));
++    box.expandByScalar(magnitude * 1e-6);
++    geometry.boundingBox = box;
++    geometry.boundingSphere = box.getBoundingSphere(new THREE.Sphere());
++    return geometry;
++  });
 +}
 --- /dev/null
 +++ fork/apps/client/src/world/passage-grades.js

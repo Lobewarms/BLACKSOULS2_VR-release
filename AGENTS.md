@@ -2853,3 +2853,8 @@ game files, player saves, private controls and audit records remain excluded.
 Local 0.2.47 release gates: 1,228 JavaScript tests pass (23 added), ESLint,
 production build, Ruff, 8 packaging and 7 Python protocol cases. No physical
 headset playtest is claimed. Historical screenshot labels/pins are preserved.
+
+Current source comparison: runtime 457d5c625cbe95480d4004c7a1df9c22e9ee1df6 (0.2.47),
+48 originals retained, 15 unchanged after import moves, 33 modified, 49 new and
+0 missing; 4,593 added/980 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
