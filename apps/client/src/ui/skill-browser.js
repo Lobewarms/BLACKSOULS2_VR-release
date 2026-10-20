@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { G } from '../core/globals.js';
 import { $data } from '../data/data.js';
 import { tr } from './i18n.js';
+import { withMenuSkillPreview } from '../combat/menu-weapon-skills.js';
 
 export const SKILL_TABS = ['favorites', 'all', 'weapon', 'attack', 'healing', 'buffs', 'debuffs'];
 const LABELS = ['즐겨찾기', '전체', '무기 기술', '공격', '회복', '강화', '약화'];
@@ -99,6 +100,9 @@ export class SkillBrowser {
     G.settings ||= {}; G.settings.skillBrowser = saved; G.saveSettings?.();
   }
   rows() {
+    return withMenuSkillPreview(this.session.actor, G.state?.party, () => this.previewRows());
+  }
+  previewRows() {
     const s = this.session, query = normalized(s.prefs.query.trim());
     const favorites = new Set(s.prefs.favorites);
     const known = new Set(s.actor.allSkills().map(skill => skill.id));
@@ -149,7 +153,7 @@ export class SkillBrowser {
     this.grid.index = Math.max(0, rows.findIndex(row => row.id === id));
     this.grid.hover = this.hover = undefined; this.drawKey = null;
   }
-  update() {
+  update({ positionSearch = true } = {}) {
     if (!this.session) return false;
     if (!this.owns()) { this.close(); return false; }
     if (this.session.mode !== 'browser') return true;
@@ -158,7 +162,8 @@ export class SkillBrowser {
     const key = JSON.stringify([this.rowsKey, this.grid.index, this.grid.top, this.session.prefs, G.vr,
       this.grid.panel.canvas.width, this.grid.panel.canvas.height, this.assetRevision()]);
     if (key !== this.drawKey) { this.drawKey = key; this.draw(); }
-    this.positionSearch(); return true;
+    if (positionSearch) this.positionSearch();
+    return true;
   }
   setTab(tab) {
     if (!this.active || !SKILL_TABS.includes(tab) || tab === this.session.prefs.tab) return;

@@ -1,4 +1,12 @@
-BLACK SOULS II VR 0.2.46
+BLACK SOULS II VR 0.2.47
+
+Performance improvements
+- More responsive Skills browsing with large skill lists and many owned weapon arts.
+  Costs, cooldowns and skill requirements stay up to date while you browse.
+- Reduced repeated work in maps with many exits or scenery events, while keeping
+  changes to events, routes and map artwork responsive.
+- Reduced rendering work for scenery outside the camera view in large areas,
+  preserving the original artwork, appearance and collision.
 
 Skill cooldowns during menus
 - Skill cooldowns and shared action recovery pause with the world, including

@@ -1,5 +1,10 @@
-﻿BLACK SOULS II VR - Controls  (version 0.2.46)
+﻿BLACK SOULS II VR - Controls  (version 0.2.47)
 ================================================
+
+Performance update
+- More responsive Skills browsing with large skill lists and many owned weapon arts.
+  Costs, cooldowns and skill requirements stay up to date while you browse.
+- Maps with many exits or scenery events do less repeated work during exploration.
 
 VR
 --

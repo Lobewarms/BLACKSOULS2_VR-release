@@ -405,3 +405,42 @@ test('a learned art that also needs an owned action weapon remains one skill and
   assert.deepEqual(e.state.quickSlots[0], { kind: 'skill', id: 9 }); assert.equal(e.actor.mp, 100);
   assert.equal(e.ui.skillsBrowser.active, true); assert.equal(e.ui.skillsBrowser.selectedId, 9);
 });
+
+test('idle Skills evaluates all rows once per UI frame without repainting unchanged textures or repositioning search twice', t => {
+  const e = environment(t); e.key('KeyR'); const field = focusSearch(e); e.frame();
+  let rows = 0, status = 0, positions = 0, paints = 0;
+  const wrap = (object, name, count) => {
+    const original = object[name]; object[name] = function(...args) { count(); return original.apply(this, args); };
+    t.after(() => { object[name] = original; });
+  };
+  wrap(e.ui.skillsBrowser, 'rows', () => rows++); wrap(e.combat, 'menuSkillUseStatus', () => status++);
+  wrap(e.ui.skillsBrowser, 'positionSearch', () => positions++);
+  wrap(e.ui.grid.panel, 'commit', () => paints++); wrap(e.ui.skillProfile.panel, 'commit', () => paints++);
+  const count = ids(e).length;
+  for (let frame = 0; frame < 10; frame++) e.frame();
+  assert.equal(rows, 10, 'one full live row refresh per rendered UI frame');
+  assert.equal(status, (count + 2) * 10, 'both selected-profile checks remain fresh; bulk row plans are not duplicated');
+  assert.equal(positions, 10, 'the HTML search field follows the final panel placement once');
+  assert.equal(paints, 0, 'unchanged canvas textures do not receive new upload requests');
+  assert.equal(e.document.activeElement, field); assert.deepEqual([e.actor.hp, e.actor.mp], [200, 100]);
+});
+
+test('post-input profile selection refreshes immediately and a resource change during confirmation still rejects the actual cast', t => {
+  const e = environment(t); e.key('KeyR');
+  e.input.pointer.seen = false; e.emit('keydown', { code: 'ArrowDown' }); e.frame();
+  assert.equal(e.ui.skillsBrowser.selectedId, 2);
+  assert.ok(e.ui.skillProfile.panel.canvas.record.texts.some(row => row.text === '紺碧の祈り'), 'the selected profile changes in the input frame');
+  e.emit('keyup', { code: 'ArrowDown' }); e.frame();
+  const confirm = e.input.confirm; let changed = false;
+  e.input.confirm = function() {
+    const pressed = confirm.call(this);
+    if (pressed && !changed) { changed = true; e.actor.mp = 0; }
+    return pressed;
+  };
+  e.key('Enter');
+  assert.equal(changed, true); assert.deepEqual([e.actor.hp, e.actor.mp], [200, 0]);
+  assert.equal(e.ui.menuOpen, true); assert.equal(e.ui.grid.items[e.ui.grid.index].available, false);
+  assert.equal(e.combat.skillCooling($data.skills[2]), 0); assert.equal(e.combat.playerRecoveryUntil, undefined);
+  assert.ok(e.ui.skillProfile.panel.canvas.record.texts.some(row => row.text === '0 / 200'), 'same-frame profile resources remain live');
+  e.actor.mp = 50; e.frame(); assert.equal(e.ui.grid.items[e.ui.grid.index].available, true, 'the next frame rereads resource authority');
+});

@@ -25,7 +25,7 @@ import { desktopRest, desktopSwing, desktopModel, desktopShield, desktopShieldGu
 import { BonusActions } from './bonus-actions.js';
 import { usableRepeats, randomTargetCount } from './usable-counts.js';
 import { withActorEquipment } from '../game/actor-equipment.js';
-import { menuSkills, menuWeaponCandidates } from './menu-weapon-skills.js';
+import { menuSkills, menuWeaponCandidates, menuKnowsSkill } from './menu-weapon-skills.js';
 import { battlerEffects, effectsKey, fitLabel } from '../ui/battler-status.js';
 import { openFights } from '../world/maphints.js';
 import { personalPage } from '../network/coopworld.js';
@@ -2286,7 +2286,7 @@ export class CombatSystem {
     if (!actor || !source || this.playerDead || this.spectating || this.restrained) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
     if (actor.hp <= 0 && !actor.stateResist(1)) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
     if (this.healing) return fail(tr('다른 아이템을 쓰는 중'));
-    if (!actor.allSkills().some(s => s.id === source.id)) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
+    if (!menuKnowsSkill(actor, source.id)) return fail(tr('지금은 쓸 수 없는 스킬입니다'));
     const effective = this.skillByState(actor, source);
     for (const s of new Set([source, effective])) {
       if (s.occasion === 3) return fail(tr('사용할 수 없습니다'), s);

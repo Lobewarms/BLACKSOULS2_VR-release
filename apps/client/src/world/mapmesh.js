@@ -21,6 +21,7 @@ import { FoliageTileDrawer, isFoliageTile } from './foliage.js';
 import { isBridgeDeckTile } from './bridges.js';
 import { isAuthoredFloorAutotile } from './floor-autotiles.js';
 import { completePassagePockets, gradePassageChains } from './passage-grades.js';
+import { billboardGeometryChunks, ordinaryGeometryChunks } from './map-geometry.js';
 
 export const T = 1.5; // meters per tile
 
@@ -193,6 +194,16 @@ class GeoBuf {
     g.setIndex(this.idx);
     g.computeBoundingSphere();
     return g;
+  }
+  geometries() {
+    if (!this.center && this.n < 2048 * 4) return [this.geometry()];
+    const attributes = {
+      position: { array: this.pos, itemSize: 3 }, uv: { array: this.uv, itemSize: 2 },
+      color: { array: this.col, itemSize: 3 }, normal: { array: this.nrm, itemSize: 3 },
+    };
+    if (!this.center) return ordinaryGeometryChunks(attributes, this.idx, 32 * T);
+    attributes.center = { array: this.center, itemSize: 3 };
+    return billboardGeometryChunks(attributes, this.idx, 32 * T, 2048);
   }
 }
 
@@ -3118,10 +3129,11 @@ export async function buildMapMesh(grid, opts = {}) {
   ];
   for (const [buf, mat] of meshes) {
     if (!buf.n) continue;
-    const mesh = new THREE.Mesh(buf.geometry(), mat);
-    mesh.frustumCulled = buf.center === null;
-    mesh.matrixAutoUpdate = false;
-    group.add(mesh);
+    for (const geometry of buf.geometries()) {
+      const mesh = new THREE.Mesh(geometry, mat);
+      mesh.matrixAutoUpdate = false;
+      group.add(mesh);
+    }
   }
   // the low wide pictures standing still: the edges of their pixels, as small blocks, in one mesh
   if (slabPieces.length) {

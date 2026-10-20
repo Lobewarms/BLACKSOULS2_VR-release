@@ -2771,3 +2771,85 @@ Current source comparison: runtime 4a82c174e1a17aab689dea8df17866619b45fd9c (0.2
 48 originals retained, 15 unchanged after import moves, 33 modified, 48 new and
 0 missing; 4,493 added/970 removed lines in modified originals after import
 normalization. Historical screenshot labels and pins are unchanged.
+
+## Repeated UI and world work (0.2.47)
+
+The user requested overall performance improvements. Keep gameplay, live skill
+authority and original artwork intact; measure specific workloads rather than
+claiming an FPS or physical-headset improvement from helper timings.
+
+UI.update performs one complete Skills-browser row refresh before input, then
+refreshes the selected profile after input without repeating every skill plan.
+Query/category/favorite/use handlers still refresh their changed rows immediately.
+Real casts perform fresh authority checks; no status is cached across frames.
+Position the HTML search field once after final panel placement. Preserve native
+costs, cooldown pauses, same-frame profile selection and ownership cleanup.
+
+The synchronous menu planning scope shares normal-gear known IDs, owned-source
+enumeration and per-source equipment compatibility only for that rows call.
+Equipment overlays still evaluate their own grants, features and costs; never
+substitute normal-gear known IDs for the action overlay's skill availability.
+Do not cache actual-cast plans, actor statistics, costs, resource levels, seals,
+states or cooldown authority across frames. Retain source-context cleanup.
+
+A private synthetic probe ran actual UI/Input/Combat with no-op canvas drawing
+for 30 updates. Its local CPU workload samples were:
+
+| Known skills / owned sources | Before, ms per update | After, ms per update |
+| --- | --- | --- |
+| 8 / 0 | 0.578 | 0.589 |
+| 120 / 60 | 9.153 | 2.622 |
+| 300 / 100 | 32.628 | 6.158 |
+
+Across 30 updates, full row evaluations fell from 60 to 30. The larger workloads'
+status-plan counts fell from 10,860 to 5,460 and from 24,060 to 12,060. The small
+workload was essentially unchanged; stable panels requested no new texture
+uploads in either run.
+These local CPU workload samples do not measure rendering, GPU time, FPS or VR
+hardware. The private probe and synthetic inputs are not shipped game data.
+
+Two real UI/Input/Three regressions cover bounded row/status/search-position
+work with unchanged canvas commits, plus MP changes during confirmation to
+retain fresh rejection and same-frame profile feedback. Existing browser,
+profile and menu coverage remains 79 passing focused cases, with owned ESLint
+checks clean.
+
+World CPU changes reuse static exit-route analysis while observing map/page/list,
+common-event and nested route/fall dependencies. Active page, erase, movement,
+floor and loop behavior remain live. Tile-picture grouping watches member,
+character, mesh and metadata identities plus map/mapInfo callbacks and tileset
+identity, retaining late-art and same-metadata replacement behavior. Nine new
+synthetic regressions plus 24 existing cases pass; owned lint is clean. Private
+local helper medians changed from 0.4451 to 0.0089ms for 20 exits with 1,000
+commands and from 0.2635 to 0.0152ms for 1,000 static tile events. These CPU measurements do not
+establish a frame-rate gain. Combined release gates and source comparison are
+recorded after final validation.
+
+Large ordinary map buffers (at least 2,048 complete quads) use 32-tile spatial
+batches; smaller ordinary buffers keep their original single draw. Billboard
+buffers below that threshold also stay together, with corrected shader-aware
+bounds; larger ones split into the same 32-tile batches. Keep full quads and
+every attribute/index, shared materials/atlases and original collision/floor
+data. Ordinary bounds contain every actual vertex; billboard bounds contain
+all cylindrical rotations around native centers, including wide canopy edges
+and translated loop copies. Standing-picture merging is unchanged. Dispose
+owned chunk geometry once and shared materials/textures once through map teardown.
+
+Ten geometry regressions cover attribute/triangle preservation, threshold
+boundaries, wide/tall geometry, yaw/frustum/loop cases, real map build/collision
+and resource disposal. A private read-only native-asset Map161 replay compared
+the exact same scene/camera/time before and after culling at six yaw/pitch
+headings at 1280x720: every RGBA pixel matched. The north-facing example reduced
+submitted triangles from 166,384 to 90,728 and draw calls changed from 51 to 55.
+Choose coarse batches to limit extra draws; do not claim all viewpoints or
+devices gain the same amount. Original artwork and visual quality are unchanged.
+
+The read-only initialized-character browser comparison measured UI CPU work
+around 30ms before versus 7ms after per frame, across 240 measured frames after
+warmup. This includes real canvas/WebGL presentation and fresh skill checks;
+it is still a local sample, not a headset or universal FPS benchmark. Original
+game files, player saves, private controls and audit records remain excluded.
+
+Local 0.2.47 release gates: 1,228 JavaScript tests pass (23 added), ESLint,
+production build, Ruff, 8 packaging and 7 Python protocol cases. No physical
+headset playtest is claimed. Historical screenshot labels/pins are preserved.

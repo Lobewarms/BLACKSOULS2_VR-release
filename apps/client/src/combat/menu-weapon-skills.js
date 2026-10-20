@@ -1,9 +1,39 @@
 import { $data } from '../data/data.js';
-import { withActorEquipment } from '../game/actor-equipment.js';
+import { actorEquipment, withActorEquipment } from '../game/actor-equipment.js';
 
 const grants = (weapon, id) => (weapon?.features || []).some(f => f.code === 43 && f.data_id === id);
+const previews = new WeakMap();
+
+function previewFor(actor, party) {
+  const preview = actor && previews.get(actor);
+  return preview && preview.equips === actorEquipment(actor) && (party === undefined || preview.party === party) ? preview : null;
+}
+
+// Only synchronous, read-only menu enumeration shares these equipment facts.
+// Every refresh gets a new scope. Costs, states, cooldowns and actual casts keep
+// their live authority; a borrowed equipment overlay never uses normal grants.
+export function withMenuSkillPreview(actor, party, run) {
+  if (!actor) return run();
+  const previous = previews.get(actor);
+  const skills = actor.allSkills();
+  const gear = collectOwnedGear(actor, party);
+  previews.set(actor, { party, equips: actorEquipment(actor), skills, known: new Set(skills.map(s => s.id)), gear, equipment: new Map() });
+  try { return run(); }
+  finally { if (previous) previews.set(actor, previous); else previews.delete(actor); }
+}
+
+export function menuKnowsSkill(actor, id) {
+  const preview = previewFor(actor);
+  return preview ? preview.known.has(id) : !!actor?.allSkills?.().some(skill => skill.id === id);
+}
 
 export function menuOwnedGear(actor, party) {
+  const preview = previewFor(actor, party);
+  if (preview) return preview.gear;
+  return collectOwnedGear(actor, party);
+}
+
+function collectOwnedGear(actor, party) {
   const out = [];
   for (const kind of ['weapon', 'armor']) {
     const ids = new Set((actor?.equips || []).filter(e => e.kind === kind && e.id).map(e => e.id));
@@ -17,7 +47,7 @@ export function menuOwnedGear(actor, party) {
 }
 
 export function menuSkills(actor, party) {
-  const skills = new Map((actor?.allSkills?.() || []).map(skill => [skill.id, skill]));
+  const skills = new Map((previewFor(actor, party)?.skills || actor?.allSkills?.() || []).map(skill => [skill.id, skill]));
   for (const { weapon } of menuOwnedGear(actor, party)) for (const feature of weapon.features || []) {
     const skill = feature.code === 43 && $data.skills[feature.data_id];
     if (skill?.name) skills.set(skill.id, skill);
@@ -28,6 +58,14 @@ export function menuSkills(actor, party) {
 // A quick action must not silently drop a shield, ring or second weapon. Match
 // the native equip permissions, including permissions lost with the old weapon.
 export function menuWeaponEquipment(actor, weapon, kind) {
+  const preview = previewFor(actor), key = `${kind}:${weapon.id}`;
+  if (preview?.equipment.has(key)) return preview.equipment.get(key);
+  const equips = compatibleEquipment(actor, weapon, kind);
+  if (preview) preview.equipment.set(key, equips);
+  return equips;
+}
+
+function compatibleEquipment(actor, weapon, kind) {
   const slot = kind === 'weapon' ? 0 : 1;
   if (!actor?.equipChangeOk?.(slot) || !actor.canEquipItem(kind, weapon)) return null;
   const equips = actor.equips.map(e => ({ ...e }));
@@ -42,7 +80,7 @@ export function menuWeaponEquipment(actor, weapon, kind) {
 }
 
 export function menuWeaponCandidates(actor, party, source, effective) {
-  const known = actor?.allSkills?.().some(skill => skill.id === source?.id);
+  const known = menuKnowsSkill(actor, source?.id);
   const required = [source?.required_wtype_id1, source?.required_wtype_id2,
     effective?.required_wtype_id1, effective?.required_wtype_id2].filter(id => id > 0);
   const candidates = menuOwnedGear(actor, party).filter(({ weapon, kind }) => grants(weapon, source?.id)

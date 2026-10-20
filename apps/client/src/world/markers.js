@@ -6,6 +6,56 @@ import { T } from './mapmesh.js';
 import { FONT } from '../ui/ui.js';
 import { transferOf } from './mapanalysis.js';
 import { exitEventPosition } from './exit-routes.js';
+import { $data } from '../data/data.js';
+
+// Native command lists are static records. Reuse their structural analysis while
+// watching page/list replacements, appended commands and referenced common-event
+// data. Keep transfer parameters live, including the unresolved variable mode.
+function exitRoute(markers, page) {
+  const cached = markers.routes.get(page);
+  let current = !!cached;
+  if (cached) for (const check of cached.checks) {
+    if (check.object?.[check.key] !== check.value) { current = false; break; }
+  }
+  if (current) return cached.route;
+  const checks = [], seen = new WeakMap();
+  const watch = (object, key) => {
+    const value = object?.[key]; checks.push({ object, key, value }); return value;
+  };
+  const commonEvents = watch($data, 'commonEvents');
+  watch(G, 'map'); watch(G.map, 'exitRevision');
+  const inspect = (list, depth) => {
+    if (!Array.isArray(list) || (seen.get(list) ?? Infinity) <= depth) return;
+    seen.set(list, depth); watch(list, 'length');
+    for (let i = 0; i < list.length; i++) {
+      const command = list[i], code = command.code;
+      if (![102, 117, 201, 205].includes(code)) continue;
+      watch(list, i); watch(command, 'code');
+      const parameters = watch(command, 'parameters');
+      if (code === 201) for (let p = 0; p < 4; p++) watch(parameters, p);
+      else if (code === 117 && depth < 3) {
+        // transferOf checks one called event; its fall guard can inspect two
+        // further levels of common events before deciding it is a usable exit.
+        const id = watch(parameters, 0), event = watch(commonEvents, id);
+        inspect(watch(event, 'list'), depth + 1);
+      } else if (code === 205) {
+        watch(parameters, 0);
+        const route = watch(parameters, 1), steps = watch(route, 'list');
+        if (!Array.isArray(steps)) continue;
+        watch(steps, 'length');
+        for (let step = 0; step < steps.length; step++) {
+          const move = watch(steps, step); watch(move, 'code');
+          const args = watch(move, 'parameters'); watch(args, 'length');
+          for (let p = 0; p < (args?.length || 0); p++) watch(args, p);
+        }
+      }
+    }
+  };
+  inspect(watch(page, 'list'), 0);
+  const route = transferOf(page.list);
+  markers.routes.set(page, { checks, route });
+  return route;
+}
 
 function ringTexture() {
   const c = document.createElement('canvas');
@@ -66,6 +116,7 @@ export class TransferMarkers {
     this.group.name = 'exit-markers';
     scene.add(this.group);
     this.items = [];
+    this.routes = new WeakMap();
     this.ringTex = ringTexture();
     this.colTex = columnTexture();
   }
@@ -82,6 +133,7 @@ export class TransferMarkers {
       });
     }
     this.items = [];
+    this.routes = new WeakMap();
   }
   build(exits) {
     this.clear();
@@ -140,7 +192,7 @@ export class TransferMarkers {
       // hide exits whose event page no longer leads anywhere (e.g. a door that got locked)
       if (it.ex.kind === 'event') {
         const ev = G.map.events[it.ex.eventId], position = exitEventPosition(G.map, ev);
-        const route = ev && !ev.erased && ev.page?.trigger <= 2 ? transferOf(ev.page.list) : null;
+        const route = ev && !ev.erased && ev.page?.trigger <= 2 ? exitRoute(this, ev.page) : null;
         it.root.visible = !!position && !!route && route.mapId === it.ex.mapId;
         if (!it.root.visible || ev.page.trigger !== it.ex.trigger) changed = true;
         if (position && (position.x !== it.ex.x || position.y !== it.ex.y)) {

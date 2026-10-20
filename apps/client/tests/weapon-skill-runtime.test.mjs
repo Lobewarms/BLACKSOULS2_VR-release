@@ -5,6 +5,7 @@ import { G } from '../src/core/globals.js';
 import { $data } from '../src/data/data.js';
 import { GameState, BattlerBase } from '../src/game/state.js';
 import { withActorEquipment } from '../src/game/actor-equipment.js';
+import { withMenuSkillPreview, menuKnowsSkill, menuOwnedGear } from '../src/combat/menu-weapon-skills.js';
 import { GameMap } from '../src/world/gamemap.js';
 import { clearEdgeCache } from '../src/world/collision.js';
 import { T } from '../src/world/mapmesh.js';
@@ -106,6 +107,45 @@ test('scoped weapon calculations preserve actor identity, serializable equipment
     assert.equal(e.actor.atk, 200); throw new Error('synthetic failure');
   }), /synthetic failure/);
   assert.equal(e.actor.atk, 80); assert.equal(e.snapshot(), before);
+});
+
+test('one menu preview shares equipment compatibility while borrowed grants and resource checks stay live', t => {
+  const e = environment(t), before = e.snapshot();
+  const original = e.actor.canEquipItem; let checks = 0;
+  t.mock.method(e.actor, 'canEquipItem', function(...args) { checks++; return original.apply(this, args); });
+  withMenuSkillPreview(e.actor, e.state.party, () => {
+    for (let n = 0; n < 20; n++) assert.equal(e.combat.menuSkillUseStatus(e.art).ok, true);
+    assert.equal(checks, 2, 'the same source is checked once, including its scoped replacement permissions');
+    assert.equal(menuKnowsSkill(e.actor, e.art.id), false, 'borrowed arts never become normal known skills');
+    e.actor.mp = 0;
+    assert.equal(e.combat.menuSkillUseStatus(e.art).ok, false, 'cost authority is not cached');
+    e.actor.mp = 100;
+    assert.equal(e.combat.menuSkillUseStatus(e.art).ok, true);
+  });
+  assert.equal(e.snapshot(), before);
+  e.state.party.weapons.delete(2);
+  assert.equal(e.combat.menuSkillUseStatus(e.art).ok, false, 'actual actions do not reuse preview ownership');
+  withMenuSkillPreview(e.actor, e.state.party, () => assert.equal(e.combat.menuSkillUseStatus(e.art).ok, false));
+});
+
+test('menu preview scopes isolate actor equipment overlays, nested ownership and exception cleanup', t => {
+  const e = environment(t), equips = e.actor.equips.map(entry => ({ ...entry }));
+  equips[0] = { kind: 'weapon', id: 2 };
+  withMenuSkillPreview(e.actor, e.state.party, () => {
+    assert.equal(menuKnowsSkill(e.actor, 101), false);
+    withActorEquipment(e.actor, equips, () => assert.equal(menuKnowsSkill(e.actor, 101), true));
+    assert.equal(menuKnowsSkill(e.actor, 101), false);
+    e.state.party.weapons.set(3, 1);
+    assert.throws(() => withMenuSkillPreview(e.actor, e.state.party, () => {
+      assert.ok(menuOwnedGear(e.actor, e.state.party).some(entry => entry.weapon.id === 3));
+      throw new Error('preview failed');
+    }), /preview failed/);
+    assert.equal(menuOwnedGear(e.actor, e.state.party).some(entry => entry.weapon.id === 3), false, 'outer snapshot restored');
+  });
+  assert.ok(menuOwnedGear(e.actor, e.state.party).some(entry => entry.weapon.id === 3));
+  assert.throws(() => withMenuSkillPreview(e.actor, e.state.party, () => { throw new Error('outer failed'); }), /outer failed/);
+  e.actor.learnSkill(101);
+  assert.equal(menuKnowsSkill(e.actor, 101), true, 'a failed preview leaves no stale knowledge');
 });
 
 test('a borrowed melee art keeps source ATK, elements, on-hit traits and animation through delayed repeats', t => {

@@ -603,18 +603,41 @@ export class CharacterSprite {
 // still facing south with some thickness (turning to the viewer, it looked like a board swinging round); the
 // rest (square or taller than wide) turns to the viewer as one picture. A lone tile keeps its own way of
 // standing. Worked out again only when such events appear, vanish, move or change tiles
+const tilePictureLayouts = new WeakMap();
+const isTilePicture = s => s.ch.isEvent && s.ch.tileId > 0 && s.mesh && s.hiddenNow === false && (s.mode === 'stand' || s.mode === 'over');
+function sameTilePictures(previous, sprites, mapInfo) {
+  if (!previous || previous.map !== G.map || previous.width !== G.map.width || previous.mapInfo !== mapInfo ||
+      previous.revision !== mapInfo.revision || previous.isWall !== mapInfo.isWall || previous.joinsBelow !== mapInfo.joinsBelow ||
+      previous.joinsBeside !== mapInfo.joinsBeside || previous.tileFlag !== mapInfo.tileFlag || previous.names !== mapInfo.tilesetNames) return false;
+  const names = mapInfo.tilesetNames;
+  if (names?.length !== previous.nameValues?.length) return false;
+  for (let i = 0; i < (names?.length || 0); i++) if (names[i] !== previous.nameValues[i]) return false;
+  let index = 0;
+  for (const sprite of sprites) {
+    if (!isTilePicture(sprite)) continue;
+    const old = previous.items[index++], c = sprite.ch;
+    if (!old || old.sprite !== sprite || old.character !== c || old.mesh !== sprite.mesh || old.x !== c.x || old.y !== c.y ||
+        old.tileId !== c.tileId || old.mode !== sprite.mode || old.priority !== c.priorityType || old.through !== !!c.through) return false;
+  }
+  return index === previous.items.length;
+}
 export function layoutTilePictures(sprites, mapInfo) {
   const w = G.map.width;
-  const ups = new Map();
-  let key = '';
+  const previous = tilePictureLayouts.get(sprites);
+  if (sameTilePictures(previous, sprites, mapInfo)) return;
+  if (previous) for (const item of previous.items) item.sprite.tp = null;
+  const ups = new Map(), items = [];
   for (const s of sprites) {
     const c = s.ch;
-    if (!c.isEvent || !(c.tileId > 0) || !s.mesh || s.hiddenNow !== false || (s.mode !== 'stand' && s.mode !== 'over')) continue;
-    ups.set(c.x + c.y * w, s);
-    key += `${c.x},${c.y},${c.tileId},${s.mode},${c.priorityType},${!!c.through};`;
+    if (!isTilePicture(s)) continue;
+    const x = c.x, y = c.y;
+    ups.set(x + y * w, s);
+    items.push({ sprite: s, character: c, mesh: s.mesh, x, y, tileId: c.tileId,
+      mode: s.mode, priority: c.priorityType, through: !!c.through });
   }
-  if (key === sprites.tileLayoutKey) return;
-  sprites.tileLayoutKey = key;
+  tilePictureLayouts.set(sprites, { map: G.map, width: w, mapInfo, revision: mapInfo.revision,
+    isWall: mapInfo.isWall, joinsBelow: mapInfo.joinsBelow, joinsBeside: mapInfo.joinsBeside, tileFlag: mapInfo.tileFlag,
+    names: mapInfo.tilesetNames, nameValues: mapInfo.tilesetNames ? Array.from(mapInfo.tilesetNames) : undefined, items });
   for (const s of sprites) s.tp = null;
   const meets = (upper, lower) => (mapInfo.joinsBelow ? mapInfo.joinsBelow(upper.ch.tileId, lower.ch.tileId) : true);
   // RPG Maker lets nobody into its cell: the same priority as characters, or below them with a tile that blocks

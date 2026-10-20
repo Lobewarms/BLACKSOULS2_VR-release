@@ -3097,8 +3097,8 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- frame
-  updateSkillProfile() {
-    if (this.skillsBrowser?.session) this.skillsBrowser.update();
+  updateSkillProfile({ refreshBrowser = true, positionSearch = true } = {}) {
+    if (refreshBrowser && this.skillsBrowser?.session) this.skillsBrowser.update({ positionSearch });
     if (!this.skillProfile?.session) return;
     if (!this.skillProfile.update()) {
       if (this.menuOpen && this.menuSection === 'skills') this.closeMenu();
@@ -3133,7 +3133,7 @@ export class UI {
     this.pointerTarget = false;
     this.updateDialoguePresentation();
     this.updateBonfireTravel();
-    this.updateSkillProfile();
+    this.updateSkillProfile({ positionSearch: false });
     if (this.sceneBusy() || this.dialogueActive() || this.keyboard.visible || this.prompt?.shown) this.unlockPointer();
     if (this.actionLockUntil && G.time < this.actionLockUntil) this.consumedConfirm = true;
     const anyPanel = this.dialogueActive() || this.menuOpen || this.sceneOpen || this.banner || this.toasts.length || this.remote?.shown || this.prompt?.shown;
@@ -3180,7 +3180,10 @@ export class UI {
       !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
     this.updateDungeonStatus();
     this.updateBonfireTravel();
-    this.updateSkillProfile();
+    // Input handlers rebuild browser rows when they change them. Refresh the
+    // selected profile after input without evaluating every skill a second time.
+    // Casting still performs its own fresh combat-authority checks.
+    this.updateSkillProfile({ refreshBrowser: false });
     if (!G.vr) this.placeRoot();
     this.skillsBrowser?.positionSearch();
     const rewardPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
