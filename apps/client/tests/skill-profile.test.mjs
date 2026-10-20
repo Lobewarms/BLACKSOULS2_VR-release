@@ -187,13 +187,52 @@ test('all long effect names and modifiers remain reachable without ellipsis and 
 test('profile warnings and interaction hints are localized in every supported language', () => {
   const url = new URL('../src/ui/i18n.js', import.meta.url).href;
   const keys = ['HP 회복 반전 {p}', 'HP 회복 무효 {p}', 'HP 재생 {p}', '면역: {name}', '행동 불가', '전체 활성 효과 {n}', 'PageUp/PageDown · 효과 위에서 스크롤',
-    '사용 장비: {name}', '자동 교체: {name}', '이 기술에만 장비를 바꾸고 원래 장비로 돌아옵니다', '자동 교체는 스킬 메뉴에서만 됩니다. 퀵슬롯에 등록하려면 먼저 이 장비를 장착하세요', '스킬 메뉴에서만 사용'];
+    '사용 장비: {name}', '자동 교체: {name}', '이 기술에만 장비를 바꾸고 원래 장비로 돌아옵니다', '자동 교체는 스킬 메뉴에서만 됩니다. 퀵슬롯에 등록하려면 먼저 이 장비를 장착하세요', '스킬 메뉴에서만 사용',
+    '보너스 행동 ×{n}', '스킬 예약 {n}/{max}', '스킬을 고른 뒤 순서대로 사용하세요', '스킬을 고른 뒤 R을 닫으면 순서대로 사용합니다',
+    '스킬을 고른 뒤 사용 버튼을 누르세요', '비용과 재사용 대기시간은 그대로 적용됩니다', '마지막 예약 취소', '예약 지우기', '스킬 {n}개 사용',
+    '예약이 가득 찼습니다', '이 스킬은 연속 사용에 추가할 수 없습니다', '예약한 스킬을 사용하고 있습니다', '다음 행동까지 {s}초', '예약: {name}',
+    'Enter: 예약 · F: 즐겨찾기 · Q: 퀵슬롯', '스틱: 선택 · A / 트리거: 예약 · B: 뒤로'];
   for (const language of ['en', 'ko', 'ja', 'zh']) {
-    const code = `globalThis.location={search:'?lang=${language}'};const {tr}=await import(${JSON.stringify(url)});console.log(JSON.stringify(${JSON.stringify(keys)}.map(key=>tr(key,{p:'100%',name:'Sleep',n:3}))));`;
+    const code = `globalThis.location={search:'?lang=${language}'};const {tr}=await import(${JSON.stringify(url)});console.log(JSON.stringify(${JSON.stringify(keys)}.map(key=>tr(key,{p:'100%',name:'Sleep',n:3,max:4,s:'0.3'}))));`;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
-    const labels = JSON.parse(result.stdout); assert.ok(labels.every(label => label.length && !/\{[pn]|\{name/.test(label)));
+    const labels = JSON.parse(result.stdout); assert.ok(labels.every(label => label.length && !/\{\w+\}/.test(label)));
     if (language !== 'ko') assert.ok(labels.every(label => !/[가-힣]/.test(label)));
   }
+});
+
+test('every queued native skill name and original icon stays accessible through compact profile pages without casting', t => {
+  const e = environment(t, { width: 640, height: 500 }), icons = [];
+  const skills = Array.from({ length: 8 }, (_, i) => ({ id: 100 + i, icon: 200 + i,
+    name: `Queued native skill ${i + 1} has a long installed name that must stay readable in full` }));
+  const chain = { remaining: 8, capacity: 8, queued: 8, icon: 91, skills };
+  e.grid.skillBrowser = { active: true, footerHeight: 260, chain, status: skill => ({ ok: false, skill, reason: 'Queue full' }) };
+  e.controller.drawIcon = (_ctx, icon) => icons.push(icon); e.controller.update();
+  const rows = [];
+  for (let i = 0; i < e.controller.pageCount; i++) {
+    rows.push(...e.controller.panel.rows.filter(row => row.y >= 100 && row.y < 188).map(row => row.text)); e.controller.changePage(1);
+  }
+  const text = rows.join('').replace(/\s+/g, '');
+  for (const skill of skills) assert.ok(text.includes(skill.name.replace(/\s+/g, '')), skill.name);
+  assert.ok(text.includes('Costsandskillcooldownsstillapply.')); assert.ok(!text.includes('…'));
+  assert.ok(icons.includes(91)); assert.ok(skills.every(skill => icons.includes(skill.icon)));
+  assert.equal(e.actor.hp, 500); assert.equal(e.actor.mp, 100);
+});
+
+test('live bonus planning reflows compact browser space, preserves resources and resets when switching modes or the queue disappears', t => {
+  const e = environment(t, { width: 640, height: 500 });
+  const browser = e.grid.skillBrowser = { active: true, footerHeight: 260,
+    chain: { remaining: 2, queued: 0, icon: 91, skills: [] }, status: skill => ({ ok: true, skill }) };
+  e.controller.update(); assert.equal(e.grid.panel.canvas.height, 464); assert.equal(e.controller.panel.canvas.height, 300);
+  const before = e.controller.panel.commits;
+  for (let i = 0; i < 5; i++) e.controller.update();
+  assert.equal(e.controller.panel.commits, before, 'an unchanged queue snapshot does not upload the profile every frame');
+  browser.chain = { ...browser.chain, queued: 1, skills: [{ id: 9, name: 'Original skill', icon: 9 }] };
+  e.controller.update(); assert.equal(e.controller.panel.commits, before + 1);
+  G.vr = true; e.controller.update(); assert.equal(e.grid.panel.canvas.height, 960); assert.equal(e.controller.compact, false);
+  G.vr = false; e.controller.update(); assert.equal(e.grid.panel.canvas.height, 464);
+  browser.footerHeight = 140; browser.chain = null; e.controller.update(); assert.equal(e.grid.panel.canvas.height, 344);
+  assert.equal(e.actor.hp, 500); assert.equal(e.actor.mp, 100);
+  e.controller.close(); assert.equal(e.grid.panel.canvas.width, 1260); assert.equal(e.grid.cols, 3);
 });
 
 test('long action-source names and auto-return guidance remain fully pageable with the original weapon icon', t => {

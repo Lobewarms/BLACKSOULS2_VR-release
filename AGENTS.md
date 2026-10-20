@@ -2892,3 +2892,48 @@ Current source comparison: runtime 482765132b87c20bed6e4497f88607cd2f1be6d1 (0.2
 48 originals retained, 15 unchanged after import moves, 33 modified, 50 new and
 0 missing; 4,649 added/982 removed lines in modified originals after import
 normalization. Historical screenshot labels and pins are unchanged.
+
+## Queued Bonus Action skills in R (0.2.49)
+
+The user explicitly chose selecting several skills in R, then closing R to cast
+them in order. Show earned count and queue capacity with native source/attack
+icons when available, plus Remove last, Clear and Cast controls. Keep every queued
+native name/icon accessible through the profile pages. Do not roll, pay, apply
+effects, consume extras or serialize drafts during selection. Without extras,
+retain the existing single-cast path. Dodge, Break preparation and ineligible
+utility cannot join a draft or silently cast and discard its contents.
+
+Draft capacity is the actual earned follow-up count, not one plus that count or
+an estimate from feature61 probabilities. R/Cast commits the plan; Esc/Back or
+leaving the Skills menu cancels an uncommitted draft. Released actions dispatch
+one at a time in gameplay, retaining their active/repeat tails, source equipment,
+native costs and cooldowns. Every actual cast freshly rechecks effective stage,
+skill ownership, equipment, eligibility, resources, target and extra-action
+authority. Invalid uses stop the remainder; never fall back to a new normal roll
+when earned actions disappear. The final bonus retains normal trailing recovery.
+
+Menu/headset/cutscene pauses freeze execution and existing clocks. Actor, state,
+map, map ID, generation and manager epoch own the transient queue. Death, world
+replacement, source loss and encounter completion invalidate it and pending work.
+
+Bonus ownership synchronization reads the actual normal loadout, so a temporary
+borrowed weapon cannot erase earned actions. Action tickets still capture that
+action's real feature61 sources before the normal-loadout synchronization. Their
+own sources govern a base action's roll, including borrowed-only sources; bonus
+tickets never reroll. Genuine normal-source removal changes the epoch and rejects
+stale completions. Preserve source-specific damage, costs and equipment cleanup.
+
+Local 0.2.49 gates: 1,287 JavaScript tests pass (38 added), ESLint, production
+build, Ruff, 8 packaging and 7 Python protocol cases. Tests exercise actual R
+keyboard and footer dispatch, free planning and cancellation, paused/resumed
+sequential casts, capacity and native restrictions, final recovery, fresh costs,
+cooldowns/targets/stages, every ownership invalidation and both directions of
+borrowed-weapon feature61 sources, plus PC/VR/compact layouts and four locales.
+
+Private visual QA uses a copied save and original Map101/portrait/icons read-only,
+with exactly two synthetic guaranteed feature61 sources in memory. Real manager
+begin/complete earns two extras and actual queueMenuSkill plans the two native
+skills. Desktop/compact/VR projection controls and native Queue hints were checked;
+field dispatch is covered by tests, not advanced by that capture harness. Private
+controls/captures and original records are excluded from releases. No actual save
+or achievement writes, and no physical-headset playtest is claimed.

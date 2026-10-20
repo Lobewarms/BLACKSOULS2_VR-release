@@ -444,3 +444,40 @@ test('post-input profile selection refreshes immediately and a resource change d
   assert.ok(e.ui.skillProfile.panel.canvas.record.texts.some(row => row.text === '0 / 200'), 'same-frame profile resources remain live');
   e.actor.mp = 50; e.frame(); assert.equal(e.ui.grid.items[e.ui.grid.index].available, true, 'the next frame rereads resource authority');
 });
+
+function earnedSkillQueue(e) {
+  $data.actors[1].features = [{ code: 61, value: 1 }, { code: 61, value: 1 }];
+  assert.equal(e.combat.useSkillFromMenu($data.skills[3]), true); e.frame(0.301);
+  assert.equal(e.combat.bonusStatus().count, 2); e.key('KeyR');
+  e.ui.skillsBrowser.setQuery('紺碧'); e.input.pointer.seen = false; e.key('Enter');
+  e.ui.skillsBrowser.setQuery('RFAQ'); e.input.pointer.seen = false; e.key('Enter');
+  assert.equal(e.combat.menuSkillChainStatus().queued, 2);
+  assert.equal(e.ui.menuOpen, true); assert.equal(e.actor.mp, 90, 'planning must not pay for either skill');
+}
+
+test('real R keyboard selection shows earned action counts and closing R releases both skills in order', t => {
+  const e = environment(t); earnedSkillQueue(e);
+  const labels = e.ui.grid.panel.canvas.record.texts.map(row => row.text);
+  assert.ok(labels.some(text => text.includes(tr('보너스 행동 ×{n}', { n: 2 }))));
+  assert.ok(labels.some(text => /2\/2/.test(text)));
+  e.key('KeyR'); assert.equal(e.ui.menuOpen, false); assert.equal(e.actor.mp, 80);
+  assert.equal(e.combat.menuSkillChainStatus().queued, 1);
+  e.frame(0.301); assert.equal(e.actor.mp, 70); assert.equal(e.combat.bonusStatus(), null);
+  assert.equal(e.combat.menuSkillChain, null);
+});
+
+test('real Escape cancels the planned R chain and its earned actions remain unspent', t => {
+  const e = environment(t); earnedSkillQueue(e);
+  e.key('Escape');
+  assert.equal(e.ui.menuSection, 'main'); assert.equal(e.combat.menuSkillChain, null);
+  assert.equal(e.actor.mp, 90); assert.equal(e.combat.bonusStatus().count, 2);
+  e.key('Escape'); e.frame(2); assert.equal(e.actor.mp, 90);
+});
+
+test('real Cast footer releases the chain once without the click casting another selected skill', t => {
+  const e = environment(t); earnedSkillQueue(e);
+  e.click(e.ui.grid.panel, 490, e.ui.grid.panel.canvas.height - 172);
+  assert.equal(e.ui.menuOpen, false); assert.equal(e.actor.mp, 90, 'button click releases planning, it does not also forward skill confirmation');
+  e.frame(0.01); assert.equal(e.actor.mp, 80); e.frame(0.301); assert.equal(e.actor.mp, 70);
+  assert.equal(e.combat.menuSkillChain, null);
+});

@@ -80,7 +80,7 @@ export class SkillBrowser {
     this.rebuild(true); this.drawKey = null;
   }
   close() {
-    const session = this.session; this.session = null; this.hover = undefined; this.blurSearch();
+    const session = this.session; this.session = null; this.chain = null; this.hover = undefined; this.blurSearch();
     if (session && this.grid.tabs === session.tabs) {
       this.grid.gridTop = session.original.gridTop; this.grid.cellH = session.original.cellH;
       this.grid.cols = session.original.cols; this.grid.rows = session.original.rows;
@@ -134,8 +134,12 @@ export class SkillBrowser {
   status(skill) {
     const combat = G.combat, status = combat?.menuSkillUseStatus ? combat.menuSkillUseStatus(skill) : combat?.skillUseStatus?.(skill);
     if (!status?.ok) return status;
+    if (this.chain?.released) return { ...status, ok: false, reason: tr('예약한 스킬을 사용하고 있습니다') };
     const effective = status.skill || skill, eligible = !!combat.bonusSkillEligible?.(effective, 'skill');
     const special = effective.id === 12 || combat.isBreakSkill?.(effective);
+    if (this.chain?.queued > 0 && !this.canQueue(effective)) return { ...status, ok: false, reason: tr('이 스킬은 연속 사용에 추가할 수 없습니다') };
+    if (this.canQueue(effective)) return this.chain.queued >= this.chain.capacity
+      ? { ...status, ok: false, reason: tr('예약이 가득 찼습니다') } : status;
     const gated = !special && (eligible || combat.bonusFighting?.() || effective.scope >= 1 && effective.scope <= 6);
     if (gated && combat.playerActionReady && !combat.playerActionReady(eligible)) {
       const seconds = Math.max(0, (combat.playerActiveUntil || 0) - G.time, (combat.playerRecoveryUntil || 0) - G.time);
@@ -143,8 +147,44 @@ export class SkillBrowser {
     }
     return status;
   }
+  readChain() {
+    const combat = G.combat, native = combat?.menuSkillChainStatus?.();
+    const raw = native || combat?.bonusStatus?.();
+    const remaining = raw?.remaining ?? raw?.count;
+    if (!Number.isSafeInteger(remaining) || remaining < 0) return null;
+    const skills = (Array.isArray(raw.skills) ? raw.skills : []).filter(skill => positiveId(skill?.id))
+      .map(skill => ({ id: skill.id, name: String(skill.name || $data.skills?.[skill.id]?.name || ''),
+        icon: Number.isSafeInteger(skill.icon) && skill.icon > 0 ? skill.icon : 0 }));
+    const queued = Number.isSafeInteger(raw.queued) && raw.queued >= 0 ? raw.queued : skills.length;
+    if (!remaining && !queued) return null;
+    const capacity = Number.isSafeInteger(raw.capacity) && raw.capacity >= 0 ? raw.capacity : remaining;
+    const fallback = Number.isSafeInteger(raw.icon) && raw.icon > 0 ? 0 : combat?.playerAttackSkill?.(this.session.actor)?.icon_index;
+    const icon = Number.isSafeInteger(raw.icon) && raw.icon > 0 ? raw.icon : Number.isSafeInteger(fallback) && fallback > 0 ? fallback : 0;
+    const seconds = value => Number.isFinite(value) ? Math.ceil(Math.max(0, value - 1e-9) * 10) / 10 : 0;
+    return { remaining, queued, capacity, icon, skills, released: !!raw.released,
+      planning: !!native && typeof combat.queueMenuSkill === 'function', ready: !!raw.ready,
+      activeRemaining: seconds(raw.activeRemaining), recoveryRemaining: seconds(raw.recoveryRemaining) };
+  }
+  canQueue(skill) {
+    return !!this.chain?.planning && !this.chain.released && this.chain.remaining > 0
+      && skill?.id !== 12 && !G.combat?.isBreakSkill?.(skill) && !!G.combat?.bonusSkillEligible?.(skill, 'skill');
+  }
+  editChain(removeLast = false) {
+    if (!this.active || !this.chain?.queued || this.chain.released) return;
+    if (removeLast) G.combat?.removeMenuSkill?.(); else G.combat?.clearMenuSkillChain?.();
+    this.rebuild(true); this.draw();
+  }
+  castChain() {
+    if (!this.active || !this.chain?.planning || !this.chain.queued || this.chain.released
+      || this.chain.queued > this.chain.capacity) return false;
+    const used = !!this.ui.castSkillChain?.();
+    if (this.active) { this.rebuild(true); this.draw(); }
+    return used;
+  }
+  get footerHeight() { return this.chain ? 260 : 140; }
   rebuild(force = false) {
     if (!this.active) return;
+    this.chain = this.readChain();
     const rows = this.rows(), signature = JSON.stringify(rows);
     if (!force && signature === this.rowsKey) return;
     this.rowsKey = signature;
@@ -159,7 +199,7 @@ export class SkillBrowser {
     if (this.session.mode !== 'browser') return true;
     if (this.grid.tabs !== this.session.tabs || !this.grid.visible) { this.close(); return false; }
     this.rebuild();
-    const key = JSON.stringify([this.rowsKey, this.grid.index, this.grid.top, this.session.prefs, G.vr,
+    const key = JSON.stringify([this.rowsKey, this.chain, this.grid.index, this.grid.top, this.session.prefs, G.vr,
       this.grid.panel.canvas.width, this.grid.panel.canvas.height, this.assetRevision()]);
     if (key !== this.drawKey) { this.drawKey = key; this.draw(); }
     if (positionSearch) this.positionSearch();
@@ -203,11 +243,12 @@ export class SkillBrowser {
     const skill = $data.skills?.[this.selectedId], combat = G.combat;
     if (!skill) return false;
     this.rememberSelection();
+    this.chain = this.readChain();
     const status = this.status(skill);
     if (!status?.ok) {
       G.audio?.playSystemSe(3); this.ui.toast(status?.reason || tr('지금은 쓸 수 없는 스킬입니다')); this.update(); return false;
     }
-    const used = !!combat.useSkillFromMenu(skill);
+    const used = this.canQueue(status.skill || skill) ? !!combat.queueMenuSkill(skill) : !!combat.useSkillFromMenu(skill);
     if (this.active) { this.rebuild(true); this.draw(); }
     return used;
   }
@@ -279,6 +320,13 @@ export class SkillBrowser {
       if (y >= this.searchY && y <= this.searchY + 36) {
         if (click) { if (x >= 560) this.setQuery(''); else this.focusSearch(); return true; }
       }
+      const H = this.grid.panel.canvas.height;
+      if (this.chain && y >= H - 192 && y <= H - 152 && click) {
+        if (x >= 20 && x <= 210) this.editChain(true);
+        else if (x >= 220 && x <= 348) this.editChain();
+        else if (x >= 358 && x <= 620) this.castChain();
+        return true;
+      }
       if (y >= this.grid.panel.canvas.height - 52) {
         if (click) { if (x < 320) this.toggleFavorite(); else this.assignSelected(); return true; }
       }
@@ -304,7 +352,7 @@ export class SkillBrowser {
     const p = this.grid.panel, { ctx, canvas } = p, compact = !!this.ui.skillProfile?.compact;
     this.searchY = compact ? 48 : 144;
     this.grid.gridTop = compact ? 96 : 200; this.grid.cellH = 108;
-    this.grid.rows = Math.max(1, Math.floor((canvas.height - this.grid.gridTop - 140) / 108));
+    this.grid.rows = Math.max(1, Math.floor((canvas.height - this.grid.gridTop - this.footerHeight) / 108));
     const layout = `${canvas.width}/${canvas.height}/${this.grid.gridTop}/${G.vr}`;
     if (layout !== this.hoverLayout) { this.hoverLayout = layout; this.hover = undefined; }
     this.grid.cols = 1;
@@ -334,8 +382,9 @@ export class SkillBrowser {
     });
     if (!G.vr) { this.drawGameCursor(ctx, 20, this.searchY, 536, 36); text(this.session.prefs.query || tr('스킬 검색 (/)'), 28, this.searchY + 18, 24, '#e8d8a8', 520);
       this.drawGameCursor(ctx, 560, this.searchY, 56, 36); text('×', 578, this.searchY + 18, 26); }
-    if (G.vr) text(tr('스틱: 선택 · A / 트리거: 결정 · B: 뒤로'), 24, 162, 20);
-    else if (!compact) text(tr('Enter: 사용 · F: 즐겨찾기 · Q: 퀵슬롯'), 24, 190, 18);
+    const planning = this.chain?.planning && !this.chain.released && this.chain.remaining > 0;
+    if (G.vr) text(tr(planning ? '스틱: 선택 · A / 트리거: 예약 · B: 뒤로' : '스틱: 선택 · A / 트리거: 결정 · B: 뒤로'), 24, 162, 20);
+    else if (!compact) text(tr(planning ? 'Enter: 예약 · F: 즐겨찾기 · Q: 퀵슬롯' : 'Enter: 사용 · F: 즐겨찾기 · Q: 퀵슬롯'), 24, 190, 18);
     this.grid.items.slice(this.grid.top, this.grid.top + this.grid.rows).forEach((row, index) => {
       const y = this.grid.gridTop + index * 108;
       if (this.grid.top + index === this.grid.index) this.drawGameCursor(ctx, 20, y, 574, 102);
@@ -350,6 +399,25 @@ export class SkillBrowser {
     this.grid.scrollbar?.draw(this.grid.gridTop, this.grid.rows * 108 - 6, this.grid.top, this.grid.rows, this.grid.items.length);
     if (!this.grid.items.length) this.wrap(tr(this.session.prefs.tab === 'favorites' ? '즐겨찾기가 없습니다. F로 추가하거나 전체를 선택하세요' : '검색 결과 없음'), 592, 25)
       .forEach((line, index) => text(line, 24, this.grid.gridTop + 28 + index * 30, 25));
+    if (this.chain) {
+      const chain = this.chain, H = canvas.height;
+      if (chain.icon) this.drawIcon(ctx, chain.icon, 24, H - 260, 28);
+      const x = chain.icon ? 62 : 24;
+      const status = tr('스킬 예약 {n}/{max}', { n: chain.queued, max: chain.capacity });
+      text(`${tr('보너스 행동 ×{n}', { n: chain.remaining })} · ${status}`, x, H - 246, 25, '#e8d8a8', 616 - x);
+      const last = chain.skills.at(-1), delay = chain.activeRemaining || (!chain.ready ? chain.recoveryRemaining : 0);
+      let hint = chain.released ? tr('예약한 스킬을 사용하고 있습니다')
+        : last ? tr('예약: {name}', { name: last.name })
+          : tr(G.vr ? '스킬을 고른 뒤 사용 버튼을 누르세요' : '스킬을 고른 뒤 R을 닫으면 순서대로 사용합니다');
+      if (delay > 0 && !chain.released) hint = `${tr('다음 행동까지 {s}초', { s: delay.toFixed(1) })} · ${hint}`;
+      text(hint, 24, H - 216, 22, '#ddd');
+      const controls = [[20, 190, '마지막 예약 취소'], [220, 128, '예약 지우기'], [358, 262, '스킬 {n}개 사용']];
+      for (const [left, width, label] of controls) {
+        this.drawGameCursor(ctx, left, H - 192, width, 40);
+        const enabled = chain.planning && chain.queued > 0 && !chain.released && (left !== 358 || chain.queued <= chain.capacity);
+        text(tr(label, { n: chain.queued }), left + 10, H - 172, 22, enabled ? '#e8d8a8' : '#999', width - 20);
+      }
+    }
     const description = this.grid.items[this.grid.index]?.desc || '';
     const descriptionLines = this.wrap(this.clean(description), 592, 24);
     descriptionLines.slice(0, 2).forEach((line, index) => text(line + (index === 1 && descriptionLines.length > 2 ? '…' : ''), 24,

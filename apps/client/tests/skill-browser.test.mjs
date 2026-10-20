@@ -16,8 +16,9 @@ function environment(t, stored) {
   $data.skills = []; for (const row of skills) $data.skills[row.id] = row;
   const actor = { id: 1, hp: 100, allSkills: () => skills, skillHpCost: () => 5, skillMpCost: () => 7,
     weapons: () => [{ features: [{ code: 43, data_id: 2 }] }] };
-  const canvas = { width: 1260, height: 726 }, texts = [];
-  const ctx = new Proxy({ clearRect: () => { texts.length = 0; }, fillText: text => texts.push(text),
+  const canvas = { width: 1260, height: 726 }, texts = [], painted = [], icons = [], cursors = [];
+  const ctx = new Proxy({ clearRect: () => { texts.length = painted.length = icons.length = cursors.length = 0; },
+    fillText: (text, x, y) => { texts.push(text); painted.push({ text, x, y, font: ctx.font }); },
     measureText: text => ({ width: String(text).length * 9 }) }, { get: (o, key) => key in o ? o[key] : () => {} });
   const panel = { canvas, ctx, widthM: 1.2, heightM: 0.726, mesh: new THREE.Group(),
     clear: () => ctx.clearRect(), commit() {}, resize(w, h, widthM) { canvas.width = w; canvas.height = h; this.widthM = widthM; }, hit: () => hit };
@@ -39,9 +40,10 @@ function environment(t, stored) {
       playerActionReady: () => ready, playerRecoveryUntil: 10.9, skillCooling: () => 0,
       skillUseStatus: s => ({ ok: allowed && s.id !== 6, skill: s, reason: allowed && s.id !== 6 ? '' : 'Sealed' }),
       useSkillFromMenu: s => { casts.push(s.id); return true; } } });
-  const browser = new SkillBrowser({ grid, ui, font: 'Synthetic', windowBg() {}, drawIcon() {}, drawGameCursor() {},
+  const browser = new SkillBrowser({ grid, ui, font: 'Synthetic', windowBg() {}, drawIcon: (...args) => icons.push(args.slice(1)),
+    drawGameCursor: (...args) => cursors.push(args.slice(1)),
     fitLabel: (_ctx, text) => text, clean: String }); ui.skillsBrowser = browser; browser.open();
-  return { browser, actor, skills, grid, texts, casts, toasts, assignments, get saves() { return saves; },
+  return { browser, actor, skills, grid, texts, painted, icons, cursors, ui, casts, toasts, assignments, get saves() { return saves; },
     input: (value = {}) => { ({ key = '', mouse = false, confirm = false, dx = 0, dy = 0 } = value); G.frame++; },
     hit: (x, y) => { hit = x == null ? null : new THREE.Vector2(x / 640, 1 - y / canvas.height); },
     allowed: value => { allowed = value; }, ready: value => { ready = value; }, fighting: value => { fighting = value; } };
@@ -239,6 +241,124 @@ test('a removed source cannot cast from a stale row and its favorite survives lo
   assert.equal(e.browser.useSelected(), false); assert.deepEqual(e.casts, []); assert.equal(e.grid.items.length, 0);
   assert.deepEqual(G.settings.skillBrowser[1].favorites, [art.id]);
   borrowedArt(e); assert.equal(e.grid.items[0].id, art.id); assert.equal(e.grid.items[0].favorite, true);
+});
+
+function bonusChain(t, count = 2) {
+  const e = environment(t), draft = []; let remaining = count, released = false, active = 0.3, icon = 91, commits = 0;
+  e.actor.mp = 50;
+  G.combat.menuSkillChainStatus = () => ({ remaining, queued: draft.length, capacity: remaining, icon,
+    activeRemaining: active, recoveryRemaining: 0.9, ready: active <= 0, released,
+    skills: draft.map(id => ({ id, name: $data.skills[id].name, icon: $data.skills[id].icon_index })) });
+  G.combat.queueMenuSkill = selected => {
+    if (released || draft.length >= remaining) return false;
+    draft.push(selected.id); return true;
+  };
+  G.combat.removeMenuSkill = () => draft.pop();
+  G.combat.clearMenuSkillChain = () => { draft.length = 0; };
+  G.combat.playerAttackSkill = () => ({ icon_index: 83 });
+  e.ui.castSkillChain = () => { commits++; released = true; return true; };
+  e.ready(false); e.browser.update();
+  return { ...e, draft, get commits() { return commits; }, set remaining(value) { remaining = value; },
+    set active(value) { active = value; }, set icon(value) { icon = value; } };
+}
+
+test('Skills reports actual follow-ups and shared active time without rolling, casting, paying or saving settings', t => {
+  const e = bonusChain(t), random = Math.random; Math.random = () => assert.fail('Viewing Skills must not roll Bonus Actions');
+  t.after(() => { Math.random = random; });
+  for (let i = 0; i < 8; i++) e.browser.update();
+  assert.ok(e.texts.includes('Bonus Action ×2 · Queued skills 0/2'));
+  assert.ok(e.texts.some(text => text.includes('Next action in 0.3 s')));
+  e.active = 0.3000000000000007; e.browser.update(); assert.equal(e.browser.chain.activeRemaining, 0.3, 'floating deadlines do not add a spurious tenth');
+  assert.ok(e.icons.some(([icon]) => icon === 91)); assert.equal(e.browser.footerHeight, 260);
+  assert.equal(e.actor.hp, 100); assert.equal(e.actor.mp, 50); assert.equal(e.saves, 0); assert.deepEqual(e.casts, []); assert.deepEqual(e.draft, []);
+  e.icon = 0; e.browser.update(); assert.ok(e.icons.some(([icon]) => icon === 83), 'icon fallback is the original normal attack artwork');
+  G.combat.playerAttackSkill = () => ({ icon_index: NaN }); e.browser.update(); assert.equal(e.browser.chain.icon, 0, 'no invented replacement icon');
+  e.remaining = 0; e.browser.update(); assert.equal(e.browser.chain, null); assert.equal(e.browser.footerHeight, 140);
+  assert.ok(!e.texts.some(text => text.includes('Bonus Action')));
+});
+
+test('Enter queues several skills during shared active time but preserves native restrictions and queue capacity', t => {
+  const e = bonusChain(t);
+  e.input({ confirm: true }); e.browser.handleInput(null);
+  e.grid.index = 1; e.input({ confirm: true }); e.browser.handleInput(null);
+  assert.deepEqual(e.draft, [1, 2]); assert.deepEqual(e.casts, []); assert.equal(e.actor.mp, 50);
+  assert.equal(e.browser.useSelected(), false); assert.equal(e.toasts.at(-1), 'Queue full');
+  assert.ok(e.texts.includes('Bonus Action ×2 · Queued skills 2/2'));
+  e.browser.editChain(true); e.allowed(false);
+  assert.equal(e.browser.useSelected(), false); assert.equal(e.toasts.at(-1), 'Sealed'); assert.deepEqual(e.draft, [1]);
+  e.remaining = 0; e.browser.update(); assert.equal(e.browser.castChain(), false); assert.equal(e.commits, 0);
+  e.browser.editChain(true); assert.deepEqual(e.draft, [], 'a stale over-capacity draft can still be corrected');
+});
+
+test('PC and VR control hints say Queue only during real Bonus Action planning, including a full queue', t => {
+  const e = bonusChain(t);
+  for (const vr of [false, true]) {
+    G.vr = vr; e.browser.draw();
+    assert.ok(e.texts.includes(vr ? 'Stick: Select · A / trigger: Queue · B: Back' : 'Enter: Queue · F: Favorite · Q: Quick slot'));
+    assert.ok(!e.texts.some(text => text.startsWith('Enter: Use') || text.includes('trigger: Confirm')));
+  }
+  e.browser.useSelected(); e.browser.useSelected(); e.browser.draw();
+  assert.ok(e.texts.includes('Stick: Select · A / trigger: Queue · B: Back'), 'capacity does not silently change confirm back to immediate Use');
+  e.browser.editChain(); e.remaining = 0; e.browser.update();
+  for (const vr of [false, true]) {
+    G.vr = vr; e.browser.draw();
+    assert.ok(e.texts.includes(vr ? 'Stick: Select · A / trigger: Confirm · B: Back' : 'Enter: Use · F: Favorite · Q: Quick slot'));
+  }
+});
+
+test('queue planning does not bypass per-skill cooldowns or queue Dodge, Break and pure utility', t => {
+  const e = bonusChain(t);
+  G.combat.menuSkillUseStatus = selected => ({ ok: selected.id !== 2, skill: selected, reason: selected.id === 2 ? 'Ready in 3.0 s' : '' });
+  e.grid.index = 1; assert.equal(e.browser.useSelected(), false); assert.deepEqual(e.draft, []);
+  for (const selected of [skill(12), skill(88), skill(89, { scope: 0 })]) {
+    if (selected.id === 88) G.combat.isBreakSkill = candidate => candidate.id === 88;
+    $data.skills[selected.id] = selected; e.skills.push(selected); e.browser.rebuild(true);
+    e.grid.index = e.grid.items.findIndex(row => row.id === selected.id);
+    e.browser.useSelected();
+    assert.deepEqual(e.draft, [], `${selected.id} must keep its native immediate/preparation route`);
+  }
+  e.grid.index = e.grid.items.findIndex(row => row.id === 1); assert.equal(e.browser.useSelected(), true);
+  const casts = [...e.casts];
+  for (const id of [12, 88, 89]) {
+    e.grid.index = e.grid.items.findIndex(row => row.id === id);
+    assert.equal(e.browser.useSelected(), false); assert.equal(e.toasts.at(-1), 'This skill cannot be added to the chain');
+    assert.deepEqual(e.draft, [1]); assert.deepEqual(e.casts, casts, 'an incompatible immediate cast cannot silently discard the draft');
+  }
+});
+
+for (const vr of [false, true]) test(`${vr ? 'VR trigger' : 'mouse'} queue controls remove, clear and commit without also selecting a skill`, t => {
+  const e = bonusChain(t, 3); G.vr = vr; e.browser.useSelected(); e.grid.index = 1; e.browser.useSelected();
+  const press = x => { e.hit(x, e.grid.panel.canvas.height - 172); e.input(vr ? { confirm: true } : { mouse: true }); e.browser.handleInput({}); };
+  press(90); assert.deepEqual(e.draft, [1]); assert.equal(e.commits, 0);
+  press(280); assert.deepEqual(e.draft, []); assert.equal(e.commits, 0);
+  e.browser.useSelected(); press(480); assert.equal(e.commits, 1); assert.deepEqual(e.draft, [2]);
+  press(480); press(90); assert.equal(e.commits, 1); assert.deepEqual(e.draft, [2], 'released queue cannot be edited or committed twice');
+  assert.deepEqual(e.casts, []); assert.equal(e.actor.mp, 50);
+});
+
+test('fresh keyboard Enter queues the selected skill even while the old mouse position is over queue chrome', t => {
+  const e = bonusChain(t, 3);
+  for (const x of [90, 280, 480]) {
+    e.hit(x, e.grid.panel.canvas.height - 172); e.input({ confirm: true }); e.browser.handleInput({});
+  }
+  assert.deepEqual(e.draft, [1, 1, 1]); assert.equal(e.commits, 0); assert.deepEqual(e.casts, []);
+});
+
+test('bonus footer reserves compact/VR rows, descriptions and favorite controls and refreshes count live', t => {
+  const e = bonusChain(t);
+  for (const [compact, vr, height] of [[true, false, 464], [true, false, 572], [false, true, 960]]) {
+    e.ui.skillProfile.compact = compact; G.vr = vr; e.grid.panel.resize(640, height, 0.64); e.browser.draw();
+    const lastRowBottom = e.grid.gridTop + e.grid.rows * 108 - 6;
+    assert.ok(lastRowBottom <= height - e.browser.footerHeight, 'skill row/cursor cannot overlap the queue strip');
+    const title = e.painted.find(row => row.text.startsWith('Bonus Action'));
+    assert.equal(title.y, height - 246);
+    for (const [x, y, width, controlHeight] of e.cursors.filter(([, y]) => y === height - 192)) {
+      assert.ok(x >= 20 && x + width <= 620); assert.equal(controlHeight, 40);
+      assert.ok(y + controlHeight < height - 134, 'queue buttons clear the native description');
+    }
+    if (vr) assert.ok(!e.texts.some(text => text.includes('close R')));
+  }
+  e.remaining = 1; e.browser.update(); assert.ok(e.texts.includes('Bonus Action ×1 · Queued skills 0/1'));
 });
 
 for (const reason of ['transfer', 'death', 'state', 'leader', 'menu']) test(`browser ${reason} cleanup keeps pending search/navigation from changing another game`, t => {

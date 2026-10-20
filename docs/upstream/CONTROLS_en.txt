@@ -1,5 +1,14 @@
-﻿BLACK SOULS II VR - Controls  (version 0.2.48)
+﻿BLACK SOULS II VR - Controls  (version 0.2.49)
 ================================================
+
+Bonus Action skill chains
+- R Skills shows earned Bonus Actions and your queued skills.
+- With extra actions available, select skills, then press R again or click Cast
+  to use them in order. In VR, use the Cast button. Remove last and Clear edit
+  the plan; Esc/Back cancels it without spending actions or resources.
+- Each cast spends one earned action and uses its own costs and cooldowns.
+  An unavailable skill stops the remaining chain without spending for that cast.
+  Temporary weapon switching preserves earned actions and uses the art's stats.
 
 Lindamea battle
 - Cinematic backsteps no longer slow your movement during real-time combat.

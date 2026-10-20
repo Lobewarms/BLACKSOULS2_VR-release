@@ -188,3 +188,115 @@ test('failed costs, cooldowns and missing targets neither spend a follow-up nor 
   e.targets([]); assert.equal(e.cast(103), false); assert.equal(e.actor.mp, 100); assert.equal(e.count(), 1);
   e.targets([e.enemy]); assert.equal(e.cast(102), true); assert.equal(e.actor.mp, 93); assert.equal(e.count(), 0);
 });
+
+function planning(e) {
+  assert.equal(e.cast(101), true); e.advance(0.301);
+  G.ui.menuOpen = true; G.ui.menuSection = 'skills';
+}
+
+test('R skill selection reserves only earned actions and never pays, rolls or saves a planning draft', t => {
+  const e = environment(t, { chances: [1, 1] }); planning(e);
+  const before = JSON.stringify(e.state), mp = e.actor.mp;
+  for (let i = 0; i < 30; i++) assert.equal(e.combat.menuSkillChainStatus($data.skills[102]).remaining, 2);
+  assert.equal(e.combat.queueMenuSkill($data.skills[101]), true);
+  assert.equal(e.combat.queueMenuSkill($data.skills[102]), true);
+  assert.equal(e.combat.queueMenuSkill($data.skills[103]), false, 'a third selection cannot borrow a future random roll');
+  assert.deepEqual(e.combat.menuSkillChainStatus().skills.map(s => s.id), [101, 102]);
+  assert.equal(e.combat.menuSkillChainStatus().capacity, 2); assert.equal(e.count(), 2);
+  assert.equal(e.actor.mp, mp); assert.equal(e.rolls, 0); assert.equal(JSON.stringify(e.state), before);
+  assert.equal(e.combat.removeMenuSkill(), true); assert.equal(e.combat.menuSkillChainStatus().queued, 1);
+  e.combat.clearMenuSkillChain(); assert.equal(e.combat.menuSkillChainStatus().queued, 0); assert.equal(e.count(), 2);
+});
+
+for (const vr of [false, true]) test(`${vr ? 'VR' : 'PC'} released R skills cast in order, spend one bonus each and retain the final recovery`, t => {
+  const e = environment(t, { chances: [1, 1] }); G.vr = vr; planning(e);
+  e.combat.queueMenuSkill($data.skills[101]); e.combat.queueMenuSkill($data.skills[102]);
+  e.advance(50, { paused: true }); assert.equal(e.actor.mp, 495); assert.equal(e.count(), 2);
+  assert.equal(e.combat.releaseMenuSkillChain(), true); G.ui.menuOpen = false;
+  e.advance(0.001); assert.equal(e.actor.mp, 490); assert.equal(e.count(), 1);
+  assert.deepEqual(e.combat.menuSkillChainStatus().skills.map(s => s.id), [102]);
+  e.advance(0.299); assert.equal(e.actor.mp, 490, 'active animation cannot be skipped by queued skills');
+  e.advance(0.002); assert.equal(e.actor.mp, 483); assert.equal(e.count(), 0);
+  assert.equal(e.combat.menuSkillChain, null); assert.equal(e.rolls, 0);
+  e.advance(0.301); assert.equal(e.cast(101), false, 'the final bonus still owns its full trailing recovery');
+  e.advance(0.6); assert.equal(e.cast(101), true);
+});
+
+test('R can plan during an active cast but a released chain waits for that actual cast to finish', t => {
+  const e = environment(t, { chances: [1, 1] }); assert.equal(e.cast(101), true);
+  G.ui.menuOpen = true; G.ui.menuSection = 'skills';
+  assert.equal(e.combat.menuSkillChainStatus().ready, false);
+  assert.equal(e.combat.queueMenuSkill($data.skills[102]), true);
+  e.advance(30, { paused: true }); assert.equal(e.actor.mp, 495);
+  assert.equal(e.combat.releaseMenuSkillChain(), true); G.ui.menuOpen = false;
+  e.advance(0.299); assert.equal(e.actor.mp, 495);
+  e.advance(0.002); assert.equal(e.actor.mp, 488); assert.equal(e.count(), 1);
+});
+
+test('reopening R or headset-away pauses remaining released casts without changing order or costs', t => {
+  const e = environment(t, { chances: [1, 1] }); planning(e);
+  e.combat.queueMenuSkill($data.skills[101]); e.combat.queueMenuSkill($data.skills[102]);
+  e.combat.releaseMenuSkillChain(); G.ui.menuOpen = false; e.advance(0.001);
+  G.ui.menuOpen = true; const active = e.combat.menuSkillChainStatus().activeRemaining;
+  e.advance(40, { paused: true }); assert.equal(e.actor.mp, 490);
+  assert.ok(Math.abs(e.combat.menuSkillChainStatus().activeRemaining - active) < 1e-9);
+  assert.equal(e.combat.queueMenuSkill($data.skills[101]), false, 'an executing chain cannot be extended with normal casts');
+  G.ui.menuOpen = false; G.xrAway = true; e.advance(40); assert.equal(e.actor.mp, 490);
+  G.xrAway = false; e.advance(0.301); assert.equal(e.actor.mp, 483);
+});
+
+for (const rejection of ['cost', 'cooldown', 'target']) test(`a queued ${rejection} rejection stops the remainder without spending a follow-up`, t => {
+  const e = environment(t, { chances: [1, 1] }); planning(e);
+  const first = rejection === 'target' ? 103 : 106;
+  assert.equal(e.combat.queueMenuSkill($data.skills[first]), true);
+  assert.equal(e.combat.queueMenuSkill($data.skills[102]), true);
+  if (rejection === 'cost') e.actor.mp = 0;
+  if (rejection === 'cooldown') e.combat.skillCD[106] = G.time + 10;
+  if (rejection === 'target') e.targets([]);
+  const mp = e.actor.mp;
+  e.combat.releaseMenuSkillChain(); G.ui.menuOpen = false; e.advance(0.01); e.advance(10);
+  assert.equal(e.actor.mp, mp); assert.equal(e.count(), 2); assert.equal(e.combat.menuSkillChain, null);
+  assert.equal(e.hits.length, 0); assert.equal(e.rolls, 0);
+});
+
+for (const invalidation of ['fight', 'death', 'transfer', 'map', 'world', 'sources']) test(`a queued chain cannot survive ${invalidation} ownership loss`, t => {
+  const e = environment(t, { chances: [1, 1] }); planning(e);
+  e.combat.queueMenuSkill($data.skills[102]); e.combat.releaseMenuSkillChain(); G.ui.menuOpen = false;
+  if (invalidation === 'fight') e.battle.done = true;
+  if (invalidation === 'death') e.combat.playerDead = true;
+  if (invalidation === 'transfer') e.map.transferring = true;
+  if (invalidation === 'map') e.map.mapId++;
+  if (invalidation === 'world') G.state = new GameState();
+  if (invalidation === 'sources') $data.actors[1].features = [];
+  e.advance(1);
+  assert.equal(e.actor.mp, 495); assert.equal(e.combat.menuSkillChain, null);
+});
+
+test('draft cancellation keeps bonuses and ordinary use without earned extras retains the single-cast path', t => {
+  const e = environment(t, { chances: [1, 1] }); planning(e);
+  e.combat.queueMenuSkill($data.skills[102]);
+  G.ui.menuSection = 'main'; e.advance(0, { paused: true });
+  assert.equal(e.combat.menuSkillChain, null); assert.equal(e.count(), 2); assert.equal(e.actor.mp, 495);
+  e.combat.clearBonusActions(); G.ui.menuSection = 'skills';
+  assert.equal(e.combat.queueMenuSkill($data.skills[102]), false);
+  assert.equal(e.combat.releaseMenuSkillChain(), false); assert.equal(e.actor.mp, 495);
+});
+
+test('a queued native stage that becomes utility cannot execute without spending a follow-up', t => {
+  const e = environment(t, { chances: [1, 1] }); planning(e);
+  assert.equal(e.combat.queueMenuSkill($data.skills[101]), true);
+  const byState = e.combat.skillByState.bind(e.combat);
+  e.combat.skillByState = (actor, object) => object?.id === 101 ? $data.skills[105] : byState(actor, object);
+  assert.equal(e.combat.releaseMenuSkillChain(), true); G.ui.menuOpen = false; e.advance(0.01);
+  assert.equal(e.actor.mp, 495); assert.equal(e.count(), 2); assert.equal(e.combat.sideInterps.length, 0);
+  assert.equal(e.combat.menuSkillChain, null);
+});
+
+test('a cooldown started by the first queued cast blocks a duplicate without paying for or skipping the failed cast', t => {
+  const e = environment(t, { chances: [1, 1] }); planning(e);
+  assert.equal(e.combat.queueMenuSkill($data.skills[106]), true);
+  assert.equal(e.combat.queueMenuSkill($data.skills[106]), true);
+  e.combat.releaseMenuSkillChain(); G.ui.menuOpen = false; e.advance(0.01); e.advance(0.301);
+  assert.equal(e.actor.mp, 490); assert.equal(e.count(), 1); assert.equal(e.combat.menuSkillChain, null);
+  assert.ok(e.combat.skillCooling($data.skills[106]) > 0);
+});

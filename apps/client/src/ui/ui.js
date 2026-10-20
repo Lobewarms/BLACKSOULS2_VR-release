@@ -2094,7 +2094,11 @@ export class UI {
       || G.combat?.playerDead || this.sceneOpen || this.keyboard.visible || this.prompt?.shown || this.remote?.shown
       || this.messageBusy() || this.dialogueActive()
       || interpreter?.running() && interpreter.waitMode !== 'battle') return false;
-    if (this.menuOpen && this.menuSection === 'skills') { this.closeMenu(); return true; }
+    if (this.menuOpen && this.menuSection === 'skills') {
+      const chain = G.combat?.menuSkillChainStatus?.();
+      if (chain?.queued && !chain.released) return this.castSkillChain();
+      this.closeMenu(); return true;
+    }
     if (!this.menuOpen) {
       G.pictures?.requestViewerCancel?.();
       this.menuOpen = true; this.menuIndex = 1;
@@ -2114,6 +2118,7 @@ export class UI {
     this.showMainMenu();
   }
   closeMenu() {
+    G.combat?.clearMenuSkillChain?.({ draftOnly: true });
     this.skillsBrowser?.close();
     this.skillProfile?.close();
     this.bonfireTravel?.close();
@@ -2126,6 +2131,7 @@ export class UI {
     this.consumedConfirm = true;
   }
   showMainMenu() {
+    G.combat?.clearMenuSkillChain?.({ draftOnly: true });
     this.skillsBrowser?.close();
     this.skillProfile?.close();
     this.menuSection = 'main';
@@ -2383,6 +2389,11 @@ export class UI {
   }
 
   // ---- skills ----
+  castSkillChain() {
+    if (!this.menuOpen || this.menuSection !== 'skills' || !G.combat?.releaseMenuSkillChain?.()) return false;
+    this.closeMenu();
+    return true;
+  }
   showSkills(keepIndex) {
     const a = G.state.party.leader();
     if (!a) return;

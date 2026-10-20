@@ -740,6 +740,11 @@ export class CombatSystem {
   }
   bonusContext() { return { actor: G.state?.party?.leader(), map: G.map, state: G.state }; }
   bonusManager() { return this._bonusActions ||= new BonusActions(); }
+  withBonusLoadout(context, run) {
+    // An action's temporary weapon cannot remove the real loadout's sources
+    // or invalidate earned follow-ups. Its own roll sources are sampled below.
+    return withActorEquipment(context.actor, null, run);
+  }
   bonusInvalid(context = this.bonusContext()) {
     return !context.actor || !context.state || !context.map || context.map.transferring || this.spectating
       || this.playerDead || context.actor.hp <= 0 && !context.actor.stateResist?.(1);
@@ -766,12 +771,81 @@ export class CombatSystem {
     this.bonusCombatActive = fighting;
     if (!fighting) return null;
     this.syncBonusClock(this.bonusPaused());
-    return this.bonusManager().status(this.bonusContext());
+    const context = this.bonusContext();
+    return this.withBonusLoadout(context, () => this.bonusManager().status(context));
   }
   bonusAvailable() { return !!this.bonusStatus(); }
   clearBonusActions() {
     this._bonusActions?.clear(); this.bonusPending = []; this.vrStrokeAction = null;
+    this.menuSkillChain = null;
     this.bonusCombatActive = false;
+  }
+  validMenuSkillChain(chain = this.menuSkillChain) {
+    const c = this.bonusContext();
+    return !!chain && !this.bonusInvalid(c) && this.bonusFighting() && chain.actor === c.actor
+      && chain.map === c.map && chain.mapId === c.map?.mapId && chain.state === c.state && chain.gen === this.gen
+      && chain.epoch === this.bonusManager().epoch
+      && (chain.released || G.ui?.menuOpen && G.ui.menuSection === 'skills');
+  }
+  clearMenuSkillChain({ draftOnly = false } = {}) {
+    if (!draftOnly || !this.menuSkillChain?.released) this.menuSkillChain = null;
+  }
+  menuSkillChainStatus(skill) {
+    this.syncBonusClock(this.bonusPaused());
+    const bonus = this.bonusStatus();
+    if (!this.validMenuSkillChain()) this.menuSkillChain = null;
+    const chain = this.menuSkillChain, remaining = bonus?.count || 0;
+    const actor = G.state?.party?.leader(), effective = skill && actor && this.skillByState(actor, skill);
+    const eligible = !!effective && effective.id !== 12 && !this.isBreakSkill(effective) && this.bonusSkillEligible(effective);
+    const activeRemaining = Math.max(0, (this.playerActiveUntil || 0) - G.time);
+    const recoveryRemaining = Math.max(0, (this.playerRecoveryUntil || 0) - G.time);
+    return { remaining, queued: chain?.skills.length || 0, capacity: remaining, icon: bonus?.icon || 0,
+      activeRemaining, recoveryRemaining, ready: activeRemaining <= 1e-9 && (recoveryRemaining <= 1e-9 || remaining > 0),
+      released: !!chain?.released, canQueue: eligible && remaining > 0 && !chain?.released,
+      skills: (chain?.skills || []).map(id => ({ id, name: $data.skills[id]?.name || '', icon: $data.skills[id]?.icon_index || 0 })) };
+  }
+  queueMenuSkill(skill) {
+    if (!G.ui?.menuOpen || G.ui.menuSection !== 'skills') return false;
+    const status = this.menuSkillChainStatus(skill);
+    if (!status.canQueue || status.queued >= status.capacity) return false;
+    const plan = this.menuSkillPlan(skill);
+    if (!plan.status.ok || !this.bonusSkillEligible(plan.status.skill) || this.isBreakSkill(plan.status.skill)) return false;
+    // Selection is free: retain only the requested native ID. Ownership,
+    // equipment, costs, cooldown and targets are checked again at each cast.
+    const context = this.bonusContext();
+    this.menuSkillChain ||= { ...context, mapId: context.map.mapId, gen: this.gen,
+      epoch: this.bonusManager().epoch, released: false, skills: [] };
+    this.menuSkillChain.skills.push(skill.id);
+    return true;
+  }
+  removeMenuSkill() {
+    if (!this.validMenuSkillChain() || this.menuSkillChain.released) return false;
+    this.menuSkillChain.skills.pop();
+    if (!this.menuSkillChain.skills.length) this.menuSkillChain = null;
+    return true;
+  }
+  releaseMenuSkillChain() {
+    const status = this.menuSkillChainStatus();
+    if (!status.queued || status.released || status.queued > status.remaining) return false;
+    this.menuSkillChain.released = true;
+    return true;
+  }
+  updateMenuSkillChain(paused) {
+    const chain = this.menuSkillChain;
+    if (!chain) return;
+    if (!this.validMenuSkillChain()) { this.menuSkillChain = null; return; }
+    if (!chain.released || paused || !this.playerActionReady(true)) return;
+    // Never turn a stale queued follow-up into a fresh normal action/roll.
+    if (!this.bonusAvailable() || this.menuSkillChain !== chain) { this.menuSkillChain = null; return; }
+    const skill = $data.skills[chain.skills[0]], plan = this.menuSkillPlan(skill), effective = plan.status.skill;
+    if (!effective || effective.id === 12 || this.isBreakSkill(effective) || !this.bonusSkillEligible(effective)) {
+      this.menuSkillChain = null;
+      G.ui.toast(tr('지금은 쓸 수 없는 스킬입니다'), skill?.icon_index); return;
+    }
+    const used = this.useSkillFromMenu(skill);
+    if (!used) { this.menuSkillChain = null; return; }
+    chain.skills.shift();
+    if (!chain.skills.length) this.menuSkillChain = null;
   }
   bonusSkillEligible(obj, kind = 'skill') {
     if (kind !== 'skill' || !obj || obj.occasion === 2 || obj.occasion === 3 || !obj.scope) return false;
@@ -800,7 +874,10 @@ export class CombatSystem {
     const context = this.bonusContext();
     // A real opening hit may engage a dormant symbol during its active phase.
     // Support can only roll inside a fight; waiting near dormant enemies cannot prime it.
-    const ticket = this.bonusFighting() || targeted && eligible ? this.bonusManager().begin(context, { eligible }) : null;
+    const manager = this.bonusManager(), sources = eligible ? manager.sources(context.actor) : [];
+    const ticket = this.bonusFighting() || targeted && eligible
+      ? this.withBonusLoadout(context, () => manager.begin(context, { eligible })) : null;
+    if (ticket) ticket.sources = sources;
     this.playerActiveUntil = G.time + active;
     // A follow-up bypasses the previous action's tail. Its own full tail still
     // gates the next normal chain, even when this was the last earned action.
@@ -814,7 +891,10 @@ export class CombatSystem {
       return this.withMenuWeapon(action.menuWeaponContext, () => this.completePlayerAction(action));
     if (this.bonusInvalid() || !this.bonusFighting()) { this.clearBonusActions(); return; }
     this.bonusCombatActive = true;
-    if (action?.ticket) this.bonusManager().complete(action.ticket, this.bonusContext(), { eligible: action.eligible });
+    if (action?.ticket) {
+      const context = this.bonusContext();
+      this.withBonusLoadout(context, () => this.bonusManager().complete(action.ticket, context, { eligible: action.eligible }));
+    }
   }
   finishPlayerAction(action, delay = 0) {
     if (!action) return;
@@ -827,14 +907,16 @@ export class CombatSystem {
     const fighting = this.bonusFighting();
     const clear = this.bonusInvalid(context) || !fighting && this.bonusCombatActive;
     this.syncBonusClock(paused || !!G.xrAway);
-    this.bonusManager().update(dt, context, { paused: paused || !!G.xrAway, clear });
-    if (clear) { this.bonusPending = []; this.vrStrokeAction = null; this.bonusCombatActive = false; return; }
+    this.withBonusLoadout(context, () => this.bonusManager().update(dt, context, { paused: paused || !!G.xrAway, clear }));
+    if (clear) { this.menuSkillChain = null; this.bonusPending = []; this.vrStrokeAction = null; this.bonusCombatActive = false; return; }
     this.bonusCombatActive = fighting;
+    if (this.menuSkillChain && !this.validMenuSkillChain()) this.menuSkillChain = null;
     if (paused || G.xrAway) return;
     const pending = this.bonusPending || [];
     for (const p of pending) p.remaining -= dt;
     this.bonusPending = pending.filter(p => p.remaining > 1e-9);
     for (const p of pending) if (p.remaining <= 1e-9) this.completePlayerAction(p.action);
+    this.updateMenuSkillChain(false);
   }
   // a fight an event started (a boss, a '살해한다' fight...) - not a roaming monster's own, unless it is a boss of a map
   // that stays open (one boss at a time there: 소녀의 악몽's 시부치 waits while a girl's fight is on)

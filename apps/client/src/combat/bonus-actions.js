@@ -52,7 +52,7 @@ export class BonusActions {
   complete(ticket, context, { eligible = true } = {}) {
     if (!ticket || ticket.completed) return 0;
     ticket.completed = true;
-    if (!this.sync(context) || ticket.owner !== this.owner || ticket.epoch !== this.epoch || ticket.bonus || !eligible || !this.hadSources) return 0;
+    if (!this.sync(context) || ticket.owner !== this.owner || ticket.epoch !== this.epoch || ticket.bonus || !eligible) return 0;
     const icons = ticket.sources.filter(source => source.chance >= 1 || this.random() < source.chance).map(source => source.icon);
     if (!icons.length) return 0;
     this.icons.push(...icons);

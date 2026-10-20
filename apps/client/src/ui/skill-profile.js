@@ -36,7 +36,7 @@ function details(object) {
 
 // Read effective battler values and native traits without rolling healing or
 // applying gameplay effects. Every state/buff remains available as a row.
-export function skillProfileModel(actor, combat, skill, availability) {
+export function skillProfileModel(actor, combat, skill, availability, chain = null) {
   const params = PARAMS.map((fallback, id) => ({ label: $data.system?.terms?.params?.[id] || fallback,
     value: actor.param?.(id) ?? [actor.mhp, actor.mmp, actor.atk, actor.def, actor.mat, actor.mdf, actor.agi, actor.luk][id] ?? 0 }));
   const resources = [{ label: 'HP', value: `${actor.hp} / ${actor.mhp}` }, { label: 'MP', value: `${actor.mp} / ${actor.mmp}` },
@@ -67,7 +67,7 @@ export function skillProfileModel(actor, combat, skill, availability) {
   const cooldown = effective && combat?.skillCooling?.(effective);
   return { name: actor.name || tr('플레이어'), level: actor.level ?? 0, className: $data.classes?.[actor.classId]?.name || '',
     faceName: actor.faceName || '', faceIndex: actor.faceIndex || 0, params, resources, effects, warnings,
-    skillName: skill?.name || '', skillDescription: skill?.description || '', costs,
+    skillName: skill?.name || '', skillDescription: skill?.description || '', costs, chain,
     actionWeapon: status?.weapon ? { name: status.weapon.name, icon: status.weapon.icon_index || 0 } : null,
     requiresSwap: !!status?.requiresSwap,
     borrowed: !!skill && !!actor.allSkills && !actor.allSkills().some(known => known.id === skill.id),
@@ -116,7 +116,7 @@ export class SkillProfile {
     const id = s.kind === 'grid' ? this.grid.items?.[this.grid.index]?.id : s.skillId;
     const skill = $data.skills?.[id];
     const availability = skill && s.kind === 'grid' && this.grid.skillBrowser?.active ? this.grid.skillBrowser.status(skill) : undefined;
-    const model = skillProfileModel(s.actor, G.combat, skill, availability);
+    const model = skillProfileModel(s.actor, G.combat, skill, availability, this.grid.skillBrowser?.chain || null);
     if (model.faceName !== this.faceKey) {
       this.faceKey = model.faceName; this.face = null;
       if (model.faceName) Promise.resolve().then(() => this.load('Graphics/Faces', model.faceName)).then(face => {
@@ -130,7 +130,8 @@ export class SkillProfile {
   }
   layout() {
     const v = desktopViewport(G.input, G.three?.renderer), compact = !G.vr && (v.width < 900 || v.height < 640), short = v.height < 640;
-    const key = `${G.vr}/${compact}/${short}/${this.session.kind}`;
+    const footerHeight = this.grid.skillBrowser?.active ? this.grid.skillBrowser.footerHeight || 140 : 140;
+    const key = `${G.vr}/${compact}/${short}/${this.session.kind}/${footerHeight}`;
     if (key === this.layoutKey) return;
     this.layoutKey = key; this.compact = compact;
     const view = this.session.kind === 'grid' ? this.grid : this.list;
@@ -138,7 +139,7 @@ export class SkillProfile {
     if (this.session.kind === 'grid') { this.grid.cols = 1; this.grid.rows = rows; }
     else this.list.rows = compact ? 3 : 8;
     const browser = this.session.kind === 'grid' && this.grid.skillBrowser?.active;
-    const height = this.session.kind === 'grid' ? compact ? browser ? 96 + rows * 108 + 140 : 150 + rows * 76 + 120 : 960 : compact ? 358 : 960;
+    const height = this.session.kind === 'grid' ? compact ? browser ? 96 + rows * 108 + footerHeight : 150 + rows * 76 + 120 : 960 : compact ? 358 : 960;
     view.panel.resize(640, height, 0.64);
     this.panel.resize(640, compact ? short ? 300 : 420 : 960, 0.64);
     if (compact) {
@@ -257,6 +258,18 @@ export class SkillProfile {
       for (const label of labels) {
         this.lines(tr(label), 544, 26).forEach(text => rows.push({ text, icon: 0, color: 16 }));
       }
+    }
+    if (model.chain) {
+      const chain = model.chain;
+      this.lines(tr('보너스 행동 ×{n}', { n: chain.remaining }), 544)
+        .forEach((text, i) => rows.push({ text, icon: i === 0 ? chain.icon : 0, color: 16 }));
+      for (const label of ['스킬을 고른 뒤 순서대로 사용하세요', '비용과 재사용 대기시간은 그대로 적용됩니다']) {
+        this.lines(tr(label), 544, 26).forEach(text => rows.push({ text, icon: 0, color: 16 }));
+      }
+      chain.skills.forEach((skill, index) => {
+        this.lines(`${index + 1}. ${skill.name}`, 544)
+          .forEach((text, i) => rows.push({ text, icon: i === 0 ? skill.icon : 0 }));
+      });
     }
     for (const effect of [...model.warnings, ...model.effects]) {
       this.lines(effect.name, 544).forEach((text, i) => rows.push({ text, icon: i === 0 ? effect.icon : 0, color: model.warnings.includes(effect) ? 18 : 0 }));
