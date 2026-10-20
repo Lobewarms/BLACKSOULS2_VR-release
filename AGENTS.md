@@ -2553,3 +2553,35 @@ Current source comparison: runtimec8b3e29dc41c8d5ad88d35d7d320945faa67ef4a (0.2.
 48 originals,15 unchanged after import moves,33 modified,44 new and0 missing;
 4,168 added/937 removed lines in modified originals after import normalization.
 Historical image versions and source pins are unchanged.
+
+## Turn-end observation of successful Breaks (0.2.42)
+
+The user's Old King question exposed a real port timing mismatch. The original
+troop checks shadow Break/Hard Break states at turn end. Port staggers last2.2/
+3.2 seconds and a big follow-up ends them; the six-second troop poll could miss
+a successful Break. A read-only original-data replay reproduced a missed early
+Break, a counted late Break, and a late Break lost to a big hit. This is separate
+from the intended six-distinct-shadow requirement and the charging Break window.
+
+Retain transient evidence of successful Break7/8 on the exact owning Battle and
+enemy object. Only its current turn-ending troop interpreter may observe that
+evidence; ordinary state checks and combat effects still read actual states.
+Snapshot at the turn-end sweep and retain it through all pages, waits and child
+events; new observations during a wait remain pending unless a page consumes
+them. Use a stable end-turn page key across long waits. Expire observations after
+the full sweep and clear them on native explicit removal, Recover All, transform,
+death, battle end and reset. A dead mirror must never count twice. Do not extend
+stagger, damage/Break windows or state rates, and do not hardcode boss/map IDs.
+No evidence is serialized into GameState or player saves.
+
+Local gates:1,094 JavaScript tests pass (18 new Break-observation cases), ESLint,
+production build, Ruff,8 packaging tests and7 Python protocol tests. Coverage
+includes early/late normal and Hard Breaks, actual follow-up recovery, ordinary
+versus turn-end conditions, nested events, concurrent battles, asynchronous
+sweeps, explicit removal, failed rolls and all lifecycle clear paths. Existing
+nameplate-transform fixtures use the real cleanup helper. A private read-only
+original Enemy489/490/Troop539 replay counts six distinct shadows1..6 once each,
+removes the King's two phase states after6, and remains6 on the next turn.
+The former early/late/follow-up results0/1/0 now all count1. No original game
+data, player saves or private replay helpers enter the repository or release;
+no physical-headset playtest is claimed.

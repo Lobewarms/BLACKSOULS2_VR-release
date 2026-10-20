@@ -92,7 +92,8 @@ test('enemy nameplate appears before damage and updates states, buffs, pages, de
   environment(t); await initAssets();
   const { ActionEnemy, CombatSystem } = await import('../src/combat/combat.js');
   const glow = new THREE.Texture(); t.after(() => glow.dispose());
-  const sys = { root: new THREE.Group(), skyHidden: () => false, glowTexture: () => glow, groggyMax: () => 100 };
+  const sys = { root: new THREE.Group(), skyHidden: () => false, glowTexture: () => glow, groggyMax: () => 100,
+    clearTroopBreaks: CombatSystem.prototype.clearTroopBreaks };
   const enemy = new ActionEnemy(sys, null, 1, 0, 0, { dormant: true });
   await enemy.ready;
   const head = new THREE.Vector3(0, 1.6, 3);
@@ -162,7 +163,7 @@ test('enemy transformations clear the previous title for an unnamed form and res
   $data.enemies[158] = { ...$data.enemies[1], id: 158, name: 'Translated Fiend' };
   const glow = new THREE.Texture(); t.after(() => glow.dispose());
   const sys = { root: new THREE.Group(), skyHidden: () => false, glowTexture: () => glow, groggyMax: () => 0,
-    dropMarker() {}, hideBlade() {} };
+    dropMarker() {}, hideBlade() {}, clearTroopBreaks: CombatSystem.prototype.clearTroopBreaks };
   const enemy = new ActionEnemy(sys, null, 1, 0, 0, { dormant: true });
   await enemy.ready; t.after(() => enemy.remove());
   const head = new THREE.Vector3(0, 1.6, 3);

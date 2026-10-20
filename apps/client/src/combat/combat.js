@@ -830,6 +830,7 @@ export class CombatSystem {
   // ---- lifecycle -------------------------------------------------------------
   // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
   reset({ keepState = false, carry = false } = {}) {
+    for (const battle of this.battles || []) this.clearTroopBreaks(battle);
     this.clearBonusActions();
     this.playerActiveUntil = this.playerRecoveryUntil = 0; this.vrStrokeAction = null;
     this.playerRecoveryPaused = true;
@@ -1374,6 +1375,7 @@ export class CombatSystem {
     if (result === 0 && m.played) G.audio?.playMe(G.state.system.battleEndMe || $data.system.battle_end_me);
   }
   onBattleEnd(battle) {
+    this.clearTroopBreaks(battle);
     if (!this.bonusFighting()) this.clearBonusActions();
     G.screen?.endBattleTone?.(battle);
     G.screen?.endBattlePictures?.(battle);
@@ -1445,7 +1447,40 @@ export class CombatSystem {
     const b = this.battleOf(interp);
     const e = b?.enemies.find(x => x.memberIndex === index);
     if (!e) return false;
-    return sub === 0 ? !e.hidden && e.alive : e.b.isState(stateId);
+    if (sub === 0) return !e.hidden && e.alive;
+    const actual = e.b.isState(stateId), root = interp?.root || interp;
+    if (![7, 8].includes(stateId) || root !== b.troopInterp || !root?.troop || !root.turnEnding
+      || !b.turnEndPending || e.battle !== b || !e.alive || e.hidden) return actual;
+    // A Break that arrived during an asynchronous end-turn page can be read
+    // by later pages too, but must not be counted again at the next turn end.
+    const pending = b.breakObservations?.get(e);
+    if (actual && pending?.has(stateId)) {
+      const snapshot = b.turnBreakObservations ||= new Map();
+      const observed = snapshot.get(e) || new Set();
+      observed.add(stateId); snapshot.set(e, observed);
+      pending.delete(stateId);
+      if (!pending.size) b.breakObservations.delete(e);
+    }
+    return actual || !!b.turnBreakObservations?.get(e)?.has(stateId);
+  }
+  observeTroopBreak(e, stateId) {
+    const battle = e.battle;
+    if (![7, 8].includes(stateId) || !battle || battle.done || e.puppet || !e.alive || e.hidden || !e.b.isState(stateId)) return;
+    const observations = battle.breakObservations ||= new Map();
+    const states = observations.get(e) || new Set();
+    states.add(stateId); observations.set(e, states);
+  }
+  clearTroopBreaks(battle, enemy = null, stateId = null) {
+    for (const observations of [battle?.breakObservations, battle?.turnBreakObservations]) {
+      if (!observations) continue;
+      if (!enemy) observations.clear();
+      else if (stateId === null) observations.delete(enemy);
+      else {
+        const states = observations.get(enemy);
+        states?.delete(stateId);
+        if (!states?.size) observations.delete(enemy);
+      }
+    }
   }
   troopCommand(code, p, interp) {
     const b = this.battleOf(interp);
@@ -1474,6 +1509,7 @@ export class CombatSystem {
           else if (st?.auto_removal_timing) this.addEnemyState(e, p[2], true);
           else { e.b.addState(p[2]); this.markBreakOpen(e, p[2]); }
         } else {
+          if (p[2] === 7 || p[2] === 8) this.clearTroopBreaks(b, e, p[2]);
           e.b.removeState(p[2]); if (e.stateTimers) delete e.stateTimers[p[2]]; if (e.actionStates) delete e.actionStates[p[2]];
           // (its Break taken away - the lion's roar as it is broken: it is up again at once)
           if ((p[2] === 7 || p[2] === 8) && e.state === 'stagger') this.endStagger(e);
@@ -1481,6 +1517,7 @@ export class CombatSystem {
         this.checkEnemyDeath(e);
       }
       if (code === 334) {
+        this.clearTroopBreaks(b, e);
         // Recover All also brings back an enemy that has just fallen: a boss phase is often "lose the
         // immortality, fall, transform, recover" in one event, all in the same moment
         const down = e.state === 'dying' || e.state === 'dead';
@@ -1528,6 +1565,7 @@ export class CombatSystem {
   }
   // Enemy Transform: the new form's picture, and its own moves - none of the old form's left half done
   transformEnemy(e, enemyId) {
+    this.clearTroopBreaks(e.battle, e);
     this.dropMarker(e); this.hideBlade(e);
     if (e.state === 'windup' || e.state === 'act') { e.state = 'recover'; e.timer = 0.5; }
     // (a form with no picture of its own taken on from one with a picture: gone from the original's screen - up into the sky
@@ -3794,6 +3832,7 @@ export class CombatSystem {
     if (e.bar) e.bar.visible = true;
     e.drawBar();
     e.b.addState(stateId);
+    this.observeTroopBreak(e, stateId);
     // being unable to act ends charging and guarding (states removed by restriction)
     for (const id of [...e.b.states]) {
       if (!$data.states[id]?.remove_by_restriction) continue;
@@ -3803,6 +3842,7 @@ export class CombatSystem {
     }
   }
   killEnemy(e) {
+    this.clearTroopBreaks(e.battle, e);
     if (e.state === 'dying' || e.state === 'dead') return;
     this.dropMarker(e);
     e.state = 'dying'; e.timer = 0;
@@ -4256,7 +4296,11 @@ export class CombatSystem {
     const pages = b.troop?.pages;
     if (!pages?.length) return;
     const turn = Math.floor(b.time / 6);
-    if (turn > (b.turnSeen ?? 0)) { b.turnSeen = turn; b.turnEndPending = true; }
+    if (turn > (b.turnSeen ?? 0) && !b.turnEndPending) {
+      b.turnSeen = turn; b.turnEndPending = true; b.turnEndTurn = turn;
+      b.turnBreakObservations = b.breakObservations || new Map();
+      b.breakObservations = new Map();
+    }
     this.updateDelayed(b, turn);
     if (b.troopInterp?.running()) { b.troopInterp.update(); return; }
     // every enemy down: the fight is won before any other page comes on (VX Ace judges the battle first) - else a
@@ -4268,10 +4312,11 @@ export class CombatSystem {
       const c = page.condition;
       if (!c.turn_ending && !c.turn_valid && !c.enemy_valid && !c.actor_valid && !c.switch_valid) continue;
       // span: 0 once per battle, 1 once per turn, 2 "moment" (whenever true; at most once a second here)
-      const key = page.span === 1 ? `${i}:${turn}` : page.span === 2 ? `${i}:m${Math.floor(b.time)}` : `${i}`;
+      const pageTurn = c.turn_ending ? b.turnEndTurn ?? turn : turn;
+      const key = page.span === 1 ? `${i}:${pageTurn}` : page.span === 2 ? `${i}:m${Math.floor(b.time)}` : `${i}`;
       if (b.pageDone.has(key)) continue;
       if (c.turn_ending && !b.turnEndPending) continue;
-      if (c.turn_valid) { const n = turn; const ok = c.turn_b === 0 ? n === c.turn_a : n >= c.turn_a && (n - c.turn_a) % c.turn_b === 0; if (!ok) continue; }
+      if (c.turn_valid) { const n = pageTurn; const ok = c.turn_b === 0 ? n === c.turn_a : n >= c.turn_a && (n - c.turn_a) % c.turn_b === 0; if (!ok) continue; }
       if (c.enemy_valid) { const e = b.enemies.find(x => x.memberIndex === c.enemy_index); if (!e || e.b.hp / e.b.mhp * 100 > c.enemy_hp) continue; }
       if (c.actor_valid) { const a = G.state.actor(c.actor_id); if (!a || a.hp / a.mhp * 100 > c.actor_hp) continue; }
       if (c.switch_valid && !G.state.sw(c.switch_id)) continue;
@@ -4280,9 +4325,11 @@ export class CombatSystem {
       b.troopInterp.troop = true;                  // its music changes play even during battle music
       b.troopInterp.battleOwner = b;
       b.troopInterp.setup(page.list, 0);
+      b.troopInterp.turnEnding = !!c.turn_ending;
       b.troopInterp.update();                      // at once, like the original processing it right away
       return;
     }
+    if (b.turnEndPending) b.turnBreakObservations?.clear();
     b.turnEndPending = false;
   }
 
