@@ -2585,3 +2585,8 @@ removes the King's two phase states after6, and remains6 on the next turn.
 The former early/late/follow-up results0/1/0 now all count1. No original game
 data, player saves or private replay helpers enter the repository or release;
 no physical-headset playtest is claimed.
+
+Current source comparison: runtime5c2ac36dcc37e72a0b2d656386989223c4bff8ce (0.2.42),
+48 originals,15 unchanged after import moves,33 modified,44 new and0 missing;
+4,219 added/941 removed lines in modified originals after import normalization.
+Historical image versions and source pins are unchanged.
