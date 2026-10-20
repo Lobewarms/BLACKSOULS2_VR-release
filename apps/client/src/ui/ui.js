@@ -21,6 +21,7 @@ import { RewardFeed } from './reward-feed.js';
 import { paintClassicMenu } from './classic-menu.js';
 import { BonfireTravel } from './bonfire-travel.js';
 import { SkillProfile } from './skill-profile.js';
+import { SkillBrowser } from './skill-browser.js';
 
 export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
@@ -579,6 +580,7 @@ class GridPanel {
   }
   setItems(tabIndex, items) { this.tabs[tabIndex].items = items; this.index = Math.min(this.index, Math.max(0, items.length - 1)); this.draw(); }
   draw() {
+    if (this.skillBrowser?.active) { this.skillBrowser.draw(); return; }
     const { ctx, canvas } = this.panel;
     this.panel.clear();
     windowBg(ctx, 4, 4, canvas.width - 8, canvas.height - 8, 0.92);
@@ -648,6 +650,7 @@ class GridPanel {
     this.panel.commit();
   }
   update(raycaster) {
+    if (this.skillBrowser?.active) return this.skillBrowser.handleInput(raycaster);
     const input = G.input;
     if (input.cancel() || G.ui?.menuOpen && input.menu()) {
       this.scrollbar.reset(); G.audio?.playSystemSe(2); this.onCancel?.(); return true;
@@ -882,6 +885,8 @@ export class UI {
     this.root.add(this.grid.panel.mesh);
     this.skillProfile = new SkillProfile({ Panel, root: this.root, grid: this.grid, list: this.list, ui: this,
       font: FONT, windowBg, drawIcon, drawGameCursor, textColor, clean: stripEscapes, assetRevision: iconAssetRevision });
+    this.skillsBrowser = new SkillBrowser({ grid: this.grid, ui: this, font: FONT, windowBg, drawIcon, drawGameCursor,
+      fitLabel, clean: stripEscapes, assetRevision: iconAssetRevision });
     this.keyboard = new KeyboardPanel();
     this.root.add(this.keyboard.panel.mesh);
     this.bannerPanel = new Panel(1600, 260, 2.2);
@@ -2109,6 +2114,7 @@ export class UI {
     this.showMainMenu();
   }
   closeMenu() {
+    this.skillsBrowser?.close();
     this.skillProfile?.close();
     this.bonfireTravel?.close();
     this.navigation.close();
@@ -2120,6 +2126,7 @@ export class UI {
     this.consumedConfirm = true;
   }
   showMainMenu() {
+    this.skillsBrowser?.close();
     this.skillProfile?.close();
     this.menuSection = 'main';
     const items = [
@@ -2218,6 +2225,7 @@ export class UI {
     ], selected, 'settings');
   }
   onMenu(id) {
+    if (id !== 'skills') this.skillsBrowser?.close();
     if (id !== 'skills') this.skillProfile?.close();
     this.menuOverview.mesh.visible = false;
     this.menuSection = id;
@@ -2259,6 +2267,7 @@ export class UI {
     }
   }
   showMap() {
+    this.skillsBrowser?.close();
     this.skillProfile?.close();
     this.bonfireTravel?.close();
     G.pictures?.requestViewerCancel?.();
@@ -2317,6 +2326,7 @@ export class UI {
     ];
   }
   showItems(keepIndex) {
+    this.skillsBrowser?.close();
     this.skillProfile?.close();
     this.list.close();
     const tabs = this.itemTabs();
@@ -2378,6 +2388,10 @@ export class UI {
     if (!a) return;
     this.menuSection = 'skills';
     this.list.close();
+    if (this.skillsBrowser) {
+      this.skillsBrowser.open({ selectedId: keepIndex === undefined ? undefined : this.grid.items[keepIndex]?.id });
+      this.skillProfile?.open('grid'); return;
+    }
     const items = a.allSkills().map(s => {
       const cost = a.skillMpCost(s), hpCost = a.skillHpCost(s);
       const slot = quickSlotOf({ kind: 'skill', id: s.id });
@@ -2394,6 +2408,7 @@ export class UI {
     this.skillProfile?.open('grid');
   }
   showSkillActions(it) {
+    this.skillsBrowser?.suspend();
     const a = G.state.party.leader();
     const s = $data.skills[it.id];
     const keep = this.grid.index;
@@ -2659,10 +2674,11 @@ export class UI {
     ];
     this.list.open(tr('상태'), items, { onSelect: () => {}, onCancel: () => this.reopenMain('status') });
   }
-  returnToTitle() { this.skillProfile?.close(); this.bonfireTravel?.close(); G.returnToTitle?.(); }
+  returnToTitle() { this.skillsBrowser?.close(); this.skillProfile?.close(); this.bonfireTravel?.close(); G.returnToTitle?.(); }
 
   // scenes requested by script calls
   openScene(name) {
+    this.skillsBrowser?.close();
     this.skillProfile?.close();
     if (name !== 'Scene_ShortMove') this.bonfireTravel?.close();
     if (name === 'Scene_ShortMove') { this.openBonfireWarp(); return; }
@@ -3082,12 +3098,14 @@ export class UI {
 
   // ---------------------------------------------------------------- frame
   updateSkillProfile() {
+    if (this.skillsBrowser?.session) this.skillsBrowser.update();
     if (!this.skillProfile?.session) return;
     if (!this.skillProfile.update()) {
       if (this.menuOpen && this.menuSection === 'skills') this.closeMenu();
       return;
     }
     if (this.skillProfile.session.kind === 'grid') {
+      if (this.skillsBrowser?.active) return;
       const actor = G.state.party.leader(); let changed = false;
       for (const item of this.grid.items) {
         const skill = $data.skills?.[item.id];
@@ -3134,6 +3152,7 @@ export class UI {
     else if (this.menuOpen || this.sceneOpen) {
       if (this.navigation.open) this.updateMap();
       else if (this.keyboard.visible) this.keyboard.update(this.pointerRay());
+      else if (this.skillsBrowser?.searchFocused()) this.skillsBrowser.handleInput(this.pointerRay());
       else if (this.skillProfile?.handleInput(this.pointerRay())) this.consumedConfirm = true;
       else if (this.grid.visible) this.grid.update(this.pointerRay());
       else if (this.list.visible) {
@@ -3163,6 +3182,7 @@ export class UI {
     this.updateBonfireTravel();
     this.updateSkillProfile();
     if (!G.vr) this.placeRoot();
+    this.skillsBrowser?.positionSearch();
     const rewardPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
     if (!this.hudPresent && this.rewardsHadPlayer) this.rewards.clear();
     this.rewardsHadPlayer = this.hudPresent;

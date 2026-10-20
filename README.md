@@ -19,8 +19,9 @@ A desktop shortcut is optional during setup.
 
 ## Gameplay screenshots
 
-Actual desktop captures from v0.2.33, with an initialized character and player
-portrait. Character stats and appearance depend on your save.
+Desktop gameplay captures from v0.2.33 and an isolated v0.2.44 Skills preview,
+with an initialized character and player portrait. Stats and appearance depend
+on your save.
 
 ### First-person exploration
 
@@ -49,11 +50,15 @@ Manage items, skills and equipment through the original-style menu.
 
 ### Skills and character profile
 
-Press **R** on PC to choose skills alongside your current stats, resources and
-all active effects. This isolated v0.2.43 preview demonstrates the healing-reversal
-warning with an original-game effect applied to a copied character in memory.
+Press **R** to browse skills beside your stats and complete active effects.
+Pin favorites with **F**, change categories with **← / →**, or press **/** to search.
+Click or press **Enter** to use a skill directly; **Q** opens quick-slot assignment.
+Costs, cooldowns and unavailable-skill reasons update while browsing.
 
-![Skills with the original character portrait, all eight stats, active effects and a healing-reversal warning](docs/screenshots/skills-profile-0.2.43-domain-example.png)
+This isolated v0.2.44 preview uses a copied character and original game artwork;
+it does not write game saves or achievements.
+
+![R Skills favorites with category tabs, search, original icons, descriptions and the live character profile](docs/screenshots/skills-browser-0.2.44-favorites.png)
 
 ## Gameplay video
 
@@ -86,6 +91,7 @@ This video shows an earlier version; the current interface and features may diff
 | Dodge | Space |
 | Menu / cancel | Tab / Esc |
 | Area map | N |
+| Skills / favorites | R |
 
 ## Play on Meta Quest 3
 

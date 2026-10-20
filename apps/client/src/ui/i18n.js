@@ -23,6 +23,24 @@ export function fmtDate(ms) { try { return new Date(ms).toLocaleString(LOCALES[c
 
 // [Korean, English, Japanese, Chinese (simplified)]
 const ENTRIES = [
+  // Skills browser; original skill names and icons still come from the game.
+  ['즐겨찾기', 'Favorites', 'お気に入り', '收藏'],
+  ['전체', 'All', 'すべて', '全部'],
+  ['무기 기술', 'Weapon Arts', '武器技', '武器战技'],
+  ['공격', 'Attack', '攻撃', '攻击'],
+  ['회복', 'Healing', '回復', '治疗'],
+  ['강화', 'Buffs', '強化', '增益'],
+  ['약화', 'Debuffs', '弱体', '减益'],
+  ['스킬 검색', 'Search skills', 'スキルを検索', '搜索技能'],
+  ['스킬 검색 (/)', 'Search skills (/)', 'スキルを検索 (/)', '搜索技能 (/)'],
+  ['검색 지우기', 'Clear search', '検索をクリア', '清空搜索'],
+  ['즐겨찾기 추가 (F)', 'Favorite (F)', 'お気に入りに追加 (F)', '收藏 (F)'],
+  ['즐겨찾기 제거 (F)', 'Unfavorite (F)', 'お気に入りを解除 (F)', '取消收藏 (F)'],
+  ['퀵슬롯 지정 (Q)', 'Assign quick slot (Q)', 'クイックスロットに登録 (Q)', '设置快捷栏 (Q)'],
+  ['즐겨찾기가 없습니다. F로 추가하거나 전체를 선택하세요', 'No favorites yet. Press F on a skill, or choose All.', 'お気に入りはありません。スキル上でF、または「すべて」を選択。', '尚无收藏。选中技能后按F，或选择「全部」。'],
+  ['검색 결과 없음', 'No matching skills', '一致するスキルはありません', '没有匹配的技能'],
+  ['Enter: 사용 · F: 즐겨찾기 · Q: 퀵슬롯', 'Enter: Use · F: Favorite · Q: Quick slot', 'Enter: 使用・F: お気に入り・Q: 登録', 'Enter：使用 · F：收藏 · Q：快捷栏'],
+  ['스킬을 선택하세요', 'Select a skill', 'スキルを選択してください', '请选择技能'],
   ['플레이어', 'Player', 'プレイヤー', '玩家'],
   ['스태미나', 'Stamina', 'スタミナ', '耐力'],
   ['보너스 행동 ×{n}', 'Bonus Action ×{n}', '追加行動 ×{n}', '额外行动 ×{n}'],

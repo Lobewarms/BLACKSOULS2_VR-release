@@ -36,7 +36,7 @@ function details(object) {
 
 // Read effective battler values and native traits without rolling healing or
 // applying gameplay effects. Every state/buff remains available as a row.
-export function skillProfileModel(actor, combat, skill) {
+export function skillProfileModel(actor, combat, skill, availability) {
   const params = PARAMS.map((fallback, id) => ({ label: $data.system?.terms?.params?.[id] || fallback,
     value: actor.param?.(id) ?? [actor.mhp, actor.mmp, actor.atk, actor.def, actor.mat, actor.mdf, actor.agi, actor.luk][id] ?? 0 }));
   const resources = [{ label: 'HP', value: `${actor.hp} / ${actor.mhp}` }, { label: 'MP', value: `${actor.mp} / ${actor.mmp}` },
@@ -60,13 +60,14 @@ export function skillProfileModel(actor, combat, skill) {
     if (inverted && disabled < 100) warnings.push({ name: tr(`${label} 회복 반전 {p}`, { p: percent((1 - disabled / 100) * inverted / 100) }), icon: 0 });
   }
   if (Number.isFinite(actor.rec) && actor.rec !== 1) warnings.push({ name: tr('받는 회복 {p}', { p: percent(actor.rec) }), icon: 0 });
-  const status = skill && combat?.skillUseStatus?.(skill), effective = status?.skill || skill;
+  const status = skill && (availability || combat?.skillUseStatus?.(skill)), effective = status?.skill || skill;
   const costs = effective ? [['HP', actor.skillHpCost?.(effective) || 0], ['MP', actor.skillMpCost?.(effective) || 0], ['TP', effective.tp_cost || 0]]
     .filter(([, value]) => value > 0).map(([label, value]) => `${label} ${value}`).join(' · ') || tr('소모 없음') : '';
   const cooldown = effective && combat?.skillCooling?.(effective);
   return { name: actor.name || tr('플레이어'), level: actor.level ?? 0, className: $data.classes?.[actor.classId]?.name || '',
     faceName: actor.faceName || '', faceIndex: actor.faceIndex || 0, params, resources, effects, warnings,
-    skillName: skill?.name || '', costs, reason: status?.reason || (cooldown > 0 ? tr('재사용 대기 {s}초', { s: cooldown.toFixed(1) }) : skill ? tr('사용 가능') : '') };
+    skillName: skill?.name || '', skillDescription: skill?.description || '', costs,
+    reason: status?.reason || (cooldown > 0 ? tr('재사용 대기 {s}초', { s: cooldown.toFixed(1) }) : skill ? tr('사용 가능') : '') };
 }
 
 export class SkillProfile {
@@ -76,8 +77,10 @@ export class SkillProfile {
     this.generation = 0; this.session = null; this.page = 0; this.pageCount = 1;
   }
   snapshot(view) {
+    if (view === this.grid && view.skillBrowser?.active) return { ...view.skillBrowser.session.original,
+      position: view.skillBrowser.session.original.position.clone() };
     return { width: view.panel.canvas.width, height: view.panel.canvas.height, widthM: view.panel.widthM,
-      position: view.panel.mesh.position.clone(), cols: view.cols, rows: view.rows };
+      position: view.panel.mesh.position.clone(), cols: view.cols, rows: view.rows, gridTop: view.gridTop, cellH: view.cellH };
   }
   open(kind = 'grid', skillId = null) {
     if (!this.validOwner()) {
@@ -107,7 +110,9 @@ export class SkillProfile {
     if (!this.validOwner() || !view.visible || (s.kind === 'grid' ? s.gridTabs !== this.grid.tabs : s.listItems !== this.list.items)) { this.close(); return false; }
     this.layout();
     const id = s.kind === 'grid' ? this.grid.items?.[this.grid.index]?.id : s.skillId;
-    const model = skillProfileModel(s.actor, G.combat, $data.skills?.[id]);
+    const skill = $data.skills?.[id];
+    const availability = skill && s.kind === 'grid' && this.grid.skillBrowser?.active ? this.grid.skillBrowser.status(skill) : undefined;
+    const model = skillProfileModel(s.actor, G.combat, skill, availability);
     if (model.faceName !== this.faceKey) {
       this.faceKey = model.faceName; this.face = null;
       if (model.faceName) Promise.resolve().then(() => this.load('Graphics/Faces', model.faceName)).then(face => {
@@ -128,7 +133,8 @@ export class SkillProfile {
     const rows = compact ? short ? 1 : 2 : 8;
     if (this.session.kind === 'grid') { this.grid.cols = 1; this.grid.rows = rows; }
     else this.list.rows = compact ? 3 : 8;
-    const height = this.session.kind === 'grid' ? compact ? 150 + rows * 76 + 120 : 960 : compact ? 358 : 960;
+    const browser = this.session.kind === 'grid' && this.grid.skillBrowser?.active;
+    const height = this.session.kind === 'grid' ? compact ? browser ? 96 + rows * 108 + 140 : 150 + rows * 76 + 120 : 960 : compact ? 358 : 960;
     view.panel.resize(640, height, 0.64);
     this.panel.resize(640, compact ? short ? 300 : 420 : 960, 0.64);
     if (compact) {
@@ -144,6 +150,8 @@ export class SkillProfile {
     for (const [view, owned, original] of [[this.grid, this.grid.tabs === s.gridTabs, s.grid], [this.list, this.list.items === s.listItems, s.list]]) {
       if (!owned) continue;
       if (original.cols !== undefined) view.cols = original.cols;
+      if (original.gridTop !== undefined) view.gridTop = original.gridTop;
+      if (original.cellH !== undefined) view.cellH = original.cellH;
       view.rows = original.rows; view.panel.resize(original.width, original.height, original.widthM); view.panel.mesh.position.copy(original.position);
       view.hover = undefined; view.scrollbar?.reset();
       if (view.visible) view.draw();
@@ -166,7 +174,8 @@ export class SkillProfile {
     if (!G.vr && input.mouse?.wheel) {
       const direction = Math.sign(input.mouse.wheel); input.mouse.wheel = 0; this.changePage(direction); return true;
     }
-    if (input.confirm?.() || input.mousePressed?.(0)) {
+    const confirmation = !G.vr && this.ui.skillsBrowser?.active ? input.mousePressed?.(0) : input.confirm?.() || input.mousePressed?.(0);
+    if (confirmation) {
       const x = uv.x * 640, y = (1 - uv.y) * this.panel.canvas.height;
       if (y >= this.panel.canvas.height - 42) { if (x < 160) this.changePage(-1); else if (x > 480) this.changePage(1); }
       return true;
@@ -224,6 +233,10 @@ export class SkillProfile {
     for (const effect of [...model.warnings, ...model.effects]) {
       this.lines(effect.name, 544).forEach((text, i) => rows.push({ text, icon: i === 0 ? effect.icon : 0, color: model.warnings.includes(effect) ? 18 : 0 }));
       for (const detail of effect.details || []) this.lines(detail, 544, 26).forEach(text => rows.push({ text, icon: 0, color: 16 }));
+    }
+    if (model.skillDescription) {
+      this.lines(`${tr('스킬')} · ${model.skillName}`, 544).forEach(text => rows.push({ text, icon: 0, color: 16 }));
+      this.lines(model.skillDescription, 544, 26).forEach(text => rows.push({ text, icon: 0, color: 16 }));
     }
     if (!rows.length) rows.push({ text: tr('(없음)'), icon: 0 });
     const firstRow = this.compact ? 112 : 566;

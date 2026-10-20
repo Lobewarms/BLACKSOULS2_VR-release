@@ -142,6 +142,8 @@ for (const reason of ['transfer', 'map', 'state', 'actor', 'death', 'other-menu'
 test('all long effect names and modifiers remain reachable without ellipsis and short layout reserves the skill footer', t => {
   const e = environment(t, { width: 640, height: 500 });
   const fullName = 'An unusually long native effect name must remain available through its continued rows';
+  const skillDescription = 'A long selected skill description remains fully accessible beyond both summary lines, including this final sentence.';
+  $data.skills[9].description = skillDescription;
   $data.states[61] = state(61, { name: fullName, description: 'The complete installed description is also reachable.', features: [feature(21, 4, 0.1)] });
   e.actor.states = [61]; e.controller.update();
   const rows = [];
@@ -152,6 +154,7 @@ test('all long effect names and modifiers remain reachable without ellipsis and 
   }
   const compact = rows.join(''); assert.ok(compact.includes(fullName)); assert.ok(compact.includes('Magic 10%'));
   assert.ok(compact.includes('The complete installed description is also reachable.')); assert.ok(!compact.includes('…'));
+  assert.ok(compact.includes(skillDescription), 'selected skill description remains complete across profile pages');
 });
 
 test('profile warnings and interaction hints are localized in every supported language', () => {
@@ -211,4 +214,17 @@ test('a changing seal/type refreshes grid eligibility while low resources and co
   typeAllowed = false; UI.prototype.updateSkillProfile.call(ui); assert.equal(item.enabled, false); assert.equal(draws, 3);
   typeAllowed = true; UI.prototype.updateSkillProfile.call(ui); assert.equal(item.enabled, true); assert.equal(draws, 4);
   UI.prototype.updateSkillProfile.call(ui); assert.equal(draws, 4);
+});
+
+
+test('the selected profile agrees with the browser shared-action recovery reason instead of showing Available', t => {
+  const e = environment(t);
+  G.combat.skillUseStatus = skill => ({ ok: true, skill, reason: '' });
+  let ready = false;
+  e.grid.skillBrowser = { active: true, status: skill => ({ ok: ready, skill, reason: ready ? '' : 'Ready in 0.8 s' }) };
+  e.controller.update();
+  assert.ok(e.controller.panel.rows.some(row => String(row.text).includes('Ready in 0.8 s')));
+  ready = true; e.controller.update();
+  assert.ok(!e.controller.panel.rows.some(row => String(row.text).includes('Ready in 0.8 s')));
+  assert.ok(e.controller.panel.rows.some(row => String(row.text).includes('Available')));
 });

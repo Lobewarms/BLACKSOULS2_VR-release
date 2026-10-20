@@ -2626,3 +2626,46 @@ Current source comparison: runtime c282b3970fabdaaa0a36b403ddea33964c916785
 (0.2.43),48 originals,15 unchanged after import moves,33 modified,45 new and
 0 missing;4,289 added/941 removed lines in modified originals after import
 normalization. Historical screenshot labels and source pins are preserved.
+
+## Skills browser and actor-scoped favorites (0.2.44)
+
+The user approved improving R Skills navigation without changing combat rules.
+Use Favorites/All/Weapon Arts/Attack/Healing/Buffs/Debuffs categories derived from
+the actor's real known/granted skills and native metadata; categories may overlap.
+Keep All complete and order favorites first, then stable skill ID. Restore the
+remembered tab; with no remembered tab, choose Favorites when saved favorites
+exist and All otherwise. Retain actor-scoped favorites/category/query/
+selected skill in application settings, without changing original game data.
+
+PC row click/Enter invokes the actual Combat skill-use authority directly.
+Unavailable skills remain inspectable, favoritable and assignable; refresh actual
+effective costs, seals, equipment/target/cooldown restrictions and reasons.
+F toggles the selected favorite. Q opens the separate quick-slot assignment
+picker. PC Slash or clicking the Search field focuses Unicode/IME input;
+Enter/Escape commits and blurs only,
+consuming the input edge so typing cannot cast, favorite or assign. Clear resets
+the query. VR retains visible category/Favorite/Quick-slot controls with native
+trigger/A and stick navigation; do not require keyboard text entry in VR.
+
+Wide layouts show all seven full category tabs. Compact layouts show the full
+active label and previous/next category arrows; retain left/right navigation.
+Show two selected native skill-description lines and retain the complete long
+description through profile paging, rather than modifying or truncating source
+metadata. Search commit consumes its input edge; only a fresh Enter may use a skill.
+
+Retain native game window/cursor/icons and the live SkillProfile during browsing
+and assignment, its safe paging and state/map/leader/async-face ownership guards.
+Do not introduce smart recommendations, synthetic stat bonuses or bypasses of
+normal combat recovery/costs. Keep responsive PC/VR layouts and four-language
+player guides. Regression fixtures use synthetic data and input; no original
+game files or player saves are changed. No physical-headset playtest is claimed.
+
+
+Local 0.2.44 gates: 1,154 JavaScript tests pass (35 added: 19 browser model/input,
+15 real UI/Input/Three integrations and 1 profile/shared-recovery consistency case),
+ESLint, production build, Ruff, 8 packaging and 7 Python protocol tests. Browser
+labels were checked in all 4 supported languages. Desktop visual checks cover
+search/favorites/native descriptions at 1020x1004 and the stacked 640x720 layout;
+physical-headset testing is not claimed. The screenshot uses an isolated copied
+character and intentionally pinned favorites, never a gameplay save write.
+Inspection retains all original cost/cooldown/target/action authority.

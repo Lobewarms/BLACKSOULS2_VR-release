@@ -1,4 +1,4 @@
-﻿BLACK SOULS II VR - Controls  (version 0.2.43)
+﻿BLACK SOULS II VR - Controls  (version 0.2.44)
 ================================================
 
 VR
@@ -51,13 +51,29 @@ In menus          Arrow keys (number input: left / right = digit, up / down = va
 USING SKILLS FROM THE MENU
 -------------------------
 On PC, press R to open Skills directly; press R again to close it. E remains
-Examine/Talk. Face a nearby visible enemy, select a skill, then Use to cast or
-strike immediately. If no valid target is in view, nothing is spent. Quick slots
-still prepare spells and weapon arts for manual aiming/striking. Healing and
+Examine/Talk. Click a skill, or select it and press Enter, to use it immediately.
+Face a nearby visible enemy for attacks; if no valid target is in view, nothing
+is spent. In VR, point and confirm with the trigger/A, or use the stick and A.
+Quick slots still prepare spells and weapon arts for manual aiming/striking. Healing and
 support take effect normally. Dodge and manual Break retain their dedicated
 actions. Common-event skills return to the game to run their event.
 Costs, weapon requirements, seals and cooldowns still apply. Field-only utility
 skills cannot be used during combat. Quick-slot assignments stay as you set them.
+
+FINDING AND FAVORITING SKILLS
+----------------------------
+Use Favorites, All, Weapon Arts, Attack, Healing, Buffs or Debuffs to narrow the
+list. A skill may appear in more than one category. Favorites appear first.
+Select a skill and press F, or use Favorite, to mark/unmark it. Q or Quick-slot
+opens slot assignment. Unavailable skills remain inspectable, favoritable and
+assignable; their current costs and the reason they cannot be used stay visible.
+On PC, press / or click the search field, then type a name. Enter or Esc finishes
+typing and returns to the list; Clear resets the search. Your favorites, category, search
+and selected skill are remembered separately for each character. In VR, use the
+visible category, Favorite and Quick-slot controls with the pointer or stick.
+Smaller windows show the full current category with previous/next arrows;
+Left/Right also changes category. Two lines of the original skill description
+are shown, with the complete longer text available on the profile pages.
 
 YOUR PROFILE IN SKILLS
 ----------------------
@@ -68,7 +84,7 @@ modifiers. Healing restrictions and the selected skill's HP/MP/TP costs, cooldow
 or reason it cannot be used are shown too.
 Use Previous/Next on the profile. On PC, Page Up/Page Down or the mouse wheel over
 the profile also turn pages. In VR, point at the page buttons and confirm.
-The profile stays open while selecting, using or assigning a skill to a quick slot.
+The profile stays beside the skill browser and quick-slot assignment picker.
 Smaller PC windows stack the panels and page resources and stats as well.
 
 BUYING LARGER QUANTITIES

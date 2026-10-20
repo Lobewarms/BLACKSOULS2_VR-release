@@ -39,11 +39,13 @@ function environment(t, width = 1366, height = 768) {
     Object.defineProperty(globalThis, key, { configurable: true, value });
   };
   const listen = (type, fn) => { if (!listeners.has(type)) listeners.set(type, []); listeners.get(type).push(fn); };
+  class Field {}
   const document = { activeElement: null, pointerLockElement: null, hasFocus: () => true,
-    addEventListener: listen, body: { appendChild() {} },
-    createElement(type) { return type === 'canvas' ? canvas() : { style: {}, addEventListener() {},
-      focus() { document.activeElement = this; }, blur() { document.activeElement = null; } }; } };
-  replace('document', document); replace('addEventListener', listen); replace('HTMLInputElement', class {});
+    addEventListener: listen, body: { appendChild(element) { element.parentNode = this; } },
+    createElement(type) { return type === 'canvas' ? canvas() : Object.assign(new Field(), {
+      tagName: 'INPUT', style: {}, value: '', addEventListener() {}, setAttribute() {}, remove() {}, select() {},
+      focus() { document.activeElement = this; }, blur() { document.activeElement = null; } }); } };
+  replace('document', document); replace('addEventListener', listen); replace('HTMLInputElement', Field);
   t.after(() => {
     Object.assign(G, saved); Object.assign($data, data);
     for (const [key, descriptor] of descriptors) {
@@ -144,14 +146,14 @@ test('the real R shortcut opens a live profile and PageDown reaches every effect
   assert.deepEqual(e.casts, []); assert.equal(e.ui.list.visible, false);
 });
 
-test('real projected profile clicks cannot select a skill, including while its action menu is visible', t => {
+test('real projected profile clicks cannot cast a skill, including while separate quick-slot assignment is visible', t => {
   const e = environment(t); e.key('KeyR');
   const profile = e.ui.skillProfile, selected = e.ui.grid.index;
   e.click(profile.panel, 40, 40);
   e.click(profile.panel, profile.panel.canvas.width / 2, profile.panel.canvas.height / 2);
   assert.equal(e.ui.grid.index, selected); assert.equal(e.ui.grid.visible, true);
   assert.equal(e.ui.list.visible, false); assert.deepEqual(e.casts, []);
-  e.click(e.ui.grid.panel, 100, e.ui.grid.gridTop + e.ui.grid.cellH / 2);
+  e.key('KeyQ');
   assert.equal(e.ui.grid.visible, false); assert.equal(e.ui.list.visible, true);
   assert.equal(profile.panel.mesh.visible, true);
   const actions = e.ui.list.items.map(item => item.id);

@@ -1,5 +1,17 @@
 # Actual upstream versus community version
 
+## Skills browser preview (v0.2.44)
+
+[Skills favorites and live profile](skills-browser-0.2.44-favorites.png) shows the
+current source renderer with an isolated copy of an initialized character and
+original-game portrait, window skin, icons and library scenery. Skills are pinned
+through the browser's real search/favorite controls. The image demonstrates
+categories, per-row resource/status details, direct use, separate assignment and
+selected descriptions beside the existing profile. No gameplay saves, original
+game records or achievements are written. This is a standalone menu preview,
+not a boss victory or an upstream comparison. No physical-headset playtest is
+claimed. The earlier v0.2.43 domain example remains below with its original label.
+
 ## Skills profile preview (v0.2.43)
 
 [Skills and character profile](skills-profile-0.2.43-domain-example.png) uses the
