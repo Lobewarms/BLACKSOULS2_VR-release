@@ -120,22 +120,21 @@ test('larger VR HUD leaves a physical gap below the wrist minimap and PC anchors
   assert.equal(ui.hud.widthM, 0.24); assert.deepEqual(ui.hud.mesh.scale.toArray(), [1, 1, 1]);
 });
 
-for (const vr of [false, true]) test(`${vr ? 'VR' : 'PC'} bonus charge row refreshes only quantized time/count/icon changes and clears on expiry`, t => {
+for (const vr of [false, true]) test(`${vr ? 'VR' : 'PC'} follow-up count stays visible without a timer and refreshes only on count/icon changes`, t => {
   const { ui, actor } = environment(t); G.vr = vr;
   let bonus = null; G.combat.bonusStatus = () => bonus;
   ui.drawHud(); const height = ui.hudPaintHeight, states = [...actor.states];
-  bonus = { count: 3, remaining: 3, duration: 3, icon: 77 };
-  ui.drawHud(); assert.equal(ui.hudPaintHeight, height + 56);
+  bonus = { count: 3, icon: 77 };
+  ui.drawHud(); assert.equal(ui.hudPaintHeight, height + 44);
   assert.ok(labels(ui).some(row => row.text === 'Bonus Action ×3'));
-  assert.ok(labels(ui).some(row => row.text === '3.0s left'));
+  assert.ok(!labels(ui).some(row => /s left|秒|초 남음/.test(row.text)), 'no obsolete time limit is advertised');
   let clears = ui.hud.canvas.record.clears;
-  bonus.remaining = 2.99; ui.drawHud(); assert.equal(ui.hud.canvas.record.clears, clears);
-  bonus.remaining = 2.89; ui.drawHud(); assert.equal(ui.hud.canvas.record.clears, ++clears);
-  assert.ok(labels(ui).some(row => row.text === '2.9s left'));
+  G.time = 10000; ui.drawHud(); assert.equal(ui.hud.canvas.record.clears, clears);
+  assert.ok(labels(ui).some(row => row.text === 'Bonus Action ×3'), 'elapsed wall time cannot hide chain follow-ups');
   bonus.count = 2; ui.drawHud(); assert.equal(ui.hud.canvas.record.clears, ++clears);
   assert.ok(labels(ui).some(row => row.text === 'Bonus Action ×2'));
-  G.time = 100; ui.menuOpen = true; ui.drawHud();
-  assert.equal(ui.hud.canvas.record.clears, clears, 'presentation must not run its own expiry clock while gameplay is paused');
+  G.time += 100; ui.menuOpen = true; ui.drawHud();
+  assert.equal(ui.hud.canvas.record.clears, clears, 'menus cannot start a separate HUD expiry clock');
   assert.equal(ui.hud.mesh.visible, vr, 'desktop menu hides the resource card while the wrist remains readable');
   bonus.icon = 0; G.combat.playerAttackSkill = () => ({ icon_index: 91 }); ui.drawHud();
   assert.equal(ui.hud.canvas.record.clears, ++clears);
@@ -143,21 +142,25 @@ for (const vr of [false, true]) test(`${vr ? 'VR' : 'PC'} bonus charge row refre
   G.combat.playerAttackSkill = () => ({ icon_index: 0 }); ui.drawHud();
   assert.equal(ui.hud.canvas.record.clears, ++clears);
   assert.equal(labels(ui).find(row => row.text === 'Bonus Action ×2').x, 24, 'no blank or invented icon is drawn');
+  bonus = { count: 0, icon: 77 }; ui.drawHud(); assert.equal(ui.hudPaintHeight, height);
+  assert.ok(!labels(ui).some(row => /Bonus Action/.test(row.text)), 'spending the last follow-up hides the row');
+  bonus = { count: 1, icon: 77 }; ui.drawHud();
+  assert.ok(labels(ui).some(row => row.text === 'Bonus Action ×1'));
   bonus = null; ui.drawHud(); assert.equal(ui.hudPaintHeight, height);
   assert.ok(!labels(ui).some(row => /Bonus Action|s left/.test(row.text))); assert.deepEqual(actor.states, states);
 });
 
 test('full VR status pages and bonus charges fit the wrist canvas and leave the minimap clear across desktop transitions', t => {
   const { ui, actor } = environment(t); actor.states = [2, 3, 4, 5, 6, 7, 8, 9];
-  G.combat.bonusStatus = () => ({ count: 2, remaining: 2.4, duration: 3, icon: 77 });
+  G.combat.bonusStatus = () => ({ count: 2, icon: 77 });
   ui.attachHud(new THREE.Group()); ui.drawHud();
-  assert.equal(ui.hudPaintHeight, 568); assert.equal(ui.hud.canvas.height, 568);
+  assert.equal(ui.hudPaintHeight, 556); assert.equal(ui.hud.canvas.height, 556);
   assert.ok(labels(ui).every(row => row.y > 0 && row.y < ui.hud.canvas.height));
   const miniBottom = ui.navigation.mini.mesh.position.y - ui.navigation.mini.heightM / 2;
   assert.ok(Math.abs(miniBottom - ui.hud.heightM / 2 - 0.02) < 1e-8);
   G.time = 4; ui.drawHud(); assert.ok(labels(ui).some(row => row.text === 'Effect 9'));
   G.vr = false; ui.attachHud(null); ui.drawHud(); ui.placeRoot();
-  assert.equal(ui.hud.canvas.height, 512); assert.equal(ui.hudPaintHeight, 312);
+  assert.equal(ui.hud.canvas.height, 512); assert.equal(ui.hudPaintHeight, 300);
   ui.hud.mesh.updateWorldMatrix(true, false);
   const y = ui.hud.heightM / 2 - ui.hud.heightM * ui.hudPaintHeight / ui.hud.canvas.height;
   const bottom = ui.hud.mesh.localToWorld(new THREE.Vector3(0, y, 0)).project(ui.camera);
@@ -167,11 +170,11 @@ test('full VR status pages and bonus charges fit the wrist canvas and leave the 
 test('new HUD text is translated in every supported language', () => {
   const url = new URL('../src/ui/i18n.js', import.meta.url).href;
   for (const [lang, stamina] of [['ko', '스태미나'], ['en', 'Stamina'], ['ja', 'スタミナ'], ['zh', '耐力']]) {
-    const code = `globalThis.location={search:'?lang=${lang}'};const {tr}=await import(${JSON.stringify(url)});console.log(JSON.stringify([tr('스태미나'),tr('플레이어'),tr('전체 효과: 메뉴 → 상태'),tr('보너스 행동 ×{n}',{n:2}),tr('{s}초 남음',{s:'2.4'})]));`;
+    const code = `globalThis.location={search:'?lang=${lang}'};const {tr}=await import(${JSON.stringify(url)});console.log(JSON.stringify([tr('스태미나'),tr('플레이어'),tr('전체 효과: 메뉴 → 상태'),tr('보너스 행동 ×{n}',{n:2})]));`;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
     const strings = JSON.parse(result.stdout); assert.equal(strings[0], stamina); assert.ok(strings.every(text => text.length));
-    assert.ok(strings[3].includes('2')); assert.ok(strings[4].includes('2.4')); assert.ok(!strings.some(text => /\{[ns]\}/.test(text)));
+    assert.ok(strings[3].includes('2')); assert.ok(!strings.some(text => /\{[ns]\}/.test(text)));
     if (lang !== 'ko') assert.ok(!strings.some(text => /[가-힣]/.test(text)));
   }
 });

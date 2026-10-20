@@ -1,7 +1,6 @@
 // Transient extra-action rolls. Nothing here is written into a save or battler.
 export class BonusActions {
-  constructor({ duration = 3, random = Math.random } = {}) {
-    this.duration = duration;
+  constructor({ random = Math.random } = {}) {
     this.random = random;
     this.epoch = 0;
     this.clear();
@@ -9,7 +8,6 @@ export class BonusActions {
   clear() {
     this.owner = null;
     this.icons = [];
-    this.remaining = 0;
     this.hadSources = false;
     this.epoch++;
   }
@@ -32,23 +30,22 @@ export class BonusActions {
     }
     const hasSources = this.sources(actor).length > 0;
     if (!hasSources && this.hadSources) {
-      this.icons = []; this.remaining = 0; this.epoch++;
+      this.icons = []; this.epoch++;
     }
     this.hadSources = hasSources;
     return true;
   }
   status(context) {
-    if (!this.sync(context) || !this.icons.length || this.remaining <= 0) return null;
-    return { count: this.icons.length, remaining: this.remaining, duration: this.duration, icon: this.icons[0] };
+    if (!this.sync(context) || !this.icons.length) return null;
+    return { count: this.icons.length, icon: this.icons[0] };
   }
   available(context) { return !!this.status(context); }
   begin(context, { eligible = true } = {}) {
     if (!this.sync(context) || !eligible) return null;
     const sources = this.sources(context.actor);
-    const bonus = this.icons.length > 0 && this.remaining > 0;
+    const bonus = this.icons.length > 0;
     if (bonus) {
       this.icons.shift();
-      if (!this.icons.length) this.remaining = 0;
     }
     return { owner: this.owner, epoch: this.epoch, bonus, sources, completed: false };
   }
@@ -59,13 +56,10 @@ export class BonusActions {
     const icons = ticket.sources.filter(source => source.chance >= 1 || this.random() < source.chance).map(source => source.icon);
     if (!icons.length) return 0;
     this.icons.push(...icons);
-    this.remaining = this.duration;
     return icons.length;
   }
-  update(dt, context, { paused = false, clear = false } = {}) {
+  update(_dt, context, { clear = false } = {}) {
     if (clear) { this.clear(); return; }
-    if (!this.sync(context) || paused || !this.icons.length || !Number.isFinite(dt) || dt <= 0) return;
-    this.remaining = Math.max(0, this.remaining - dt);
-    if (this.remaining === 0) this.icons = [];
+    this.sync(context);
   }
 }

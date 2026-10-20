@@ -67,13 +67,17 @@ Storage uses its own limits, and exchanges still require their materials.
 
 BONUS ACTION
 ------------
-After a normal combat action, each Bonus Action trait rolls separately: +50% is
-a 50% chance for one charge, and +100% guarantees one. Sources can stack.
-Use your next attack or eligible combat skill within three seconds of active
-play to skip its normal recovery. Menus and dialogue pause the timer. The HUD
-shows the original source icon, charge count and time remaining.
-Costs, skill cooldowns, attack motion and burst spacing still apply. A bonus
-action cannot generate charges. Items and utility actions do not count.
+During combat, after a normal eligible action, each Bonus Action trait rolls once:
++50% is a 50% chance for one follow-up, and +100% guarantees one. Sources stack.
+Spend the earned follow-ups on your next attacks or eligible combat skills.
+Each follow-up consumes one count and cannot roll more follow-ups. There is no
+three-second timeout; unused follow-ups clear when combat ends. The HUD shows
+the original source icon and the number of follow-ups left.
+Skills share action recovery with attacks. An earned follow-up can begin during
+the previous action's trailing recovery. Every action keeps its own full
+recovery, so a new normal chain waits until the final follow-up has recovered.
+Active attack motions, burst spacing, MP and stamina costs, and skill cooldowns
+still apply. Items and utility actions do not count.
 This works with PC, VR and skills used directly from the R menu.
 
 BONFIRE TRAVEL

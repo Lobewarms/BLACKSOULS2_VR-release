@@ -13,7 +13,7 @@ function environment(objects = [source(1, 46)], random = () => 0.25) {
 test('each actual source rolls independently and retains its original icon, without averaging probabilities', () => {
   const rolls = [0.49, 0.5, 0.09], e = environment([source(0.5, 392), source(0.5, 513), source(0.1, 308)], () => rolls.shift());
   assert.equal(e.earn(), 2); assert.deepEqual(rolls, []);
-  assert.deepEqual(e.manager.status(e.context), { count: 2, remaining: 3, duration: 3, icon: 392 });
+  assert.deepEqual(e.manager.status(e.context), { count: 2, icon: 392 });
   assert.equal(e.manager.begin(e.context).bonus, true);
   assert.equal(e.manager.status(e.context).icon, 308);
 });
@@ -51,13 +51,16 @@ test('failed targets and ineligible utility actions neither spend an earned char
   assert.equal(e.manager.status(e.context).count, 1);
 });
 
-test('three active seconds expire charges; menu or headset pauses do not use the window', () => {
-  const e = environment(); e.earn(); e.manager.update(1, e.context);
-  assert.equal(e.manager.status(e.context).remaining, 2);
-  e.manager.update(60, e.context, { paused: true }); assert.equal(e.manager.status(e.context).remaining, 2);
-  for (const dt of [-1, NaN, Infinity, 0]) e.manager.update(dt, e.context);
-  assert.equal(e.manager.status(e.context).remaining, 2);
-  e.manager.update(2, e.context); assert.equal(e.manager.status(e.context), null);
+test('follow-ups have no activation timer and survive active time and menu/headset pauses', () => {
+  const e = environment(); e.earn();
+  for (const dt of [1, 3, 60, 3600, -1, NaN, Infinity, 0]) {
+    e.manager.update(dt, e.context);
+    assert.deepEqual(e.manager.status(e.context), { count: 1, icon: 46 });
+  }
+  e.manager.update(3600, e.context, { paused: true });
+  assert.equal(e.manager.status(e.context).count, 1);
+  assert.equal(e.manager.begin(e.context).bonus, true);
+  assert.equal(e.manager.status(e.context), null);
 });
 
 for (const change of ['actor', 'map', 'mapId', 'state', 'missing']) {

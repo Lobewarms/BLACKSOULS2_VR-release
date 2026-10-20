@@ -2478,3 +2478,44 @@ Combined source comparison: runtime 12f6835bc79e937047d3f3c679409848b19c3f5e (0.
 48 original modules retained,15 unchanged after import moves,33 modified,
 44 new and0 missing;4,141 added/935 removed lines in modified originals after
 import normalization. Historical screenshot labels/pins remain unchanged.
+
+## Bonus Action chains and shared combat recovery (0.2.40)
+
+The user approved replacing the three-second charge window with action chains,
+then clarified that rapidly repeated skills made Bonus Action ineffective.
+This supersedes the timing and final-bonus recovery rules in the0.2.39 section.
+Keep independent feature61 rolls, source icons, original formulas and costs.
+Earned follow-ups have no timer and cannot reroll. They bypass only the prior
+action's trailing recovery; every accepted action retains its own full recovery,
+so the final follow-up cannot start a fresh normal chain immediately.
+
+Direct and readied combat skills share a0.3-second active phase and0.9-second
+total action recovery, retaining multi-target/repeat/burst tails. Noneligible
+combat utility obeys the same action gate without spending or earning extras.
+Changing skill IDs, opening R, switching to melee/ranged, or consuming the last
+bonus cannot evade this gate. Per-skill cooldowns, HP/MP/TP/stamina, target
+validation, deliberate weapon charges and physical VR gestures remain intact.
+Instant menu support advances both action deadlines with its UI clock so the
+menu remains usable; field actions pause with dialogue/menu/headset-away.
+PC handsBusy includes the shared active phase to keep guarding out of casts.
+
+Bonuses belong to active local fights or engaged guest puppets, including death
+animations. Dormant/unjoined bodies do not make an encounter. Support outside
+combat cannot bank charges for the next fight. Prospective opening melee hits
+can begin a real encounter before their normal action completes. Clear unused
+extras and invalidate pending completions after the final Battle.finish, on
+direct removal of an active encounter, and existing reset/death/transfer/load
+ownership changes. Concurrent fights retain the chain until all have ended.
+Canceled support cannot roll. No chain metadata enters saves or battler states.
+
+PC and VR show only the remaining follow-up count and original source icon;
+remove the expiry/progress bar and its obsolete timer translation. Four-language
+controls explain the new recovery sequence. Keep historical screenshot captions
+and their source commits unchanged.
+
+Local gates:1,072 JavaScript tests pass (25 added:14 action-chain recovery and
+11 encounter/lifecycle regressions), ESLint, production build, Ruff,8 packaging
+and7 Python protocol tests. Synthetic tests cover real Combat/GameState/common
+frames, PC/VR actions, guest puppets, original death/victory ownership, instant
+menu support and paused field work. This is not a physical-headset playtest.
+Original game files, private helpers and player saves remain unchanged.

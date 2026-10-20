@@ -27,6 +27,7 @@ function environment(t) {
   $data.skills[1] = usable(1, { scope: 1, hit_type: 1, mp_cost: 0, effects: [],
     damage: { type: 1, formula: '10', variance: 0, element_id: 0 } });
   $data.skills[101] = usable(101);
+  $data.commonEvents[4] = { id: 4, trigger: 0, list: [{ code: 0, parameters: [], indent: 0 }] };
   const state = new GameState(), map = new GameMap(); map.mapId = 1;
   Object.assign(G, { state, map, time: 10, vr: false, xrAway: false, scripts: {}, settings: { swingLevel: 2 },
     audio: null, coop: null, screen: { playAnimationOn() {} },
@@ -41,11 +42,12 @@ function environment(t) {
   G.input = { attackPressed: () => press, mouseHeld: () => held, breakPressed: () => false, haptic() {}, controllers: {},
     xrPressed: (hand, index) => press && hand === 'right' && index === 0, xrHeld: () => false };
   const enemy = { alive: true, hr: 0.2, h: 1.6, hitCooldown: 0, worldPos: out => out.set(0, 0, -1) };
+  const battle = { done: false, enemies: [enemy] }; enemy.battle = battle;
   targets = [enemy];
   const hits = [], shots = [], scheduled = [], launches = [], followups = [];
   const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
     root, weapon: new THREE.Group(), stamina: 1, staminaDelay: 0, skillCD: {}, rangedCooldown: 0,
-    battles: [], sideInterps: [], prevBase: new THREE.Vector3(), prevTip: new THREE.Vector3(), prevRel: new THREE.Vector3(),
+    battles: [battle], sideInterps: [], prevBase: new THREE.Vector3(), prevTip: new THREE.Vector3(), prevRel: new THREE.Vector3(),
     allTargets: () => targets, pickTargets: () => [...targets],
     readyAim: () => ({ enemy: targets[0] || null, point: new THREE.Vector3(0, 0, -1), dir: new THREE.Vector3(0, 0, -1) }),
     playerHitEnemy: (...args) => hits.push(args), applyUsableToEnemy: (...args) => hits.push(args),
@@ -63,7 +65,10 @@ function environment(t) {
     combat.updateBonusActions(dt, paused);
     if (attack && !paused) combat.updatePlayerAttack(dt);
   };
-  const prime = () => { assert.equal(combat.useSkillFromMenu($data.skills[101]), true); assert.equal(combat.bonusStatus()?.count, 1); };
+  const prime = () => {
+    assert.equal(combat.useSkillFromMenu($data.skills[101]), true); advance(0.301);
+    assert.equal(combat.bonusStatus()?.count, 1);
+  };
   const ready = (obj, kind = 'skill') => {
     const fx = new THREE.Group(); root.add(fx);
     combat.ready = { obj, kind, fx, aim: combat.readyAim(), marker: { dispose() {} } };
@@ -72,7 +77,7 @@ function environment(t) {
     press: value => { press = value; }, held: value => { held = value; }, targets: value => { targets = value; }, get rolls() { return rolls; } };
 }
 
-test('PC melee awards once after its active window, consumes once on the next accepted swing and skips only bonus recovery', t => {
+test('PC melee awards once after its active window and the final follow-up retains its own normal recovery', t => {
   const e = environment(t);
   e.combat.updatePlayerAttack(0); e.press(false);
   assert.equal(e.combat.swing.duration, 0.32); assert.equal(e.combat.bonusStatus(), null);
@@ -83,8 +88,13 @@ test('PC melee awards once after its active window, consumes once on the next ac
   assert.equal(e.combat.swing.action.ticket.bonus, true); assert.equal(e.combat.bonusStatus(), null);
   assert.ok(Math.abs(firstStamina - e.combat.stamina - 0.12) < 1e-9); assert.equal(e.combat.swing.duration, 0.32);
   e.advance(0.23, { attack: true }); assert.equal(e.combat.swing, null); assert.equal(e.rolls, 1);
+  const bonusStamina = e.combat.stamina;
   e.press(true); e.combat.updatePlayerAttack(0);
-  assert.ok(e.combat.swing); assert.equal(e.combat.swing.action.ticket.bonus, false, 'the next normal input need not wait through the skipped tail');
+  assert.equal(e.combat.swing, null, 'finishing the follow-up active animation does not finish its trailing recovery');
+  assert.equal(e.combat.stamina, bonusStamina);
+  e.press(false); e.advance(0.1, { attack: true }); assert.equal(e.combat.swing, null);
+  e.press(true); e.combat.updatePlayerAttack(0);
+  assert.ok(e.combat.swing); assert.equal(e.combat.swing.action.ticket.bonus, false);
 });
 
 test('a held melee pose, missing target and failed stamina cannot consume a banked charge', t => {
@@ -108,7 +118,9 @@ test('VR bonus hits require another physical stroke and never repeat a continuou
   tip = 4; e.advance(0.01, { attack: true }); e.advance(0.02, { attack: true });
   assert.equal(e.hits.length, 2); assert.equal(e.rolls, 1);
   tip = 5; e.advance(0.01, { attack: true });
-  assert.equal(e.hits.length, 3); assert.equal(e.rolls, 2, 'a new normal stroke can follow the bonus without its skipped recovery');
+  assert.equal(e.hits.length, 2); assert.equal(e.rolls, 1, 'a fresh gesture still waits for the final follow-up recovery');
+  e.advance(0.46, { attack: true }); tip = 6; e.advance(0.01, { attack: true });
+  assert.equal(e.hits.length, 3); assert.equal(e.rolls, 2);
 });
 
 test('a ranged burst rolls once, preserves every bullet and its tail, and a bonus burst cannot generate another charge', t => {
@@ -117,16 +129,18 @@ test('a ranged burst rolls once, preserves every bullet and its tail, and a bonu
   assert.deepEqual(e.scheduled.map(s => s.ms), [80, 160]); assert.equal(e.combat.bonusStatus(), null);
   e.advance(0.2); assert.equal(e.combat.fireRanged(), false, 'the protected burst/animation window cannot be skipped');
   e.advance(0.26); assert.equal(e.combat.bonusStatus()?.count, 1); assert.equal(e.rolls, 1);
-  assert.equal(e.combat.fireRanged(), true); assert.ok(Math.abs(e.combat.rangedCooldown - 0.46) < 1e-9);
+  assert.equal(e.combat.fireRanged(), true, 'the earned follow-up bypasses the first burst trailing recovery');
+  assert.ok(Math.abs(e.combat.rangedCooldown - 0.76) < 1e-9);
   assert.equal(e.combat.bonusStatus(), null); e.scheduled.forEach(s => s.run());
   assert.equal(e.shots.length, 6); assert.equal(e.combat.bonusStatus(), null);
-  e.advance(0.46); assert.equal(e.rolls, 1); assert.equal(e.combat.fireRanged(), true);
+  e.advance(0.46); assert.equal(e.rolls, 1); assert.equal(e.combat.fireRanged(), false);
+  e.advance(0.3); assert.equal(e.combat.fireRanged(), true);
 });
 
 test('air shots and rejected skill-shot costs or cooldowns retain available bonus charges', t => {
   const e = environment(t); e.prime(); e.combat.shotKind = 'gun'; e.targets([]);
   assert.equal(e.combat.fireRanged(), false); assert.equal(e.shots.length, 0); assert.equal(e.combat.bonusStatus()?.count, 1);
-  e.advance(0.31); assert.equal(e.combat.fireRanged(), true); e.advance(0.31);
+  e.advance(0.6); assert.equal(e.combat.fireRanged(), true); e.advance(0.31);
   assert.equal(e.combat.bonusStatus()?.count, 1); assert.equal(e.rolls, 1, 'free firing without a valid aim target cannot roll traits');
   e.targets([e.enemy]); const shot = usable(102, { scope: 1, mp_cost: 10, effects: [], damage: { type: 1 } });
   e.actor.mp = 0; assert.equal(e.combat.fireSkillShot(e.actor, shot), false);
@@ -160,12 +174,17 @@ test('direct menu support pays every cast, uses one bonus to bypass recovery and
   const e = environment(t); G.ui.menuOpen = true;
   assert.equal(e.combat.useSkillFromMenu($data.skills[101]), true);
   assert.deepEqual([e.actor.hp, e.actor.mp], [420, 95]); assert.equal(e.combat.bonusStatus()?.count, 1);
+  assert.equal(e.combat.useSkillFromMenu($data.skills[101]), false); assert.equal(e.actor.mp, 95);
+  e.advance(0.301, { paused: true });
   assert.equal(e.combat.useSkillFromMenu($data.skills[101]), true);
   assert.deepEqual([e.actor.hp, e.actor.mp], [440, 90]); assert.equal(e.combat.bonusStatus(), null); assert.equal(e.rolls, 1);
-  assert.equal(e.combat.playerRecoveryUntil, G.time, 'an instantaneous bonus support effect has no trailing recovery');
+  e.advance(0.301, { paused: true });
+  assert.equal(e.combat.useSkillFromMenu($data.skills[101]), false, 'the final extra support action retains its normal trailing recovery');
+  assert.equal(e.actor.mp, 90); e.advance(0.6, { paused: true });
+  assert.equal(e.combat.useSkillFromMenu($data.skills[101]), true); assert.equal(e.actor.mp, 85);
 });
 
-test('ordinary support can be used again after its short recovery while the same menu remains open', async t => {
+test('ordinary support can be used again after normal recovery while the same menu remains open', async t => {
   for (const source of ['none', 'failed roll']) await t.test(source, t => {
     const e = environment(t); G.ui.menuOpen = true;
     if (source === 'none') $data.actors[1].features = [];
@@ -176,6 +195,8 @@ test('ordinary support can be used again after its short recovery while the same
     assert.equal(e.combat.useSkillFromMenu($data.skills[101]), false, 'the normal short recovery still prevents immediate repeats');
     assert.deepEqual([e.actor.hp, e.actor.mp], [420, 95]);
     e.advance(0.11, { paused: true });
+    assert.equal(e.combat.useSkillFromMenu($data.skills[101]), false, 'a normal combat skill keeps its full 0.9-second recovery');
+    e.advance(0.591, { paused: true });
     assert.equal(G.ui.menuOpen, true); assert.equal(e.combat.useSkillFromMenu($data.skills[101]), true);
     assert.deepEqual([e.actor.hp, e.actor.mp], [440, 90]); assert.equal(e.combat.bonusStatus(), null);
   });
@@ -187,26 +208,32 @@ test('direct offensive repeats and an additional common event form one eligible 
   e.targets([]); assert.equal(e.combat.performUsable(attack, 'skill', 'menu', { direct: true }), false);
   assert.equal(e.actor.mp, 100); assert.equal(e.combat.bonusStatus(), null);
   e.targets([e.enemy]); assert.equal(e.combat.performUsable(attack, 'skill', 'menu', { direct: true }), true);
-  assert.equal(e.actor.mp, 95); assert.deepEqual(e.map.reservedCommon, [4]); assert.equal(e.hits.length, 1);
+  assert.equal(e.actor.mp, 95); assert.equal(e.combat.sideInterps.length, 1); assert.equal(e.hits.length, 1);
+  assert.equal(e.combat.sideInterps[0].battleOwner, e.enemy.battle);
   e.scheduled.forEach(s => s.run()); assert.equal(e.hits.length, 3); assert.equal(e.combat.bonusStatus(), null);
-  e.advance(0.24); assert.equal(e.combat.bonusStatus()?.count, 1); assert.equal(e.rolls, 1);
+  e.advance(0.24); assert.equal(e.combat.bonusStatus(), null); assert.equal(e.rolls, 0);
+  e.advance(0.3); assert.equal(e.combat.bonusStatus()?.count, 1); assert.equal(e.rolls, 1);
   e.combat.applyUsableToActor($data.skills[101], 'self'); assert.equal(e.rolls, 1); assert.equal(e.combat.bonusStatus()?.count, 1);
 });
 
 test('pure common events, field utility and items cannot consume or generate charges', t => {
   const e = environment(t); e.prime();
   const ritual = usable(102, { scope: 0, effects: [{ code: 44, data_id: 4 }] });
+  assert.equal(e.combat.performUsable(ritual, 'skill', 'menu'), false, 'an ineligible ritual cannot spend a follow-up to bypass ordinary recovery');
+  assert.equal(e.combat.bonusStatus()?.count, 1); assert.equal(e.combat.sideInterps.length, 0);
+  e.advance(0.6);
   assert.equal(e.combat.performUsable(ritual, 'skill', 'menu'), true);
-  assert.deepEqual(e.map.reservedCommon, [4]); assert.equal(e.combat.bonusStatus()?.count, 1);
+  assert.equal(e.combat.sideInterps.length, 1); assert.equal(e.combat.bonusStatus()?.count, 1);
+  e.combat.battles = []; assert.equal(e.combat.bonusStatus(), null);
   assert.equal(e.combat.performUsable(usable(103, { occasion: 2 }), 'skill', 'menu'), true);
   assert.equal(e.combat.performUsable(usable(105, { effects: [{ code: 42, data_id: 2, value1: 1 },
     { code: 43, data_id: 101 }] }), 'skill', 'menu'), true);
   const potion = usable(104, { __class: 'RPG::Item', consumable: true });
   assert.equal(e.combat.performUsable(potion, 'item'), true); assert.ok(e.combat.healing);
-  assert.equal(e.combat.bonusStatus()?.count, 1); assert.equal(e.rolls, 1);
+  assert.equal(e.combat.bonusStatus(), null); assert.equal(e.rolls, 1, 'out-of-combat utility cannot farm follow-ups for another fight');
 });
 
-test('a long menu or headset pause cannot finish pending burst actions, expire charges or wait out recovery', t => {
+test('a long menu or headset pause cannot finish pending burst actions or wait out recovery', t => {
   const e = environment(t); e.combat.shotKind = 'gun'; e.combat.attackHits = () => 3;
   e.combat.fireRanged(); e.advance(0.1);
   G.ui.menuOpen = true; e.advance(100, { paused: true });
@@ -215,8 +242,8 @@ test('a long menu or headset pause cannot finish pending burst actions, expire c
   G.ui.menuOpen = false; assert.equal(e.combat.handsBusy(), true, 'resuming cannot raise guard through the remaining ranged active window');
   e.advance(0.35); assert.equal(e.combat.bonusStatus(), null); assert.equal(e.combat.handsBusy(), true);
   e.advance(0.011); assert.equal(e.combat.bonusStatus()?.count, 1); assert.equal(e.rolls, 1); assert.equal(e.combat.handsBusy(), false);
-  G.xrAway = true; e.advance(100, { paused: true }); assert.equal(e.combat.bonusStatus()?.remaining, 3);
-  G.xrAway = false; e.advance(1); assert.equal(e.combat.bonusStatus()?.remaining, 2);
+  G.xrAway = true; e.advance(100, { paused: true }); assert.equal(e.combat.bonusStatus()?.count, 1);
+  G.xrAway = false; e.advance(10); assert.equal(e.combat.bonusStatus()?.count, 1, 'earned follow-ups stay available until the fight ends');
 });
 
 test('PC active swing work does not complete while a menu pauses gameplay', t => {
@@ -253,8 +280,8 @@ test('a cooling armed skill cannot spend a bonus charge or pay an unusable skill
 test('status clears dead, transferred and superseded ownership without needing another gameplay frame', t => {
   const e = environment(t); e.prime(); e.combat.playerDead = true;
   assert.equal(e.combat.bonusStatus(), null); e.combat.playerDead = false;
-  e.advance(0.31); e.prime(); e.map.transferring = true;
+  e.advance(0.901); e.prime(); e.map.transferring = true;
   assert.equal(e.combat.bonusStatus(), null); e.map.transferring = false;
-  e.advance(0.31); e.prime(); G.map = { mapId: 1 };
+  e.advance(0.901); e.prime(); G.map = { mapId: 1 };
   assert.equal(e.combat.bonusStatus(), null);
 });

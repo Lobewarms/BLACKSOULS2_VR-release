@@ -1,19 +1,16 @@
 // Desktop combat information has a fixed resource card and a separate effect strip.
 // The caller owns anchoring, visibility and caching; no time-based pages move either card.
-// Quantize only presentation, never the combat clock or available charges.
+// The combat action chain owns these charges; the HUD has no expiry clock.
 export function bonusHudStatus(value, fallbackIcon = 0) {
-  if (!Number.isSafeInteger(value?.count) || value.count <= 0 || !Number.isFinite(value.remaining) || value.remaining <= 0
-    || !Number.isFinite(value.duration) || value.duration <= 0) return null;
-  const remaining = Math.min(value.duration, Math.max(1, Math.ceil(value.remaining * 10 - 1e-8)) / 10);
+  if (!Number.isSafeInteger(value?.count) || value.count <= 0) return null;
   const icon = [value.icon, fallbackIcon].find(index => Number.isSafeInteger(index) && index > 0) || 0;
-  return { count: value.count, remaining, duration: value.duration, icon,
-    ratio: Math.min(1, remaining / value.duration), key: `${value.count}/${remaining}/${value.duration}/${icon}` };
+  return { count: value.count, icon, key: `${value.count}/${icon}` };
 }
 
 export function paintDesktopHud({ hud, status, leader, stamina, sen, menuVar, currency, effects = [], faceCanvas, bonus: rawBonus, helpers }) {
   const { windowBg, drawIcon, textColor, fitLabel, stripEscapes, tr, FONT } = helpers;
   const bonus = bonusHudStatus(rawBonus);
-  const W = hud.canvas.width, height = 256 + (bonus ? 56 : 0);
+  const W = hud.canvas.width, height = 256 + (bonus ? 44 : 0);
   const number = value => (Number.isFinite(Number(value)) ? Number(value) : 0).toLocaleString();
   const hp = Number(leader.hp), mhp = Number(leader.mhp);
   const critical = Number.isFinite(hp) && mhp > 0 && hp / mhp <= 0.25;
@@ -87,10 +84,7 @@ export function paintDesktopHud({ hud, status, leader, stamina, sen, menuVar, cu
     ctx.globalAlpha = 0.22; ctx.fillStyle = textColor(21); ctx.fillRect(24, 252, W - 48, 1); ctx.globalAlpha = 1;
     if (bonus.icon) drawIcon(ctx, bonus.icon, 24, 260, 28);
     const x = bonus.icon ? 60 : 24;
-    write(ctx, tr('보너스 행동 ×{n}', { n: bonus.count }), x, 273, W - x - 150, 24, { color: textColor(16), fit: true });
-    write(ctx, tr('{s}초 남음', { s: bonus.remaining.toFixed(1) }), W - 24, 273, 120, 22, { align: 'right', fit: true });
-    ctx.fillStyle = textColor(19); ctx.fillRect(24, 294, W - 48, 4);
-    ctx.fillStyle = textColor(21); ctx.fillRect(24, 294, (W - 48) * bonus.ratio, 4);
+    write(ctx, tr('보너스 행동 ×{n}', { n: bonus.count }), x, 273, W - x - 24, 24, { color: textColor(16), fit: true });
   }
   hud.commit();
 

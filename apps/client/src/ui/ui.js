@@ -1951,7 +1951,7 @@ export class UI {
     const stamina = G.combat?.stamina;
     const rawBonus = G.combat?.bonusStatus?.();
     const bonus = bonusHudStatus(rawBonus, rawBonus?.count > 0 ? G.combat?.playerAttackSkill?.(leader)?.icon_index : 0);
-    const currencyY = stamina === undefined ? 182 : 234, baseHeight = currencyY + 28 + (bonus ? 56 : 0);
+    const currencyY = stamina === undefined ? 182 : 234, baseHeight = currencyY + 28 + (bonus ? 44 : 0);
     const effectsTop = baseHeight + 32;
     this.hudPaintHeight = shown.length ? effectsTop + shown.length * 36 + (more ? 74 : 8) : baseHeight;
     this.hud.resize(512, Math.max(512, this.hudPaintHeight));
@@ -2005,11 +2005,8 @@ export class UI {
       const y = currencyY + 44, x = bonus.icon ? 62 : 24;
       if (bonus.icon) drawIcon(ctx, bonus.icon, 24, y - 14, 28);
       ctx.font = `25px ${FONT}`;
-      write(fitLabel(ctx, tr('보너스 행동 ×{n}', { n: bonus.count }), canvas.width - x - 150), x, y,
-        canvas.width - x - 150, 25, 'left', textColor(16));
-      write(tr('{s}초 남음', { s: bonus.remaining.toFixed(1) }), canvas.width - 24, y, 120, 22, 'right');
-      ctx.fillStyle = textColor(19); ctx.fillRect(24, y + 20, canvas.width - 48, 4);
-      ctx.fillStyle = textColor(21); ctx.fillRect(24, y + 20, (canvas.width - 48) * bonus.ratio, 4);
+      write(fitLabel(ctx, tr('보너스 행동 ×{n}', { n: bonus.count }), canvas.width - x - 24), x, y,
+        canvas.width - x - 24, 25, 'left', textColor(16));
     }
     if (shown.length) {
       write(tr('상태 효과'), 24, baseHeight + 14, 330, 24, 'left', textColor(16));

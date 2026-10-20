@@ -47,6 +47,7 @@ const PERFECT_GUARD = 0.25, POWER_BUFF = { mult: 1.5, time: 5 }, GUARD_BUFF = { 
 // next Gun Break is ready at once
 const GUARD_COOLDOWN = 0.5, GUN_PARRY = 0.35;
 const DESK_ACT = 0.3;          // (PC) a shot, a cast or a throw let go keeps the hands busy this long: the guard down (handsBusy)
+const SKILL_RECOVERY = 0.9;    // shared combat-skill cadence, including casts without their own cooldown
 // how long a boss rests between two of its own moves (s, random between)
 const BOSS_MOVE_REST = [2.5, 5];
 const FOLLOW_REST = 0.3;          // the breath between an action and the one it goes on with (使用後追加行動)
@@ -722,7 +723,11 @@ export class CombatSystem {
     this.detached = [];            // event fights moved off the map's interpreter: {interp, battle, ev}
     this.defeated = new Map();     // event -> time its enemy was beaten on this visit (respawn hold)
   }
-  get inCombat() { return this.battles.some(b => !b.done); }
+  get inCombat() { return !!this.battles?.some(b => !b.done); }
+  bonusFighting() {
+    // A guest's engaged enemies are host-owned puppets, not local Battles.
+    return this.inCombat || [...(this.puppets?.values() || [])].some(e => e.battle && !e.outOfFight && e.state !== 'dead');
+  }
   bonusContext() { return { actor: G.state?.party?.leader(), map: G.map, state: G.state }; }
   bonusManager() { return this._bonusActions ||= new BonusActions(); }
   bonusInvalid(context = this.bonusContext()) {
@@ -738,16 +743,23 @@ export class CombatSystem {
     const previous = this.bonusClock ?? G.time, elapsed = Math.max(0, G.time - previous);
     this.bonusClock = G.time;
     if (!paused) return;
-    if (this.playerActiveUntil > previous) this.playerActiveUntil += elapsed;
+    if (this.playerActivePaused !== false && this.playerActiveUntil > previous) this.playerActiveUntil += elapsed;
     if (this.playerRecoveryPaused !== false && this.playerRecoveryUntil > previous) this.playerRecoveryUntil += elapsed;
     if (this.deskActUntil > previous) this.deskActUntil += elapsed;
   }
   bonusStatus() {
-    if (this.bonusInvalid()) { this._bonusActions?.clear(); this.bonusPending = []; this.vrStrokeAction = null; return null; }
+    const fighting = this.bonusFighting();
+    if (this.bonusInvalid() || !fighting && this.bonusCombatActive) { this.clearBonusActions(); return null; }
+    this.bonusCombatActive = fighting;
+    if (!fighting) return null;
     this.syncBonusClock(this.bonusPaused());
     return this.bonusManager().status(this.bonusContext());
   }
   bonusAvailable() { return !!this.bonusStatus(); }
+  clearBonusActions() {
+    this._bonusActions?.clear(); this.bonusPending = []; this.vrStrokeAction = null;
+    this.bonusCombatActive = false;
+  }
   bonusSkillEligible(obj, kind = 'skill') {
     if (kind !== 'skill' || !obj || obj.occasion === 2 || obj.occasion === 3 || !obj.scope) return false;
     return (obj.damage?.type || 0) > 0 || (obj.effects || []).some(e =>
@@ -769,17 +781,24 @@ export class CombatSystem {
     if (G.time + 1e-9 < (this.playerActiveUntil || 0)) return false;
     return G.time + 1e-9 >= Math.max(this.playerRecoveryUntil || 0, until) || eligible && this.bonusAvailable();
   }
-  beginPlayerAction(eligible, { active = 0, recovery = 0, pauseRecovery = true } = {}) {
+  beginPlayerAction(eligible, { active = 0, recovery = 0, pauseRecovery = true, targeted = false } = {}) {
     if (this.bonusInvalid()) return false;
     if (!this.playerActionReady(eligible)) return false;
-    const context = this.bonusContext(), ticket = this.bonusManager().begin(context, { eligible });
+    const context = this.bonusContext();
+    // A real opening hit may engage a dormant symbol during its active phase.
+    // Support can only roll inside a fight; waiting near dormant enemies cannot prime it.
+    const ticket = this.bonusFighting() || targeted && eligible ? this.bonusManager().begin(context, { eligible }) : null;
     this.playerActiveUntil = G.time + active;
-    this.playerRecoveryUntil = G.time + (ticket?.bonus ? active : recovery);
+    // A follow-up bypasses the previous action's tail. Its own full tail still
+    // gates the next normal chain, even when this was the last earned action.
+    this.playerRecoveryUntil = G.time + Math.max(active, recovery);
+    this.playerActivePaused = pauseRecovery;
     this.playerRecoveryPaused = pauseRecovery;
     return { ticket, eligible };
   }
   completePlayerAction(action) {
-    if (this.bonusInvalid()) { this._bonusActions?.clear(); return; }
+    if (this.bonusInvalid() || !this.bonusFighting()) { this.clearBonusActions(); return; }
+    this.bonusCombatActive = true;
     if (action?.ticket) this.bonusManager().complete(action.ticket, this.bonusContext(), { eligible: action.eligible });
   }
   finishPlayerAction(action, delay = 0) {
@@ -790,10 +809,12 @@ export class CombatSystem {
   updateBonusActions(dt, paused) {
     paused ||= this.bonusPaused();
     const context = this.bonusContext();
-    const clear = this.bonusInvalid(context);
+    const fighting = this.bonusFighting();
+    const clear = this.bonusInvalid(context) || !fighting && this.bonusCombatActive;
     this.syncBonusClock(paused || !!G.xrAway);
     this.bonusManager().update(dt, context, { paused: paused || !!G.xrAway, clear });
-    if (clear) { this.bonusPending = []; this.vrStrokeAction = null; return; }
+    if (clear) { this.bonusPending = []; this.vrStrokeAction = null; this.bonusCombatActive = false; return; }
+    this.bonusCombatActive = fighting;
     if (paused || G.xrAway) return;
     const pending = this.bonusPending || [];
     for (const p of pending) p.remaining -= dt;
@@ -809,9 +830,10 @@ export class CombatSystem {
   // ---- lifecycle -------------------------------------------------------------
   // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
   reset({ keepState = false, carry = false } = {}) {
-    this._bonusActions?.clear(); this.bonusPending = [];
+    this.clearBonusActions();
     this.playerActiveUntil = this.playerRecoveryUntil = 0; this.vrStrokeAction = null;
     this.playerRecoveryPaused = true;
+    this.playerActivePaused = true;
     if (this.breakGlow) this.breakGlow.visible = false;
     G.screen?.clearBattleTones?.();
     G.screen?.clearBattlePictures?.();
@@ -1352,6 +1374,7 @@ export class CombatSystem {
     if (result === 0 && m.played) G.audio?.playMe(G.state.system.battleEndMe || $data.system.battle_end_me);
   }
   onBattleEnd(battle) {
+    if (!this.bonusFighting()) this.clearBonusActions();
     G.screen?.endBattleTone?.(battle);
     G.screen?.endBattlePictures?.(battle);
     G.player.floatDown?.();                         // (blown up by the wind when it ended: let down gently)
@@ -2262,8 +2285,8 @@ export class CombatSystem {
       if (!targets.length) { G.ui.toast(tr('{name}: 대상이 없습니다', { name }), obj.icon_index); G.audio?.playSystemSe(3); return false; }
       const eligible = this.bonusSkillEligible(obj, kind);
       const tail = Math.max((targets.length - 1) * 0.14, (usableRepeats(obj) - 1) * 0.12);
-      const action = eligible ? this.beginPlayerAction(true, { active: tail, recovery: DESK_ACT + tail }) : null;
-      if (eligible && !action) return false;
+      const action = this.beginPlayerAction(eligible, { active: DESK_ACT + tail, recovery: SKILL_RECOVERY + tail, targeted: true });
+      if (!action) return false;
       this.cancelReady(); this.cancelHeld(); this.skillArm = null;
       if (kind === 'skill' && this.disarmed && this.isWeaponArt(obj)) this.toggleDisarm(false);
       this.payUsable(obj, kind, targets[0]?.battle);
@@ -2289,7 +2312,7 @@ export class CombatSystem {
       if (kind === 'item') G.audio?.playSe(G.seAt('Wind7', 70, 120));
       else this.playerFollowUp(obj, targets[0], from);
       G.input.haptic('left', 0.5, 60);
-      this.finishPlayerAction(action, tail);
+      this.finishPlayerAction(action, DESK_ACT + tail);
       return true;
     }
     // Friendly revival chooses a dead battle member before spending anything.
@@ -2302,12 +2325,15 @@ export class CombatSystem {
       return true;
     }
     const eligible = this.bonusSkillEligible(obj, kind);
-    // An instant support cast can repeat within the open menu after its short UI recovery;
-    // field animations, volleys and charge expiry keep their paused gameplay clock.
-    const action = eligible ? this.beginPlayerAction(true, { recovery: DESK_ACT, pauseRecovery: from !== 'menu' }) : null;
-    if (eligible && !action) return false;
+    // Combat utility obeys the same action lock even when it cannot roll/spend
+    // extras. Instant menu support uses the UI clock so the menu stays usable.
+    const fighting = this.bonusFighting(), gated = kind === 'skill' && (eligible || fighting);
+    const action = gated ? this.beginPlayerAction(eligible, { active: fighting ? DESK_ACT : 0,
+      recovery: fighting ? SKILL_RECOVERY : DESK_ACT, pauseRecovery: from !== 'menu' }) : null;
+    if (gated && !action) return false;
     if (kind === 'skill') { this.payUsable(obj, kind); this.playerFollowUp(obj, null, null); }
     const used = this.applyUsableToActor(obj, from);
+    if (!used && action) action.eligible = false;
     if (kind === 'item' && used && obj.consumable) G.state.party.gainItem('item', obj.id, -1);
     if (obj.animation_id > 0) G.screen.playAnimationOn(G.map.playerChar, obj.animation_id, { rate: 3 });
     else if (used) G.audio?.playSystemSe(22);
@@ -2783,15 +2809,16 @@ export class CombatSystem {
     const eligible = this.bonusSkillEligible(obj, kind) && (aim.enemy?.alive ||
       (r.area || r.physicalArea) && this.allTargets().some(e => e.worldPos(new THREE.Vector3()).distanceTo(aim.point) < (r.physicalArea ? 3.5 : 2.5) + (e.hr || 0) * T));
     const tail = (randomTargetCount(obj.scope) - 1) * 0.13;
-    const action = this.beginPlayerAction(!!eligible, { active: tail, recovery: DESK_ACT + tail });
+    const active = (kind === 'skill' ? DESK_ACT : 0) + tail;
+    const action = this.beginPlayerAction(!!eligible, { active, recovery: (kind === 'skill' ? SKILL_RECOVERY : DESK_ACT) + tail, targeted: true });
     if (!action) return;
-    if (!G.vr) this.deskActUntil = G.time + (action.ticket?.bonus ? 0 : DESK_ACT) + tail;
+    if (!G.vr) this.deskActUntil = G.time + DESK_ACT + tail;
     const from = new THREE.Vector3(); r.fx.getWorldPosition(from);
     // throwing knives stay in the hand - one throw per pull, no waiting - until they run out or X puts them away
     const knife = kind === 'item' && this.isKnife(obj);
     if (!knife) this.cancelReady();
     this.payUsable(obj, kind, aim.enemy?.battle);
-    this.finishPlayerAction(action, tail);
+    this.finishPlayerAction(action, active);
     if (kind === 'skill') this.playerFollowUp(obj, aim.enemy || null, from);
     if (knife && G.state.party.itemCount('item', obj.id) <= 0) this.cancelReady();
     G.input.haptic('right', 0.8, 70);
@@ -4010,7 +4037,9 @@ export class CombatSystem {
   // spell or a throwable held ready, a drink: no guard meanwhile (attacking and guarding never at once). A weapon art
   // waiting on the weapon (skillArm) or a Break armed leaves them free. VR: the hands are the player's own
   handsBusy() {
-    return !G.vr && (this.deskCharge != null || !!this.swing || !!this.ready || !!this.healing || G.time < (this.deskActUntil ?? -99));
+    this.syncBonusClock(this.bonusPaused());
+    return !G.vr && (this.deskCharge != null || !!this.swing || !!this.ready || !!this.healing || G.time < (this.deskActUntil ?? -99)
+      || G.time < (this.playerActiveUntil || 0));
   }
   // the shield coming up: a buckle's clink, a little different each time
   playShieldSound(at = null) {
@@ -6982,7 +7011,7 @@ export class CombatSystem {
           if (!stroke && contacts.some(e => e.hitCooldown <= 0 || this.bonusAvailable())) {
             const actor = G.state.party.leader(), skill = this.skillArm?.skill || this.skillByState(actor, this.playerAttackSkill(actor));
             const eligible = this.bonusSkillEligible(skill) && (!this.skillArm || actor.skillCostPayable(skill) && !actor.skillSealed(skill.id) && actor.skillTypeUsable(skill) && this.skillCooling(skill) <= 0);
-            const action = this.beginPlayerAction(eligible);
+            const action = this.beginPlayerAction(eligible, { recovery: 0.45, targeted: true });
             if (action) stroke = this.vrStrokeAction = { action, hits: new Set(), completed: false };
           }
           let landed = false;
@@ -7026,7 +7055,7 @@ export class CombatSystem {
         const charge = THREE.MathUtils.clamp((G.time - this.deskCharge - 0.15) / 1.0, 0, 1);
         this.deskCharge = null;
         if (canSwing && this.stamina > 0.05) {
-          const action = this.beginPlayerAction(eligible, { active: 0.32 * 0.7, recovery: 0.32 });
+          const action = this.beginPlayerAction(eligible, { active: 0.32 * 0.7, recovery: 0.32, targeted: true });
           if (!action) return;
           this.swing = { t: 0, hit: new Set(), charge, duration: 0.32, action };
           this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.12)); this.staminaDelay = 0.7;
@@ -7834,10 +7863,10 @@ export class CombatSystem {
     const eligible = !!this.readyAim().enemy?.alive, tail = (n - 1) * BURST_GAP;
     if (!this.playerActionReady(eligible, G.time + Math.max(0, this.rangedCooldown || 0))) return false;
     const recovery = (kind === 'magic' ? 0.9 : 0.6) + tail;
-    const action = this.beginPlayerAction(eligible, { active: DESK_ACT + tail, recovery });
+    const action = this.beginPlayerAction(eligible, { active: DESK_ACT + tail, recovery, targeted: true });
     if (!action) return false;
     if (!G.vr) this.deskActUntil = G.time + DESK_ACT + tail;
-    this.rangedCooldown = action.ticket?.bonus ? DESK_ACT + tail : recovery;
+    this.rangedCooldown = recovery;
     const brk = this.breakArmed();                 // (fired with Break held: the first shot carries the Break)
     this.fireShot(kind, n > 1, brk);
     for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot(kind, true, null));
@@ -7868,14 +7897,14 @@ export class CombatSystem {
     const n = THREE.MathUtils.clamp(usableRepeats(s) * randomTargetCount(s.scope), 1, 64);
     const eligible = this.bonusSkillEligible(s) && !!this.readyAim().enemy?.alive, tail = (n - 1) * BURST_GAP;
     if (!this.playerActionReady(eligible, G.time + Math.max(0, this.rangedCooldown || 0))) return false;
-    const action = this.beginPlayerAction(eligible, { active: DESK_ACT + tail, recovery: 0.6 + tail });
+    const action = this.beginPlayerAction(eligible, { active: DESK_ACT + tail, recovery: 0.6 + tail, targeted: true });
     if (!action) return false;
     this.actorPays(actor, s);
     this.skillCD[s.id] = G.time + this.coolSeconds(s);
     this.actorUserEffect(s);
     if (!G.vr) this.deskActUntil = action.ticket?.bonus ? G.time + DESK_ACT + tail
       : Math.max(this.deskActUntil ?? -Infinity, G.time + DESK_ACT + 0.6, G.time + DESK_ACT + tail);
-    this.rangedCooldown = (action.ticket?.bonus ? DESK_ACT : 0.6) + tail;
+    this.rangedCooldown = 0.6 + tail;
     const volley = { shown: false };
     this.fireShot('gun', true, null, { skill: s, volley });
     for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot('gun', true, null, { skill: s, volley }));
