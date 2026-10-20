@@ -1,17 +1,10 @@
-BLACK SOULS II VR 0.2.40
+BLACK SOULS II VR 0.2.41
 
-Bonus Action chains
-- Earn follow-up actions from your Bonus Action traits during combat. Each source
-  rolls once after a normal eligible action; follow-ups cannot generate more.
-- Remove the three-second activation window. Your follow-ups stay available
-  until used or combat ends. The HUD shows the original icon and remaining count.
-- Ordinary combat skills share an action window and recovery with attacks, even
-  when switching skills or using the R menu. A bonus lets you follow up during
-  the previous action's recovery, after its active motion finishes.
-- The final follow-up retains its own recovery before a new normal chain starts.
-  Costs, skill cooldowns, attack motions and burst spacing still apply.
-- Keep instant support skills usable while their menu is open. Field actions
-  pause with the menu or headset, and unused bonuses clear when the fight ends.
+Chaos Dungeon skull saves
+- Fix the boss-room skull refusing to open its save screen while ordinary menu
+  saving is disabled. Skull checkpoints now follow the original game rule.
+- Keep slot selection, overwrite confirmation, retry and cancellation working
+  without enabling ordinary menu saving or changing the saved restriction.
 
 Install the update, then close and reopen the game window to load the changes.
 Your existing saves are retained. The original game is required and is not included.

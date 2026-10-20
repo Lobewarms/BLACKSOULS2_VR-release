@@ -58,8 +58,43 @@ test('event Save holds through the write and only then continues the original ch
   e.assertContinued();
 });
 
+test('an authored Save event works with menu saving disabled and preserves the saved restriction', async t => {
+  const e = environment(t, { saveSlot: async (...args) => {
+    assert.equal(G.state.system.saveDisabled, true, 'event saving must not enable ordinary menu saving');
+    e.writes.push(args); return true;
+  } });
+  e.interpreter.setup([command(134, 0, 0), command(352, 0), command(102, 0, ['Continue', 'Leave'], 2), command(0, 0)]);
+  e.start(); await tick();
+  assert.equal(G.state.system.saveDisabled, true); assert.equal(e.ui.list.items.length, 16);
+  assert.equal(e.notices.length, 0); assert.equal(e.interpreter.waitMode, 'save');
+  await e.select(0); await tick();
+  assert.deepEqual(e.writes, [[1, false, 'vr']]); assert.equal(G.state.system.saveDisabled, true);
+  e.interpreter.update(); assert.equal(e.messages.length, 1);
+  assert.deepEqual(e.ui.msg.choices.map(c => c.text), ['Continue', 'Leave']);
+});
+
+test('normal menu Save stays unavailable when the authored map disables saving', async t => {
+  let reads = 0; const e = environment(t, { listSaves: async () => { reads++; return []; } });
+  G.state.system.saveDisabled = true;
+  await G.openSaveMenu();
+  assert.equal(reads, 0); assert.equal(e.writes.length, 0); assert.equal(e.notices.length, 1);
+  assert.equal(e.ui.list.visible, false); assert.deepEqual(e.reopened, ['save']);
+  assert.equal(G.state.system.saveDisabled, true);
+});
+
+for (const role of ['phantom', 'disconnected world']) test(`an authored Save event cannot bypass ${role} save ownership`, async t => {
+  let reads = 0; const e = environment(t, { listSaves: async () => { reads++; return []; } });
+  G.state.system.saveDisabled = true;
+  G.coop = role === 'phantom' ? { role: '', phantom: true } : { role: 'world', world: false, phantom: false };
+  e.start(); await tick();
+  assert.equal(reads, 0); assert.equal(e.writes.length, 0); assert.equal(e.notices.length, 1);
+  assert.equal(e.ui.list.visible, false); assert.equal(e.ui.menuOpen, false);
+  assert.equal(G.state.system.saveDisabled, true); e.assertContinued();
+});
+
 test('failed event save allows retry or Back without advancing or reopening the main menu', async t => {
   let calls = 0; const e = environment(t, { saveSlot: async () => ++calls > 1 });
+  G.state.system.saveDisabled = true;
   e.start(); await tick(); await e.select(0); await tick();
   e.assertWaiting(); assert.equal(e.ui.list.visible, true); assert.deepEqual(e.reopened, []);
   await e.select(1); await tick(); assert.equal(calls, 2); e.assertContinued();
@@ -103,6 +138,7 @@ test('battle event Save is ignored as in the original interpreter', t => {
 
 test('boss-skull adjacent choice blocks keep their merged choices and finish Save without selecting a transfer', async t => {
   const e = environment(t);
+  G.state.system.saveDisabled = true;
   e.interpreter.setup([command(102, 0, ['Save'], 0), command(402, 0, 0, 'Save'), command(352, 1), command(0, 1), command(404, 0),
     command(102, 0, ['Skip the Boss Room', 'Leave'], 2), command(402, 0, 0, 'Skip the Boss Room'), command(201, 1, 0, 999, 1, 1, 2, 0),
     command(402, 0, 1, 'Leave'), command(0, 1), command(404, 0), command(0, 0)]);

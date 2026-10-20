@@ -18,7 +18,9 @@ export function showManualSaveMenu({ event = false, listSaves, saveSlot, selecte
   const title = () => kind === 'world' ? tr('개발자 서버 세이브 — 저장할 슬롯') : tr('세이브 — 저장할 슬롯');
   const showSlots = async () => {
     if (!current()) { complete(false); return; }
-    if (state?.system.saveDisabled || G.coop.phantom || (kind === 'world' && !G.coop.world)) {
+    // VX Ace command352 opens the authored save scene independently of the
+    // ordinary menu's save_disabled flag (e.g. Chaos Dungeon skull checkpoints).
+    if ((!event && state?.system.saveDisabled) || G.coop.phantom || (kind === 'world' && !G.coop.world)) {
       ui.toast(tr('지금은 저장할 수 없습니다')); back(); return;
     }
     if (event) { ui.menuOpen = true; ui.list.close(); }

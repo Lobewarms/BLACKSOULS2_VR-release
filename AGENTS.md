@@ -2524,3 +2524,27 @@ Current source comparison: runtime97378d0a936a46743b98bcc929d639d19b6c1143 (0.2.
 48 original modules retained,15 unchanged after import moves,33 modified,
 44 new and0 missing;4,168 added/937 removed lines in modified originals after
 import normalization. Historical image versions and source pins are unchanged.
+
+## Chaos Dungeon skull saves (0.2.41)
+
+The original boss-skull common event294 and the dedicated final-room skull
+explicitly invoke command352 while ordinary menu saving can remain disabled.
+showManualSaveMenu incorrectly applied saveDisabled to both entry paths. Gate
+that flag only for ordinary menu requests; an authored event save retains its
+existing interpreter-owned async slot/overwrite/write/retry/cancel flow. Never
+temporarily enable saving in GameState or serialize a changed restriction.
+Keep co-op phantom/world ownership, battle-event exclusion, departed-map guards,
+normal overwrite confirmation and transport failures intact.
+
+A read-only installed-data trace found the shared path in9 boss-room maps plus
+the final-room direct352 event (10 skulls). No original event data or saves are
+changed by this repair. Synthetic regressions reproduce3 failures before the
+fix: event Save under command134's restriction, retry with saving disabled, and
+the merged skull Save/skip/leave choices. Four added cases cover permitted event
+saving with its restriction preserved, denied ordinary menu saving, phantom
+ownership and a disconnected world. Focused save/menu coverage passes44 tests.
+
+Local gates:1,076 JavaScript tests pass, ESLint, production build, Ruff,
+8 packaging tests and7 Python protocol tests. Original command352 was verified
+to guard only against battle context before opening Scene_Save; save_disabled
+is not its gate. No player save was modified or written during these tests.
