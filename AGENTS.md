@@ -2937,3 +2937,8 @@ skills. Desktop/compact/VR projection controls and native Queue hints were check
 field dispatch is covered by tests, not advanced by that capture harness. Private
 controls/captures and original records are excluded from releases. No actual save
 or achievement writes, and no physical-headset playtest is claimed.
+
+Current source comparison: runtime b3560c989ed76ea59bc71d0900c985c4348910e6 (0.2.49),
+48 originals retained, 15 unchanged after import moves, 33 modified, 50 new and
+0 missing; 4,757 added/982 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
