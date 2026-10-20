@@ -1,4 +1,18 @@
-BLACK SOULS II VR 0.2.44
+BLACK SOULS II VR 0.2.45
+
+Use arts from owned weapons
+- R Skills includes arts from weapons, offhand guns and shields in your bag. See the source
+  weapon's original icon/name and the costs for the selected action.
+- Use a compatible source weapon for that action, then resume your usual gear.
+  Repeats and projectiles retain its weapon stats and effects; normal equipment,
+  cost, target, recovery and cooldown requirements still apply.
+- Borrowed-only arts are used directly from R. Equip their source weapon before
+  assigning to a quick slot; learned/currently granted skills keep normal Q access.
+- Main profile stats show current equipment; the selected action lists its weapon
+  and costs separately. Search also finds source weapon names.
+- Compatible equipped gear is preferred, with the highest owned +N when swapping
+  within a weapon family. Break still prepares the next real hit for three seconds;
+  disarming cancels its preparation.
 
 Finding and using skills
 - Browse Favorites, All, Weapon Arts, Attack, Healing, Buffs and Debuffs.

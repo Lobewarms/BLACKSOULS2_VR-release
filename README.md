@@ -19,7 +19,7 @@ A desktop shortcut is optional during setup.
 
 ## Gameplay screenshots
 
-Desktop gameplay captures from v0.2.33 and an isolated v0.2.44 Skills preview,
+Desktop gameplay captures from v0.2.33 and an isolated v0.2.45 Skills preview,
 with an initialized character and player portrait. Stats and appearance depend
 on your save.
 
@@ -55,10 +55,15 @@ Pin favorites with **F**, change categories with **← / →**, or press **/** t
 Click or press **Enter** to use a skill directly; **Q** opens quick-slot assignment.
 Costs, cooldowns and unavailable-skill reasons update while browsing.
 
-This isolated v0.2.44 preview uses a copied character and original game artwork;
+**Weapon Arts** includes skills from compatible weapons, pistols and shields in
+your bag. R switches to the item shown for that action, then returns to your
+equipped gear. Costs and delayed hits use that item's stats and effects. To put
+a skill borrowed only from bag equipment in a quick slot, equip its source first.
+
+This isolated v0.2.45 preview uses a copied character and original game artwork;
 it does not write game saves or achievements.
 
-![R Skills favorites with category tabs, search, original icons, descriptions and the live character profile](docs/screenshots/skills-browser-0.2.44-favorites.png)
+![R Weapon Arts showing Drake Sword's Dragon Shockwave, its source item, costs and normal character profile](docs/screenshots/weapon-skills-0.2.45-owned-arts.png)
 
 ## Gameplay video
 

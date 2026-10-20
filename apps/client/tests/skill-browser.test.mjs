@@ -174,6 +174,73 @@ test('selected installed descriptions get two visible lines while full text rema
   assert.equal(e.grid.items[0].desc, e.skills[0].description);
 });
 
+function borrowedArt(e) {
+  const art = skill(8, { name: 'Owned arc', scope: 2 }), weapon = { id: 2, name: 'Silver crescent', icon_index: 201,
+    features: [{ code: 43, data_id: art.id }] };
+  $data.skills[art.id] = art; $data.weapons = [null, null, weapon];
+  G.state.party.weapons = new Map([[weapon.id, 1]]);
+  G.combat.menuSkills = actor => [...actor.allSkills(), art, art];
+  G.combat.menuSkillUseStatus = selected => ({ ok: true, skill: selected, reason: '', costs: { hp: 0, mp: 2, tp: 4 },
+    weapon: selected.id === art.id ? weapon : null, requiresSwap: selected.id === art.id });
+  e.browser.rebuild(true); return { art, weapon };
+}
+
+test('owned menu arts deduplicate by stable skill ID and preview action costs without changing learned skills or settings', t => {
+  const e = environment(t), { art, weapon } = borrowedArt(e);
+  const row = e.grid.items.find(item => item.id === art.id);
+  assert.equal(e.grid.items.filter(item => item.id === art.id).length, 1);
+  assert.deepEqual(row.weapon, { id: weapon.id, name: weapon.name, icon: weapon.icon_index });
+  assert.equal(row.cost, 'MP 2 · TP 4'); assert.equal(row.borrowed, true); assert.equal(row.requiresSwap, true);
+  assert.ok(!e.actor.allSkills().includes(art)); assert.equal(e.saves, 0);
+  e.browser.setTab('weapon'); assert.ok(e.grid.items.some(item => item.id === art.id));
+  e.browser.setQuery(weapon.name); assert.deepEqual(e.grid.items.map(item => item.id), [art.id]);
+  e.browser.toggleFavorite(); assert.deepEqual(G.settings.skillBrowser[1].favorites, [art.id]);
+});
+
+test('weapon-name search covers all owned granting sources while excluding storage and other characters', t => {
+  const e = environment(t), { art, weapon } = borrowedArt(e);
+  for (const [id, name] of [[3, 'Azure alternate'], [4, 'Stored source'], [5, 'Other hero source']]) {
+    $data.weapons[id] = { ...weapon, id, name };
+  }
+  G.state.party.weapons.set(3, 1); G.state.party.weapons.set(5, 0);
+  G.state.party.kept = { weapon: new Map([[4, 1]]) };
+  G.state.party.members = () => [e.actor, { weapons: () => [$data.weapons[5]] }];
+  e.browser.setQuery('Azure'); assert.deepEqual(e.grid.items.map(item => item.id), [art.id]);
+  e.browser.setQuery('Stored'); assert.deepEqual(e.grid.items, []);
+  e.browser.setQuery('Other hero'); assert.deepEqual(e.grid.items, []);
+  $data.armors = [null, null, { ...weapon, name: 'Native shield source', etype_id: 1 }, { ...weapon, id: 3, name: 'Helmet source', etype_id: 2 }];
+  G.state.party.armors = new Map([[2, 1], [3, 1]]);
+  e.browser.setQuery('Native shield'); assert.deepEqual(e.grid.items.map(item => item.id), [art.id], 'weapon and offhand IDs do not collide');
+  e.browser.setQuery('Helmet'); assert.deepEqual(e.grid.items, []);
+  assert.equal(G.state.party.weapons.get(2), 1);
+});
+
+test('borrowed-only Q and pointer assignment explain the limitation without creating an unusable slot', t => {
+  const e = environment(t), { art } = borrowedArt(e);
+  e.browser.setQuery('Owned arc');
+  assert.ok(e.texts.includes('Skills menu only'));
+  e.input({ key: 'KeyQ' }); e.browser.handleInput(null);
+  assert.deepEqual(e.assignments, []); assert.match(e.toasts.at(-1), /Equip this item to assign/);
+  G.vr = true; e.browser.draw(); e.hit(500, e.grid.panel.canvas.height - 28);
+  e.input({ confirm: true }); e.browser.handleInput({}); assert.deepEqual(e.assignments, []); assert.deepEqual(e.casts, []);
+  e.skills.push(art); e.browser.rebuild(true); e.browser.draw();
+  assert.equal(e.grid.items[0].requiresSwap, true, 'known skills can still need an action weapon');
+  assert.equal(e.grid.items[0].borrowed, false);
+  e.input({ key: 'KeyQ' }); G.vr = false; e.browser.handleInput(null);
+  assert.deepEqual(e.assignments[0].entry, { kind: 'skill', id: art.id });
+});
+
+test('a removed source cannot cast from a stale row and its favorite survives loss and reacquisition', t => {
+  const e = environment(t), { art } = borrowedArt(e);
+  e.browser.setQuery('Owned arc'); e.browser.toggleFavorite();
+  G.state.party.weapons.delete(2);
+  G.combat.menuSkills = actor => actor.allSkills();
+  G.combat.menuSkillUseStatus = selected => ({ ok: selected.id !== art.id, skill: selected, reason: 'Weapon no longer owned' });
+  assert.equal(e.browser.useSelected(), false); assert.deepEqual(e.casts, []); assert.equal(e.grid.items.length, 0);
+  assert.deepEqual(G.settings.skillBrowser[1].favorites, [art.id]);
+  borrowedArt(e); assert.equal(e.grid.items[0].id, art.id); assert.equal(e.grid.items[0].favorite, true);
+});
+
 for (const reason of ['transfer', 'death', 'state', 'leader', 'menu']) test(`browser ${reason} cleanup keeps pending search/navigation from changing another game`, t => {
   const e = environment(t);
   if (reason === 'transfer') G.map.transferring = true;

@@ -60,13 +60,17 @@ export function skillProfileModel(actor, combat, skill, availability) {
     if (inverted && disabled < 100) warnings.push({ name: tr(`${label} 회복 반전 {p}`, { p: percent((1 - disabled / 100) * inverted / 100) }), icon: 0 });
   }
   if (Number.isFinite(actor.rec) && actor.rec !== 1) warnings.push({ name: tr('받는 회복 {p}', { p: percent(actor.rec) }), icon: 0 });
-  const status = skill && (availability || combat?.skillUseStatus?.(skill)), effective = status?.skill || skill;
-  const costs = effective ? [['HP', actor.skillHpCost?.(effective) || 0], ['MP', actor.skillMpCost?.(effective) || 0], ['TP', effective.tp_cost || 0]]
+  const status = skill && (availability || (combat?.menuSkillUseStatus ? combat.menuSkillUseStatus(skill) : combat?.skillUseStatus?.(skill))), effective = status?.skill || skill;
+  const costs = effective ? [['HP', status?.costs?.hp ?? actor.skillHpCost?.(effective) ?? 0],
+    ['MP', status?.costs?.mp ?? actor.skillMpCost?.(effective) ?? 0], ['TP', status?.costs?.tp ?? effective.tp_cost ?? 0]]
     .filter(([, value]) => value > 0).map(([label, value]) => `${label} ${value}`).join(' · ') || tr('소모 없음') : '';
   const cooldown = effective && combat?.skillCooling?.(effective);
   return { name: actor.name || tr('플레이어'), level: actor.level ?? 0, className: $data.classes?.[actor.classId]?.name || '',
     faceName: actor.faceName || '', faceIndex: actor.faceIndex || 0, params, resources, effects, warnings,
     skillName: skill?.name || '', skillDescription: skill?.description || '', costs,
+    actionWeapon: status?.weapon ? { name: status.weapon.name, icon: status.weapon.icon_index || 0 } : null,
+    requiresSwap: !!status?.requiresSwap,
+    borrowed: !!skill && !!actor.allSkills && !actor.allSkills().some(known => known.id === skill.id),
     reason: status?.reason || (cooldown > 0 ? tr('재사용 대기 {s}초', { s: cooldown.toFixed(1) }) : skill ? tr('사용 가능') : '') };
 }
 
@@ -184,13 +188,27 @@ export class SkillProfile {
   }
   lines(text, room, size = 28) {
     const ctx = this.panel.ctx; ctx.font = `${size}px ${this.font}`;
-    const lines = []; let line = '';
-    for (const char of this.clean(text)) {
-      if (char === '\n' || line && ctx.measureText(line + char).width > room) { lines.push(line); line = char === '\n' ? '' : char; }
-      else line += char;
+    const lines = [];
+    for (const paragraph of this.clean(text).replace(/\r\n?/g, '\n').split('\n')) {
+      let line = '';
+      for (const word of paragraph.split(/\s+/u).filter(Boolean)) {
+        const combined = line ? `${line} ${word}` : word;
+        if (ctx.measureText(combined).width <= room) { line = combined; continue; }
+        if (ctx.measureText(word).width <= room) {
+          if (line) lines.push(line);
+          line = word; continue;
+        }
+        // CJK text and long unbroken identifiers still need character fallback.
+        // Ordinary words that fit by themselves always stay together above.
+        if (line) { lines.push(line); line = ''; }
+        for (const char of word) {
+          if (line && ctx.measureText(line + char).width > room) { lines.push(line); line = ''; }
+          line += char;
+        }
+      }
+      lines.push(line);
     }
-    if (line) lines.push(line);
-    return lines.length ? lines : [''];
+    return lines;
   }
   paint(model) {
     const p = this.panel, { ctx, canvas } = p, W = canvas.width, H = canvas.height;
@@ -229,6 +247,16 @@ export class SkillProfile {
         write(String(r.value), x + 280, y, fit(String(r.value), 96, 28), 0, 'right');
       });
       write(tr('전체 활성 효과 {n}', { n: model.effects.length }), 24, 524, 30, 16);
+    }
+    if (model.actionWeapon) {
+      this.lines(tr(model.requiresSwap ? '자동 교체: {name}' : '사용 장비: {name}', { name: model.actionWeapon.name }), 544)
+        .forEach((text, i) => rows.push({ text, icon: i === 0 ? model.actionWeapon.icon : 0, color: 16 }));
+      const labels = [];
+      if (model.requiresSwap) labels.push('이 기술에만 장비를 바꾸고 원래 장비로 돌아옵니다');
+      if (model.borrowed) labels.push('자동 교체는 스킬 메뉴에서만 됩니다. 퀵슬롯에 등록하려면 먼저 이 장비를 장착하세요');
+      for (const label of labels) {
+        this.lines(tr(label), 544, 26).forEach(text => rows.push({ text, icon: 0, color: 16 }));
+      }
     }
     for (const effect of [...model.warnings, ...model.effects]) {
       this.lines(effect.name, 544).forEach((text, i) => rows.push({ text, icon: i === 0 ? effect.icon : 0, color: model.warnings.includes(effect) ? 18 : 0 }));

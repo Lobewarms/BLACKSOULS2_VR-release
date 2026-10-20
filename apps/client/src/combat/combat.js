@@ -24,6 +24,8 @@ import { WeaponFx, ELEMENT_FX } from './weaponfx.js';
 import { desktopRest, desktopSwing, desktopModel, desktopShield, desktopShieldGuardPoint, desktopEquipmentHidden } from './desktop-weapon.js';
 import { BonusActions } from './bonus-actions.js';
 import { usableRepeats, randomTargetCount } from './usable-counts.js';
+import { withActorEquipment } from '../game/actor-equipment.js';
+import { menuSkills, menuWeaponCandidates } from './menu-weapon-skills.js';
 import { battlerEffects, effectsKey, fitLabel } from '../ui/battler-status.js';
 import { openFights } from '../world/maphints.js';
 import { personalPage } from '../network/coopworld.js';
@@ -794,9 +796,11 @@ export class CombatSystem {
     this.playerRecoveryUntil = G.time + Math.max(active, recovery);
     this.playerActivePaused = pauseRecovery;
     this.playerRecoveryPaused = pauseRecovery;
-    return { ticket, eligible };
+    return { ticket, eligible, menuWeaponContext: this._menuWeaponContext || null };
   }
   completePlayerAction(action) {
+    if (action?.menuWeaponContext && this._menuWeaponContext !== action.menuWeaponContext)
+      return this.withMenuWeapon(action.menuWeaponContext, () => this.completePlayerAction(action));
     if (this.bonusInvalid() || !this.bonusFighting()) { this.clearBonusActions(); return; }
     this.bonusCombatActive = true;
     if (action?.ticket) this.bonusManager().complete(action.ticket, this.bonusContext(), { eligible: action.eligible });
@@ -830,6 +834,7 @@ export class CombatSystem {
   // ---- lifecycle -------------------------------------------------------------
   // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
   reset({ keepState = false, carry = false } = {}) {
+    this.menuWeaponVisual = null; this._menuWeaponContext = null;
     for (const battle of this.battles || []) this.clearTroopBreaks(battle);
     this.clearBonusActions();
     this.playerActiveUntil = this.playerRecoveryUntil = 0; this.vrStrokeAction = null;
@@ -1603,7 +1608,15 @@ export class CombatSystem {
 
   // ---- player equipment visuals ------------------------------------------------------
   // what each hand holds: the weapon, and the shield-slot item (a shield, or one of the guns that sit in that slot)
-  heldSpecs() {
+  heldSpecs(actionView = true) {
+    const view = this.menuWeaponVisual;
+    if (actionView && view) {
+      if (this.menuWeaponValid(view.context) && (G.time < view.until ||
+          this.breakArm?.menuWeaponContext === view.context && this.breakArm.until > G.time)) {
+        return withActorEquipment(view.context.actor, view.context.equips, () => this.heldSpecs(false));
+      }
+      this.menuWeaponVisual = null;
+    }
     const leader = G.state.party.leader();
     const w = leader?.weapons()[0] || null;
     const off = leader?.armors().find(a => a && a.etype_id === 1) || null;
@@ -1625,8 +1638,7 @@ export class CombatSystem {
     this.equipKey = key;
     this.swing = null; this.deskCharge = null;
     this.wtype = wtype;
-    if (this.weapon) this.weapon.parent?.remove(this.weapon);
-    if (this.shield) this.shield.parent?.remove(this.shield);
+    this.retireHeldEquipment();
     const ctrl = G.input.controllers;
     const vr = G.vr && ctrl.right;
     // the held models are built from the equipped items' own icons (fallback: simple shapes)
@@ -1704,6 +1716,22 @@ export class CombatSystem {
     this.hasPrev = false;
     this.showArms();
   }
+  retireHeldEquipment() {
+    // Held models and their lasers are built per equip. Materials can be used
+    // by several meshes, so retire each resource once; their textures and the
+    // controller/hand models belong to other owners and remain alive.
+    const geometry = new Set(), materials = new Set();
+    for (const group of new Set([this.weapon, this.shield])) {
+      if (!group) continue;
+      group.parent?.remove(group);
+      group.traverse(object => {
+        if (object.geometry) geometry.add(object.geometry);
+        for (const material of [object.material].flat()) if (material) materials.add(material);
+      });
+    }
+    for (const resource of geometry) resource.dispose();
+    for (const resource of materials) resource.dispose();
+  }
   // the weapon / shield in the hands - unless they are put away (무장해제), or the hand holds something else.
   // (PC: a shield only comes into view while the guard is up - updateDeskShield; held low all the time it hid the
   // status window and part of the view)
@@ -1732,6 +1760,7 @@ export class CombatSystem {
   toggleDisarm(on = !this.disarmed) {
     if (on === this.disarmed) return;
     this.disarmed = on;
+    if (on) this.menuWeaponVisual = null;
     // what the hands were doing with them ends (a weapon art is paid only when it lands: nothing is lost)
     this.hasPrev = false; this.charge = null; this.deskCharge = null; this.breakArm = null;
     if (this.swing) { this.swing = null; if (!G.vr) desktopRest(this.weapon, 'right', !!this.shotKind, G.three.camera); }
@@ -1947,7 +1976,16 @@ export class CombatSystem {
   }
   // Friendly scopes share the same effect path, whether cast by the leader or
   // a companion. An explicit recipient is useful for a companion's chosen ally.
-  applyUsableToActor(obj, from, { target = null, user = null, global = true, repeats = true, battle = null, opposed = false } = {}) {
+  applyUsableToActor(obj, from, { target = null, user = null, global = true, repeats = true, battle = null, opposed = false, menuUser = false } = {}) {
+    const context = this._menuWeaponContext;
+    // When the caster also receives an effect (including reflection), its
+    // outgoing numbers use the action weapon; the real recipient keeps normal
+    // equipment, immunities and maxima. Resource/state writes still reach it.
+    if (context && !menuUser && (!user || user === context.actor)) {
+      const actionUser = new Proxy(context.actor, { set: (actor, key, value) => Reflect.set(actor, key, value, actor) });
+      return withActorEquipment(context.actor, null, () => withActorEquipment(actionUser, context.equips, () =>
+        this.applyUsableToActor(obj, from, { target, user: actionUser, global, repeats, battle, opposed, menuUser: true })));
+    }
     const leader = G.state.party.leader();
     user ||= leader;
     if (!obj || !user) return false;
@@ -2177,6 +2215,55 @@ export class CombatSystem {
   }
   // The skill menu and quick slots must agree before any cost or preparation.
   // State-selected stages need their own requirements as well as the root's.
+  menuSkills(actor = G.state?.party?.leader()) { return menuSkills(actor, G.state?.party); }
+  menuWeaponValid(context) {
+    return !!context && context.gen === this.gen && context.state === G.state && context.map === G.map
+      && context.mapId === G.map?.mapId && !G.map?.transferring && G.state?.party?.leader() === context.actor
+      && !this.playerDead && !this.spectating && (context.actor.hp > 0 || context.actor.stateResist(1));
+  }
+  withMenuWeapon(context, run) {
+    if (!context) return run();
+    if (!this.menuWeaponValid(context)) return false;
+    const previous = this._menuWeaponContext;
+    this._menuWeaponContext = context;
+    try { return withActorEquipment(context.actor, context.equips, run); }
+    finally {
+      this._menuWeaponContext = previous;
+      // Resource gains belong to the real actor and cannot leave a borrowed
+      // weapon's higher resource maximum behind after the action.
+      withActorEquipment(context.actor, null, () => {
+        context.actor.hp = Math.min(context.actor.hp, context.actor.mhp);
+        context.actor.mp = Math.min(context.actor.mp, context.actor.mmp);
+      });
+    }
+  }
+  menuWeaponLater(context, ms, run) { this.later(ms, () => this.withMenuWeapon(context, run)); }
+  menuSkillPlan(skill) {
+    const actor = G.state?.party?.leader(), source = $data.skills[skill?.id];
+    const base = this.skillUseStatus(skill);
+    const decorate = (status, weapon = null, kind = null, requiresSwap = false) => ({ ...status, weapon, weaponKind: kind, requiresSwap,
+      costs: actor && status.skill ? { hp: actor.skillHpCost(status.skill), mp: actor.skillMpCost(status.skill), tp: status.skill.tp_cost || 0 }
+        : { hp: 0, mp: 0, tp: 0 } });
+    const context = (equips, weapon, kind, requiresSwap) => ({ actor, equips: equips.map(e => ({ ...e })), weapon, kind, requiresSwap,
+      gen: this.gen, state: G.state, map: G.map, mapId: G.map?.mapId });
+    if (base.ok) return { status: decorate(base), context: null };
+    if (!actor || !source) return { status: decorate(base), context: null };
+    let first;
+    for (const candidate of menuWeaponCandidates(actor, G.state.party, source, this.skillByState(actor, source))) {
+      const { weapon, kind, equips } = candidate;
+      const slot = kind === 'weapon' ? 0 : 1;
+      if (actor.equips[slot]?.kind === kind && actor.equips[slot]?.id === weapon.id) continue;
+      const status = equips ? withActorEquipment(actor, equips, () => decorate(this.skillUseStatus(source), weapon, kind, true))
+        : decorate({ ...base, reason: tr('이 장비로 자동 교체할 수 없습니다') }, weapon, kind, true);
+      if (this.playerDead || this.spectating || this.restrained || actor.hp <= 0 && !actor.stateResist(1)) {
+        status.ok = false; status.reason = base.reason;
+      }
+      first ||= status;
+      if (status.ok) return { status, context: context(equips, weapon, kind, true) };
+    }
+    return { status: first || decorate(base), context: null };
+  }
+  menuSkillUseStatus(skill) { return this.menuSkillPlan(skill).status; }
   skillUseStatus(skill) {
     const actor = G.state.party.leader(), source = $data.skills[skill?.id];
     const fail = (reason, selected = source || skill) => ({ ok: false, skill: selected, reason });
@@ -2274,8 +2361,13 @@ export class CombatSystem {
   // and execute immediately. Quick slots retain their manual preparation.
   useSkillFromMenu(skill) {
     if (!skill) return false;
-    const effective = this.skillByState(G.state.party.leader(), $data.skills[skill.id] || skill);
-    const used = this.useQuickEntry({ kind: 'skill', id: skill.id }, 'menu', { direct: true });
+    const plan = this.menuSkillPlan(skill), effective = plan.status.skill;
+    if (!plan.status.ok) { G.ui.toast(plan.status.reason, skill.icon_index); G.audio?.playSystemSe(3); return false; }
+    const used = this.withMenuWeapon(plan.context, () => this.useQuickEntry({ kind: 'skill', id: skill.id }, 'menu', { direct: true }));
+    if (used && plan.context?.requiresSwap) {
+      this.menuWeaponVisual = { context: plan.context, until: Math.max(G.time + DESK_ACT, this.playerActiveUntil || 0) };
+      if (this.breakArm?.skill === effective) this.breakArm.menuWeaponContext = plan.context;
+    }
     if (used && G.ui.menuOpen && (effective.occasion === 1 || effective.scope >= 1 && effective.scope <= 6)) G.ui.closeMenu();
     return used;
   }
@@ -2311,9 +2403,10 @@ export class CombatSystem {
   actorUserEffect(s, battle = null) {
     if (s.scope >= 1 && s.scope <= 6) this.itemGlobalEffects(s, battle);
     const self = this.userEffectSkill(s);
-    if (self) this.later(60, () => { if (!this.playerDead) this.applyUsableToActor(self, 'self', { battle }); });
+    if (self) this.menuWeaponLater(this._menuWeaponContext, 60, () => { if (!this.playerDead) this.applyUsableToActor(self, 'self', { battle }); });
   }
   performUsable(obj, kind, from = 'quick', { direct = false } = {}) {
+    const menuWeaponContext = this._menuWeaponContext;
     const scope = obj.scope || 0;
     const name = stripEscapes(obj.name);
     // things aimed at enemies go into the right hand first; the attack button lets them go
@@ -2333,13 +2426,13 @@ export class CombatSystem {
       const flies = kind === 'item' || obj.hit_type === 2;
       targets.forEach((e, i) => {
         if (flies) {
-          const launch = () => { if (e.alive) this.launchUsable(obj, kind, from, e); };
-          if (i) this.later(i * 140, launch); else launch();
+          const launch = () => { if (e.alive) this.launchUsable(obj, kind, from, e, menuWeaponContext); };
+          if (i) this.menuWeaponLater(menuWeaponContext, i * 140, launch); else launch();
         }
         else {
           for (let r = 0; r < usableRepeats(obj); r++) {
             const hit = () => { if (e.alive) this.applyUsableToEnemy(e, obj, from); };
-            if (r) this.later(r * 120, hit); else hit();
+            if (r) this.menuWeaponLater(menuWeaponContext, r * 120, hit); else hit();
           }
           const wp = e.worldPos(new THREE.Vector3()); wp.y += e.h * 0.5;
           const anim = obj.animation_id < 0 ? G.state.party.leader()?.weapons()[0]?.animation_id || 0 : obj.animation_id;
@@ -2918,6 +3011,8 @@ export class CombatSystem {
   // a thrown pot that met no enemy: it breaks where it fell (its own animation there), and an enemy right beside
   // that spot still takes it
   landThrown(p) {
+    if (p.menuWeaponContext && this._menuWeaponContext !== p.menuWeaponContext)
+      return this.withMenuWeapon(p.menuWeaponContext, () => this.landThrown(p));
     const at = p.mesh.position.clone();
     at.y = Math.max(at.y, G.floorAt(at.x / T - 0.5, at.z / T - 0.5));
     let best = null, bd = THROWN_SPLASH;
@@ -2932,16 +3027,18 @@ export class CombatSystem {
     if (pt) this.strikePlayerWith(pt, p.usable);
     if (!best) return;
     const n = usableRepeats(p.usable);
-    for (let r = 0; r < n; r++) this.later(r * 120, () => { if (best.alive) this.applyUsableToEnemy(best, p.usable, at); });
+    for (let r = 0; r < n; r++) this.menuWeaponLater(p.menuWeaponContext, r * 120, () => { if (best.alive) this.applyUsableToEnemy(best, p.usable, at); });
   }
   // an area spell / thrown item bursting at a spot: everything within the radius takes it
-  burstUsable(obj, at, radius) {
+  burstUsable(obj, at, radius, menuWeaponContext = this._menuWeaponContext) {
+    if (menuWeaponContext && this._menuWeaponContext !== menuWeaponContext)
+      return this.withMenuWeapon(menuWeaponContext, () => this.burstUsable(obj, at, radius, menuWeaponContext));
     this.burstFx(this.skillColor(obj), obj.animation_id, at, radius);
     const n = usableRepeats(obj);
     for (const e of this.allTargets()) {
       const wp = e.worldPos(tmpB);
       if (Math.hypot(wp.x - at.x, wp.z - at.z) > radius + e.hr * T) continue;
-      for (let k = 0; k < n; k++) this.later(k * 120, () => this.applyUsableToEnemy(e, obj, at));
+      for (let k = 0; k < n; k++) this.menuWeaponLater(menuWeaponContext, k * 120, () => this.applyUsableToEnemy(e, obj, at));
     }
     // (PvP: the other players in it take it too)
     for (const t of G.coop?.pvpTargets?.() || []) if (Math.hypot(t.x - at.x, t.z - at.z) <= radius + t.r) this.strikePlayerWith(t, obj);
@@ -3018,9 +3115,9 @@ export class CombatSystem {
     const f = G.player.forwardVec();
     return head.addScaledVector(f, 0.45).add(new THREE.Vector3(f.z * 0.18, -0.25, -f.x * 0.18));
   }
-  launchUsable(obj, kind, from, e) {
+  launchUsable(obj, kind, from, e, menuWeaponContext = this._menuWeaponContext) {
     const to = e.worldPos(new THREE.Vector3()); to.y += e.h * 0.6;
-    const opts = { speed: kind === 'item' ? 11 : 19, owner: 'player', target: e, usable: obj, homing: 0 };
+    const opts = { speed: kind === 'item' ? 11 : 19, owner: 'player', target: e, usable: obj, homing: 0, menuWeaponContext };
     if (kind === 'item') opts.mesh = this.iconSprite(obj.icon_index);
     else opts.color = this.skillColor(obj);
     this.spawnProjectile(from, to.sub(from), opts);
@@ -3600,14 +3697,14 @@ export class CombatSystem {
   // break, 글라키의 묵시록 and its thorns, 사자선풍 or 잭 슈트룸 again half the time): that one comes by itself a moment
   // later, on the same enemy (else the nearest; all around for an "all" skill), or on me - as many hits as it has (풀
   // 버스트's 7); a shot from the gun in the right hand when there is one (거룩한 총검), else from the left
-  playerFollowUp(s, e, from, depth = 0) {
+  playerFollowUp(s, e, from, depth = 0, menuWeaponContext = this._menuWeaponContext) {
     const actor = G.state.party.leader();
     if (!s || !actor || depth > 8) return;
     for (const a of this.afterActions(s)) {
       if (a.p < Math.floor(Math.random() * 100)) continue;
       const next = a.id > 0 ? this.skillByState(actor, $data.skills[a.id]) : null;
       if (!next) continue;
-      this.later(320, () => {
+      this.menuWeaponLater(menuWeaponContext, 320, () => {
         if (this.playerDead || !actor.skillCostPayable(next) || actor.skillSealed(next.id) || !actor.skillTypeUsable(next) || this.skillCooling(next) > 0) return;
         let targets = [];
         if (next.scope >= 1 && next.scope <= 6) {
@@ -3623,7 +3720,7 @@ export class CombatSystem {
         for (const t of targets) {
           const wp = t.worldPos(new THREE.Vector3()); wp.y += t.h * 0.5;
           if (next.animation_id > 0) { G.screen.playAnimationOn(wp, next.animation_id, { rate: 3, height: t.h }); G.coop?.shareAnim?.(wp, next.animation_id, t.h); }
-          for (let r = 0; r < reps; r++) this.later(r * BURST_GAP * 1000, () => {
+          for (let r = 0; r < reps; r++) this.menuWeaponLater(menuWeaponContext, r * BURST_GAP * 1000, () => {
             if (!t.alive) return;
             this.applyUsableToEnemy(t, next, at);
             if (!gun) return;
@@ -3634,7 +3731,7 @@ export class CombatSystem {
         }
         if (!targets.length) this.applyUsableToActor(next, 'self');
         this.actorUserEffect(next, targets[0]?.battle || e?.battle);
-        this.playerFollowUp(next, targets[0] || e, from, depth + 1);
+        this.playerFollowUp(next, targets[0] || e, from, depth + 1, menuWeaponContext);
       });
       return;
     }
@@ -4105,6 +4202,7 @@ export class CombatSystem {
 
   // ---- death ------------------------------------------------------------------------------
   onPlayerDeath(killer) {
+    this.menuWeaponVisual = null; this.breakArm = null;
     G.player.endAir?.();
     if (this.playerDead) return;
     this.playerDead = true;
@@ -4122,6 +4220,7 @@ export class CombatSystem {
     if (!primary) this.onPartyDead();
   }
   onPartyDead() {
+    this.menuWeaponVisual = null; this.breakArm = null;
     if (this.deathHandled || G.coop?.phantom) return;          // (a co-op guest's fall: by the server's rules - coop.js)
     this.playerDead = true;
     this.deathHandled = true;
@@ -4149,7 +4248,7 @@ export class CombatSystem {
   // (owner 'peer': another co-op player's shot as this world shows it - peerShot; anim: what plays where it ends)
   spawnProjectile(from, dir, { speed = 7, color = 0x8844ff, owner = 'enemy', enemy = null, skill = null, power = 1, homing = 0.6, target = null, usable = null, mesh = null, certain = false, aoe = 0, dest = null, life = 4, breakSkill = null, cap = null,
     gravity = 0, track = null, landAt = 0, align = false, tumble = false, fine = false, aimAt = null, steer = 0, accel = 0, maxSpeed = speed, pierce = false, ghost = false, one = false, volley = null, anim = 0,
-    staff = 0 }) {
+    staff = 0, menuWeaponContext = null }) {
     if (!mesh) {
       mesh = new THREE.Mesh(new THREE.SphereGeometry(owner === 'enemy' ? 0.13 : 0.08, 12, 8),
         new THREE.MeshBasicMaterial({ color, toneMapped: false }));
@@ -4160,7 +4259,7 @@ export class CombatSystem {
     mesh.position.copy(from);
     this.root.add(mesh);
     const p = { mesh, vel: dir.clone().normalize().multiplyScalar(speed), owner, enemy, skill, power, life, homing, speed, target, usable, certain, aoe, dest, breakSkill, cap,
-      gravity, track, landAt, align, tumble, fine, aimAt, steer, accel, maxSpeed, pierce, ghost, one, volley, anim, color, staff };
+      gravity, track, landAt, align, tumble, fine, aimAt, steer, accel, maxSpeed, pierce, ghost, one, volley, anim, color, staff, menuWeaponContext };
     this.projectiles.push(p);
     if (owner === 'player') this.shareShot(p, from);
     if (aoe > 0 && dest && (owner === 'player' || owner === 'peer')) this.areaMark(dest, aoe, G.time + life, p);
@@ -6678,6 +6777,10 @@ export class CombatSystem {
   }
   // a projectile at its new spot: walls, the floor, and whoever it meets
   projectileStep(p, head) {
+    if (p.menuWeaponContext && this._menuWeaponContext !== p.menuWeaponContext) {
+      if (!this.menuWeaponValid(p.menuWeaponContext)) { p.life = 0; p.hit = true; return; }
+      return this.withMenuWeapon(p.menuWeaponContext, () => this.projectileStep(p, head));
+    }
     {
       const pos = p.mesh.position;
       // walls
@@ -6762,7 +6865,7 @@ export class CombatSystem {
             if (p.usable) {
               // (a round of a skill's shot is one hit of it, and the skill's animation comes once for all its rounds)
               const n = p.one ? 1 : usableRepeats(p.usable);
-              for (let r = 0; r < n; r++) this.later(r * 120, () => this.applyUsableToEnemy(e, p.usable, pos));
+              for (let r = 0; r < n; r++) this.menuWeaponLater(p.menuWeaponContext, r * 120, () => this.applyUsableToEnemy(e, p.usable, pos));
               if (p.usable.animation_id > 0 && !p.volley?.shown) G.screen.playAnimationOn(new THREE.Vector3(wp.x, wp.y + e.h * 0.5, wp.z), p.usable.animation_id, { rate: 3, height: e.h });
               if (p.volley) p.volley.shown = true;
             } else if (p.breakSkill && (this.breakCooldown || 0) <= G.time) this.breakOnHit(e, p.breakSkill, pos);
@@ -6780,7 +6883,7 @@ export class CombatSystem {
     this.projectiles = this.projectiles.filter(p => {
       if (p.life > 0) return true;
       if (p.staff && !p.burst) { p.burst = true; this.staffBurst(p); }
-      if (p.aoe && p.usable && !p.burst) { p.burst = true; this.burstUsable(p.usable, p.mesh.position.clone(), p.aoe); }
+      if (p.aoe && p.usable && !p.burst) { p.burst = true; this.burstUsable(p.usable, p.mesh.position.clone(), p.aoe, p.menuWeaponContext); }
       else if (p.gravity && p.usable && !p.hit && !p.aoe) this.landThrown(p);
       else if (p.owner === 'peer') this.peerShotEnds(p);
       // an enemy's shot that missed: its animation where it ended (a wall, the floor, out of range)
@@ -7500,6 +7603,9 @@ export class CombatSystem {
   breakArmed() {
     if ((this.breakCooldown || 0) > G.time || this.playerDead) return null;
     if (this.breakArm) {
+      if (this.breakArm.menuWeaponContext && !this.menuWeaponValid(this.breakArm.menuWeaponContext)) {
+        this.breakArm = null; this.menuWeaponVisual = null; return null;
+      }
       if (this.breakArm.until > G.time) return this.breakArm.skill;
       this.breakArm = null;
     }
@@ -7508,6 +7614,8 @@ export class CombatSystem {
   // a Break landing on e: the original command has no damage of its own (only the break, by the skill's
   // rate x the enemy's); Break skills with a blow (weapon / armor / karma break) hit with it too
   breakOnHit(e, skill, src) {
+    const context = this.breakArm?.skill === skill ? this.breakArm.menuWeaponContext : this._menuWeaponContext;
+    if (context && this._menuWeaponContext !== context) return this.withMenuWeapon(context, () => this.breakOnHit(e, skill, src));
     this.breakArm = null;
     this.breakCooldown = G.time + Math.max(0.9, this.coolSeconds(skill));
     this.stamina = Math.max(0, this.stamina - 0.2); this.staminaDelay = 0.8;
@@ -7783,7 +7891,7 @@ export class CombatSystem {
     const actor = G.state.party.leader();
     if (!actor) return false;
     const n = one ? 1 : usableRepeats(obj), mult = this.buffMult(), item = obj.__class === 'RPG::Item';
-    for (let r = 0; r < n; r++) this.later(r * 120, () => G.coop?.sendPvp(t.id, obj.id, mult, false, actor, item));
+    for (let r = 0; r < n; r++) this.menuWeaponLater(this._menuWeaponContext, r * 120, () => G.coop?.sendPvp(t.id, obj.id, mult, false, actor, item));
     if (obj.animation_id > 0) G.screen.playAnimationOn(new THREE.Vector3(t.x, t.y + 0.9, t.z), obj.animation_id, { rate: 3, height: t.h });
     G.input.haptic('left', 0.5, 50);
     return true;
@@ -7966,7 +8074,8 @@ export class CombatSystem {
     const ray = this.aimRay('right');
     const dir = ray ? ray.dir : new THREE.Vector3(0, 0, -1).applyQuaternion(G.three.camera.getWorldQuaternion(new THREE.Quaternion()));
     this.spawnProjectile(from, dir, { speed: bow ? 18 : 16, color: magic ? 0x6688ff : 0xffe0a0, owner: 'player', power: 0.9, homing: 0, breakSkill, one, usable: skill, volley,
-      staff: magic && !skill ? STAFF_BURST : 0, ...(bow ? { mesh: this.arrowMesh(), align: true } : {}) });
+      staff: magic && !skill ? STAFF_BURST : 0, menuWeaponContext: breakSkill ? this.breakArm?.menuWeaponContext : null,
+      ...(bow ? { mesh: this.arrowMesh(), align: true } : {}) });
     G.audio?.playSe(G.seAt(bow ? 'Bow1' : magic ? 'Magic1' : 'Gun1', 80, 100));
     G.input.haptic('right', 0.6, one ? 30 : 50);
   }

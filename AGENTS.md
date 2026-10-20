@@ -2674,3 +2674,57 @@ Current source comparison: runtime 2b522bb715af9e22ddab4aa3cc7bb1cbaf435e9c (0.2
 48 originals retained, 15 unchanged after import moves, 33 modified, 46 new and
 0 missing; 4,327 added/941 removed lines in modified originals after import
 normalization. Earlier screenshots and source labels retain their historical pins.
+
+## R actions using owned weapon arts (0.2.45)
+
+The user approved showing arts from owned unequipped weapons in R and using a
+compatible source for that action before resuming the usual loadout. Candidate
+sources are the party bag and current actor's equipment, not storage or another
+actor's equipped gear. Use native weapon skill grants and required weapon types;
+include main-hand weapons and offhand combat gear (guns/shields). Prefer the
+currently usable equipped source. When a swap is needed, use the highest owned
++N refinement within the same native family, otherwise a deterministic eligible
+source. Never substitute an unrelated family merely because its ID is larger.
+Respect equip permissions, fixed/sealed weapon slots and other-slot compatibility,
+including dual-wield/shield effects. Reject before payment when no valid source
+or target exists; keep native seals, HP/MP/TP costs, cooldowns and action recovery.
+
+Keep the real actor identity and equipment/inventory records unchanged. Use the
+action-scoped equipment overlay in game/actor-equipment.js with bounded cleanup;
+combat/menu-weapon-skills.js supplies the preview/action source context. Preserve that
+source's parameters and traits through repeats, projectiles and automatic follow-up
+callbacks, restoring the normal lookup after each scoped evaluation. Do not learn
+the borrowed skill, transfer inventory, serialize temporary gear or save it as the
+normal loadout. Preview must remain free of resource and state changes.
+
+Rows show the original source weapon icon/name, availability and source-aware
+skill costs; source names participate in search. The main profile retains the
+normal current-equipment resources/parameters, with the selected action's weapon
+and costs explained separately. Keep the Q distinction based on real allSkills:
+learned/currently granted skills remain normally assignable even when their R
+preview needs another weapon or use is blocked by costs/cooldown. Only an art
+absent from real allSkills and borrowed from an unequipped source is R-only;
+explain that equipping the source makes it available for normal assignment.
+Quick slots retain their existing equipped-weapon rules. Do not claim a held-model
+swap without implementing and verifying it. Keep synthetic regression fixtures,
+private original-data audits and player saves separate. No physical-headset
+playtest is claimed. Four-language player guides explain controls and sources.
+
+Native Break grants retain preparation followed by the next real hit, with the
+original three-second latch expiry. Retain the action source through that latch;
+consume it on the hit and release it on expiry or disarm. Do not turn preparation
+into an immediate hit or keep the borrowed source active after cancellation.
+
+Retire rebuilt held groups by disposing each owned geometry/material once;
+never dispose shared textures or controller hands. Source selection must not
+duplicate a weapon equipped in another slot without a real bag copy. Both the
+PC/VR source-to-normal graphics lifecycle and the dual-wield inventory case are
+covered by real runtime regressions.
+
+Local 0.2.45 gates: 1,194 JavaScript tests pass (30 new runtime and10 UI cases),
+npm lint/production build, Ruff,
+8 packaging and7 Python protocol tests. Desktop native-asset checks cover the
+Drake Sword+5/Dragon Shockwave source preview at1020x1004 and640x720. The public
+source screenshot is docs/screenshots/weapon-skills-0.2.45-owned-arts.png. No
+physical-headset playtest is claimed; original game files and player saves remain
+unchanged. Release/source-comparison updates remain a separate final step.

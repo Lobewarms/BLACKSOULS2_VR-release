@@ -26,6 +26,28 @@ export function skillCategories(skill, combat, actor) {
   return categories;
 }
 const normalized = text => String(text).normalize('NFKC').toLowerCase();
+// Provenance is only presentation metadata. Combat independently rechecks bag
+// ownership and equipment rules immediately before using a menu skill.
+function sourceEquipment(actor) {
+  const equipment = [];
+  for (const kind of ['weapon', 'armor']) {
+    const records = kind === 'weapon' ? $data.weapons : $data.armors;
+    const eligible = item => !!item && (kind === 'weapon' || item.etype_id === 1);
+    for (const item of kind === 'weapon' ? actor.weapons?.() || [] : actor.armors?.() || []) if (eligible(item)) equipment.push([kind, item]);
+    for (const [id, count] of G.state?.party?.[kind === 'weapon' ? 'weapons' : 'armors'] || []) {
+      if (Number.isFinite(count) && count > 0 && eligible(records?.[id])) equipment.push([kind, records[id]]);
+    }
+  }
+  const sources = new Map();
+  for (const item of new Map(equipment.map(([kind, item]) => [`${kind}:${item.id}`, item])).values()) {
+    for (const feature of item.features || []) if (feature.code === 43) {
+      const list = sources.get(feature.data_id) || [];
+      if (!list.includes(item)) list.push(item);
+      sources.set(feature.data_id, list);
+    }
+  }
+  return sources;
+}
 
 export class SkillBrowser {
   constructor({ grid, ui, font, windowBg, drawIcon, drawGameCursor, fitLabel, clean = String, assetRevision = () => 0 }) {
@@ -79,22 +101,34 @@ export class SkillBrowser {
   rows() {
     const s = this.session, query = normalized(s.prefs.query.trim());
     const favorites = new Set(s.prefs.favorites);
-    return [...new Map(s.actor.allSkills().map(skill => [skill.id, skill])).values()]
-      .filter(skill => (s.prefs.tab === 'favorites' ? favorites.has(skill.id) : skillCategories(skill, G.combat, s.actor).includes(s.prefs.tab))
-        && (!query || normalized(this.clean(`${skill.name}\n${skill.description || ''}`)).includes(query)))
-      .sort((a, b) => Number(favorites.has(b.id)) - Number(favorites.has(a.id)) || a.id - b.id)
+    const known = new Set(s.actor.allSkills().map(skill => skill.id));
+    const provenance = sourceEquipment(s.actor);
+    const skills = G.combat?.menuSkills?.(s.actor) || s.actor.allSkills();
+    return [...new Map(skills.filter(Boolean).map(skill => [skill.id, skill])).values()]
       .map(skill => {
-        const status = this.status(skill), effective = status?.skill || skill;
-        const cost = [['HP', s.actor.skillHpCost?.(effective) || 0], ['MP', s.actor.skillMpCost?.(effective) || 0], ['TP', effective.tp_cost || 0]]
+        const status = this.status(skill), sources = [...(provenance.get(skill.id) || [])];
+        if (status?.weapon && !sources.includes(status.weapon)) sources.push(status.weapon);
+        return { skill, status, sources };
+      })
+      .filter(({ skill, status, sources }) => (s.prefs.tab === 'favorites' ? favorites.has(skill.id)
+        : s.prefs.tab === 'weapon' && (status?.weapon || sources.length) || skillCategories(skill, G.combat, s.actor).includes(s.prefs.tab))
+        && (!query || normalized(this.clean(`${skill.name}\n${skill.description || ''}\n${sources.map(weapon => weapon.name).join('\n')}`)).includes(query)))
+      .sort((a, b) => Number(favorites.has(b.skill.id)) - Number(favorites.has(a.skill.id)) || a.skill.id - b.skill.id)
+      .map(({ skill, status }) => {
+        const effective = status?.skill || skill;
+        const cost = [['HP', status?.costs?.hp ?? s.actor.skillHpCost?.(effective) ?? 0],
+          ['MP', status?.costs?.mp ?? s.actor.skillMpCost?.(effective) ?? 0], ['TP', status?.costs?.tp ?? effective.tp_cost ?? 0]]
           .filter(([, value]) => value > 0).map(([label, value]) => `${label} ${value}`).join(' · ') || tr('소모 없음');
         const cooldown = G.combat?.skillCooling?.(effective) || 0;
         const reason = status?.reason || (cooldown > 0 ? tr('재사용 대기 {s}초', { s: cooldown.toFixed(1) }) : tr('사용 가능'));
         return { id: skill.id, text: skill.name, desc: skill.description, icon: skill.icon_index, enabled: true,
-          available: !!status?.ok, favorite: favorites.has(skill.id), cost, reason };
+          available: !!status?.ok, favorite: favorites.has(skill.id), cost, reason,
+          weapon: status?.weapon ? { id: status.weapon.id, name: status.weapon.name, icon: status.weapon.icon_index || 0 } : null,
+          requiresSwap: !!status?.requiresSwap, borrowed: !known.has(skill.id) };
       });
   }
   status(skill) {
-    const combat = G.combat, status = combat?.skillUseStatus?.(skill);
+    const combat = G.combat, status = combat?.menuSkillUseStatus ? combat.menuSkillUseStatus(skill) : combat?.skillUseStatus?.(skill);
     if (!status?.ok) return status;
     const effective = status.skill || skill, eligible = !!combat.bonusSkillEligible?.(effective, 'skill');
     const special = effective.id === 12 || combat.isBreakSkill?.(effective);
@@ -151,6 +185,11 @@ export class SkillBrowser {
   }
   assignSelected() {
     const id = this.selectedId; if (!this.active || !id) return;
+    const status = this.status($data.skills?.[id]);
+    if (!this.session.actor.allSkills().some(skill => skill.id === id)) {
+      this.ui.toast(tr('자동 교체는 스킬 메뉴에서만 됩니다. 퀵슬롯에 등록하려면 먼저 이 장비를 장착하세요'), status?.weapon?.icon_index);
+      G.audio?.playSystemSe(3); return;
+    }
     this.rememberSelection(); this.suspend(); this.grid.close();
     this.ui.showQuickPicker({ kind: 'skill', id }, () => { if (this.ui.menuOpen) this.ui.showSkills(); });
   }
@@ -297,7 +336,11 @@ export class SkillBrowser {
       if (this.grid.top + index === this.grid.index) this.drawGameCursor(ctx, 20, y, 574, 102);
       this.drawIcon(ctx, row.icon || 0, 28, y + 10, 36);
       text(`${row.favorite ? '★ ' : ''}${row.text}`, 74, y + 24, compact ? 30 : 28, row.available ? '#fff' : '#bbb', 502);
-      text(row.cost, 74, y + 55, 24, '#e8d8a8', 502); text(row.reason, 28, y + 84, 23, row.available ? '#ccc' : '#e7a3a3', 548);
+      text(row.cost, 74, y + 55, 24, '#e8d8a8', 502);
+      if (row.weapon) {
+        if (row.weapon.icon) this.drawIcon(ctx, row.weapon.icon, 28, y + 73, 22);
+        text(`${row.weapon.name} · ${row.reason}`, row.weapon.icon ? 56 : 28, y + 84, 22, row.available ? '#ccc' : '#e7a3a3', row.weapon.icon ? 520 : 548);
+      } else text(row.reason, 28, y + 84, 23, row.available ? '#ccc' : '#e7a3a3', 548);
     });
     this.grid.scrollbar?.draw(this.grid.gridTop, this.grid.rows * 108 - 6, this.grid.top, this.grid.rows, this.grid.items.length);
     if (!this.grid.items.length) this.wrap(tr(this.session.prefs.tab === 'favorites' ? '즐겨찾기가 없습니다. F로 추가하거나 전체를 선택하세요' : '검색 결과 없음'), 592, 25)
@@ -309,7 +352,8 @@ export class SkillBrowser {
     const favorite = this.session.prefs.favorites.includes(this.selectedId);
     this.drawGameCursor(ctx, 20, canvas.height - 48, 280, 40); this.drawGameCursor(ctx, 340, canvas.height - 48, 280, 40);
     text(G.vr ? `${favorite ? '✓ ' : ''}${tr('즐겨찾기')}` : tr(favorite ? '즐겨찾기 제거 (F)' : '즐겨찾기 추가 (F)'), 32, canvas.height - 28, 23, '#e8d8a8', 256);
-    text(tr(G.vr ? '퀵슬롯에 등록' : '퀵슬롯 지정 (Q)'), 352, canvas.height - 28, 23, '#e8d8a8', 256);
+    const borrowed = this.grid.items[this.grid.index]?.borrowed;
+    text(tr(borrowed ? '스킬 메뉴에서만 사용' : G.vr ? '퀵슬롯에 등록' : '퀵슬롯 지정 (Q)'), 352, canvas.height - 28, 23, borrowed ? '#bbb' : '#e8d8a8', 256);
     ctx.restore(); p.commit();
   }
   wrap(text, room, size) {

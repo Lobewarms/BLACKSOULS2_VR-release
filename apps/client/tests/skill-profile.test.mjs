@@ -76,6 +76,19 @@ test('selected effective skill shows HP, MP and TP costs together plus its live 
   model = skillProfileModel(actor, combat, $data.skills[9]); assert.equal(model.reason, 'Ready in 1.3 s');
 });
 
+test('action-weapon cost preview leaves current profile stats and resources honest and preserves normal quick-slot knowledge', t => {
+  const actor = data(t), weapon = { id: 42, name: 'Owned source', icon_index: 123 };
+  actor.allSkills = () => [];
+  const combat = { stamina: 0.7, menuSkillUseStatus: skill => ({ ok: true, skill, reason: '', costs: { hp: 0, mp: 2, tp: 0 }, weapon, requiresSwap: true }) };
+  const before = [actor.hp, actor.mp, actor.atk, actor.mat];
+  let model = skillProfileModel(actor, combat, $data.skills[9]);
+  assert.equal(model.costs, 'MP 2'); assert.equal(model.params[2].value, 100); assert.equal(model.params[4].value, 90);
+  assert.deepEqual(model.actionWeapon, { name: 'Owned source', icon: 123 }); assert.equal(model.requiresSwap, true); assert.equal(model.borrowed, true);
+  assert.deepEqual([actor.hp, actor.mp, actor.atk, actor.mat], before);
+  actor.allSkills = () => [$data.skills[9]];
+  model = skillProfileModel(actor, combat, $data.skills[9]); assert.equal(model.borrowed, false); assert.equal(model.requiresSwap, true);
+});
+
 class Panel {
   constructor(width, height, widthM) {
     this.canvas = { width, height }; this.rows = []; this.images = []; this.commits = 0;
@@ -104,6 +117,19 @@ function environment(t, { load = () => Promise.resolve(null), width = 1280, heig
 }
 const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
+
+test('profile text wraps ordinary words intact, respects explicit newlines and bounds CJK and long unbroken text', t => {
+  const e = environment(t), sentence = 'Returns to your equipped gear after the action.', room = 156;
+  const lines = e.controller.lines(sentence, room);
+  assert.equal(lines.join(' '), sentence);
+  assert.ok(lines.includes('the action.'), 'the last ordinary word is never split into an orphaned suffix');
+  assert.ok(lines.every(line => e.controller.panel.ctx.measureText(line).width <= room));
+  assert.deepEqual(e.controller.lines('First line\n\nNext line\r\nLast', 544), ['First line', '', 'Next line', 'Last']);
+  for (const text of ['AReallyLongUnbrokenIdentifierThatMustStillFit', '長い日本語の説明文にも文字単位の折り返しが必要です']) {
+    const broken = e.controller.lines(text, room);
+    assert.equal(broken.join(''), text); assert.ok(broken.every(line => e.controller.panel.ctx.measureText(line).width <= room));
+  }
+});
 
 test('late portrait uses its actual original face cell and cannot return after close/reopen or a face-name change', async t => {
   const first = deferred(), second = deferred(), requests = [];
@@ -152,20 +178,40 @@ test('all long effect names and modifiers remain reachable without ellipsis and 
     assert.ok(text.every(row => row.y <= 146), 'body rows do not overlap the selected skill at188');
     rows.push(...text.map(row => row.text)); e.controller.changePage(1);
   }
-  const compact = rows.join(''); assert.ok(compact.includes(fullName)); assert.ok(compact.includes('Magic 10%'));
-  assert.ok(compact.includes('The complete installed description is also reachable.')); assert.ok(!compact.includes('…'));
-  assert.ok(compact.includes(skillDescription), 'selected skill description remains complete across profile pages');
+  const compact = rows.join('').replace(/\s+/g, ''), has = text => compact.includes(text.replace(/\s+/g, ''));
+  assert.ok(has(fullName)); assert.ok(has('Magic 10%'));
+  assert.ok(has('The complete installed description is also reachable.')); assert.ok(!compact.includes('…'));
+  assert.ok(has(skillDescription), 'selected skill description remains complete across profile pages');
 });
 
 test('profile warnings and interaction hints are localized in every supported language', () => {
   const url = new URL('../src/ui/i18n.js', import.meta.url).href;
-  const keys = ['HP 회복 반전 {p}', 'HP 회복 무효 {p}', 'HP 재생 {p}', '면역: {name}', '행동 불가', '전체 활성 효과 {n}', 'PageUp/PageDown · 효과 위에서 스크롤'];
+  const keys = ['HP 회복 반전 {p}', 'HP 회복 무효 {p}', 'HP 재생 {p}', '면역: {name}', '행동 불가', '전체 활성 효과 {n}', 'PageUp/PageDown · 효과 위에서 스크롤',
+    '사용 장비: {name}', '자동 교체: {name}', '이 기술에만 장비를 바꾸고 원래 장비로 돌아옵니다', '자동 교체는 스킬 메뉴에서만 됩니다. 퀵슬롯에 등록하려면 먼저 이 장비를 장착하세요', '스킬 메뉴에서만 사용'];
   for (const language of ['en', 'ko', 'ja', 'zh']) {
     const code = `globalThis.location={search:'?lang=${language}'};const {tr}=await import(${JSON.stringify(url)});console.log(JSON.stringify(${JSON.stringify(keys)}.map(key=>tr(key,{p:'100%',name:'Sleep',n:3}))));`;
     const result = spawnSync(process.execPath, ['--input-type=module', '-e', code], { encoding: 'utf8' }); assert.equal(result.status, 0, result.stderr);
     const labels = JSON.parse(result.stdout); assert.ok(labels.every(label => label.length && !/\{[pn]|\{name/.test(label)));
     if (language !== 'ko') assert.ok(labels.every(label => !/[가-힣]/.test(label)));
   }
+});
+
+test('long action-source names and auto-return guidance remain fully pageable with the original weapon icon', t => {
+  const e = environment(t, { width: 640, height: 500 }), icons = [];
+  e.actor.allSkills = () => [];
+  const sourceName = 'The full installed name of an owned source weapon must stay readable across every continued row';
+  G.combat.menuSkillUseStatus = skill => ({ ok: false, skill, reason: 'Sealed', costs: { hp: 0, mp: 2, tp: 0 },
+    weapon: { name: sourceName, icon_index: 241 }, requiresSwap: true });
+  e.controller.drawIcon = (_ctx, icon) => icons.push(icon); e.controller.update();
+  const rows = [];
+  for (let i = 0; i < e.controller.pageCount; i++) {
+    rows.push(...e.controller.panel.rows.filter(row => row.y >= 100 && row.y < 188).map(row => row.text)); e.controller.changePage(1);
+  }
+  const text = rows.join('').replace(/\s+/g, ''), has = value => text.includes(value.replace(/\s+/g, ''));
+  assert.ok(has(`Auto-switch: ${sourceName}`));
+  assert.ok(has('Returns to your gear afterward.'));
+  assert.ok(has('Equip this item to assign a quick slot.')); assert.ok(!text.includes('…'));
+  assert.ok(icons.includes(241)); assert.equal(e.actor.atk, 100); assert.equal(e.actor.mp, 100);
 });
 
 test('long selected skill names and combined resource/restriction text stay inside wide and compact footers', t => {

@@ -4,6 +4,7 @@ import { G } from '../core/globals.js';
 import { hashGet } from '../data/marshal.js';
 import { normalizeMoveSpeed } from './movement-speed.js';
 import { originalEnvironmentState } from './environment-state.js';
+import { actorEquipment } from './actor-equipment.js';
 
 // script 131 ステータス限界突破: the most a param can be - the script's own limits (actors 999,999 HP, 99,999 MP, 9,999
 // the rest; enemies 9,999,999 HP) plus every <限界変動:n,v> on the battler's actor / class / equipment / states / enemy
@@ -409,7 +410,7 @@ export class GameActor extends BattlerBase {
   get currentExp() { return this.exp[this.classId] || 0; }
   ownFeatureObjects() {
     const objs = [this.data, this.cls];
-    for (const e of this.equips) { const d = itemData(e.kind, e.id); if (d) objs.push(d); }
+    for (const e of actorEquipment(this)) { const d = itemData(e.kind, e.id); if (d) objs.push(d); }
     return objs.concat(super.featureObjects()).filter(Boolean);
   }
   // (with the features of the spirits sworn to it)
@@ -474,7 +475,7 @@ export class GameActor extends BattlerBase {
   }
   paramPlus(i) {
     let v = this.paramPlusArr[i] || 0;
-    for (const e of this.equips) { const d = itemData(e.kind, e.id); if (d?.params) v += d.params[i]; }
+    for (const e of actorEquipment(this)) { const d = itemData(e.kind, e.id); if (d?.params) v += d.params[i]; }
     return v;
   }
   param(i) {
@@ -507,8 +508,8 @@ export class GameActor extends BattlerBase {
   skillCostPayable(skill) { const hp = this.skillHpCost(skill); return this.mp >= this.skillMpCost(skill) && this.tp >= skill.tp_cost && (hp <= 0 || this.hp > hp); }
   paySkillCost(skill) { const hp = this.skillHpCost(skill); this.mp -= this.skillMpCost(skill); this.tp -= skill.tp_cost; if (hp > 0) this.hp = Math.max(1, this.hp - hp); }
   forgetSkill(id) { this.skills = this.skills.filter(s => s !== id); }
-  weapons() { return this.equips.filter(e => e.kind === 'weapon' && e.id).map(e => $data.weapons[e.id]); }
-  armors() { return this.equips.filter(e => e.kind === 'armor' && e.id).map(e => $data.armors[e.id]); }
+  weapons() { return actorEquipment(this).filter(e => e.kind === 'weapon' && e.id).map(e => $data.weapons[e.id]); }
+  armors() { return actorEquipment(this).filter(e => e.kind === 'armor' && e.id).map(e => $data.armors[e.id]); }
   padEquips() {
     const n = equipSlotCount(this.id);
     while (this.equips.length < n) this.equips.push({ kind: 'armor', id: 0 });

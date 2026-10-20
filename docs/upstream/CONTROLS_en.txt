@@ -1,4 +1,4 @@
-﻿BLACK SOULS II VR - Controls  (version 0.2.44)
+﻿BLACK SOULS II VR - Controls  (version 0.2.45)
 ================================================
 
 VR
@@ -65,8 +65,9 @@ FINDING AND FAVORITING SKILLS
 Use Favorites, All, Weapon Arts, Attack, Healing, Buffs or Debuffs to narrow the
 list. A skill may appear in more than one category. Favorites appear first.
 Select a skill and press F, or use Favorite, to mark/unmark it. Q or Quick-slot
-opens slot assignment. Unavailable skills remain inspectable, favoritable and
-assignable; their current costs and the reason they cannot be used stay visible.
+opens slot assignment for your usual learned or currently granted skills.
+Unavailable rows remain inspectable and favoritable, with current costs and
+the reason they cannot be used. Borrowed-only arts use R as described below.
 On PC, press / or click the search field, then type a name. Enter or Esc finishes
 typing and returns to the list; Clear resets the search. Your favorites, category, search
 and selected skill are remembered separately for each character. In VR, use the
@@ -74,6 +75,22 @@ visible category, Favorite and Quick-slot controls with the pointer or stick.
 Smaller windows show the full current category with previous/next arrows;
 Left/Right also changes category. Two lines of the original skill description
 are shown, with the complete longer text available on the profile pages.
+
+ARTS FROM WEAPONS IN YOUR BAG
+----------------------------
+R also lists arts from weapons, offhand guns and shields in your bag. The selected action
+shows its source weapon's original icon/name and the costs with that weapon.
+Using the art from R chooses a compatible owned weapon for that action, then
+your usual equipment resumes. Repeats and projectiles keep that action's weapon
+stats and effects. Equip permissions, seals, costs and cooldowns still apply.
+Break skills still prepare the next real hit; strike within three seconds.
+Disarming cancels that preparation. Compatible equipped gear is preferred;
+swapping within a weapon family uses the highest owned +N refinement.
+Main profile stats describe your current equipment. Action weapon and skill
+costs show what the selected skill will use. Source weapon names are searchable.
+Q works for learned or currently granted skills. An art borrowed only from an
+unequipped weapon is used directly from R; equip its source weapon before
+assigning it to a quick slot. Quick slots keep their usual equipped-weapon rules.
 
 YOUR PROFILE IN SKILLS
 ----------------------

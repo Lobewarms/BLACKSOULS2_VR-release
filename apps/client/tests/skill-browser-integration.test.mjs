@@ -6,6 +6,7 @@ import { $data } from '../src/data/data.js';
 import { Input } from '../src/core/input.js';
 import { GameState } from '../src/game/state.js';
 import { GameMap } from '../src/world/gamemap.js';
+import { tr } from '../src/ui/i18n.js';
 
 globalThis.location = { search: '?lang=en' };
 globalThis.addEventListener ||= () => {};
@@ -343,4 +344,49 @@ test('narrow desktop search hands off to actual VR rays without leaking confirma
   G.vr = false; e.input.transitionViewMode(false); e.ui.transitionViewMode(false); e.frame();
   assert.equal(e.ui.skillProfile.compact, true); assert.equal(field.style.display, 'none');
   assert.equal(e.actor.mp, 90, 'returning to desktop does not repeat the controller confirmation');
+});
+
+function ownedArt(e, kind = 'weapon') {
+  $data.skills[9] = { ...$data.skills[5], id: 9, name: 'Borrowed Tempest', description: 'Native borrowed art detail', mp_cost: 20,
+    required_wtype_id1: kind === 'weapon' ? 2 : 0, required_wtype_id2: 0 };
+  const item = { id: 2, name: kind === 'weapon' ? 'Silver source blade' : 'Silver source shield', icon_index: 201,
+    wtype_id: 2, atype_id: 1, etype_id: kind === 'weapon' ? 0 : 1, note: '',
+    params: [0, 0, 300, 0, 0, 0, 0, 0], features: [{ code: 43, data_id: 9, value: 1 }, { code: 23, data_id: 4, value: 0.5 }] };
+  $data.classes[1].features.push({ code: kind === 'weapon' ? 51 : 52, data_id: kind === 'weapon' ? 2 : 1, value: 1 });
+  (kind === 'weapon' ? $data.weapons : $data.armors)[2] = item;
+  (kind === 'weapon' ? e.state.party.weapons : e.state.party.armors).set(2, 1);
+  return item;
+}
+
+for (const kind of ['weapon', 'armor']) test(`real Skills browser previews an owned unequipped ${kind} art without changing normal gear or spending on no target`, t => {
+  const e = environment(t), source = ownedArt(e, kind), gear = structuredClone(e.actor.equips), stats = Array.from({ length: 8 }, (_, id) => e.actor.param(id));
+  e.key('KeyR'); e.ui.skillsBrowser.setQuery(source.name); e.frame();
+  assert.deepEqual(ids(e), [9]); assert.equal(e.ui.grid.items[0].cost, 'MP 10');
+  assert.equal(e.ui.grid.items[0].weapon.name, source.name); assert.equal(e.ui.grid.items[0].borrowed, true);
+  assert.equal(e.ui.grid.items[0].requiresSwap, true); assert.equal(e.ui.grid.items[0].available, true);
+  assert.deepEqual(e.actor.equips, gear); assert.deepEqual(Array.from({ length: 8 }, (_, id) => e.actor.param(id)), stats);
+  assert.ok(e.ui.skillProfile.panel.canvas.record.texts.some(row => row.text.includes('MP 10')));
+  assert.ok(e.ui.grid.panel.canvas.record.texts.some(row => row.text === tr('스킬 메뉴에서만 사용')));
+  const slots = structuredClone(e.state.quickSlots);
+  e.key('KeyQ'); assert.equal(e.ui.list.visible, false); assert.deepEqual(e.state.quickSlots, slots);
+  e.click(e.ui.grid.panel, 500, e.ui.grid.panel.canvas.height - 28);
+  assert.equal(e.ui.list.visible, false); assert.deepEqual(e.state.quickSlots, slots);
+  e.key('KeyF'); assert.deepEqual(prefs(e).favorites, [9]);
+  e.input.pointer.seen = false; e.key('Enter');
+  assert.equal(e.actor.mp, 100); assert.equal(e.combat.skillCooling($data.skills[9]), 0); assert.equal(e.ui.menuOpen, true);
+  assert.deepEqual(e.actor.equips, gear); assert.deepEqual(Array.from({ length: 8 }, (_, id) => e.actor.param(id)), stats);
+  const bag = kind === 'weapon' ? e.state.party.weapons : e.state.party.armors;
+  assert.equal(bag.get(2), 1); bag.delete(2); e.frame(); assert.deepEqual(ids(e), []);
+  assert.deepEqual(prefs(e).favorites, [9]); bag.set(2, 1); e.frame();
+  assert.deepEqual(ids(e), [9]); assert.equal(e.ui.grid.items[0].favorite, true);
+});
+
+test('a learned art that also needs an owned action weapon remains one skill and keeps ordinary quick-slot assignment', t => {
+  const e = environment(t); ownedArt(e); e.actor.learnSkill(9);
+  e.key('KeyR'); e.ui.skillsBrowser.setQuery('Borrowed Tempest'); e.frame();
+  assert.deepEqual(ids(e), [9]); assert.equal(e.ui.grid.items[0].requiresSwap, true); assert.equal(e.ui.grid.items[0].borrowed, false);
+  e.key('KeyQ'); assert.equal(e.ui.list.visible, true); assert.equal(e.ui.grid.visible, false);
+  e.input.pointer.seen = false; e.key('Enter');
+  assert.deepEqual(e.state.quickSlots[0], { kind: 'skill', id: 9 }); assert.equal(e.actor.mp, 100);
+  assert.equal(e.ui.skillsBrowser.active, true); assert.equal(e.ui.skillsBrowser.selectedId, 9);
 });

@@ -1,5 +1,16 @@
 # Actual upstream versus community version
 
+## Owned weapon arts preview (v0.2.45)
+
+[R Weapon Arts](weapon-skills-0.2.45-owned-arts.png) shows Dragon Shockwave from
+an owned Drake Sword+5 while the copied character keeps their normal equipment.
+The original portrait, skill/equipment icons, window skin and library scenery
+come from the selected installed game. The selected action shows its source,
+MP cost and automatic return explanation beside the normal character profile.
+This is an isolated in-memory UI preview, not a combat victory or an upstream
+comparison. No original records, player saves or achievements are written.
+No physical-headset playtest is claimed.
+
 ## Skills browser preview (v0.2.44)
 
 [Skills favorites and live profile](skills-browser-0.2.44-favorites.png) shows the
