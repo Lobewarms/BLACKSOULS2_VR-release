@@ -1,4 +1,11 @@
-BLACK SOULS II VR 0.2.45
+BLACK SOULS II VR 0.2.46
+
+Skill cooldowns during menus
+- Skill cooldowns and shared action recovery pause with the world, including
+  while R Skills is open. Return to gameplay to resume them.
+- Accepted action-consuming skills, including healing and buffs, return to the
+  game automatically. Reopening R freezes their remaining recovery too.
+  Pure out-of-combat utility can stay open. Native durations and costs still apply.
 
 Use arts from owned weapons
 - R Skills includes arts from weapons, offhand guns and shields in your bag. See the source

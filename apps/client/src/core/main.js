@@ -738,6 +738,9 @@ function frameBody(xrFrame) {
     if (m.transferring && !transferBusy) performTransfer();
     // the headset shows something else (SteamVR dashboard, desktop, system menu): the map and the fights wait
     const away = G.vr && (G.xrAway || viewMode.awaitingPose);
+    // Combat.update is skipped while tracking is away, but its absolute player
+    // deadlines must still follow the paused world rather than the UI clock.
+    if (away) G.combat.syncBonusClock(true);
     if (m.grid && view.mesh) {
       if (!away) acc += dt;
       let steps = 0;
@@ -776,6 +779,7 @@ function frameBody(xrFrame) {
       G.environment.update(dt, head);
       G.coop.update(dt, head);               // (last: a visit that ends here sends the player elsewhere at once)
     } else {
+      G.combat.syncBonusClock(true);
       G.screen.updateLogic();
       G.coop.update(dt, null);
     }

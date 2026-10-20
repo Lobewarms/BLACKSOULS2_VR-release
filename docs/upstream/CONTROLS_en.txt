@@ -1,4 +1,4 @@
-﻿BLACK SOULS II VR - Controls  (version 0.2.45)
+﻿BLACK SOULS II VR - Controls  (version 0.2.46)
 ================================================
 
 VR
@@ -59,6 +59,10 @@ support take effect normally. Dodge and manual Break retain their dedicated
 actions. Common-event skills return to the game to run their event.
 Costs, weapon requirements, seals and cooldowns still apply. Field-only utility
 skills cannot be used during combat. Quick-slot assignments stay as you set them.
+Skill cooldowns and shared action recovery pause with the world, including while
+R Skills is open. Accepted action-consuming skills, including healing and buffs,
+return to gameplay automatically so recovery can progress. Reopening R freezes
+the remaining time too. Pure out-of-combat utility can stay open.
 
 FINDING AND FAVORITING SKILLS
 ----------------------------

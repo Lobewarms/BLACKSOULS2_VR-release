@@ -748,6 +748,9 @@ export class CombatSystem {
     if (this.playerActivePaused !== false && this.playerActiveUntil > previous) this.playerActiveUntil += elapsed;
     if (this.playerRecoveryPaused !== false && this.playerRecoveryUntil > previous) this.playerRecoveryUntil += elapsed;
     if (this.deskActUntil > previous) this.deskActUntil += elapsed;
+    for (const id of Object.keys(this.skillCD || {})) if (this.skillCD[id] > previous) this.skillCD[id] += elapsed;
+    if (this.breakCooldown > previous) this.breakCooldown += elapsed;
+    if (this.breakArm?.until > previous) this.breakArm.until += elapsed;
   }
   bonusStatus() {
     const fighting = this.bonusFighting();
@@ -2207,9 +2210,22 @@ export class CombatSystem {
       }
     }
     const root = this._stageRoot.get(s?.id);
-    if (root) this.skillCD[root] = Math.max(this.skillCD[root] || 0, G.time + TURN_SECONDS);
+    if (root) this.setSkillCooldown(root, TURN_SECONDS, { extendOnly: true });
   }
-  skillCooling(skill) { return Math.max(0, (this.skillCD[skill.id] || 0) - G.time); }
+  syncSkillClock() { this.syncBonusClock(this.bonusPaused() || !!G.map?.transferring); }
+  setSkillCooldown(skill, seconds, { extendOnly = false } = {}) {
+    // Synchronize before creating a deadline, so elapsed paused time cannot be
+    // added to a cooldown that did not exist during that interval.
+    this.syncSkillClock();
+    const id = typeof skill === 'number' ? skill : skill.id;
+    this.skillCD ||= {};
+    const until = G.time + Math.max(0, seconds);
+    this.skillCD[id] = extendOnly ? Math.max(this.skillCD[id] || 0, until) : until;
+  }
+  skillCooling(skill) {
+    this.syncSkillClock();
+    return Math.max(0, (this.skillCD?.[skill.id] || 0) - G.time);
+  }
   isBreakSkill(obj) {
     return /브레이크|ブレイク|破防|\bbreak/i.test(obj.name || '') && (obj.effects || []).some(e => e.code === 21 && (e.data_id === 7 || e.data_id === 8));
   }
@@ -2352,13 +2368,13 @@ export class CombatSystem {
       return null;
     }
     this.actorPays(actor, s);
-    this.skillCD[s.id] = G.time + this.coolSeconds(s);
+    this.setSkillCooldown(s, this.coolSeconds(s));
     this.actorUserEffect(s, battle);
     return s;
   }
   // Menu skills use the real field action without needing a registered slot.
-  // Friendly skills stay in the menu; offensive skills acquire a valid target
-  // and execute immediately. Quick slots retain their manual preparation.
+  // Action-consuming skills return to gameplay so recovery advances there;
+  // other field utility can stay in the menu. Quick slots keep preparation.
   useSkillFromMenu(skill) {
     if (!skill) return false;
     const plan = this.menuSkillPlan(skill), effective = plan.status.skill;
@@ -2368,7 +2384,8 @@ export class CombatSystem {
       this.menuWeaponVisual = { context: plan.context, until: Math.max(G.time + DESK_ACT, this.playerActiveUntil || 0) };
       if (this.breakArm?.skill === effective) this.breakArm.menuWeaponContext = plan.context;
     }
-    if (used && G.ui.menuOpen && (effective.occasion === 1 || effective.scope >= 1 && effective.scope <= 6)) G.ui.closeMenu();
+    if (used && G.ui.menuOpen && (this.bonusSkillEligible(effective) || this.bonusFighting()
+        || effective.occasion === 1 || effective.scope >= 1 && effective.scope <= 6)) G.ui.closeMenu();
     return used;
   }
   isDrink(obj) {
@@ -2382,7 +2399,7 @@ export class CombatSystem {
     }
     else {
       this.actorPays(G.state.party.leader(), obj);
-      this.skillCD[obj.id] = G.time + this.coolSeconds(obj);
+      this.setSkillCooldown(obj, this.coolSeconds(obj));
       this.stageCool(obj);
       this.actorUserEffect(obj, battle);
     }
@@ -2457,10 +2474,10 @@ export class CombatSystem {
     }
     const eligible = this.bonusSkillEligible(obj, kind);
     // Combat utility obeys the same action lock even when it cannot roll/spend
-    // extras. Instant menu support uses the UI clock so the menu stays usable.
+    // extras. Accepted support returns to play so recovery uses gameplay time.
     const fighting = this.bonusFighting(), gated = kind === 'skill' && (eligible || fighting);
     const action = gated ? this.beginPlayerAction(eligible, { active: fighting ? DESK_ACT : 0,
-      recovery: fighting ? SKILL_RECOVERY : DESK_ACT, pauseRecovery: from !== 'menu' }) : null;
+      recovery: fighting ? SKILL_RECOVERY : DESK_ACT }) : null;
     if (gated && !action) return false;
     if (kind === 'skill') { this.payUsable(obj, kind); this.playerFollowUp(obj, null, null); }
     const used = this.applyUsableToActor(obj, from);
@@ -3714,7 +3731,7 @@ export class CombatSystem {
           if (!targets.length) return;
         }
         this.actorPays(actor, next);
-        this.skillCD[next.id] = G.time + this.coolSeconds(next);
+        this.setSkillCooldown(next, this.coolSeconds(next));
         const at = from || this.castOrigin();
         const gun = this.skillLook(next) === 'gun', reps = usableRepeats(next);
         for (const t of targets) {
@@ -8055,7 +8072,7 @@ export class CombatSystem {
     const action = this.beginPlayerAction(eligible, { active: DESK_ACT + tail, recovery: 0.6 + tail, targeted: true });
     if (!action) return false;
     this.actorPays(actor, s);
-    this.skillCD[s.id] = G.time + this.coolSeconds(s);
+    this.setSkillCooldown(s, this.coolSeconds(s));
     this.actorUserEffect(s);
     if (!G.vr) this.deskActUntil = action.ticket?.bonus ? G.time + DESK_ACT + tail
       : Math.max(this.deskActUntil ?? -Infinity, G.time + DESK_ACT + 0.6, G.time + DESK_ACT + tail);
@@ -8188,7 +8205,7 @@ export class CombatSystem {
   // script 141's cool-down shortened from an event ($game_temp.actor_loss_cool_time(n) - 토끼의 회중시계 5 turns,
   // 정신 통일 all of them, 리로드 one): n turns (COOL_TURN each) off the player's / the enemies'
   lossCoolTime(kind, n) {
-    if (kind === 'actor') { for (const k of Object.keys(this.skillCD)) this.skillCD[k] -= n * COOL_TURN; }
+    if (kind === 'actor') { this.syncSkillClock(); for (const k of Object.keys(this.skillCD)) this.skillCD[k] -= n * COOL_TURN; }
     else for (const e of this.enemies) for (const k of Object.keys(e.cool || {})) e.cool[k] -= n * COOL_TURN;
   }
   // the stealth (안 보이는 후추, 보이지 않는 몸): the hands and what they hold are half see-through while it lasts

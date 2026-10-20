@@ -173,31 +173,38 @@ test('readied spells consume charges only on valid paid release and retain origi
 test('direct menu support pays every cast, uses one bonus to bypass recovery and never rerolls a bonus cast', t => {
   const e = environment(t); G.ui.menuOpen = true;
   assert.equal(e.combat.useSkillFromMenu($data.skills[101]), true);
+  assert.equal(G.ui.menuOpen, false);
   assert.deepEqual([e.actor.hp, e.actor.mp], [420, 95]); assert.equal(e.combat.bonusStatus()?.count, 1);
   assert.equal(e.combat.useSkillFromMenu($data.skills[101]), false); assert.equal(e.actor.mp, 95);
-  e.advance(0.301, { paused: true });
+  e.advance(0.301);
+  G.ui.menuOpen = true;
   assert.equal(e.combat.useSkillFromMenu($data.skills[101]), true);
   assert.deepEqual([e.actor.hp, e.actor.mp], [440, 90]); assert.equal(e.combat.bonusStatus(), null); assert.equal(e.rolls, 1);
-  e.advance(0.301, { paused: true });
+  assert.equal(G.ui.menuOpen, false); e.advance(0.301);
+  G.ui.menuOpen = true;
   assert.equal(e.combat.useSkillFromMenu($data.skills[101]), false, 'the final extra support action retains its normal trailing recovery');
-  assert.equal(e.actor.mp, 90); e.advance(0.6, { paused: true });
+  assert.equal(e.actor.mp, 90); G.ui.menuOpen = false; e.advance(0.6); G.ui.menuOpen = true;
   assert.equal(e.combat.useSkillFromMenu($data.skills[101]), true); assert.equal(e.actor.mp, 85);
 });
 
-test('ordinary support can be used again after normal recovery while the same menu remains open', async t => {
+test('ordinary support returns to gameplay and requires active recovery before another menu cast', async t => {
   for (const source of ['none', 'failed roll']) await t.test(source, t => {
     const e = environment(t); G.ui.menuOpen = true;
     if (source === 'none') $data.actors[1].features = [];
     else e.combat.bonusManager().random = () => 1;
     assert.equal(e.combat.useSkillFromMenu($data.skills[101]), true);
+    assert.equal(G.ui.menuOpen, false);
     assert.deepEqual([e.actor.hp, e.actor.mp], [420, 95]); assert.equal(e.combat.bonusStatus(), null);
-    e.advance(0.2, { paused: true });
+    e.advance(0.2); G.ui.menuOpen = true;
     assert.equal(e.combat.useSkillFromMenu($data.skills[101]), false, 'the normal short recovery still prevents immediate repeats');
     assert.deepEqual([e.actor.hp, e.actor.mp], [420, 95]);
-    e.advance(0.11, { paused: true });
+    e.advance(30, { paused: true });
+    assert.equal(e.combat.useSkillFromMenu($data.skills[101]), false, 'reopening Skills cannot wait out recovery');
+    G.ui.menuOpen = false; e.advance(0.11); G.ui.menuOpen = true;
     assert.equal(e.combat.useSkillFromMenu($data.skills[101]), false, 'a normal combat skill keeps its full 0.9-second recovery');
-    e.advance(0.591, { paused: true });
+    G.ui.menuOpen = false; e.advance(0.591); G.ui.menuOpen = true;
     assert.equal(G.ui.menuOpen, true); assert.equal(e.combat.useSkillFromMenu($data.skills[101]), true);
+    assert.equal(G.ui.menuOpen, false);
     assert.deepEqual([e.actor.hp, e.actor.mp], [440, 90]); assert.equal(e.combat.bonusStatus(), null);
   });
 });

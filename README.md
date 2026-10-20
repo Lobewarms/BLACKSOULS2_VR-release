@@ -54,6 +54,9 @@ Press **R** to browse skills beside your stats and complete active effects.
 Pin favorites with **F**, change categories with **← / →**, or press **/** to search.
 Click or press **Enter** to use a skill directly; **Q** opens quick-slot assignment.
 Costs, cooldowns and unavailable-skill reasons update while browsing.
+Skill cooldowns and action recovery pause while R is open. Using an action,
+including healing or buffing, returns you to gameplay; reopening R pauses its
+remaining cooldown again. Field utility that uses no action can stay open.
 
 **Weapon Arts** includes skills from compatible weapons, pistols and shields in
 your bag. R switches to the item shown for that action, then returns to your

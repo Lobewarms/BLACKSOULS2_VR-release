@@ -2733,3 +2733,36 @@ Current source comparison: runtime a9a4a727e2a6ae911dc2abb5181823d8e31bdde1 (0.2
 48 originals retained, 15 unchanged after import moves, 33 modified, 48 new and
 0 missing; 4,465 added/963 removed lines in modified originals after import
 normalization. Earlier screenshots and source labels retain their historical pins.
+
+## Paused skill cooldown clock (0.2.46)
+
+The user reported that skill cooldowns elapsed while R Skills paused the world.
+Absolute G.time deadlines must account for paused gameplay consistently in both
+the displayed remaining time and action eligibility. Synchronize the cooldown
+clock before paused reads and before every fresh deadline write, including
+stage/root cooldowns and alternate cast paths. Shift existing deadlines only
+for their owned paused interval; never retroactively add the earlier pause to
+a deadline just created in the menu or apply the same elapsed interval twice.
+Keep native skill durations, HP/MP/TP costs and shared action/cooldown authority.
+
+The user's clarified scope includes shared action recovery. This supersedes the
+earlier menu-origin UI-clock exception: remove pauseRecovery:false for menu
+actions, and freeze native skill deadlines plus shared active/recovery/field
+timers while the world is paused. An accepted action-consuming support skill
+(healing, buffs and similar effects) returns to gameplay so recovery progresses;
+reopening R pauses the remaining recovery again. Pure out-of-combat utility may
+stay open. Rejected uses must leave resources, recovery and the menu untouched.
+Keep native per-skill duration, shared recovery and burst-tail rules intact.
+Use synthetic regressions for paused status reads, accepted support returning
+to gameplay, reopening R during recovery, rejected uses, fresh writes, resume
+boundaries and stage/shared deadlines. No original files or player saves are
+changed, and no physical-headset playtest is claimed.
+
+Local 0.2.46 gates: 1,205 JavaScript tests pass (11 new cooldown/real UI cases),
+ESLint, production build, Ruff, 8 packaging and 7 Python protocol tests. Tests
+cover actual PC R/VR menu paths, paused/resumed native and shared recovery,
+new deadlines during pauses, repeated reads, stage clocks, authored reductions,
+rejected casts and accepted support returning to play. Core frame branches
+that skip Combat.update during headset-away or map loading still synchronize
+paused deadlines. No player saves/original records are changed; no physical
+headset playtest is claimed. Earlier screenshots retain their original versions.

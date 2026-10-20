@@ -145,11 +145,14 @@ test('follow-ups survive elapsed time within their fight, end with the fight and
   e.combat.battles = [{ done: false, enemies: [e.enemy] }]; assert.equal(e.count(), 0);
 });
 
-test('ordinary support recovery progresses in an open menu while field active work stays paused', t => {
+test('support returns to gameplay and all action recovery freezes on reopening the menu', t => {
   const e = environment(t, { chances: [] }); G.ui.menuOpen = true;
-  assert.equal(e.cast(101), true); e.advance(0.301, { paused: true });
+  assert.equal(e.cast(101), true); assert.equal(G.ui.menuOpen, false); e.advance(0.301);
+  G.ui.menuOpen = true;
   assert.equal(e.cast(102), false); assert.equal(e.actor.mp, 495);
-  e.advance(0.6, { paused: true }); assert.equal(e.cast(102), true); assert.equal(e.actor.mp, 488);
+  e.advance(30, { paused: true }); assert.equal(e.cast(102), false, 'inspection cannot finish the trailing support recovery');
+  G.ui.menuOpen = false; e.advance(0.6); G.ui.menuOpen = true;
+  assert.equal(e.cast(102), true); assert.equal(e.actor.mp, 488); assert.equal(G.ui.menuOpen, false);
   G.ui.menuOpen = false; e.advance(0.901); assert.equal(e.cast(103), true);
   G.ui.menuOpen = true; e.advance(30, { paused: true }); G.ui.menuOpen = false;
   assert.equal(e.cast(101), false, 'waiting in the menu cannot finish a protected field action');

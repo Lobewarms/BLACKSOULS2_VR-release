@@ -85,12 +85,12 @@ function environment(t, obj = skill()) {
   return { actor, combat, ui, state, map, obj, toasts, bursts, animations, selectUse, addTarget, blockedEdges };
 }
 
-test('menu support casts heal directly and pay HP, MP and TP once while leaving the menu open', t => {
+test('menu support casts heal directly and pay HP, MP and TP once before resuming the field action', t => {
   const e = environment(t, skill(101, { note: '<消費HP 30>', repeats: 2 }));
   e.ui.showSkillActions({ id: 101 }); assert.equal(e.ui.list.items[0].enabled, true);
   e.selectUse();
   assert.deepEqual([e.actor.hp, e.actor.mp, e.actor.tp], [610, 80, 43]);
-  assert.equal(e.ui.menuOpen, true); assert.equal(e.combat.ready, undefined);
+  assert.equal(e.ui.menuOpen, false); assert.equal(e.combat.ready, undefined);
 });
 
 test('a menu common-event skill closes the menu and runs its original interpreter exactly once per use', t => {
@@ -253,7 +253,7 @@ test('a death-immune zero-HP actor retains the original ability to use skills', 
   assert.equal(e.actor.stateResist(1), true); assert.equal(e.combat.skillUseStatus(e.obj).ok, true);
   e.selectUse();
   assert.deepEqual([e.actor.hp, e.actor.mp, e.actor.tp], [120, 80, 43]);
-  assert.equal(e.ui.menuOpen, true);
+  assert.equal(e.ui.menuOpen, false);
 });
 
 const blocked = [
@@ -308,5 +308,5 @@ test('equipment-granted and state-transformed known skills use the effective ski
   e.actor.addState(9);
   assert.equal(e.actor.skills.includes(102), false); assert.equal(e.combat.skillUseStatus(e.obj).skill, transformed);
   assert.equal(e.combat.useSkillFromMenu(e.obj), true);
-  assert.deepEqual([e.actor.hp, e.actor.mp, e.actor.tp], [470, 91, 48]); assert.equal(e.ui.menuOpen, true);
+  assert.deepEqual([e.actor.hp, e.actor.mp, e.actor.tp], [470, 91, 48]); assert.equal(e.ui.menuOpen, false);
 });

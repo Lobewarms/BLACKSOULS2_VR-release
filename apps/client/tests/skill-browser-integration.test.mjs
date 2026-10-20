@@ -160,24 +160,37 @@ test('a direct row click and fresh Enter use the actual skill once with native c
   const e = environment(t); e.key('KeyR');
   assert.equal(e.writes, 0, 'opening and live redraws do not rewrite preferences');
   e.ui.skillsBrowser.setQuery('Mend'); e.frame(); clickSkill(e, 'Mend');
-  assert.deepEqual([e.actor.hp, e.actor.mp], [225, 90]); assert.equal(e.ui.menuOpen, true);
+  assert.deepEqual([e.actor.hp, e.actor.mp], [225, 90]); assert.equal(e.ui.menuOpen, false, 'an accepted heal resumes the field action');
   assert.equal(e.ui.list.visible, false, 'using a skill has no intermediate Use submenu');
   assert.ok(e.combat.skillCooling($data.skills[1]) > 0);
+  e.key('KeyR');
+  const cooldown = e.combat.skillCooling($data.skills[1]), recovery = e.combat.playerRecoveryUntil - G.time;
+  e.frame(5);
+  assert.ok(Math.abs(e.combat.skillCooling($data.skills[1]) - cooldown) < 1e-8, 'native cooldown freezes through real R inspection');
+  assert.ok(Math.abs(e.combat.playerRecoveryUntil - G.time - recovery) < 1e-8, 'shared recovery freezes too');
   e.key('Enter'); assert.deepEqual([e.actor.hp, e.actor.mp], [225, 90]);
   e.ui.skillsBrowser.setQuery('RFAQ'); e.frame();
   e.input.pointer.seen = false; e.key('Enter');
   assert.equal(e.actor.mp, 90, 'another skill cannot bypass the active cast');
-  e.frame(0.31); e.key('Enter'); assert.equal(e.actor.mp, 90, 'ordinary trailing recovery still applies');
-  e.frame(0.61); e.key('Enter'); assert.deepEqual([e.actor.hp, e.actor.mp], [250, 80]);
+  e.key('KeyR'); e.frame(0.31); e.key('KeyR');
+  e.key('Enter'); assert.equal(e.actor.mp, 90, 'ordinary trailing recovery still applies after only part of its field time');
+  e.key('KeyR'); e.frame(0.61); e.key('KeyR');
+  e.key('Enter'); assert.deepEqual([e.actor.hp, e.actor.mp], [250, 80]); assert.equal(e.ui.menuOpen, false);
+  e.key('KeyR');
   e.ui.skillsBrowser.setQuery('Mend'); e.frame(e.combat.coolSeconds($data.skills[1]) + 1); e.key('Enter');
+  assert.deepEqual([e.actor.hp, e.actor.mp], [250, 80], 'native skill cooldown stays paused while inspecting Skills');
+  e.key('KeyR'); e.frame(e.combat.coolSeconds($data.skills[1]) + 1); e.key('KeyR');
+  e.input.pointer.seen = false; e.key('Enter');
   assert.deepEqual([e.actor.hp, e.actor.mp], [275, 70]);
 });
 
 test('no-cooldown skill rows show shared recovery and live MP restrictions, then become usable again', t => {
   const e = environment(t); e.key('KeyR'); e.ui.skillsBrowser.setQuery('RFAQ'); e.frame();
-  clickSkill(e, 'RFAQ Remedy'); assert.equal(e.actor.mp, 90);
+  clickSkill(e, 'RFAQ Remedy'); assert.equal(e.actor.mp, 90); assert.equal(e.ui.menuOpen, false);
+  e.key('KeyR');
   assert.equal(e.ui.grid.items[0].available, false, 'the row must not advertise ready during shared recovery');
-  e.frame(0.95); assert.equal(e.ui.grid.items[0].available, true);
+  e.frame(0.95); assert.equal(e.ui.grid.items[0].available, false, 'R inspection cannot finish the action recovery');
+  e.key('KeyR'); e.frame(0.95); e.key('KeyR'); assert.equal(e.ui.grid.items[0].available, true);
   e.actor.mp = 0; e.frame(); assert.equal(e.ui.grid.items[0].available, false);
   e.input.pointer.seen = false; e.key('Enter'); assert.equal(e.actor.hp, 225);
   e.actor.mp = 20; e.frame(); assert.equal(e.ui.grid.items[0].available, true);
@@ -229,16 +242,18 @@ test('Unicode IME commits filter intact and its confirmation never doubles as a 
 });
 
 test('fresh keyboard Enter casts the selected skill independently of the last pointer chrome or profile hit', t => {
-  const e = environment(t); e.key('KeyR'); const field = query(e, 'Mend');
+  const e = environment(t); e.key('KeyR'); const field = query(e, 'RFAQ');
   e.key('Enter', field); assert.equal(e.actor.mp, 100);
   e.key('Enter'); assert.equal(e.actor.mp, 90, 'stale search hover must not reopen the text field');
-  e.frame(e.combat.coolSeconds($data.skills[1]) + 1);
+  assert.equal(e.ui.menuOpen, false); e.frame(0.95); e.key('KeyR');
   const p = e.point(e.ui.skillProfile.panel, 40, 40); e.emit('mousemove', p); e.frame();
   e.key('Enter'); assert.equal(e.actor.mp, 80, 'a profile hover must not swallow an explicit keyboard cast');
-  e.frame(e.combat.coolSeconds($data.skills[1]) + 1);
+  assert.equal(e.ui.menuOpen, false); e.frame(0.95); e.key('KeyR');
   e.emit('mousemove', e.point(e.ui.grid.panel, 100, e.ui.grid.panel.canvas.height - 28)); e.frame();
   e.key('Enter'); assert.equal(e.actor.mp, 70, 'a favorite footer hover must not swallow an explicit keyboard cast');
-  assert.deepEqual(prefs(e).favorites, [], 'keyboard casting does not also toggle the hovered favorite button');
+  assert.equal(e.ui.menuOpen, false);
+  assert.deepEqual(e.state.quickSlots, Array(8).fill(null));
+  assert.deepEqual(G.settings.skillBrowser[String(e.actor.id)].favorites, [], 'keyboard casting does not also toggle the hovered favorite button');
 });
 
 test('separate assignment and star controls never cast, and the real quick-slot choice returns to the same browser', t => {
@@ -340,9 +355,9 @@ test('narrow desktop search hands off to actual VR rays without leaking confirma
   pull(e.ui.grid.panel, 100, e.ui.grid.panel.canvas.height - 28);
   assert.deepEqual(prefs(e).favorites, [1]); assert.equal(e.actor.mp, 100);
   pull(e.ui.grid.panel, 100, e.ui.grid.gridTop + 24);
-  assert.deepEqual([e.actor.hp, e.actor.mp], [225, 90]);
+  assert.deepEqual([e.actor.hp, e.actor.mp], [225, 90]); assert.equal(e.ui.menuOpen, false);
   G.vr = false; e.input.transitionViewMode(false); e.ui.transitionViewMode(false); e.frame();
-  assert.equal(e.ui.skillProfile.compact, true); assert.equal(field.style.display, 'none');
+  assert.equal(e.ui.skillProfile.panel.mesh.visible, false); assert.equal(e.ui.grid.visible, false); assert.equal(field.style.display, 'none');
   assert.equal(e.actor.mp, 90, 'returning to desktop does not repeat the controller confirmation');
 });
 
