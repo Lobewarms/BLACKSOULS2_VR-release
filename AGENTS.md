@@ -2858,3 +2858,32 @@ Current source comparison: runtime 457d5c625cbe95480d4004c7a1df9c22e9ee1df6 (0.2
 48 originals retained, 15 unchanged after import moves, 33 modified, 49 new and
 0 missing; 4,593 added/980 removed lines in modified originals after import
 normalization. Historical screenshot labels and pins are unchanged.
+
+## Scripted battle movement and shared duel countdown (0.2.48)
+
+Lindamea's native pre-battle backstep route decelerates the player through speeds
+6/5/4/3/2 and leaves the final speed until its post-battle restoration. Native
+battles do not use free map movement, but this port applied that speed to real-time
+locomotion, reducing normal movement to one quarter. Retain raw forced-route speed
+and capture the previous free speed only for player routes containing positional
+movement and speed commands in the owning interpreter tree. A battle consumes its
+valid scene snapshot. PC/VR free locomotion may use it only during that active
+battle; completed battles, different characters and later speed writes invalidate
+it. Native speed-only choices, including Dodo Normal/Fast, stay authoritative even
+when writing the same value. Do not clamp all battles to a fixed normal speed or
+alter AGI, guard, sprint or boss balance to hide a cinematic carry-over.
+
+The shared immortality countdown uses actual player/enemy state timers and the
+existing timed shared Death-immunity criteria. It owns no clock or independent
+120-second deadline. Keep combat pauses, state removals and battle/world ownership
+authoritative. Paint a compact localized row below enemy HP, with the native state
+icon when available; preserve status-effect rows and reuse the nameplate texture.
+No native game records, actual player saves or private replay helpers are shipped.
+
+Local verification: 1,249 JavaScript tests pass (7 scene-speed and 14 countdown
+regressions added), ESLint, production build, Ruff, 8 packaging and 7 Python
+protocol tests. The private read-only native intro replay ended at raw speed 2
+with free-combat multipliers 1/2 for pre-scene Normal/Fast rather than 0.25.
+Separate synthetic PC and VR camera-projection previews retained the compact
+HP/timer/effects layout; pausing held the same actual lifetime across views.
+These are automated/projection checks, not a physical-headset playtest.

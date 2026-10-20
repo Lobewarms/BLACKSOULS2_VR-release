@@ -7,6 +7,7 @@ import { GameState } from '../src/game/state.js';
 import { Player } from '../src/entities/player.js';
 import { GameMap } from '../src/world/gamemap.js';
 import { T } from '../src/world/mapmesh.js';
+import { movementSpeedRate } from '../src/game/movement-speed.js';
 
 globalThis.addEventListener ||= () => {};
 const { CombatSystem } = await import('../src/combat/combat.js');
@@ -64,6 +65,68 @@ function environment(t) {
   };
   return { player, map, camera, rig, distance, chooseSpeed, running: value => { running = value; } };
 }
+
+function battleScene(e, { nested = false, cinematic = true } = {}) {
+  const list = cinematic ? [
+    { code: 37, parameters: [] }, { code: 29, parameters: [6] }, { code: 13, parameters: [] },
+    { code: 29, parameters: [3] }, { code: 13, parameters: [] }, { code: 29, parameters: [2] },
+    { code: 38, parameters: [] }, { code: 0, parameters: [] },
+  ] : [{ code: 0, parameters: [] }];
+  const scene = [cmd(205, 0, -1, { repeat: false, skippable: false, wait: true, list }), cmd(0)];
+  $data.troops = [null, {}];
+  const combat = G.combat = { battles: [], get inCombat() { return this.battles.some(b => !b.done); },
+    startBattle() { const b = { done: false }; this.battles.push(b); return b; } };
+  if (nested) $data.commonEvents[2] = { id: 2, trigger: 0, list: scene };
+  e.map.interpreter.setup([...(nested ? [cmd(117, 0, 2)] : scene.slice(0, -1)), cmd(301, 0, 0, 1, false, true), cmd(0)]);
+  for (let i = 0; i < 500 && !combat.inCombat; i++) e.map.update();
+  assert.equal(combat.inCombat, true, 'the synthetic intro must reach Battle Processing');
+  assert.equal(e.map.playerChar.moveRouteForcing, false);
+  return combat.battles[0];
+}
+
+for (const vr of [false, true]) for (const fast of [false, true]) {
+  test(`${vr ? 'VR' : 'PC'} combat retains ${fast ? 'Fast' : 'Normal'} free movement after cinematic deceleration`, t => {
+    const e = environment(t); G.vr = vr;
+    if (fast) e.chooseSpeed(1);
+    const normal = e.distance(), battle = battleScene(e, { nested: true }), pc = e.map.playerChar;
+    assert.equal(pc.moveSpeed, 2, 'native forced-route speed stays available to the post-battle cutscene');
+    assert.equal(pc.distancePerFrame(), 1 / 64);
+    assert.ok(Math.abs(e.distance() - normal) < 1e-10, 'the cutscene must not reduce real-time combat movement');
+    e.running(true);
+    assert.ok(Math.abs(e.distance() / normal - 1.5) < 1e-10);
+    e.running(false); G.combat.guardUp = true;
+    assert.ok(Math.abs(e.distance() / normal - 0.55) < 1e-10);
+    battle.done = true; e.map.update(); G.combat.guardUp = false;
+    assert.equal(movementSpeedRate(pc, G.combat.battles), 0.25, 'finished battle snapshots are never used for free movement');
+    assert.equal(pc.moveSpeed, 2);
+  });
+}
+
+test('an explicit speed-only route overrides the cinematic baseline even when it writes the same slow value', t => {
+  const e = environment(t), normal = e.distance(); battleScene(e);
+  const pc = e.map.playerChar;
+  pc.forceMoveRoute(route(2));
+  for (let i = 0; i < 5 && pc.moveRouteForcing; i++) pc.update();
+  assert.ok(Math.abs(e.distance() / normal - 0.25) < 1e-10);
+  pc.forceMoveRoute(route(5));
+  for (let i = 0; i < 5 && pc.moveRouteForcing; i++) pc.update();
+  assert.ok(Math.abs(e.distance() / normal - 2) < 1e-10, 'Dodo-style explicit changes remain live during combat');
+});
+
+test('a new interpreter execution cannot reuse the earlier scene speed and ordinary slow battles stay slow', t => {
+  const e = environment(t); battleScene(e);
+  G.combat.battles[0].done = true;
+  const battle = battleScene(e, { cinematic: false });
+  assert.equal(battle.sceneMoveSpeed, undefined);
+  assert.equal(movementSpeedRate(e.map.playerChar, G.combat.battles), 0.25);
+});
+
+test('direct speed changes and replacement player characters invalidate active scene snapshots', t => {
+  const e = environment(t), battle = battleScene(e), pc = e.map.playerChar;
+  pc.moveSpeed = 3;
+  assert.equal(movementSpeedRate(pc, [battle]), 0.5);
+  assert.equal(movementSpeedRate({ moveSpeed: 2, moveSpeedRevision: pc.moveSpeedRevision }, [battle]), 0.25);
+});
 
 test('a common-event skill changes actual Player walking distance and Normal restores the original speed', t => {
   const e = environment(t), normal = e.distance();

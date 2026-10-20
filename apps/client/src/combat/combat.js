@@ -27,6 +27,7 @@ import { usableRepeats, randomTargetCount } from './usable-counts.js';
 import { withActorEquipment } from '../game/actor-equipment.js';
 import { menuSkills, menuWeaponCandidates, menuKnowsSkill } from './menu-weapon-skills.js';
 import { battlerEffects, effectsKey, fitLabel } from '../ui/battler-status.js';
+import { duelCountdown } from '../ui/duel-countdown.js';
 import { openFights } from '../world/maphints.js';
 import { personalPage } from '../network/coopworld.js';
 import { SHIELD_SOUND } from '../ui/audio.js';
@@ -600,13 +601,14 @@ export class ActionEnemy {
     // Some original enemies deliberately have no name. Keep their HP/effects
     // visible without exposing database IDs or inventing an artwork-based name.
     const name = stripEscapes(this.b.name).trim();
-    const key = `${name}/${this.b.hp}/${this.b.mhp}/${this.state}/${gmax}/${Math.round(grog * 488)}/${effectsKey(effects)}/${page}/${iconAssetRevision()}`;
+    const duel = duelCountdown(this.sys?.duelStatus?.(this));
+    const key = `${name}/${this.b.hp}/${this.b.mhp}/${this.state}/${gmax}/${Math.round(grog * 488)}/${effectsKey(effects)}/${page}/${iconAssetRevision()}/${duel?.key || ''}`;
     if (key === this.lastBar) return;
     this.lastBar = key;
     const ctx = this.barCanvas.getContext('2d');
     ctx.clearRect(0, 0, 512, 184);
     const top = name ? 0 : 40;
-    ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, top, 512, (effects.length ? 184 : 88) - top);
+    ctx.fillStyle = 'rgba(0,0,0,0.82)'; ctx.fillRect(0, top, 512, (effects.length ? 184 : duel ? 116 : 88) - top);
     ctx.textBaseline = 'middle';
     if (name) {
       ctx.font = `bold 42px ${FONT}`; ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
@@ -621,13 +623,19 @@ export class ActionEnemy {
       ctx.fillStyle = '#ece0b4';
       ctx.fillRect(12, 76, 488 * grog, 4);
     }
-    ctx.font = `34px ${FONT}`; ctx.textAlign = 'left';
+    if (duel) {
+      const x = duel.icon ? 46 : 12;
+      if (duel.icon) drawIcon(ctx, duel.icon, 12, 86, 26);
+      ctx.font = `28px ${FONT}`; ctx.fillStyle = '#eee0b9'; ctx.textAlign = 'left';
+      ctx.fillText(fitLabel(ctx, duel.text, 500 - x), x, 100);
+    }
+    ctx.font = `${duel ? 28 : 34}px ${FONT}`; ctx.textAlign = 'left';
     // Cycle pages so every active effect is readable even with many simultaneous states.
     effects.slice(page * 4, page * 4 + 4).forEach((effect, i) => {
-      const x = 12 + (i % 2) * 250, y = 96 + Math.floor(i / 2) * 40;
-      drawIcon(ctx, effect.icon, x, y, 32);
+      const x = 12 + (i % 2) * 250, y = (duel ? 116 : 96) + Math.floor(i / 2) * (duel ? 32 : 40);
+      drawIcon(ctx, effect.icon, x, y, duel ? 28 : 32);
       ctx.fillStyle = '#fff';
-      ctx.fillText(fitLabel(ctx, stripEscapes(effect.name), 202), x + 38, y + 16);
+      ctx.fillText(fitLabel(ctx, stripEscapes(effect.name), duel ? 208 : 202), x + (duel ? 34 : 38), y + (duel ? 14 : 16));
     });
     this.barTex.needsUpdate = true;
   }
@@ -3401,12 +3409,35 @@ export class CombatSystem {
   }
   // 흑기사 린다메아's duel: a state that keeps both her and the player from dying, put on both at once for a while (린다메아영역2):
   // she stands her ground under the player's blows while it lasts - no knockback
+  duelStates(e) {
+    const a = G.state?.party?.leader();
+    return a && e?.b ? e.b.states.filter(id => {
+      const st = $data.states[id];
+      return !!st?.auto_removal_timing && a.isState(id) && (st.features || []).some(f => f.code === 14 && f.data_id === 1);
+    }) : [];
+  }
   inDuel(e) {
     const a = G.state?.party?.leader();
     return !!a && e.b.states.some(id => {
       const st = $data.states[id];
       return !!st?.auto_removal_timing && a.isState(id) && (st.features || []).some(f => f.code === 14 && f.data_id === 1);
     });
+  }
+  duelStatus(e) {
+    const actor = G.state?.party?.leader(), battle = e?.battle;
+    if (!actor || typeof actor.isState !== 'function' || this.playerDead || this.spectating || G.map?.transferring || actor.isState(1)
+        || !e?.alive || e.hidden || e.untargetable || e.outOfFight || e.group?.visible === false
+        || !battle || battle.done || !this.battles?.includes(battle) || !battle.enemies?.includes(e)) return null;
+    let status = null;
+    for (const id of this.duelStates(e)) {
+      const lifetime = [G.state?.system?.stateTimers?.[id], e.stateTimers?.[id]];
+      if (lifetime.some(value => value !== undefined && (!Number.isFinite(value) || value <= 0))) continue;
+      const times = lifetime.filter(value => Number.isFinite(value) && value > 0);
+      if (!times.length) continue;
+      const remaining = Math.min(...times);
+      if (!status || remaining > status.remaining) status = { stateId: id, remaining, icon: $data.states[id].icon_index || 0 };
+    }
+    return status;
   }
   damageRemovesStates(e) {
     for (const id of [...e.b.states]) {

@@ -8,6 +8,7 @@ import { commonEventList } from '../entities/character.js';
 import { itemData } from './state.js';
 import { steamAchievementName } from './steam-achievements.js';
 import { ambientMapTone, isMapAmbientTone } from '../world/ambient-tone.js';
+import { captureSceneMoveSpeed, validSceneMoveSpeed } from './movement-speed.js';
 
 // the interpreter running a command right now (the innermost): what kind of run made a change to the world
 // (coopworld.js writeSyncs)
@@ -33,6 +34,7 @@ export class Interpreter {
     this.battleBgmBefore = undefined;
     this.battlebacks = undefined;
     this.undo = null;
+    this.sceneMoveSpeed = null;
   }
   // what an event's run changed (switches, variables, self switches: key -> the value before), kept on its root so a
   // fight it starts and that is never finished can be undone with all of it (combat.js undoFightEvent): its scene then
@@ -576,7 +578,10 @@ export class Interpreter {
   c205() {
     const c = this.character(this.params[0]);
     if (c) {
-      c.forceMoveRoute(this.params[1]);
+      const root = this.root || this;
+      const speed = c === G.map.playerChar ? captureSceneMoveSpeed(c, this.params[1], root.sceneMoveSpeed) : null;
+      if (speed) root.sceneMoveSpeed = speed;
+      c.forceMoveRoute(this.params[1], speed);
       if (this.params[1].wait) { this.waitMode = 'route'; this.waitChar = c; }
     }
     return true;
@@ -739,6 +744,9 @@ export class Interpreter {
     this.battle = G.combat.startBattle({
       troopId, canEscape: p[2], canLose: p[3], event: this.event(), interpreter: this,
     });
+    const owner = this.root || this;
+    if (validSceneMoveSpeed(owner.sceneMoveSpeed, G.map.playerChar)) this.battle.sceneMoveSpeed = owner.sceneMoveSpeed;
+    owner.sceneMoveSpeed = null;
     this.waitMode = 'battle';
     // a fight started by touching / talking to an event no longer holds the map: the event's commands
     // wait for the result on their own while menus, exits and other events stay usable

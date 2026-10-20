@@ -252,7 +252,7 @@ export class Player {
       const f = this.forward2D();
       // stick y negative = forward
       const fwd = -mv.y, side = mv.x;
-      let speed = s.moveSpeed * movementSpeedRate(pc) * (input.running() ? s.runMultiplier : 1);
+      let speed = s.moveSpeed * movementSpeedRate(pc, G.combat?.inCombat ? G.combat.battles : null) * (input.running() ? s.runMultiplier : 1);
       if (G.vr) speed *= s.vrSpeed ?? 2;                // setting VR 이동 속도
       if (G.combat?.inCombat && G.combat.guardUp) speed *= 0.55;
       mvx = (f.x * fwd - f.z * side) * speed * dt / T;

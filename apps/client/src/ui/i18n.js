@@ -50,6 +50,7 @@ const ENTRIES = [
   ['플레이어', 'Player', 'プレイヤー', '玩家'],
   ['스태미나', 'Stamina', 'スタミナ', '耐力'],
   ['보너스 행동 ×{n}', 'Bonus Action ×{n}', '追加行動 ×{n}', '额外行动 ×{n}'],
+  ['공유 불사 · {time}', 'Shared immortality · {time}', '相互不死 · {time}', '双方不死 · {time}'],
   ['전체 효과: 메뉴 → 상태', 'All effects: Menu → Status', '全効果: メニュー → ステータス', '全部效果：菜单 → 状态'],
   ['전체 활성 효과 {n}', 'Active effects: {n}', '有効な効果：{n}', '当前效果：{n}'],
   ['효과 #{n}', 'Effect #{n}', '効果 #{n}', '效果 #{n}'],

@@ -14,6 +14,8 @@ export class PlayerChar extends GameCharacter {
     this.isPlayer = true;
     this.fx = 0; this.fy = 0;     // continuous position in tile units (tile center = integer)
     this.forcedTarget = null;
+    this.moveSpeedRevision = 0;
+    this.sceneMoveSpeed = null;
   }
   // continuous -> grid. realX/realY stay on the tile so free movement never counts as
   // RPG Maker "moving" (only forced move routes interpolate realX/realY).
@@ -46,9 +48,21 @@ export class PlayerChar extends GameCharacter {
   }
   increaseSteps() { G.state.party.steps++; }
   checkEventTriggerTouchFront() {}
-  forceMoveRoute(route) {
+  forceMoveRoute(route, sceneMoveSpeed = null) {
     if (isFallRoute(route, this.through)) G.player?.startScriptedFall();
+    this.sceneMoveSpeed = sceneMoveSpeed;
     super.forceMoveRoute(route);
+  }
+  processMoveCommand(command) {
+    super.processMoveCommand(command);
+    if (command.code === 29) {
+      this.moveSpeedRevision++;
+      if (this.sceneMoveSpeed) {
+        this.sceneMoveSpeed.revision = this.moveSpeedRevision;
+        this.sceneMoveSpeed.scriptedSpeed = this.moveSpeed;
+      }
+    }
+    if (!this.moveRouteForcing) this.sceneMoveSpeed = null;
   }
   setDirection(d) {
     // forced turns would rotate the user's view: only track the logical direction
