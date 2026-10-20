@@ -2669,3 +2669,8 @@ search/favorites/native descriptions at 1020x1004 and the stacked 640x720 layout
 physical-headset testing is not claimed. The screenshot uses an isolated copied
 character and intentionally pinned favorites, never a gameplay save write.
 Inspection retains all original cost/cooldown/target/action authority.
+
+Current source comparison: runtime 2b522bb715af9e22ddab4aa3cc7bb1cbaf435e9c (0.2.44),
+48 originals retained, 15 unchanged after import moves, 33 modified, 46 new and
+0 missing; 4,327 added/941 removed lines in modified originals after import
+normalization. Earlier screenshots and source labels retain their historical pins.
