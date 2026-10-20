@@ -2621,3 +2621,8 @@ real UI/Input/Three integration cases), ESLint, production build, Ruff,
 initialized native portrait, domain warnings and a640x720 compact layout.
 The domain example is staged only in an isolated in-memory copy; no original
 game files or player saves are changed. No physical-headset playtest is claimed.
+
+Current source comparison: runtime c282b3970fabdaaa0a36b403ddea33964c916785
+(0.2.43),48 originals,15 unchanged after import moves,33 modified,45 new and
+0 missing;4,289 added/941 removed lines in modified originals after import
+normalization. Historical screenshot labels and source pins are preserved.
