@@ -2519,3 +2519,8 @@ and7 Python protocol tests. Synthetic tests cover real Combat/GameState/common
 frames, PC/VR actions, guest puppets, original death/victory ownership, instant
 menu support and paused field work. This is not a physical-headset playtest.
 Original game files, private helpers and player saves remain unchanged.
+
+Current source comparison: runtime97378d0a936a46743b98bcc929d639d19b6c1143 (0.2.40),
+48 original modules retained,15 unchanged after import moves,33 modified,
+44 new and0 missing;4,168 added/937 removed lines in modified originals after
+import normalization. Historical image versions and source pins are unchanged.
