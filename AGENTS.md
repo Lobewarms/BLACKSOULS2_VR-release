@@ -2887,3 +2887,8 @@ with free-combat multipliers 1/2 for pre-scene Normal/Fast rather than 0.25.
 Separate synthetic PC and VR camera-projection previews retained the compact
 HP/timer/effects layout; pausing held the same actual lifetime across views.
 These are automated/projection checks, not a physical-headset playtest.
+
+Current source comparison: runtime 482765132b87c20bed6e4497f88607cd2f1be6d1 (0.2.48),
+48 originals retained, 15 unchanged after import moves, 33 modified, 50 new and
+0 missing; 4,649 added/982 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
