@@ -2766,3 +2766,8 @@ rejected casts and accepted support returning to play. Core frame branches
 that skip Combat.update during headset-away or map loading still synchronize
 paused deadlines. No player saves/original records are changed; no physical
 headset playtest is claimed. Earlier screenshots retain their original versions.
+
+Current source comparison: runtime 4a82c174e1a17aab689dea8df17866619b45fd9c (0.2.46),
+48 originals retained, 15 unchanged after import moves, 33 modified, 48 new and
+0 missing; 4,493 added/970 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
