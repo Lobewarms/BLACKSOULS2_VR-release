@@ -126,8 +126,8 @@ reading a locally owned game. Original game artwork belongs to its rights holder
 It compares original ZIP entries with the committed fork files, matching moved
 modules by filename. The diff retains actual import-path changes and normalizes
 line endings. It includes new fork runtime modules and is intended for review.
-The current source comparison is version 0.2.44 at commit
-2b522bb715af9e22ddab4aa3cc7bb1cbaf435e9c; the captured image pairs above remain
+The current source comparison is version 0.2.45 at commit
+a9a4a727e2a6ae911dc2abb5181823d8e31bdde1; the captured image pairs above remain
 the labelled version 0.2.25 comparison.
 The complete PR also contains the launcher, build tools, tests and documentation.
 

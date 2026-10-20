@@ -2728,3 +2728,8 @@ Drake Sword+5/Dragon Shockwave source preview at1020x1004 and640x720. The public
 source screenshot is docs/screenshots/weapon-skills-0.2.45-owned-arts.png. No
 physical-headset playtest is claimed; original game files and player saves remain
 unchanged. Release/source-comparison updates remain a separate final step.
+
+Current source comparison: runtime a9a4a727e2a6ae911dc2abb5181823d8e31bdde1 (0.2.45),
+48 originals retained, 15 unchanged after import moves, 33 modified, 48 new and
+0 missing; 4,465 added/963 removed lines in modified originals after import
+normalization. Earlier screenshots and source labels retain their historical pins.
