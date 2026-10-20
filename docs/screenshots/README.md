@@ -1,5 +1,17 @@
 # Actual upstream versus community version
 
+## Skills profile preview (v0.2.43)
+
+[Skills and character profile](skills-profile-0.2.43-domain-example.png) uses the
+current source renderer with a copy of an initialized save and the installed
+game's original portrait, window skin, icons and library scenery. The original
+Heavenly Beast Domain state is applied only to the isolated in-memory character
+to demonstrate effective ATK/MAG suppression and the healing-reversal warning.
+It is a standalone interface preview, not a boss victory or an upstream comparison.
+No saves, achievements, game records or renderer functions are changed by the
+capture controls. The image follows the browser's1020x1004 viewport; the runtime
+source is pinned in the comparison section below. No headset playtest is claimed.
+
 ## Current gameplay previews (v0.2.33)
 
 The main README uses these newer standalone gameplay captures. They use the

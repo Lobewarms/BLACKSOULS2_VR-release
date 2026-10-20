@@ -47,6 +47,14 @@ Manage items, skills and equipment through the original-style menu.
 
 ![Original-style menu showing the full player portrait, items, skills and equipment](docs/screenshots/gameplay-0.2.33-menu.png)
 
+### Skills and character profile
+
+Press **R** on PC to choose skills alongside your current stats, resources and
+all active effects. This isolated v0.2.43 preview demonstrates the healing-reversal
+warning with an original-game effect applied to a copied character in memory.
+
+![Skills with the original character portrait, all eight stats, active effects and a healing-reversal warning](docs/screenshots/skills-profile-0.2.43-domain-example.png)
+
 ## Gameplay video
 
 [![Watch the original BLACK SOULS II VR gameplay video](https://img.youtube.com/vi/J8WaV70g5cc/maxresdefault.jpg)](https://www.youtube.com/watch?v=J8WaV70g5cc)

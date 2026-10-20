@@ -2590,3 +2590,34 @@ Current source comparison: runtime5c2ac36dcc37e72a0b2d656386989223c4bff8ce (0.2.
 48 originals,15 unchanged after import moves,33 modified,44 new and0 missing;
 4,219 added/941 removed lines in modified originals after import normalization.
 Historical image versions and source pins are unchanged.
+
+## Party leader profile beside Skills (0.2.43)
+
+The R Skills grid and its nested Use/quick-slot picker share SkillProfile in
+ui/skill-profile.js. Read the current party leader's effective battler values:
+original face/name/class/level, HP/MP/TP/stamina and all eight parameters including LUK.
+Keep every state and buff accessible through paging with native icons; supported
+details include parameter rates, recovery/physical/magic/MP-cost rates,
+feature61 chance, action restrictions and script172 healing rules. Do not claim
+that the panel explains every arbitrary note tag. Show aggregate healing warnings
+and the selected effective skill's actual HP/MP/TP costs, cooldown or blocked
+reason without rolling healing, changing game metadata or casting on inspection.
+
+Wide PC and VR layouts pair the skill selection with the profile. Compact PC
+stacks them and pages resources/parameters too, preserving readable text and
+reachable controls. Profile Previous/Next works by pointer/VR confirmation;
+PageUp/PageDown and wheel-over-profile support PC. Consume profile input before
+skill confirmation, including decorative clicks, so paging cannot cast a skill.
+Live refresh retains selection. Bind sessions and asynchronous face loads to
+state/map/leader and panel ownership; restore the original grid/list layout on
+close, transfer, actor change, death or return to title. Reuse game window/cursor,
+faces and icons rather than distributing original art or inventing replacements.
+Keep synthetic model/layout/input/lifecycle regressions independent of installed
+game files and player saves. Four-language guides describe player controls only.
+
+Local gates:1,119 JavaScript tests pass (25 new profile model/controller and
+real UI/Input/Three integration cases), ESLint, production build, Ruff,
+8 packaging and7 Python protocol tests. Desktop visual checks include the
+initialized native portrait, domain warnings and a640x720 compact layout.
+The domain example is staged only in an isolated in-memory copy; no original
+game files or player saves are changed. No physical-headset playtest is claimed.

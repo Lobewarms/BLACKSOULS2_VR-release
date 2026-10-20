@@ -1,4 +1,4 @@
-﻿BLACK SOULS II VR - Controls  (version 2026.10.18-1)
+﻿BLACK SOULS II VR - Controls  (version 0.2.43)
 ================================================
 
 VR
@@ -58,6 +58,18 @@ support take effect normally. Dodge and manual Break retain their dedicated
 actions. Common-event skills return to the game to run their event.
 Costs, weapon requirements, seals and cooldowns still apply. Field-only utility
 skills cannot be used during combat. Quick-slot assignments stay as you set them.
+
+YOUR PROFILE IN SKILLS
+----------------------
+The Skills menu shows your current party leader's original portrait, HP, MP, TP,
+stamina and all eight current stats, including Luck. Page through every active
+status effect and buff with original icons, plus useful damage, recovery and cost
+modifiers. Healing restrictions and the selected skill's HP/MP/TP costs, cooldown
+or reason it cannot be used are shown too.
+Use Previous/Next on the profile. On PC, Page Up/Page Down or the mouse wheel over
+the profile also turn pages. In VR, point at the page buttons and confirm.
+The profile stays open while selecting, using or assigning a skill to a quick slot.
+Smaller PC windows stack the panels and page resources and stats as well.
 
 BUYING LARGER QUANTITIES
 -----------------------

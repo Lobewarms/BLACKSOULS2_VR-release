@@ -1,4 +1,13 @@
-BLACK SOULS II VR 0.2.42
+BLACK SOULS II VR 0.2.43
+
+Your profile in Skills
+- Open Skills with R on PC to see your party leader's original portrait,
+  HP/MP/TP, stamina and all eight current stats alongside skill selection.
+- Page through every active status effect and buff with original game icons,
+  useful modifiers and healing warnings. Selected skill costs, cooldowns and
+  reasons it cannot be used remain visible while using or assigning skills.
+- Use Previous/Next, Page Up/Page Down or the mouse wheel over the profile.
+  VR uses the page buttons; smaller PC windows stack and page the profile.
 
 Old King shadow phase
 - Fix successful Breaks not counting when the stagger ends before the boss's

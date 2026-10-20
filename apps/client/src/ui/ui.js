@@ -20,6 +20,7 @@ import { paintDesktopHud, bonusHudStatus } from './desktop-hud.js';
 import { RewardFeed } from './reward-feed.js';
 import { paintClassicMenu } from './classic-menu.js';
 import { BonfireTravel } from './bonfire-travel.js';
+import { SkillProfile } from './skill-profile.js';
 
 export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
 const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
@@ -879,6 +880,8 @@ export class UI {
     this.root.add(this.menuOverview.mesh);
     this.grid = new GridPanel(1260, 3, 6, 1.2);
     this.root.add(this.grid.panel.mesh);
+    this.skillProfile = new SkillProfile({ Panel, root: this.root, grid: this.grid, list: this.list, ui: this,
+      font: FONT, windowBg, drawIcon, drawGameCursor, textColor, clean: stripEscapes, assetRevision: iconAssetRevision });
     this.keyboard = new KeyboardPanel();
     this.root.add(this.keyboard.panel.mesh);
     this.bannerPanel = new Panel(1600, 260, 2.2);
@@ -971,6 +974,7 @@ export class UI {
     if (this.grid.visible) { this.grid.hover = undefined; this.grid.draw(); }
     if (this.keyboard.visible) { this.keyboard.draw(); this.keyboard.field(!vr); }
     this.updateBonfireTravel();
+    this.updateSkillProfile();
     const message = this.msg || this.heldMessage?.message || (this.remote?.shown ? this.remote : null);
     if (message) this.drawMessage(message);
     if (this.msg?.state === 'number') this.drawNumber();
@@ -2105,6 +2109,7 @@ export class UI {
     this.showMainMenu();
   }
   closeMenu() {
+    this.skillProfile?.close();
     this.bonfireTravel?.close();
     this.navigation.close();
     this.menuOverview.mesh.visible = false;
@@ -2115,6 +2120,7 @@ export class UI {
     this.consumedConfirm = true;
   }
   showMainMenu() {
+    this.skillProfile?.close();
     this.menuSection = 'main';
     const items = [
       { text: tr('아이템'), id: 'items' },
@@ -2212,6 +2218,7 @@ export class UI {
     ], selected, 'settings');
   }
   onMenu(id) {
+    if (id !== 'skills') this.skillProfile?.close();
     this.menuOverview.mesh.visible = false;
     this.menuSection = id;
     this.list.panel.mesh.position.set(0, 0, 0);
@@ -2252,6 +2259,7 @@ export class UI {
     }
   }
   showMap() {
+    this.skillProfile?.close();
     this.bonfireTravel?.close();
     G.pictures?.requestViewerCancel?.();
     this.unlockPointer();
@@ -2309,6 +2317,7 @@ export class UI {
     ];
   }
   showItems(keepIndex) {
+    this.skillProfile?.close();
     this.list.close();
     const tabs = this.itemTabs();
     this.grid.open(tr('아이템'), tabs, {
@@ -2360,12 +2369,14 @@ export class UI {
       },
       onCancel: back,
     });
+    if (this.menuSection === 'skills') this.skillProfile?.open('list', entry.id);
   }
 
   // ---- skills ----
   showSkills(keepIndex) {
     const a = G.state.party.leader();
     if (!a) return;
+    this.menuSection = 'skills';
     this.list.close();
     const items = a.allSkills().map(s => {
       const cost = a.skillMpCost(s), hpCost = a.skillHpCost(s);
@@ -2380,6 +2391,7 @@ export class UI {
       onSelect: (it) => this.showSkillActions(it),
       onCancel: () => { this.grid.close(); this.reopenMain('skills'); },
     });
+    this.skillProfile?.open('grid');
   }
   showSkillActions(it) {
     const a = G.state.party.leader();
@@ -2407,6 +2419,7 @@ export class UI {
       },
       onCancel: back,
     });
+    this.skillProfile?.open('list', s.id);
   }
 
   // ---- equipment ----
@@ -2646,10 +2659,11 @@ export class UI {
     ];
     this.list.open(tr('상태'), items, { onSelect: () => {}, onCancel: () => this.reopenMain('status') });
   }
-  returnToTitle() { this.bonfireTravel?.close(); G.returnToTitle?.(); }
+  returnToTitle() { this.skillProfile?.close(); this.bonfireTravel?.close(); G.returnToTitle?.(); }
 
   // scenes requested by script calls
   openScene(name) {
+    this.skillProfile?.close();
     if (name !== 'Scene_ShortMove') this.bonfireTravel?.close();
     if (name === 'Scene_ShortMove') { this.openBonfireWarp(); return; }
     if (name === 'Scene_ItemSynthesis') { this.openSynthesis(); return; }
@@ -3067,11 +3081,41 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- frame
+  updateSkillProfile() {
+    if (!this.skillProfile?.session) return;
+    if (!this.skillProfile.update()) {
+      if (this.menuOpen && this.menuSection === 'skills') this.closeMenu();
+      return;
+    }
+    if (this.skillProfile.session.kind === 'grid') {
+      const actor = G.state.party.leader(); let changed = false;
+      for (const item of this.grid.items) {
+        const skill = $data.skills?.[item.id];
+        if (!skill) continue;
+        const enabled = actor.skillTypeUsable(skill) && !actor.skillSealed(skill.id);
+        if (item.enabled !== enabled) { item.enabled = enabled; changed = true; }
+      }
+      if (changed) this.grid.draw();
+      return;
+    }
+    if (this.skillProfile.session.kind !== 'list') return;
+    const use = this.list.items.find(item => item.id === 'use');
+    const skill = $data.skills?.[this.skillProfile.session.skillId];
+    const status = skill && G.combat?.skillUseStatus?.(skill);
+    if (!use || !status) return;
+    const effective = status.skill || skill, aimed = effective.scope >= 1 && effective.scope <= 6;
+    const desc = !status.ok ? status.reason || tr('사용할 수 없습니다') : aimed
+      ? tr('가까이 보이는 적에게 바로 사용합니다. 대상이 없으면 소모하지 않습니다') : skill.description;
+    if (use.enabled !== !!status.ok || use.desc !== desc) {
+      use.enabled = !!status.ok; use.desc = desc; this.list.draw();
+    }
+  }
   update(dt) {
     this.consumedConfirm = false;
     this.pointerTarget = false;
     this.updateDialoguePresentation();
     this.updateBonfireTravel();
+    this.updateSkillProfile();
     if (this.sceneBusy() || this.dialogueActive() || this.keyboard.visible || this.prompt?.shown) this.unlockPointer();
     if (this.actionLockUntil && G.time < this.actionLockUntil) this.consumedConfirm = true;
     const anyPanel = this.dialogueActive() || this.menuOpen || this.sceneOpen || this.banner || this.toasts.length || this.remote?.shown || this.prompt?.shown;
@@ -3090,6 +3134,7 @@ export class UI {
     else if (this.menuOpen || this.sceneOpen) {
       if (this.navigation.open) this.updateMap();
       else if (this.keyboard.visible) this.keyboard.update(this.pointerRay());
+      else if (this.skillProfile?.handleInput(this.pointerRay())) this.consumedConfirm = true;
       else if (this.grid.visible) this.grid.update(this.pointerRay());
       else if (this.list.visible) {
         if (!this.list.classic || !this.updateClassicTools()) this.list.update(this.pointerRay());
@@ -3116,6 +3161,7 @@ export class UI {
       !this.menuOpen && !this.sceneOpen && !this.remote?.shown && !this.prompt?.shown);
     this.updateDungeonStatus();
     this.updateBonfireTravel();
+    this.updateSkillProfile();
     if (!G.vr) this.placeRoot();
     const rewardPaused = this.sceneBusy() || this.messageBusy() || this.dialogueActive() || !!this.remote?.shown || !!this.prompt?.shown || !!G.combat?.playerDead;
     if (!this.hudPresent && this.rewardsHadPlayer) this.rewards.clear();
