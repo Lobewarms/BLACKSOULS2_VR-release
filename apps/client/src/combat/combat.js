@@ -11,7 +11,7 @@ import { tr } from '../ui/i18n.js';
 import { $data } from '../data/data.js';
 import { T } from '../world/mapmesh.js';
 import { loadCanvas } from '../data/assets.js';
-import { BattlerBase, itemData, LB_ENEMY, battleStartEffects } from '../game/state.js';
+import { BattlerBase, itemData, LB_ENEMY, battleStartEffects, stateInstance } from '../game/state.js';
 import { evalFormula } from '../game/rubyexpr.js';
 import { Interpreter } from '../game/interpreter.js';
 import { commonEventList } from '../entities/character.js';
@@ -890,6 +890,7 @@ export class CombatSystem {
     if (preferBonus && !ticket?.bonus) return false;
     if (ticket) ticket.sources = sources;
     this.playerActiveUntil = G.time + active;
+    this.confusionAction = null; // A newly accepted manual action owns its recovery.
     // A follow-up bypasses the previous action's tail. Its own full tail still
     // gates the next normal chain, even when this was the last earned action.
     this.playerRecoveryUntil = G.time + Math.max(active, recovery);
@@ -946,6 +947,7 @@ export class CombatSystem {
   // ---- lifecycle -------------------------------------------------------------
   // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
   reset({ keepState = false, carry = false } = {}) {
+    this.confusionAction = this.confusionSwing = null;
     this.delayedActions?.clear();
     this.menuWeaponVisual = null; this._menuWeaponContext = null;
     for (const battle of this.battles || []) this.clearTroopBreaks(battle);
@@ -2856,6 +2858,18 @@ export class CombatSystem {
     return restriction >= 1 && restriction <= 3 ? restriction : 0;
   }
   manualConfusionBlocked() { return this.leaderConfusionLevel() > 0; }
+  forcedAttackValid(context) {
+    return !context || context.actor === G.state?.party?.leader() && this.leaderConfusionLevel() === 1
+      && context.states.some(([id, token]) => stateInstance(context.actor, id) === token);
+  }
+  releaseConfusionAction() {
+    if (!this.confusionAction || this.forcedAttackValid(this.confusionAction)) return;
+    this.confusionAction = this.confusionSwing = null;
+    // Only the most recently accepted forced action owns these shared gates.
+    // Native skill-specific cooldowns and already released projectiles remain.
+    this.playerActiveUntil = this.playerRecoveryUntil = this.deskActUntil = G.time;
+    this.rangedCooldown = 0;
+  }
   confusionTargetReachable(enemy, range) {
     if (!enemy?.alive || enemy.hidden || enemy.untargetable || !enemy.battle || enemy.battle.done || enemy.mesh?.visible === false || this.outOfFight(enemy)) return false;
     const head = G.player.headWorld(new THREE.Vector3()), at = enemy.worldPos(new THREE.Vector3());
@@ -2867,20 +2881,23 @@ export class CombatSystem {
     if (this.leaderConfusionLevel() !== 1 || this.bonusPaused() || G.map?.transferring || this.playerDead || this.restrained || this.spectating || this.gripAdjust || !this.weapon) return false;
     const ranged = !!this.weapon.userData.ranged, reach = ranged ? 15 : this.weaponLength() + 0.9;
     if (!this.confusionTargetReachable(enemy, reach)) return false;
-    if (ranged) return this.fireRanged({ forcedTarget: enemy });
     const actor = G.state.party.leader(), skill = this.skillByState(actor, this.playerAttackSkill(actor));
+    const forcedAttack = { actor, states: actor.states.filter(id => $data.states[id]?.restriction === 1).map(id => [id, stateInstance(actor, id)]) };
+    if (ranged) return this.fireRanged({ forcedTarget: enemy, forcedAttack });
     if (!skill || !actor.skillCostPayable(skill) || actor.skillSealed(skill.id) || !actor.skillTypeUsable(skill) || this.skillCooling(skill) > 0) return false;
     const action = this.beginPlayerAction(this.bonusSkillEligible(skill), { active: 0.224, recovery: G.vr ? 0.45 : 0.32, targeted: true });
     if (!action) return false;
+    this.confusionAction = forcedAttack;
     this.actorPays(actor, skill); this.setSkillCooldown(skill, this.coolSeconds(skill));
     this.deskActUntil = G.time + 0.32; this.confusionSwing = { t: 0, duration: 0.32 };
     this.stamina = Math.max(0, this.stamina - 0.12); this.staminaDelay = 0.7;
-    this.later(112, () => this.playerHitEnemy(enemy, 1, false, G.player.headWorld(new THREE.Vector3()), { melee: true, normalAttackOnly: true, critBonus: G.vr ? 0 : 0.08 }),
-      { battle: enemy.battle, valid: () => this.leaderConfusionLevel() === 1 && this.confusionTargetReachable(enemy, reach) });
+    this.later(112, () => this.playerHitEnemy(enemy, 1, false, G.player.headWorld(new THREE.Vector3()), { melee: true, normalAttackOnly: true, forcedAttack, critBonus: G.vr ? 0 : 0.08 }),
+      { battle: enemy.battle, valid: () => this.forcedAttackValid(forcedAttack) && this.confusionTargetReachable(enemy, reach) });
     this.finishPlayerAction(action, 0.224);
     return true;
   }
   updateConfusion(dt, paused) {
+    this.releaseConfusionAction();
     if (!this.manualConfusionBlocked()) { this.confusionSwing = null; return; }
     this.cancelReady(); this.cancelHeld();
     this.skillArm = this.breakArm = this.healing = this.swing = this.deskCharge = this.charge = null;
@@ -3863,7 +3880,7 @@ export class CombatSystem {
   // drain and states (Raiden's axes hit by the wielder's HP, the youtou drains, daggers hit twice...)
   // opts.melee: a swing (counts toward flailing); opts.strong: swung very hard; opts.charge: how charged (0-1); opts.one:
   // one hit of the blow's (a bullet of a burst - fireRanged)
-  playerHitEnemy(e, power, crit, sourcePos, { melee = false, strong = false, charge = 0, one = false, critBonus = 0, normalAttackOnly = false } = {}) {
+  playerHitEnemy(e, power, crit, sourcePos, { melee = false, strong = false, charge = 0, one = false, critBonus = 0, normalAttackOnly = false, forcedAttack = null } = {}) {
     const actor = G.state.party.leader();
     // a weapon art on the weapon (red): this blow is that skill - its formula, hits, element and animation -
     // at least at full strength, and not weakened by flailing
@@ -3885,7 +3902,7 @@ export class CombatSystem {
     const hits = one ? 1 : this.attackHits(skill, actor, { normalAttack: !art });
     const blow = {};                                     // (its hits are one attack for the groggy gauge)
     const landed = this.applyUsableToEnemy(e, skill, sourcePos, { mult, crit, critBonus, knock: 0.12 * power * (heavy ? 2 : 1) * (big ? 1.6 : 1), weak, color: big ? '#ffb030' : null, blow }) >= 0;
-    for (let i = 1; i < hits; i++) this.later(i * 120, () => this.applyUsableToEnemy(e, skill, sourcePos, { mult, crit, critBonus, knock: 0.04, weak, blow }), { battle: e.battle, valid: () => e.alive && !e.hidden });
+    for (let i = 1; i < hits; i++) this.later(i * 120, () => this.applyUsableToEnemy(e, skill, sourcePos, { mult, crit, critBonus, knock: 0.04, weak, blow }), { battle: e.battle, valid: () => e.alive && !e.hidden && this.forcedAttackValid(forcedAttack) });
     if (skill.scope === 2) {
       // an "all enemies" attack (the giant iron ball): the blow reaches everyone around the one struck
       const op = new THREE.Vector3();
@@ -3913,21 +3930,21 @@ export class CombatSystem {
       G.audio?.playSe(G.seAt('Blow3', 95, 85), at);
       G.input.haptic('right', 1, 160);
     }
-    this.afterPlayerAction(skill, e, sourcePos, !!art);
+    this.afterPlayerAction(skill, e, sourcePos, !!art, forcedAttack);
   }
   // after a blow of mine (once a swing, however many it met): what the attack leaves on me (script 113 - 쌍검's stacks,
   // 쉴드 뱅커's guard; an art's came as it was paid for) and the skill it goes on with (script 189)
-  afterPlayerAction(s, e, from, art) {
+  afterPlayerAction(s, e, from, art, forcedAttack = null) {
     if (this.lastAct?.s === s && G.time - this.lastAct.t < 0.12) return;
     this.lastAct = { s, t: G.time };
     if (!art) this.actorUserEffect(s, e?.battle);
-    this.playerFollowUp(s, e, from);
+    this.playerFollowUp(s, e, from, 0, this._menuWeaponContext, forcedAttack);
   }
   // a skill of mine that goes on with another (script 189 使用後追加行動 - 거룩한 총검's cut or thrust and then its gun
   // break, 글라키의 묵시록 and its thorns, 사자선풍 or 잭 슈트룸 again half the time): that one comes by itself a moment
   // later, on the same enemy (else the nearest; all around for an "all" skill), or on me - as many hits as it has (풀
   // 버스트's 7); a shot from the gun in the right hand when there is one (거룩한 총검), else from the left
-  playerFollowUp(s, e, from, depth = 0, menuWeaponContext = this._menuWeaponContext) {
+  playerFollowUp(s, e, from, depth = 0, menuWeaponContext = this._menuWeaponContext, forcedAttack = null) {
     const actor = G.state.party.leader();
     if (!s || !actor || depth > 8) return;
     for (const a of this.afterActions(s)) {
@@ -3959,12 +3976,12 @@ export class CombatSystem {
             const f = this.shotKind === 'gun' && this.weapon && !this.disarmed ? this.muzzle() : this.castOrigin();
             this.spawnTracer(f, wp, 0xfff0c0);
             G.coop?.shareLine?.(f, wp, 0xfff0c0);
-          }, { battle: t.battle, valid: () => t.alive && !t.hidden });
+          }, { battle: t.battle, valid: () => t.alive && !t.hidden && this.forcedAttackValid(forcedAttack) });
         }
         if (!targets.length) this.applyUsableToActor(next, 'self');
         this.actorUserEffect(next, targets[0]?.battle || e?.battle);
-        this.playerFollowUp(next, targets[0] || e, from, depth + 1, menuWeaponContext);
-      }, { battle: e?.battle, valid: () => actor.hp > 0 });
+        this.playerFollowUp(next, targets[0] || e, from, depth + 1, menuWeaponContext, forcedAttack);
+      }, { battle: e?.battle, valid: () => actor.hp > 0 && this.forcedAttackValid(forcedAttack) });
       return;
     }
   }
@@ -4496,7 +4513,7 @@ export class CombatSystem {
   // (owner 'peer': another co-op player's shot as this world shows it - peerShot; anim: what plays where it ends)
   spawnProjectile(from, dir, { speed = 7, color = 0x8844ff, owner = 'enemy', enemy = null, skill = null, power = 1, homing = 0.6, target = null, usable = null, mesh = null, certain = false, aoe = 0, dest = null, life = 4, breakSkill = null, cap = null,
     gravity = 0, track = null, landAt = 0, align = false, tumble = false, fine = false, aimAt = null, steer = 0, accel = 0, maxSpeed = speed, pierce = false, ghost = false, one = false, volley = null, anim = 0,
-    staff = 0, menuWeaponContext = null, normalAttackOnly = false }) {
+    staff = 0, menuWeaponContext = null, normalAttackOnly = false, forcedAttack = null }) {
     if (!mesh) {
       mesh = new THREE.Mesh(new THREE.SphereGeometry(owner === 'enemy' ? 0.13 : 0.08, 12, 8),
         new THREE.MeshBasicMaterial({ color, toneMapped: false }));
@@ -4507,7 +4524,7 @@ export class CombatSystem {
     mesh.position.copy(from);
     this.root.add(mesh);
     const p = { mesh, vel: dir.clone().normalize().multiplyScalar(speed), owner, enemy, skill, power, life, homing, speed, target, usable, certain, aoe, dest, breakSkill, cap,
-      gravity, track, landAt, align, tumble, fine, aimAt, steer, accel, maxSpeed, pierce, ghost, one, volley, anim, color, staff, menuWeaponContext, normalAttackOnly };
+      gravity, track, landAt, align, tumble, fine, aimAt, steer, accel, maxSpeed, pierce, ghost, one, volley, anim, color, staff, menuWeaponContext, normalAttackOnly, forcedAttack };
     this.projectiles.push(p);
     if (owner === 'player') this.shareShot(p, from);
     if (aoe > 0 && dest && (owner === 'player' || owner === 'peer')) this.areaMark(dest, aoe, G.time + life, p);
@@ -4689,6 +4706,8 @@ export class CombatSystem {
   }
 
   update(dt) {
+    // Expiry must precede both queued action tails and new forced dispatch.
+    if (G.map?.grid) this.updateActorStates(dt, this.paused());
     this.updateBonusActions(dt, this.paused());
     if (!G.map?.grid) return;
     if (this.gripAdjust) this.updateGripAdjust();
@@ -4726,7 +4745,6 @@ export class CombatSystem {
     if (this.guardUp && this.handsBusy()) this.updateGuard();
     this.updateWeaponGlow();
     this.updateBreakReady(paused);
-    this.updateActorStates(dt, paused);
     this.updateGhost();
     this.updateWeaponFx(dt);
     if (this.spectating) this.setGhostly(true);       // (co-op: watching a fight fallen - what it holds stays a shade)
@@ -7130,7 +7148,7 @@ export class CombatSystem {
               if (p.volley) p.volley.shown = true;
             } else if (p.breakSkill && (this.breakCooldown || 0) <= G.time) this.breakOnHit(e, p.breakSkill, pos);
             else {
-              this.playerHitEnemy(e, p.power, false, pos, { one: p.one, normalAttackOnly: p.normalAttackOnly });
+              this.playerHitEnemy(e, p.power, false, pos, { one: p.one, normalAttackOnly: p.normalAttackOnly, forcedAttack: p.forcedAttack });
               if (p.staff) p.burstAt = e.worldPos(new THREE.Vector3());       // (its blow and its reach landed there: staffBurst shows it)
             }
             break;
@@ -8274,11 +8292,11 @@ export class CombatSystem {
   // whole blow where it lands). A gun whose normal attack hits several times (한스의 기관총: its attack count) fires as
   // many bullets in a burst, each of them one hit. A gun whose blow goes on with a shot of its own fires that shot
   // instead (gunShotSkill - 거룩한 총검)
-  fireRanged({ forcedTarget = null } = {}) {
+  fireRanged({ forcedTarget = null, forcedAttack = null } = {}) {
     if (this.manualConfusionBlocked() && !forcedTarget) return false;
     const kind = this.shotKind, actor = G.state.party.leader();
     const shot = kind === 'gun' && actor ? this.gunShotSkill(actor) : null;
-    if (shot) return this.fireSkillShot(actor, shot, { forcedTarget });
+    if (shot) return this.fireSkillShot(actor, shot, { forcedTarget, forcedAttack });
     const n = kind !== 'gun' || !actor ? 1 : this.attackHits(this.skillByState(actor, this.playerAttackSkill(actor)), actor);
     const eligible = !!(forcedTarget || this.readyAim().enemy)?.alive, tail = (n - 1) * BURST_GAP;
     if (!this.playerActionReady(eligible, G.time + Math.max(0, this.rangedCooldown || 0))) return false;
@@ -8287,10 +8305,11 @@ export class CombatSystem {
     if (!action) return false;
     if (!G.vr) this.deskActUntil = G.time + DESK_ACT + tail;
     this.rangedCooldown = recovery;
+    this.confusionAction = forcedAttack;
     const brk = forcedTarget ? null : this.breakArmed(); // (fired with Break held: the first shot carries the Break)
-    this.fireShot(kind, n > 1, brk, { forcedTarget });
-    for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot(kind, true, null, { forcedTarget }),
-      { battle: forcedTarget?.battle, valid: () => !forcedTarget || forcedTarget.alive && !forcedTarget.hidden });
+    this.fireShot(kind, n > 1, brk, { forcedTarget, forcedAttack });
+    for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot(kind, true, null, { forcedTarget, forcedAttack }),
+      { battle: forcedTarget?.battle, valid: () => this.forcedAttackValid(forcedAttack) && (!forcedTarget || forcedTarget.alive && !forcedTarget.hidden) });
     this.finishPlayerAction(action, DESK_ACT + tail);
     return true;
   }
@@ -8308,7 +8327,7 @@ export class CombatSystem {
   // that shot fired: as many rounds as it hits (풀 버스트: 7 in a burst, each one hit of it), each landing as the skill
   // does - its damage, its Break / Hard Break, its animation once; paid and cooling as the skill is (Ⅱ, Ⅲ: 3 turns). Cooling
   // (or unpaid), nothing fires: the original's stab goes on without its shot then
-  fireSkillShot(actor, s, { forcedTarget = null } = {}) {
+  fireSkillShot(actor, s, { forcedTarget = null, forcedAttack = null } = {}) {
     if (this.manualConfusionBlocked() && !forcedTarget) return false;
     if (this.skillCooling(s) > 0 || !actor.skillCostPayable(s) || actor.skillSealed(s.id) || !actor.skillTypeUsable(s)) {
       this.rangedCooldown = 0.25;
@@ -8327,15 +8346,16 @@ export class CombatSystem {
     if (!G.vr) this.deskActUntil = action.ticket?.bonus ? G.time + DESK_ACT + tail
       : Math.max(this.deskActUntil ?? -Infinity, G.time + DESK_ACT + 0.6, G.time + DESK_ACT + tail);
     this.rangedCooldown = 0.6 + tail;
+    this.confusionAction = forcedAttack;
     const volley = { shown: false };
-    this.fireShot('gun', true, null, { skill: s, volley, forcedTarget });
-    for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot('gun', true, null, { skill: s, volley, forcedTarget }),
-      { battle: forcedTarget?.battle, valid: () => !forcedTarget || forcedTarget.alive && !forcedTarget.hidden });
+    this.fireShot('gun', true, null, { skill: s, volley, forcedTarget, forcedAttack });
+    for (let i = 1; i < n; i++) this.later(i * BURST_GAP * 1000, () => this.fireShot('gun', true, null, { skill: s, volley, forcedTarget, forcedAttack }),
+      { battle: forcedTarget?.battle, valid: () => this.forcedAttackValid(forcedAttack) && (!forcedTarget || forcedTarget.alive && !forcedTarget.hidden) });
     this.finishPlayerAction(action, DESK_ACT + tail);
     return true;
   }
   // one round of kind 'gun' | 'bow' | 'magic' (skill: a skill's shot, one hit of it - fireSkillShot)
-  fireShot(kind, one, breakSkill, { skill = null, volley = null, forcedTarget = null } = {}) {
+  fireShot(kind, one, breakSkill, { skill = null, volley = null, forcedTarget = null, forcedAttack = null } = {}) {
     if (!this.weapon || this.disarmed) return;
     const bow = kind === 'bow', magic = kind === 'magic';
     const from = this.muzzle();
@@ -8344,7 +8364,7 @@ export class CombatSystem {
       : ray ? ray.dir : new THREE.Vector3(0, 0, -1).applyQuaternion(G.three.camera.getWorldQuaternion(new THREE.Quaternion()));
     this.spawnProjectile(from, dir, { speed: bow ? 18 : 16, color: magic ? 0x6688ff : 0xffe0a0, owner: 'player', power: 0.9, homing: 0, breakSkill, one, usable: skill, volley,
       staff: magic && !skill ? STAFF_BURST : 0, menuWeaponContext: breakSkill ? this.breakArm?.menuWeaponContext : null,
-      target: forcedTarget, normalAttackOnly: !!forcedTarget,
+      target: forcedTarget, normalAttackOnly: !!forcedTarget, forcedAttack,
       ...(bow ? { mesh: this.arrowMesh(), align: true } : {}) });
     G.audio?.playSe(G.seAt(bow ? 'Bow1' : magic ? 'Magic1' : 'Gun1', 80, 100));
     G.input.haptic('right', 0.6, one ? 30 : 50);

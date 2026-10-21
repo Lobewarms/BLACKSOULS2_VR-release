@@ -6,6 +6,18 @@ import { normalizeMoveSpeed } from './movement-speed.js';
 import { originalEnvironmentState } from './environment-state.js';
 import { actorEquipment } from './actor-equipment.js';
 
+// Identity of one live state application. Never serialized: a removed/cured
+// state cannot lend its identity to a later application of the same state ID.
+const stateInstances = new WeakMap();
+export function stateInstance(battler, id) {
+  if (!battler?.isState(id)) return null;
+  let instances = stateInstances.get(battler);
+  if (!instances) stateInstances.set(battler, (instances = new Map()));
+  if (!instances.has(id)) instances.set(id, {});
+  return instances.get(id);
+}
+function forgetStateInstance(battler, id) { stateInstances.get(battler)?.delete(id); }
+
 // script 131 ステータス限界突破: the most a param can be - the script's own limits (actors 999,999 HP, 99,999 MP, 9,999
 // the rest; enemies 9,999,999 HP) plus every <限界変動:n,v> on the battler's actor / class / equipment / states / enemy
 // (one to a line): the player's actors 1-11 go up to 1,099,998 HP, 199,998 MP and 109,998 for the rest. (They were
@@ -192,6 +204,7 @@ export class BattlerBase {
   // (as VX Ace's refresh after a state comes or goes: HP and MP no higher than the maximum it leaves - 기사의 긍지's
   // doubled HP gone, the HP over it goes too)
   removeState(id) {
+    forgetStateInstance(this, id);
     this.states = this.states.filter(s => s !== id);
     delete this.stateTurns[id];
     delete this.stateTimerRemaining[id];
@@ -205,6 +218,7 @@ export class BattlerBase {
     const resisted = new Set(this.featuresSet(14));
     this.states = this.states.filter(id => {
       if (!resisted.has(id)) return true;
+      forgetStateInstance(this, id);
       delete this.stateTurns[id]; delete this.stateSteps[id]; delete this.stateTimerRemaining[id];
       return false;
     });
@@ -353,6 +367,7 @@ export class BattlerBase {
   // VX Ace's clear_states as script 115 (全回復無効ステート) has it: a state noted [全回復無効ステート] stays -
   // 망자 through a bonfire's Recover All, a boss's domain, a companion's difficulty - until an event takes it away
   clearStates() {
+    for (const id of this.states) if (!($data.states[id]?.note || '').includes('[全回復無効ステート]')) forgetStateInstance(this, id);
     this.states = this.states.filter(id => ($data.states[id]?.note || '').includes('[全回復無効ステート]'));
     for (const id of Object.keys(this.stateTurns)) if (!this.states.includes(+id)) delete this.stateTurns[id];
     for (const id of Object.keys(this.stateTimerRemaining)) if (!this.states.includes(+id)) delete this.stateTimerRemaining[id];

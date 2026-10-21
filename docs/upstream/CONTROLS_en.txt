@@ -1,5 +1,10 @@
-﻿BLACK SOULS II VR - Controls  (version 0.2.51)
+﻿BLACK SOULS II VR - Controls  (version 0.2.52)
 ================================================
+
+Confusion ending correctly
+- Curing or ending Rampage stops queued automatic hits, follow-up skills and
+  unlaunched gun rounds, and restores manual attacks and skills immediately.
+- Already-fired projectiles and paid weapon-skill cooldowns continue normally.
 
 Combat and event fidelity fixes
 - Attacks, skills and projectiles now use the original critical scaling, critical

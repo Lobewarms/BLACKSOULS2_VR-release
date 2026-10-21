@@ -3048,3 +3048,33 @@ The content comparison retains all48 original modules:
 0 missing; modified-original summary +5134/-1064.
 The literal public diff retains moved import-path changes. Historical image
 versions, source pins and upstream/fork labels remain unchanged.
+
+## Confusion action lifetime and recovery ownership (0.2.52)
+
+After Rampage38 ended, the first delayed melee callback stopped but its already
+scheduled normal repeats, automatic followups and ranged burst callbacks did
+not check the state again. The long forced burst's shared active/recovery and
+ranged gates also survived the cure, making manual skill use remain blocked.
+Do not fix this by deleting native states, timers, skill cooldowns or saves.
+
+Each forced attack captures the live application of the restriction1 state in
+an ephemeral WeakMap token. Reapplying a still-active state refreshes it;
+remove/cure, resistance refresh and Recover All discard its token. A later
+application cannot revive earlier queued actions. Save JSON remains unchanged.
+Propagate this context through forced melee repeats, followups and unlaunched
+normal/native gun rounds. Already released projectiles retain normal flight
+and impact; their extra followups still respect the originating state lifetime.
+Do not attach this cancellation to independent enemy counter responses.
+
+Only the latest accepted forced action owns confusionAction. Any newly accepted
+manual action takes ownership of shared recovery, so stale cleanup cannot erase
+its delays. An expired forced owner releases only its shared gates, animation
+and remaining burst; paid native skill cooldowns remain authoritative. Actor
+state expiration runs before queued tails and forced dispatch, preventing one final automatic
+shot on the frame that removes the state. Reset clears transient ownership.
+
+Eight production-path regressions reproduce and verify melee repeats/followup,
+both gun burst forms, cure/reapply between frames, immunity/Recover All identity,
+manual skill recovery ownership and timed expiry ordering. The previous source
+fails four new regressions; all1,390 JavaScript tests pass after the repair.
+Original game records and player saves are read-only; no headset playtest claim.

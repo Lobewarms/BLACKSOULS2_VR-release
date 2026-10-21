@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { G } from '../src/core/globals.js';
 import { $data } from '../src/data/data.js';
-import { GameState, BattlerBase } from '../src/game/state.js';
+import { GameState, BattlerBase, stateInstance } from '../src/game/state.js';
 import { AllySystem } from '../src/entities/allies.js';
 import { Player } from '../src/entities/player.js';
 import { GameMap } from '../src/world/gamemap.js';
@@ -299,6 +299,83 @@ test('Rampage cannot attack through a blocked route and a cured state cancels a 
   assert.equal(e.combat.performConfusionAttack(e.enemy), false); assert.equal(e.b.hp, 10000);
   G.map.passableFor = () => true; clearEdgeCache(); assert.equal(e.combat.performConfusionAttack(e.enemy), true);
   e.actor.removeState(38); e.advance(1); assert.equal(e.b.hp, 10000); assert.equal(e.combat.manualConfusionBlocked(), false);
+});
+
+test('curing Rampage after the first melee hit stops the remaining authored repeats and automatic follow-up', t => {
+  const e = environment(t); rampage(e); $data.skills[1].repeats = 3;
+  $data.skills[1].note = '<使用後追加行動:10,-2,100>';
+  $data.skills[10] = action(10, { mp_cost: 7 });
+  assert.equal(e.combat.performConfusionAttack(e.enemy), true); e.advance(0.112);
+  assert.equal(e.b.hp, 9900); const mp = e.actor.mp;
+  e.actor.removeState(38); e.advance(1);
+  assert.equal(e.b.hp, 9900); assert.equal(e.actor.mp, mp);
+});
+
+for (const nativeShot of [false, true]) test(`curing Rampage stops unlaunched ${nativeShot ? 'native gun-skill' : 'normal gun'} rounds and releases forced recovery`, t => {
+  const e = environment(t); rampage(e); e.combat.weapon.userData.ranged = true; e.combat.shotKind = 'gun';
+  if (nativeShot) {
+    $data.skills[1].note = '<使用後追加行動:10,-2,100>';
+    $data.skills[10] = action(10, { mp_cost: 7, repeats: 3, note: '<クールタイム:3>' });
+    t.mock.method(e.combat, 'skillLook', obj => obj.id === 10 ? 'gun' : 'melee');
+  } else $data.actors[1].features.push(trait(34, 0, 2));
+  assert.equal(e.combat.performConfusionAttack(e.enemy), true); assert.equal(e.combat.projectiles.length, 1);
+  const nativeCooldown = nativeShot ? e.combat.skillCooling($data.skills[10]) : 0;
+  if (nativeShot) assert.ok(nativeCooldown > 0);
+  e.actor.removeState(38); e.combat.updateConfusion(0, false);
+  assert.equal(e.combat.manualConfusionBlocked(), false); assert.equal(e.combat.playerActionReady(true), true);
+  assert.equal(e.combat.rangedCooldown, 0);
+  if (nativeShot) assert.equal(e.combat.skillCooling($data.skills[10]), nativeCooldown, 'curing does not reset a paid native skill cooldown');
+  e.advance(1);
+  assert.equal(e.combat.projectiles.length, 1, 'an already released bullet remains, but no more rounds launch');
+  if (nativeShot) assert.equal(e.combat.skillCooling($data.skills[10]), nativeCooldown - 1);
+});
+
+test('a cured and reapplied Rampage cannot revive repeats from its previous application', t => {
+  const e = environment(t); rampage(e); $data.skills[1].repeats = 3;
+  e.combat.performConfusionAttack(e.enemy); e.advance(0.112); assert.equal(e.b.hp, 9900);
+  e.actor.removeState(38); e.actor.addState(38); e.advance(1);
+  assert.equal(e.b.hp, 9900); assert.equal(e.combat.manualConfusionBlocked(), true);
+});
+
+test('forced attack identity survives refresh but is discarded by immunity and full recovery', t => {
+  const e = environment(t); rampage(e); const first = stateInstance(e.actor, 38);
+  e.actor.addState(38); assert.equal(stateInstance(e.actor, 38), first, 'refreshing a live status continues its application');
+  $data.actors[1].features.push(trait(14, 38)); e.actor.clampHpMp(); assert.equal(stateInstance(e.actor, 38), null);
+  $data.actors[1].features.pop(); e.actor.addState(38); assert.notEqual(stateInstance(e.actor, 38), first);
+  const next = stateInstance(e.actor, 38); e.actor.recoverAll(); e.actor.addState(38);
+  assert.notEqual(stateInstance(e.actor, 38), next);
+  assert.equal('stateInstances' in e.actor.toJSON(), false);
+});
+
+test('ending a forced burst restores direct skill use and cannot erase a newer manual action recovery', t => {
+  const e = environment(t); rampage(e); e.combat.weapon.userData.ranged = true; e.combat.shotKind = 'gun';
+  $data.actors[1].features.push(trait(34, 0, 2)); e.combat.performConfusionAttack(e.enemy);
+  e.actor.removeState(38); e.combat.updateConfusion(0, false);
+  const skill = $data.skills[10] = action(10, { mp_cost: 7 }); e.actor.learnSkill(10);
+  assert.equal(e.combat.useSkillFromMenu(skill), true); assert.equal(e.actor.mp, 993);
+  const active = e.combat.playerActiveUntil, recovery = e.combat.playerRecoveryUntil;
+  e.combat.updateConfusion(0, false);
+  assert.equal(e.combat.playerActiveUntil, active); assert.equal(e.combat.playerRecoveryUntil, recovery);
+});
+
+for (const queued of [false, true]) test(`the real gameplay update expires Rampage before ${queued ? 'queued rounds' : 'a new automatic shot'}`, t => {
+  const e = environment(t); rampage(e); e.battle.time = 0;
+  e.combat.weapon.userData.ranged = true; e.combat.shotKind = 'gun';
+  if (queued) {
+    $data.actors[1].features.push(trait(34, 0, 2));
+    e.combat.performConfusionAttack(e.enemy); assert.equal(e.combat.projectiles.length, 1);
+  }
+  e.state.system.stateTimers = { 38: 0.01 };
+  Object.assign(G.map, { interpreter: { running: () => false }, reservedCommon: [] });
+  Object.assign(G.input, { block: () => false, disarmPressed: () => false });
+  e.combat.fadingMarkers = []; e.combat.staminaDelay = 0;
+  for (const method of ['refreshEquipment', 'alignHeldToRay', 'updateDeskShield', 'updateDesktopEquipment', 'updateQuick',
+    'updateReady', 'updateHeld', 'updateFx', 'updateAreaMarks', 'updateSymbols', 'updateWeaponGlow', 'updateBreakReady',
+    'updatePlayerAttack', 'updateGhost', 'updateWeaponFx', 'updateEnemies', 'updateProjectiles', 'updateWaves', 'updateHazards', 'updatePopups']) t.mock.method(e.combat, method, () => {});
+  t.mock.method(e.combat.allies, 'update', () => {});
+  G.time += 0.1; e.combat.update(0.1);
+  assert.equal(e.actor.isState(38), false); assert.equal(e.combat.projectiles.length, queued ? 1 : 0);
+  assert.equal(e.combat.manualConfusionBlocked(), false);
 });
 
 test('common gameplay updates dispatch Rampage automatically and an inspection menu freezes its attack', t => {
