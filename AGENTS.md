@@ -3078,3 +3078,12 @@ both gun burst forms, cure/reapply between frames, immunity/Recover All identity
 manual skill recovery ownership and timed expiry ordering. The previous source
 fails four new regressions; all1,390 JavaScript tests pass after the repair.
 Original game records and player saves are read-only; no headset playtest claim.
+
+Current0.2.52 source comparison: runtime 8a0054bb772f701f51893e37fc04e6d3a0dfce01, actual upstream ZIP
+d39c2afd830c7be7fbbe2a86380f9c490e377bf7; all48 original modules retained,
+15 unchanged after import moves, 33
+modified, 55 new fork modules, 0 missing;
+modified-original summary +5174/-1069.
+The public literal diff retains import moves; historical screenshots keep their
+exact previous source pins. Local1,390tests, ESLint, build, Ruff,8packaging and
+7protocol cases passed. Windows distribution gates also run in CI.
