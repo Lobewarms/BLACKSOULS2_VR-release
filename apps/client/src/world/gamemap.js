@@ -1,5 +1,6 @@
 // Map runtime: events, interpreters, passability (with BLACKSOULS II region rules), transfers.
 import { G } from '../core/globals.js';
+import { worldMenuPaused } from '../game/world-pause.js';
 import { $data, loadMap } from '../data/data.js';
 import { MapGrid, T } from './mapmesh.js';
 import { GameEvent, GameCharacter, commonEventList } from '../entities/character.js';
@@ -289,6 +290,7 @@ export class GameMap {
 
   // one logic frame (60 Hz)
   update() {
+    if (worldMenuPaused()) { G.pictures?.advanceViewerCancel?.(1 / 60); return; }
     if (this.needRefresh) this.refresh();
     // (a co-op phantom in another player's world: that world's events are its host's to run - coop.js; one leading a map
     // the host is not on runs only what it began itself - a boss fight the host let the guests have)
@@ -297,13 +299,15 @@ export class GameMap {
       this.updateRegionEvents();
       this.updateInterpreter();
     } else if (G.coop.leadsNow) this.updateLeadInterpreter();
+    if (worldMenuPaused()) return;
     this.playerChar.update();
-    for (const ev of this.eventList) ev.update();
+    for (const ev of this.eventList) { ev.update(); if (worldMenuPaused()) return; }
     if (own) for (const c of this.commonParallel) {
       if (!G.state.sw(c.ce.switch_id)) continue;
       if (G.combat?.inCombat && !c.interp.running()) continue;       // (as the original's battle scene: not during a fight)
       if (!c.interp.running()) c.interp.setup(c.ce.list, 0);
       c.interp.update();
+      if (worldMenuPaused()) return;
     }
     for (const ev of this.eventList) if (ev.balloonTime > 0 && --ev.balloonTime === 0) ev.balloonId = 0;
     const pc = this.playerChar;

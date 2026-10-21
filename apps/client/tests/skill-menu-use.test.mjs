@@ -82,7 +82,13 @@ function environment(t, obj = skill()) {
     battle.enemies.push(enemy); combat.battles.push(battle); combat.enemies.push(enemy); return enemy;
   };
   const selectUse = () => { ui.showSkillActions({ id: obj.id }); ui.list.onSelect(0, ui.list.items[0]); };
-  return { actor, combat, ui, state, map, obj, toasts, bursts, animations, selectUse, addTarget, blockedEdges };
+  const advance = seconds => {
+    for (let left = seconds; left > 1e-9;) {
+      const dt = Math.min(left, 1 / 60); left -= dt; G.time += dt;
+      combat.updateBonusActions(dt, false); combat.updateProjectiles(dt, false);
+    }
+  };
+  return { actor, combat, ui, state, map, obj, toasts, bursts, animations, selectUse, addTarget, blockedEdges, advance };
 }
 
 test('menu support casts heal directly and pay HP, MP and TP once before resuming the field action', t => {
@@ -110,7 +116,6 @@ test('battle-only support can be used from the menu and returns to the ongoing f
 });
 
 test('using a spell from the real menu immediately launches at a valid target and pays once without changing quick slots', t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
   const e = environment(t, skill(101, { scope: 1, hit_type: 2,
     damage: { type: 1, formula: '100', element_id: 0, variance: 0, critical: false } }));
   const enemy = e.addTarget();
@@ -123,13 +128,12 @@ test('using a spell from the real menu immediately launches at a valid target an
   assert.equal(e.combat.projectiles.length, 1); assert.equal(e.combat.projectiles[0].usable, e.obj);
   assert.equal(e.combat.projectiles[0].target, enemy);
   assert.deepEqual([e.actor.mp, e.actor.tp], [80, 43]);
-  for (let i = 0; i < 60 && e.combat.projectiles.length; i++) { e.combat.updateProjectiles(1 / 60, false); t.mock.timers.tick(0); }
+  e.advance(1);
   assert.equal(enemy.b.hp, 900); assert.deepEqual([e.actor.mp, e.actor.tp], [80, 43]);
   assert.deepEqual(e.state.quickSlots, slots);
 });
 
 test('a menu weapon art immediately lands all authored repeats and uses the original weapon animation without arming', t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
   const e = environment(t, skill(101, { scope: 1, hit_type: 1, repeats: 3, animation_id: -1, note: '<クールタイム:2>',
     damage: { type: 1, formula: 'a.atk', element_id: 0, variance: 0, critical: false } }));
   $data.weapons[1].animation_id = 17;
@@ -138,9 +142,11 @@ test('a menu weapon art immediately lands all authored repeats and uses the orig
   assert.equal(e.ui.menuOpen, false); assert.equal(e.combat.skillArm, null); assert.equal(e.combat.ready, undefined);
   assert.equal(enemy.b.hp, 920); assert.equal(e.bursts.length, 0);
   assert.deepEqual([e.actor.mp, e.actor.tp], [80, 43]);
-  t.mock.timers.tick(240);
+  const cooldown = e.combat.skillCD[101];
+  e.advance(0.24);
   assert.equal(enemy.b.hp, 760); assert.deepEqual([e.actor.mp, e.actor.tp], [80, 43]);
-  assert.equal(e.combat.skillCD[101], G.time + e.combat.coolSeconds(e.obj));
+  assert.equal(e.combat.skillCD[101], cooldown);
+  assert.ok(Math.abs(cooldown - G.time - (e.combat.coolSeconds(e.obj) - 0.24)) < 1e-8);
   assert.equal(e.animations.length, 1); assert.equal(e.animations[0][1], 17);
 });
 
@@ -174,7 +180,6 @@ for (const vr of [false, true]) for (const [reason, arrange] of invalidTargets) 
 }
 
 test('all-enemy immediate casts preserve targets, repeats and one cost/common event for the complete action', t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] });
   const e = environment(t, skill(101, { scope: 2, hit_type: 1, repeats: 3, note: '<クールタイム:2>',
     damage: { type: 1, formula: '100', element_id: 0, variance: 0, critical: false }, effects: [{ code: 44, data_id: 1 }] }));
   const first = e.addTarget(), second = e.addTarget(4, 2), behind = e.addTarget(3, 8);
@@ -182,18 +187,19 @@ test('all-enemy immediate casts preserve targets, repeats and one cost/common ev
   e.selectUse();
   assert.deepEqual([first.b.hp, second.b.hp, behind.b.hp], [900, 900, 1000]);
   assert.equal(e.combat.sideInterps.length, 1); e.combat.sideInterps[0].update(); assert.equal(e.state.v(88), 1);
-  t.mock.timers.tick(240);
+  const cooldown = e.combat.skillCD[101];
+  e.advance(0.24);
   assert.deepEqual([first.b.hp, second.b.hp, behind.b.hp], [700, 700, 1000]);
   assert.deepEqual([e.actor.mp, e.actor.tp], [80, 43]); assert.equal(e.combat.sideInterps.length, 1);
-  assert.equal(e.combat.skillCD[101], G.time + e.combat.coolSeconds(e.obj)); assert.equal(e.ui.menuOpen, false);
+  assert.equal(e.combat.skillCD[101], cooldown); assert.equal(e.ui.menuOpen, false);
 });
 
 test('random-target immediate casts keep the authored target count and repeats without multiplying action costs', t => {
-  t.mock.timers.enable({ apis: ['setTimeout'] }); t.mock.method(Math, 'random', () => 0);
+  t.mock.method(Math, 'random', () => 0);
   const e = environment(t, skill(101, { scope: 4, hit_type: 1, repeats: 2,
     damage: { type: 1, formula: '100', element_id: 0, variance: 0, critical: false } }));
   const first = e.addTarget(), second = e.addTarget(4, 2);
-  e.selectUse(); t.mock.timers.tick(120);
+  e.selectUse(); e.advance(0.12);
   assert.deepEqual([first.b.hp, second.b.hp], [600, 1000], 'two random targets each receive two repeats');
   assert.deepEqual([e.actor.mp, e.actor.tp], [80, 43]); assert.equal(e.ui.menuOpen, false);
 });

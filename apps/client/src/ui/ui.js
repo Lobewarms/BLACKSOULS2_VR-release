@@ -3144,6 +3144,11 @@ export class UI {
   update(dt) {
     this.consumedConfirm = false;
     this.pointerTarget = false;
+    if (G.movies?.busy()) {
+      this.consumedConfirm = true;
+      G.input.syncPointerUi?.(true);
+      return;
+    }
     this.updateDialoguePresentation();
     this.updateBonfireTravel();
     this.updateSkillProfile({ positionSearch: false });

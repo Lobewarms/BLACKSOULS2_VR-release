@@ -1,5 +1,17 @@
-﻿BLACK SOULS II VR - Controls  (version 0.2.50)
+﻿BLACK SOULS II VR - Controls  (version 0.2.51)
 ================================================
+
+Combat and event fidelity fixes
+- Attacks, skills and projectiles now use the original critical scaling, critical
+  evasion, counter, reflection and substitution rules. Each repeated strike gets
+  its own chance to hit; weapon arts keep their own authored repeat count.
+- Bonus Actions remain available when an ordinary action is already ready.
+- Enemy skills respect Silence, seals and resources. An enemy with no usable
+  action waits. Rampage forces normal attacks rather than permitting manual arts.
+- Delayed strikes, NPC cooldowns, map events, movement routes and timers pause
+  with local menus. Companion status durations refresh and survive save/load.
+- Nested confirmations preserve the original choice group. Original event
+  movies play on PC and in VR; use Play/A/Enter if prompted, or Skip/B/Esc.
 
 Grand Guignol Skills menu
 - R opens Skills during Grand Guignol and other battles whose entrances disable

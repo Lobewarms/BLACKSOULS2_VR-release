@@ -149,6 +149,55 @@ async function realUiEnvironment(t) {
   return { ...e, ui, frame, view };
 }
 
+function waitingViewer(e, trigger = 4, frames = 2) {
+  const event = e.map.events[2], list = [command(230, [frames]), ...event.list];
+  event.event.pages = [page(list, trigger, 7)]; event.refresh();
+  const interpreter = trigger === 4 ? event.interpreter : e.map.interpreter;
+  interpreter.setup(list, event.id); interpreter.update();
+  return { event, interpreter, list };
+}
+
+for (const trigger of [3, 4]) test(`menu cancellation advances only the waiting native ${trigger === 3 ? 'autorun' : 'parallel'} viewer`, async t => {
+  const e = await realUiEnvironment(t); await e.view(); const owner = waitingViewer(e, trigger);
+  assert.equal(owner.interpreter.waitCount, 1);
+  let routes = 0, unrelated = 0;
+  e.map.playerChar.update = () => routes++;
+  e.map.eventList.push({ page: null, update: () => unrelated++ });
+  e.map.commonParallel.push({ ce: { switch_id: 7 }, interp: { running: () => true, update: () => unrelated++ } });
+  G.state.system.timer = { working: true, count: 60 };
+  e.ui.openMenu(); await e.frame();
+  assert.equal(owner.interpreter.waitCount, 0); assert.equal(e.pictures.pics.has(1), true);
+  assert.equal(e.pictures.viewerCancelPending(), true);
+  await e.frame();
+  assert.equal(G.state.sw(7), false); assert.equal(e.pictures.pics.has(1), false);
+  assert.equal(e.pictures.viewerCancelPending(), false); assert.equal(e.input.rmButton(12), false);
+  for (let i = 0; i < 4; i++) await e.frame();
+  assert.equal(e.ui.menuOpen, true); assert.equal(routes, 0); assert.equal(unrelated, 0);
+  assert.equal(G.state.system.timer.count, 60);
+});
+
+for (const reason of ['map', 'state', 'page', 'execution']) test(`a waiting viewer cancel cannot advance a replaced ${reason} owner`, async t => {
+  const e = await realUiEnvironment(t); await e.view(); const owner = waitingViewer(e);
+  e.ui.openMenu(); await e.frame(); assert.equal(owner.interpreter.waitCount, 0);
+  if (reason === 'map') e.map.mapId++;
+  else if (reason === 'state') G.state = { ...G.state };
+  else if (reason === 'page') owner.event.page = { ...owner.event.page };
+  else owner.interpreter.setup([command(235, [1]), command(0)], owner.event.id);
+  await e.frame();
+  assert.equal(e.pictures.viewerCancelPending(), false); assert.equal(e.pictures.pics.has(1), true);
+  assert.equal(e.input.rmButton(12), false); assert.equal(e.ui.menuOpen, true);
+});
+
+test('a viewer cleanup gets a finite interpreter budget without unpausing the world or manufacturing Erase', async t => {
+  const e = await realUiEnvironment(t); await e.view(); const owner = waitingViewer(e, 4, 1000);
+  let routes = 0; e.map.playerChar.update = () => routes++;
+  G.state.system.timer = { working: true, count: 60 }; e.ui.openMenu();
+  for (let i = 0; i < 605; i++) await e.frame();
+  assert.equal(e.pictures.viewerCancelPending(), false); assert.equal(e.pictures.pics.has(1), true);
+  assert.ok(owner.interpreter.waitCount > 0, 'the native long wait is neither skipped nor force-completed');
+  assert.equal(routes, 0); assert.equal(G.state.system.timer.count, 60); assert.equal(e.input.rmButton(12), false);
+});
+
 for (const key of ['Tab', 'KeyM', 'KeyN']) test(`real UI ${key} opening cancels only a B-controlled viewer through its original autorun`, async t => {
   const e = await realUiEnvironment(t); e.pictures.show([2, '', 0, 0, 0, 0, 100, 100, 255, 0]); await e.view();
   e.lock(); e.emit('keydown', { code: key }); await e.frame(); e.emit('keyup', { code: key });

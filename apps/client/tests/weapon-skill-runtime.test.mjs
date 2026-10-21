@@ -24,7 +24,6 @@ const skill = (id, extra = {}) => ({ __class: 'RPG::Skill', id, name: `Art ${id}
 function environment(t, extra = {}) {
   const previous = { ...G }, data = { ...$data };
   t.after(() => { Object.assign(G, previous); Object.assign($data, data); });
-  t.mock.timers.enable({ apis: ['setTimeout'] });
   const params = [1000, 200, 80, 30, 100, 30, 30, 30];
   const weapon = (id, features, plus = 0) => ({ __class: 'RPG::Weapon', id, name: `Weapon ${id}`, note: '',
     wtype_id: id === 1 ? 1 : 2, icon_index: id, etype_id: 0, animation_id: id + 10,
@@ -80,7 +79,8 @@ function environment(t, extra = {}) {
     battle.enemies.push(enemy); combat.battles.push(battle); combat.enemies.push(enemy); return enemy;
   };
   const snapshot = () => JSON.stringify({ actor: actor.toJSON(), party: state.party.toJSON(), slots: state.quickSlots, cd: combat.skillCD });
-  return { actor, state, map, combat, root, camera, addTarget, blocked, animations, toasts, gains, snapshot, art: $data.skills[101] };
+  const advance = milliseconds => { const dt = milliseconds / 1000; G.time += dt; combat.updateDelayedActions(dt, false); };
+  return { actor, state, map, combat, root, camera, addTarget, blocked, animations, toasts, gains, snapshot, advance, art: $data.skills[101] };
 }
 
 test('owned menu arts use bag weapons and combat offhands without teaching skills or borrowing storage/other actors', t => {
@@ -164,7 +164,7 @@ test('a borrowed melee art keeps source ATK, elements, on-hit traits and animati
   assert.equal(enemy.b.hp, 9900); assert.equal(enemy.b.isState(30), true);
   assert.equal(e.actor.atk, 80); assert.equal(e.actor.mp, 90); assert.equal(e.animations[0][1], 12);
   assert.equal(e.combat.heldSpecs().weapon.item, $data.weapons[2]);
-  t.mock.timers.tick(240);
+  e.advance(240);
   assert.equal(enemy.b.hp, 9700); assert.equal(e.actor.mp, 90);
   assert.equal(JSON.stringify(e.actor.equips), gear); assert.equal(JSON.stringify(e.state.party.toJSON()), bag);
   G.time += 1; assert.equal(e.combat.heldSpecs().weapon.item, $data.weapons[1]);
@@ -178,8 +178,8 @@ test('a borrowed projectile uses source magic and costs after usual equipment is
   const enemy = e.addTarget();
   assert.equal(e.combat.useSkillFromMenu(e.art), true); assert.equal(e.actor.mp, 90);
   assert.equal(e.actor.mat, 100); assert.equal(e.combat.projectiles.length, 1);
-  for (let n = 0; n < 90 && e.combat.projectiles.length; n++) { e.combat.updateProjectiles(1 / 60, false); t.mock.timers.tick(0); }
-  t.mock.timers.tick(120);
+  for (let n = 0; n < 90 && e.combat.projectiles.length; n++) { e.combat.updateProjectiles(1 / 60, false); e.advance(1000 / 60); }
+  e.advance(120);
   assert.equal(enemy.b.hp, 9700); assert.equal(e.actor.mp, 90); assert.equal(e.actor.mat, 100);
 });
 
@@ -187,7 +187,7 @@ test('native delayed followups retain the borrowed source and pay their own cost
   const e = environment(t, { note: '<使用後追加行動:102,0,100>' }); const enemy = e.addTarget();
   $data.skills[102].repeats = 2;
   assert.equal(e.combat.useSkillFromMenu(e.art), true); assert.equal(enemy.b.hp, 9800);
-  t.mock.timers.tick(320); t.mock.timers.tick(120);
+  e.advance(320); e.advance(120);
   assert.equal(enemy.b.hp, 9400); assert.equal(e.actor.mp, 88, 'main cost10 and followup cost2 use the source MCR');
   assert.equal(e.actor.atk, 80); assert.deepEqual(e.actor.skills, []);
 });
@@ -201,7 +201,7 @@ test('a reflected borrowed spell uses source offense against the normal real cas
     calculations.push([user.atk, target.def, target === e.actor]); return compute.call(this, user, target, ...args);
   });
   assert.equal(e.combat.useSkillFromMenu(e.art), true);
-  for (let n = 0; n < 90 && e.combat.projectiles.length; n++) { e.combat.updateProjectiles(1 / 60, false); t.mock.timers.tick(0); }
+  for (let n = 0; n < 90 && e.combat.projectiles.length; n++) { e.combat.updateProjectiles(1 / 60, false); e.advance(1000 / 60); }
   assert.deepEqual(calculations, [[200, 30, true]]);
   assert.equal(e.actor.hp, 330, 'borrowed ATK200 minus normal DEF30 is reflected; temporary DEF230 cannot protect it');
   assert.equal(enemy.b.hp, 10000); assert.equal(e.actor.def, 30); assert.equal(e.actor.mp, 90);
@@ -303,7 +303,7 @@ for (const reason of ['generation', 'map', 'leader', 'state', 'death', 'transfer
   if (reason === 'state') G.state = new GameState();
   if (reason === 'death') e.combat.playerDead = true;
   if (reason === 'transfer') e.map.transferring = true;
-  t.mock.timers.tick(500);
+  e.advance(500);
   assert.equal(enemy.b.hp, 9800); assert.equal(e.actor.equips[0].id, 1);
   e.combat.heldSpecs(); assert.equal(e.combat.menuWeaponVisual, null);
 });
@@ -327,7 +327,7 @@ test('real combat reset removes borrowed projectiles, visuals and all pending re
   Object.assign(e.combat, { detached: [], popups: [], fx: [], fadingMarkers: [], waves: [], hazards: [], defeated: new Set(),
     quick: { close() {} }, hideBlade() {} });
   e.combat.allies.reset = () => {}; enemy.remove = () => {};
-  e.combat.reset({ keepState: true }); t.mock.timers.tick(500);
+  e.combat.reset({ keepState: true }); e.advance(500);
   assert.equal(enemy.b.hp, 9800); assert.equal(e.combat.menuWeaponVisual, null); assert.equal(e.combat._menuWeaponContext, null);
   assert.deepEqual(e.combat.projectiles, []); assert.equal(e.actor.atk, 80); assert.equal(e.actor.equips[0].id, 1);
 });
@@ -336,8 +336,9 @@ test('co-op PvP sends every delayed hit with borrowed stats and normal serializa
   const e = environment(t, { repeats: 3 });
   const plan = e.combat.menuSkillPlan(e.art), sent = [], gear = JSON.stringify(e.actor.equips);
   G.coop.sendPvp = (_id, _skill, _mult, _crit, actor) => sent.push([actor === e.actor, actor.atk, JSON.stringify(actor.toJSON().equips)]);
+  G.ui.closeMenu();
   e.combat.withMenuWeapon(plan.context, () => e.combat.strikePlayerWith({ id: 'peer', x: 3, y: 0, z: 2 }, e.art));
-  t.mock.timers.tick(240);
+  e.advance(240);
   assert.deepEqual(sent, Array(3).fill([true, 200, gear])); assert.equal(e.actor.atk, 80);
 });
 

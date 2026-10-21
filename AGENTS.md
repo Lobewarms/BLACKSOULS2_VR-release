@@ -943,7 +943,7 @@ replacement for stun; 0.2.17 below restores the original weapon status.
 Keep full legitimate attack counts (upgraded Hans' Machine Gun reaches 12 hits),
 with bounded validation for malformed values. Accuracy penalties, skill success
 rates and target critical evasion must participate in real hit/critical rolls.
-The original normal-game critical multiplier is 2; do not silently replace it.
+The base engine critical multiplier is 2, but later original Script218 overrides it with DIFFICULTY_SETTING row11 (3.0 for every installed difficulty). Read the parsed effective row at variable60; fall back to the base2 only when that data is absent.
 
 Script 193 reads damage-rate piercing tags from feature objects and a differently
 spelled additional tag from skills, while the installed data puts the former tag
@@ -2974,3 +2974,67 @@ Current source comparison: runtime 5cd0ffe2d2c4ad9b0be8c3db46a2a8ad10248858 (0.2
 48 originals retained, 15 unchanged after import moves, 33 modified, 50 new and
 0 missing; 4,759 added/982 removed lines in modified originals after import
 normalization. Historical screenshot labels and pins are unchanged.
+
+## Combat and event fidelity audit fixes (0.2.51)
+
+The read-only native-script audit identified nineteen runtime defects plus a
+skipped movie command. Synthetic public regressions exercise production paths;
+private native scripts/databases/maps/saves stay outside Git and distribution.
+
+Combat invocation: use the final native critical multiplier table rather than
+an earlier overwritten method. Preview computeDamage never rolls. Executed
+critical-enabled damage rolls CRI plus the deliberate gesture bonus, then CEV;
+direct/R/projectile and reflected/companion paths share these semantics. Repeats
+roll HIT/EVA/CRI/CEV independently, including after a first miss. Only normal
+attacks inherit feature34 extra attacks. Followups multiply native random scope
+count by authored repeats. Physical direct and ranged arts invoke native CNT;
+the original custom counter still applies the incoming strike before answering.
+MRF precedes substitute selection; the selected substitute alone rolls HIT/EVA.
+Companion reflection targets the actual caster, with no recursive reflect/counter.
+
+Action choice: an already-ready normal action preserves the earned Bonus Action.
+Queued extras explicitly preferBonus and may never silently become normal casts.
+Enemy usable selection checks type42, skill44, resources, and base/state feature61.
+No usable native action means no invented basic attack. Confusion restriction1
+forces normal hostile attacks with real melee/projectile/cost routes, suppresses
+manual actions, guard and dodge, and clears prepared/queued actions. Free look,
+locomotion and R inspection remain real-time adaptations; never rotate a headset
+to simulate confusion. Preserve authored forced-action semantics separately.
+
+GameplayDelay replaces wall-clock action tails. Validate map object/id, state,
+actor and combat generation; explicit battle validity includes the current
+co-op puppetBattle, not just local battles. Ended battles and invalid owners
+cancel rather than leak attacks into the next scene. New jobs do not reenter a
+flush; optional cancellation cleanup is exactly once. R/dialogue/tracking-away
+pauses these tails and absolute NPC/companion cooldowns. Original committed
+wave/ground effects keep their deliberate alive/death behavior while ownership
+is active. Companion stateTimerRemaining belongs to the actor, refreshes on
+reapply, and survives JSON/native import and AllySystem resets. Removed states
+cannot retain timers. Local inspection stops map/side/troop interpreters, forced
+routes and the native timer; co-op guest inspection cannot pause host-owned
+world logic. An identified original B/Erase viewer advances only its owning
+interpreter through authored waits while menus suspend every other world clock.
+Map/state/page/list/execution changes, native erasure and a finite budget clear
+that cancellation; never advance unrelated routes, timers, events or scenes.
+
+Nested choice confirmations use a stack and restore merged group metadata.
+Original Play Movie c261 waits on an owned MoviePlayer handle. Invalidation,
+transfer, title, game over, skip and playback failure release the wait, media,
+textures, workers and audio context. PC uses a contained full-window player;
+VR uses a stationary aspect-correct screen with Play/Skip controls. Freeze while
+tracking is away; preserve the world's presentation after playback. Consume
+keyboard/mouse/XR/grab edges so transition input cannot become an attack.
+Chromium Theora fallback is pinned ogv1.9.0 loaded only when needed; Vite ships
+the minimal Ogg/Theora/Vorbis/Opus workers/WASM and their licenses. Resolve
+original Movies assets read-only; never bundle or transcode game assets into
+the release. No runtime CDN or codec download, no private game/save writes.
+Player-facing controls cover all four supported locales. No physical-headset
+playtest or exhaustive playthrough is claimed.
+
+Local 0.2.51 gates: 1,382 JavaScript tests pass (87 added), ESLint, production
+build, Ruff, 8 packaging and 7 protocol cases, plus Windows launcher checks.
+Private native-script replay confirms C0-C6 combat outcomes from the parsed
+final difficulty table; both installed Theora videos decode in isolated Chrome
+with no playback/network errors. Concurrent movie commands wait without
+replacing active playback; waiting picture controllers complete only their own
+native cancellation. No original game/save/account writes or headset claims.

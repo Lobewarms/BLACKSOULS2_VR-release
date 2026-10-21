@@ -103,6 +103,7 @@ export class BattlerBase {
   constructor() {
     this.hp = 1; this.mp = 0; this.tp = 0;
     this.states = []; this.stateTurns = {};
+    this.stateTimerRemaining = {};                  // companion auto-removal seconds, owned by this battler
     this.stateSteps = {};                           // (states that wear off by walking: steps left)
     this.buffs = [0, 0, 0, 0, 0, 0, 0, 0];
     this.buffTime = [0, 0, 0, 0, 0, 0, 0, 0];       // (seconds left)
@@ -174,10 +175,15 @@ export class BattlerBase {
     const st = $data.states[id];
     if (!st) return;
     // (one it has already: its counts start again - VX Ace's reset_state_counts)
-    if (this.isState(id)) { if (st.remove_by_walking) this.stateSteps[id] = st.steps_to_remove; return; }
+    if (this.isState(id)) {
+      delete this.stateTimerRemaining[id];
+      if (st.remove_by_walking) this.stateSteps[id] = st.steps_to_remove;
+      return;
+    }
     // (a state it resists does not take - VX Ace's state_addable?; death is seen to by the callers)
     if (id !== 1 && this.stateResist(id)) return;
     if (id === 1) this.hp = 0;
+    delete this.stateTimerRemaining[id];
     this.states.push(id);
     this.stateTurns[id] = st.min_turns || 0;
     if (st.remove_by_walking) this.stateSteps[id] = st.steps_to_remove;
@@ -188,6 +194,7 @@ export class BattlerBase {
   removeState(id) {
     this.states = this.states.filter(s => s !== id);
     delete this.stateTurns[id];
+    delete this.stateTimerRemaining[id];
     delete this.stateSteps[id];
     if (id === 1 && this.hp <= 0) this.hp = 1;
     this.clampHpMp();
@@ -198,7 +205,7 @@ export class BattlerBase {
     const resisted = new Set(this.featuresSet(14));
     this.states = this.states.filter(id => {
       if (!resisted.has(id)) return true;
-      delete this.stateTurns[id]; delete this.stateSteps[id];
+      delete this.stateTurns[id]; delete this.stateSteps[id]; delete this.stateTimerRemaining[id];
       return false;
     });
     this.hp = Math.max(0, Math.min(this.hp, this.mhp));
@@ -348,6 +355,7 @@ export class BattlerBase {
   clearStates() {
     this.states = this.states.filter(id => ($data.states[id]?.note || '').includes('[全回復無効ステート]'));
     for (const id of Object.keys(this.stateTurns)) if (!this.states.includes(+id)) delete this.stateTurns[id];
+    for (const id of Object.keys(this.stateTimerRemaining)) if (!this.states.includes(+id)) delete this.stateTimerRemaining[id];
     for (const id of Object.keys(this.stateSteps)) if (!this.states.includes(+id)) delete this.stateSteps[id];
   }
   // VX Ace's die: no other states, no buffs
@@ -594,6 +602,7 @@ export class GameActor extends BattlerBase {
       skills: this.skills, equips: this.equips, hp: this.hp, mp: this.mp, tp: this.tp, states: this.states,
       partners: this.partners, maxSpirits: this.maxSpirits, partnerLocked: this.partnerLocked,
       buffs: this.buffs, buffTime: this.buffTime, stateSteps: this.stateSteps,
+      stateTurns: { ...this.stateTurns }, stateTimerRemaining: { ...this.stateTimerRemaining },
     };
   }
   static fromJSON(o) {
@@ -608,6 +617,12 @@ export class GameActor extends BattlerBase {
     });
     if (Array.isArray(o.buffs) && o.buffs.length === 8) { a.buffs = o.buffs.map(v => +v || 0); a.buffTime = (o.buffTime || []).map(v => +v || 0).concat([0, 0, 0, 0, 0, 0, 0, 0]).slice(0, 8); }
     if (o.stateSteps && typeof o.stateSteps === 'object') a.stateSteps = { ...o.stateSteps };
+    for (const id of a.states) {
+      const turns = o.stateTurns?.[id], remaining = o.stateTimerRemaining?.[id];
+      if (Number.isSafeInteger(turns) && turns >= 0) a.stateTurns[id] = turns;
+      if ($data.states[id]?.auto_removal_timing && Number.isFinite(remaining) && remaining >= 0)
+        a.stateTimerRemaining[id] = Math.min(remaining, Number.MAX_SAFE_INTEGER);
+    }
     a.padEquips();
     return a;
   }
@@ -875,6 +890,10 @@ export class GameState {
           const count = remainingCount(hashGet(ra[source], sid) ?? ra[source]?.[sid]);
           if (count !== undefined) a[target][sid] = count;
         }
+      }
+      for (const sid of a.states) {
+        if ($data.states[sid]?.auto_removal_timing && a.stateTurns[sid] !== undefined)
+          a.stateTimerRemaining[sid] = a.stateTurns[sid] * turnSeconds;
       }
       if (Array.isArray(ra.buffs)) {
         a.buffs = Array.from({ length: 8 }, (_, i) => Number.isInteger(ra.buffs[i]) ? Math.max(-2, Math.min(2, ra.buffs[i])) : 0);

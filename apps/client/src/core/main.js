@@ -10,6 +10,7 @@ import { $data, loadDatabase, loadMapNames, destinationName } from '../data/data
 import { MarshalReader } from '../data/marshal.js';
 import { billboardUniforms, T } from '../world/mapmesh.js';
 import { GameState } from '../game/state.js';
+import { worldMenuPaused } from '../game/world-pause.js';
 import { readSaveSlots, readSaveState, writeSaveFile } from '../game/savefiles.js';
 import { prepareSaveLocations, prepareOriginalSaveLocations, saveLocation } from '../game/savepresentation.js';
 import { showManualSaveMenu } from '../game/manual-save-menu.js';
@@ -22,6 +23,8 @@ import { ScreenFx } from '../ui/screen.js';
 import { CombatSystem } from '../combat/combat.js';
 import { BossArena } from '../combat/arena.js';
 import { Theater } from '../ui/theater.js';
+import { MoviePlayer } from '../ui/movie-player.js';
+import { MoviePresentation } from '../ui/movie-presentation.js';
 import { Emotes } from '../ui/emotes.js';
 import { CharacterSprite, layoutTilePictures } from '../entities/sprites.js';
 import { Poke } from '../game/poke.js';
@@ -129,6 +132,8 @@ G.input.setupXR(scene, rig);
 G.audio = new AudioManager();
 G.screen = new ScreenFx(camera);
 G.ui = new UI(scene, camera, rig);
+G.movies = new MoviePlayer(scene, camera, { isAway: () => G.vr && (G.xrAway || viewMode.awaitingPose) });
+const moviePresentation = new MoviePresentation();
 G.pictures = new PictureLayer(G.ui, camera);
 G.player = new Player(rig, camera);
 G.combat = new CombatSystem(scene);
@@ -325,6 +330,7 @@ function checkReach() {
 let transferBusy = false;
 async function performTransfer() {
   if (transferBusy) return;
+  G.movies.clear(); moviePresentation.restore();
   transferBusy = true;
   const m = G.map;
   const t = m.transfer;
@@ -489,6 +495,7 @@ async function startGame(state, overridePos) {
 }
 // the game goes on in this state, from its saved place or pos (also co-op's way into another player's world and back)
 function enterWorld(state, overridePos) {
+  G.movies.clear(); moviePresentation.restore();
   G.state = state;
   void G.steamAchievements.flush();
   G.pictures?.clear();
@@ -507,6 +514,7 @@ function enterWorld(state, overridePos) {
 G.enterWorld = enterWorld;
 // (what was going on in the game left goes with it: an event's run, the common events waiting - else a new game took them on)
 G.returnToTitle = () => {
+  G.movies.clear(); moviePresentation.restore();
   G.ui.clearDialoguePresentation();
   G.coop.end('title', { stay: true }); G.combat.reset(); G.pictures?.clear(); clearMapView(); atmosphere.clear(); G.sky.clear(); G.audio.stopBgm(); G.audio.stopBgs();
   if (G.map) { G.map.interpreter.clear(); G.map.reservedCommon = []; }
@@ -540,6 +548,7 @@ async function gameOverArt() {
 }
 G.gameOver = async () => {
   if (mode !== 'game') return;
+  G.movies.clear(); moviePresentation.restore();
   G.ui.clearDialoguePresentation();
   mode = 'gameover';
   G.ui.navigation.hide();
@@ -707,6 +716,11 @@ function frameBody(xrFrame) {
   const dt = Math.min(clock.getDelta(), 0.1);
   G.time += dt;
   G.input.update();
+  moviePresentation.restore();
+  // Consume the transition frame too: skipping with B/Esc must not also open
+  // a menu or fire a weapon before the following input frame.
+  const wasMovie = G.movies.busy();
+  G.movies.update();
   for (const w of frameWaiters.splice(0)) { if (--w.n <= 0) w.r(); else frameWaiters.push(w); }
 
   if (mode === 'title') {
@@ -740,13 +754,19 @@ function frameBody(xrFrame) {
     const away = G.vr && (G.xrAway || viewMode.awaitingPose);
     // Combat.update is skipped while tracking is away, but its absolute player
     // deadlines must still follow the paused world rather than the UI clock.
-    if (away) G.combat.syncBonusClock(true);
+    if (away) {
+      G.combat.syncBonusClock(true);
+      G.combat.updateDelayedActions(0, true);
+    }
     if (m.grid && view.mesh) {
-      if (!away) acc += dt;
+      if (!away && worldMenuPaused()) G.pictures?.advanceViewerCancel?.(dt);
+      if (!away && !worldMenuPaused()) acc += dt;
+      else acc = 0;
       let steps = 0;
-      while (acc >= STEP && steps < 4) {
+      while (acc >= STEP && steps < 4 && !worldMenuPaused()) {
         for (const ev of m.eventList) { ev.prevRealX = ev.realX; ev.prevRealY = ev.realY; }
         m.update();
+        if (worldMenuPaused()) { acc = 0; break; }
         G.combat.updateLogic();
         G.screen.updateLogic();
         G.frame++;
@@ -755,11 +775,13 @@ function frameBody(xrFrame) {
       }
       if (steps === 4) acc = 0;
       if (!away) {
-        G.player.update(dt);
-        checkReach();
-        G.combat.update(dt);
-        G.arena.update();
-        G.theater.update(dt);
+        if (!wasMovie && !G.movies.busy()) {
+          G.player.update(dt);
+          checkReach();
+          G.combat.update(dt);
+          G.arena.update();
+          G.theater.update(dt);
+        } else G.combat.updateBonusActions(0, true);
       }
       G.hands.update(dt);
       const head = G.player.headWorld(headTmp);
@@ -768,8 +790,10 @@ function frameBody(xrFrame) {
       const alpha = acc / STEP;
       layoutTilePictures(view.sprites, view.mapInfo);
       for (const s of view.sprites) s.update(head, alpha);
-      worldPickup.update(view.sprites, head);
-      G.poke.update(dt, view.sprites);       // (bare hands pressing / pulling people: after they are placed)
+      if (!wasMovie && !G.movies.busy()) {
+        worldPickup.update(view.sprites, head);
+        G.poke.update(dt, view.sprites);       // (bare hands pressing / pulling people: after they are placed)
+      }
       G.sky.update();
       updatePlayerBalloon(head);
       refreshExitMarkers();
@@ -780,6 +804,7 @@ function frameBody(xrFrame) {
       G.coop.update(dt, head);               // (last: a visit that ends here sends the player elsewhere at once)
     } else {
       G.combat.syncBonusClock(true);
+      G.combat.updateDelayedActions(0, true);
       G.screen.updateLogic();
       G.coop.update(dt, null);
     }
@@ -787,6 +812,7 @@ function frameBody(xrFrame) {
     G.ui.update(dt);
   }
   G.audio.updateListener(camera);
+  moviePresentation.apply(G);
   G.input.endFrame();
   G.screen.beginShake(G.three?.rig, dt);
   renderWithXrStatus(renderer, scene, camera, xrFrame, session => vrButton.notifyPose(session));

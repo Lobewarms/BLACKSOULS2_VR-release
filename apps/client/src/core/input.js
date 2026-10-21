@@ -432,6 +432,12 @@ export class Input {
     this.mousePresses = 0;
     this.mouse.dx = 0; this.mouse.dy = 0; this.mouse.wheel = 0;
   }
+  consumeActionEdges() {
+    this.endFrame();
+    this.btnPrev = { left: [...this.btn.left], right: [...this.btn.right] };
+    this.rFlick = 0;
+    this.clearGrabEdges();
+  }
 
   key(code) { return this.keys.has(code); }
   keyPressed(code) { return this.keys.has(code) && !this.keysPrev.has(code); }

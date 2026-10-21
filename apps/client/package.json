@@ -1,6 +1,6 @@
 {
   "name": "@blacksouls-vr/client",
-  "version": "0.2.50",
+  "version": "0.2.51",
   "private": true,
   "type": "module",
   "scripts": {
@@ -10,8 +10,9 @@
     "test": "node --test tests/*.test.mjs"
   },
   "dependencies": {
-    "three": "0.170.0",
-    "@webxr-input-profiles/assets": "1.0.20"
+    "@webxr-input-profiles/assets": "1.0.20",
+    "ogv": "1.9.0",
+    "three": "0.170.0"
   },
   "devDependencies": {
     "vite": "8.3.4"

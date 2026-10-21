@@ -6,6 +6,7 @@ export const G = {
   ui: null,        // UI (message, choices, HUD)
   audio: null,     // AudioManager
   screen: null,    // ScreenFx (tone, fade, flash)
+  movies: null,    // Original event-movie playback (PC and VR)
   combat: null,    // CombatSystem
   input: null,     // Input
   three: null,     // { renderer, scene, camera, rig }

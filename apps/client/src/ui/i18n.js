@@ -23,6 +23,13 @@ export function fmtDate(ms) { try { return new Date(ms).toLocaleString(LOCALES[c
 
 // [Korean, English, Japanese, Chinese (simplified)]
 const ENTRIES = [
+  ['혼란 중에는 일반 공격을 합니다', 'Normal attacks only while confused', '混乱中は通常攻撃を行います', '混乱时只能普通攻击'],
+  ['동영상을 재생할 수 없습니다', 'This movie couldn’t be played.', '動画を再生できませんでした。', '无法播放此视频。'],
+  ['동영상 재생', 'Play movie', '動画を再生', '播放视频'],
+  ['건너뛰기', 'Skip', 'スキップ', '跳过'],
+  ['A / Enter: 재생 · B / Esc: 건너뛰기', 'A / Enter: Play · B / Esc: Skip', 'A / Enter: 再生・B / Esc: スキップ', 'A / Enter：播放 · B / Esc：跳过'],
+  ['B / Esc: 건너뛰기', 'B / Esc: Skip', 'B / Esc: スキップ', 'B / Esc：跳过'],
+  ['동영상 불러오는 중…', 'Loading movie…', '動画を読み込み中…', '正在加载视频…'],
   // Skills browser; original skill names and icons still come from the game.
   ['즐겨찾기', 'Favorites', 'お気に入り', '收藏'],
   ['전체', 'All', 'すべて', '全部'],

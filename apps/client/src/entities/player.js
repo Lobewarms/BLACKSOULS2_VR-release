@@ -259,6 +259,7 @@ export class Player {
       mvy = (f.z * fwd + f.x * side) * speed * dt / T;
       // (not the press that just closed a message - A is both)
       if ((input.dodge() && !G.ui.consumedConfirm || this.wantDodge) && this.dodge.cooldown <= 0
+        && !G.combat?.manualConfusionBlocked?.()
         && !G.state?.party?.leader()?.skillSealed?.(12)) {
         this.wantDodge = false;
         let dx = f.x * fwd - f.z * side, dy = f.z * fwd + f.x * side;

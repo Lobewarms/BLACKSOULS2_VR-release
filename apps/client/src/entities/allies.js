@@ -494,7 +494,8 @@ class Ally {
         const at = e.worldPos(new THREE.Vector3());
         if (anim > 0) G.screen.playAnimationOn(new THREE.Vector3(at.x, at.y + e.h * 0.5, at.z), anim, { rate: 3, height: e.h });
         if (it.far) G.combat.spawnTracer(from, new THREE.Vector3(at.x, at.y + e.h * 0.55, at.z), G.combat.skillColor(s));
-        for (let r = 0; r < reps; r++) G.combat.later((k + r) * gap, () => { if (e.alive) G.combat.applyUsableToEnemy(e, s, from, { knock: 0.06, by: a, blow }); });
+        for (let r = 0; r < reps; r++) G.combat.later((k + r) * gap, () => G.combat.applyUsableToEnemy(e, s, from, { knock: 0.06, by: a, blow }),
+          { battle: e.battle, valid: () => e.alive && !e.hidden && a.hp > 0 && this.members().includes(a) });
       });
       if (!it.far) this.lunge = 1;
       return;
@@ -517,25 +518,22 @@ class Ally {
   // ---- struck: an enemy's blow, shot or move as it would land on the player, without a guard (on two that
   // are one body, it lands on one of them); it is thrown back by it - away from the one who struck (or from where
   // the blow came down: from, world x/z), or along dir; push in metres (0: not moved) ----
-  takeHit(e, skill, { dir = null, from = null, push = null } = {}) {
-    const a = pick(this.living());
+  takeHit(e, skill, { dir = null, from = null, push = null, target = null, invocationSelected = false } = {}) {
+    const living = this.living(), a = target ? living.includes(target) && target : pick(living);
     if (!a || !this.stands) return;
     const combat = G.combat, user = e?.b || a, hitType = skill?.hit_type ?? 1;
     const miss = () => G.audio?.playSystemSe(hitType === 2 ? 19 : 18);
-    if (!combat.certainHit(user, skill) && a.certainty(1, hitType)) { miss(); return; }
-    if (e && hitType === 2 && a.mrf > Math.random()) { combat.reflectOntoEnemy(e, skill); return; }
+    if (!invocationSelected && !skill?._counterResponse && e && hitType === 2 && a.mrf > Math.random()) { combat.reflectOntoEnemy(e, skill); return; }
     if (skill?.__class === 'RPG::Skill' && a.skillCanceled(skill.id)) { G.audio?.playSystemSe(3); return; }
-    if (!combat.hitLands(user, skill) || combat.slipsWithAnswer(a, skill, user)) { miss(); return; }
+    if (!combat.hitLands(user, skill) || !combat.certainHit(user, skill) && a.certainty(1, hitType) || combat.slipsWithAnswer(a, skill, user)) { miss(); return; }
     const dist = push ?? ((skill && G.combat.isHeavySkill(skill)) || (e?.boss && e.move) ? 0.8 : 0.35);
     if (dist > 0 && !this.wall) {
       const at = this.worldPos(new THREE.Vector3());
       const [dx, dy] = dir || (from ? [at.x - from.x, at.z - from.z] : e ? [this.fx - e.fx, this.fy - e.fy] : [-this.dir[0], -this.dir[1]]);
       this.knockBack(dx, dy, dist);
     }
-    const criticalChance = skill?.damage?.type > 0 && skill.damage.critical === true
-      ? THREE.MathUtils.clamp((user.cri || 0) * (1 - THREE.MathUtils.clamp(a.cev || 0, 0, 1)), 0, 1) : 0;
-    const critical = criticalChance > 0 && Math.random() < criticalChance;
-    let dmg = combat.computeDamage(user, a, skill, critical ? 2 : 1);
+    const critical = combat.rollCritical(user, a, skill);
+    let dmg = combat.computeDamage(user, a, skill, critical ? combat.criticalMultiplier() : 1);
     // (it chose to guard - unless the blow goes through a guard, script 170)
     if ((this.guardUntil || 0) > G.time && dmg > 0 && !combat.nativeGuarded(a) && !combat.ignoresGuard(user, skill)) dmg = dmg / (2 * Math.max(0.5, a.grd ?? 1));
     dmg = Math.round(dmg * (G.settings.difficulty ?? 1));
@@ -694,17 +692,21 @@ export class AllySystem {
   // whether those who walk along show on the map (the database's "followers" option, events' Change Player
   // Followers); a fight brings them out anyway, as every battle member fights in the original
   followersShown() { const f = G.state?.system?.followers; return f ?? !!$data.system?.opt_followers; }
-  reset() { for (const a of this.list) a.dispose(); this.list = []; this.cools.clear(); }
+  reset() { for (const a of this.list) a.dispose(); this.list = []; this.cools.clear(); this.stateTimers?.clear(); }
   onMapLoaded() { for (const a of this.list) a.placed = false; }
   unitOf(id) { return this.list.find(x => x.ids.includes(id) && !x.leaving && !x.gone) || null; }
   // skill cool-downs (script 141, <クールタイム:n>): n turns of COOL_TURN s each, as the player's; cleared when the
   // fight ends, as the original clears them at battle end
-  cooling(a, s) { return (this.cools.get(a.id)?.[s.id] || 0) > G.time; }
+  cooling(a, s) { this.combat.syncSkillClock?.(); return (this.cools.get(a.id)?.[s.id] || 0) > G.time; }
   cool(a, s) {
+    this.combat.syncSkillClock?.();
     const t = G.combat.coolSeconds(s);
     if (!t) return;
     if (!this.cools.has(a.id)) this.cools.set(a.id, {});
     this.cools.get(a.id)[s.id] = G.time + t;
+  }
+  pauseSkillClocks(previous, elapsed) {
+    for (const deadlines of this.cools.values()) for (const id of Object.keys(deadlines)) if (deadlines[id] > previous) deadlines[id] += elapsed;
   }
 
   update(dt, paused) {
@@ -754,19 +756,20 @@ export class AllySystem {
   // (the meat shield's 20 turns end in its death)
   tickStates(dt) {
     const timers = (this.stateTimers ||= new Map());
-    const buffed = new Set();
+    const buffed = new Set(), present = new Set();
     for (const u of this.list) {
       if (!u.stands) continue;
       for (const a of u.members()) {
-        if (!buffed.has(a)) { a.tickBuffs(dt); buffed.add(a); }
-        let t = timers.get(a.id);
-        if (!t) timers.set(a.id, (t = {}));
+        if (buffed.has(a)) continue;
+        a.tickBuffs(dt); buffed.add(a); present.add(a.id);
+        const t = (a.stateTimerRemaining ||= {});
+        timers.set(a.id, t);
         for (const id of a.states) {
           const st = $data.states[id];
           if (t[id] === undefined && st?.auto_removal_timing && st.max_turns > 0) t[id] = (st.min_turns + Math.floor(Math.random() * (st.max_turns - st.min_turns + 1))) * TURN;
         }
         for (const k of Object.keys(t)) {
-          if (!a.isState(+k)) { delete t[k]; continue; }
+          if (!a.isState(+k) || !$data.states[k]?.auto_removal_timing) { delete t[k]; continue; }
           t[k] -= dt;
           if (t[k] > 0) continue;
           delete t[k];
@@ -781,6 +784,7 @@ export class AllySystem {
         }
       }
     }
+    for (const id of timers.keys()) if (!present.has(id)) timers.delete(id);
   }
 
   // ---- for the enemies ----

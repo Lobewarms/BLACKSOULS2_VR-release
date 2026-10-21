@@ -26,11 +26,14 @@ export class Interpreter {
     this.clear();
   }
   clear() {
+    if (this.movieHandle?.pending) G.movies?.clear(this.movieHandle);
+    this.child?.terminate();
+    this.movieHandle = null;
     this.killMode = false;
     this.mapId = 0; this.eventId = 0; this.list = null; this.index = 0;
     this.waitCount = 0; this.waitMode = ''; this.child = null; this.branch = {};
     this.saveRequest = null;
-    this.indent = 0; this.params = null; this.choiceGroup = null; this.battle = null;
+    this.indent = 0; this.params = null; this.choiceGroup = null; this.choiceGroups = new Map(); this.battle = null;
     this.battleBgmBefore = undefined;
     this.battlebacks = undefined;
     this.undo = null;
@@ -54,11 +57,17 @@ export class Interpreter {
     this.list = list;
   }
   running() { return !!this.list; }
-  terminate() { this.list = null; this.child = null; }
+  terminate() {
+    if (this.movieHandle?.pending) G.movies?.clear(this.movieHandle);
+    this.child?.terminate(); this.movieHandle = null; this.list = null; this.child = null;
+  }
   event() { return this.eventId > 0 && this.mapId === G.map.mapId ? G.map.events[this.eventId] : null; }
   isMainTree() { return (this.root || this).main; }
 
   update() {
+    // Graphics.play_movie suspends original event scheduling. Parallel/side
+    // interpreters cannot replace the live movie or advance behind it.
+    if (G.movies?.busy?.() && G.movies.active?.owner !== this) return;
     const was = running;
     running = this;
     try {
@@ -98,6 +107,7 @@ export class Interpreter {
         break;
       case 'scene': if (G.ui.sceneBusy()) return true; break;
       case 'save': if (this.saveRequest?.pending || G.ui.sceneBusy()) return true; break;
+      case 'movie': if (this.movieHandle?.pending) return true; this.movieHandle = null; break;
       default: break;
     }
     this.waitMode = '';
@@ -204,11 +214,14 @@ export class Interpreter {
       });
       if (ct > 0) { cancelType = ct; cancelBlock = b; }
     });
-    this.choiceGroup = { indices: groupIdx, results: null };
+    const group = { indices: groupIdx, results: null, list: this.list, executionId: this.executionId };
+    this.choiceGroup = group;
+    this.choiceGroups.set(indent, group);
     msg.choices = items.map(it => ({ text: it.text, enabled: it.enabled }));
     msg.choiceAt = items.map(it => [it.block, it.local]);        // (which of them show - co-op guests, coop.js onSay)
     msg.cancelable = cancelType > 0;
     msg.onChoice = n => {
+      if (group.list !== this.list || group.executionId !== this.executionId || this.choiceGroups.get(indent) !== group) return;
       const results = new Map();
       groupIdx.forEach(ci => results.set(ci, -1));
       if (n < 0) {
@@ -218,7 +231,7 @@ export class Interpreter {
         const it = items[n];
         results.set(groupIdx[it.block], it.local);
       }
-      this.choiceGroup.results = results;
+      group.results = results;
       this.branch[indent] = results.get(groupIdx[0]);
       // The first block resumes directly after this callback. Only later
       // merged blocks still need their answer; a label loop must ask anew.
@@ -230,7 +243,8 @@ export class Interpreter {
     return !!evalRuby(js);
   }
   resolveChoiceGroup() {
-    const g = this.choiceGroup;
+    const g = this.choiceGroups.get(this.indent);
+    if (g && (g.list !== this.list || g.executionId !== this.executionId)) { this.choiceGroups.delete(this.indent); return false; }
     if (!g || !g.results || !g.results.has(this.index)) return false;
     this.branch[this.indent] = g.results.get(this.index);
     g.results.delete(this.index);
@@ -693,7 +707,12 @@ export class Interpreter {
   // (co-op: the guests in this world hear it too - coop.js onFx)
   mirrorSound(kind, a) { if (a?.name) G.coop?.onFx?.(this, [kind, String(a.name), Math.round(+a.volume || 0), Math.round(+a.pitch || 100)]); }
   c251() { G.audio.stopSe(); return true; }
-  c261() { return true; } // movie
+  c261() {
+    if (G.ui.messageBusy() || G.movies?.busy?.()) return false;
+    this.movieHandle = G.movies?.play(this.params[0], this) || null;
+    if (this.movieHandle?.pending) this.waitMode = 'movie';
+    return true;
+  }
 
   // ---------------------------------------------------------------- map
   c281() { return true; }

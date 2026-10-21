@@ -148,7 +148,7 @@ test('a guest engaged puppet permits a chain, retains it through dying and clear
   assert.equal(e.combat.inCombat, false, 'guest combat need not own a local Battle');
   e.earn(); e.advance(30);
   assert.equal(e.combat.bonusStatus()?.count, 1, 'extras have no three-second expiry');
-  const extra = e.combat.beginPlayerAction(true, { active: 0.3, recovery: 0.9 });
+  const extra = e.combat.beginPlayerAction(true, { active: 0.3, recovery: 0.9, preferBonus: true });
   assert.equal(extra.ticket.bonus, true);
   e.combat.finishPlayerAction(extra, 0.3); e.advance(0.3);
   assert.equal(e.combat.bonusStatus(), null); assert.equal(e.rolls, 1, 'a guest extra does not reroll');

@@ -125,6 +125,7 @@ export class PictureLayer {
     this.battlePics.clear(); this.dirty = true; this.render();
   }
   clear() {
+    this.finishViewerCancel();
     this.pics.clear();
     for (const [battle, pictures] of this.battlePics) { pictures.clear(); this.endedBattles.add(battle); }
     this.battlePics.clear(); this.dirty = true;
@@ -146,15 +147,75 @@ export class PictureLayer {
         // an unrelated later Erase Picture command on the same event page.
         for (let j = i + 1; j < list.length && list[j].indent > command.indent; j++) {
           const next = list[j], picture = next.code === 235 ? this.pics.get(next.parameters?.[0]) : null;
-          if (picture?.name && picture.opacity > 0) { G.input.requestRmCancel(); return true; }
+          if (picture?.name && picture.opacity > 0) {
+            this.finishViewerCancel();
+            G.input.requestRmCancel();
+            this.menuCancel = { map: G.map, mapId: G.map.mapId, state: G.state, event, page: event.page, list,
+              pictureId: next.parameters[0], pictureName: picture.name, cancelFrame: G.frame,
+              accumulator: 0, ticks: 0, interpreter: null, executionId: null, restart: false };
+            return true;
+          }
         }
       }
     }
     return false;
   }
 
+  // Menus keep the world frozen. Only this original picture controller may
+  // consume its native B input and finish an authored wait/erase sequence.
+  viewerCancelPending() {
+    const pending = this.menuCancel;
+    if (!pending) return false;
+    const event = pending.event, picture = this.pics.get(pending.pictureId);
+    const valid = pending.map === G.map && pending.mapId === G.map?.mapId && pending.state === G.state && !G.map?.transferring && !G.coop?.phantom
+      && G.map.events[event.id] === event
+      && !event.erased && event.page === pending.page && event.list === pending.list && [3, 4].includes(event.trigger)
+      && (!event.findProperPage || event.findProperPage() === pending.page)
+      && picture?.name === pending.pictureName && picture.opacity > 0 && pending.ticks < 600;
+    if (!valid) this.finishViewerCancel();
+    return !!valid;
+  }
+  finishViewerCancel() {
+    const pending = this.menuCancel;
+    if (pending && G.input?.rmCancelFrame === pending.cancelFrame) G.input.rmCancelFrame = null;
+    this.menuCancel = null;
+  }
+  advanceViewerCancel(dt = 1 / 60) {
+    if (!this.viewerCancelPending() || !(G.ui?.menuOpen || G.ui?.sceneOpen) || G.movies?.busy?.()) return false;
+    const pending = this.menuCancel;
+    pending.accumulator += Math.max(0, Math.min(0.1, Number.isFinite(dt) ? dt : 0));
+    let steps = 0;
+    while (pending.accumulator + 1e-9 >= 1 / 60 && steps++ < 4 && this.viewerCancelPending()) {
+      pending.accumulator -= 1 / 60; pending.ticks++;
+      const event = pending.event;
+      const interpreter = event.trigger === 4 ? event.interpreter : pending.map.interpreter;
+      if (!interpreter || pending.interpreter && (interpreter !== pending.interpreter || interpreter.executionId !== pending.executionId)
+        || interpreter.running() && (interpreter.list !== pending.list || interpreter.eventId !== event.id)
+        || pending.interpreter && !interpreter.running() && !pending.restart) {
+        this.finishViewerCancel(); break;
+      }
+      if (!interpreter.running()) {
+        // Match native autorun/parallel restarts without selecting any other
+        // starting event, common event, route or scene in the frozen world.
+        if (event.trigger === 3 && interpreter.eventId > 0 && interpreter.eventId !== event.id) {
+          pending.map.events[interpreter.eventId]?.unlock?.();
+          G.coop?.eventDone?.(interpreter.mapId, interpreter.eventId);
+        }
+        interpreter.setup(pending.list, event.id); event.starting = false;
+      }
+      pending.interpreter = interpreter; pending.executionId = interpreter.executionId; pending.restart = false;
+      G.input.requestRmCancel(); pending.cancelFrame = G.frame;
+      interpreter.update();
+      if (!this.viewerCancelPending()) break;
+      pending.restart = !interpreter.running();
+    }
+    return !!this.menuCancel;
+  }
+
   // 60 Hz: moves (Game_Picture#update_move)
   update() {
+    if (this.menuCancel && !(G.ui?.menuOpen || G.ui?.sceneOpen)) this.finishViewerCancel();
+    else this.viewerCancelPending();
     this.displayedPictures(); // release finished scopes even if the end hook was bypassed
     for (const pictures of [this.pics, ...this.battlePics.values()]) for (const pic of pictures.values()) {
       if (pic.d <= 0 || !pic.target) continue;

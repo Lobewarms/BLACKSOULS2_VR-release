@@ -40,10 +40,10 @@ export class BonusActions {
     return { count: this.icons.length, icon: this.icons[0] };
   }
   available(context) { return !!this.status(context); }
-  begin(context, { eligible = true } = {}) {
+  begin(context, { eligible = true, consumeBonus = true } = {}) {
     if (!this.sync(context) || !eligible) return null;
     const sources = this.sources(context.actor);
-    const bonus = this.icons.length > 0;
+    const bonus = consumeBonus && this.icons.length > 0;
     if (bonus) {
       this.icons.shift();
     }
