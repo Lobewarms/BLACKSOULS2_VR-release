@@ -1,6 +1,6 @@
 # Literal runtime JavaScript source comparison
 # Upstream: d39c2afd830c7be7fbbe2a86380f9c490e377bf7 (release ZIP entries)
-# Fork: b3560c989ed76ea59bc71d0900c985c4348910e6 (committed source)
+# Fork: 5cd0ffe2d2c4ad9b0be8c3db46a2a8ad10248858 (committed source)
 # Module moves are matched by filename. Only line endings are normalized.
 # Relative import-path changes remain visible. These are review hunks, not an automatic migration script.
 
@@ -8928,13 +8928,15 @@
      const c = G.input.controllers.right;
      if (!G.vr || !c) return null;
      const m = c.ray.matrixWorld;
-@@ -1572,70 +2088,168 @@
+@@ -1572,70 +2088,170 @@
    }
  
    // ---------------------------------------------------------------- menus
 +  toggleSkillsMenu() {
 +    const interpreter = G.map?.interpreter;
-+    if (!G.map || G.map.transferring || !G.state?.party.leader() || G.state.system.menuDisabled
++    // The native flag disables the exploration menu, not battle commands.
++    // Some boss entrances retain it throughout the fight.
++    if (!G.map || G.map.transferring || !G.state?.party.leader() || G.state.system.menuDisabled && !G.combat?.inCombat
 +      || G.combat?.playerDead || this.sceneOpen || this.keyboard.visible || this.prompt?.shown || this.remote?.shown
 +      || this.messageBusy() || this.dialogueActive()
 +      || interpreter?.running() && interpreter.waitMode !== 'battle') return false;
@@ -9123,7 +9125,7 @@
        case 'coop': this.showCoopMenu(); break;
        case 'turn':
          if (s.snapTurn && s.snapAngle === 30) s.snapAngle = 45;
-@@ -1650,8 +2264,45 @@
+@@ -1650,8 +2266,45 @@
        case 'diff':
          s.difficulty = s.difficulty >= 1.5 ? 0.5 : +(s.difficulty + 0.25).toFixed(2);
          G.saveSettings?.(); this.reopenMain('diff'); break;
@@ -9170,7 +9172,7 @@
      }
    }
    // an item / skill does something (effects or a damage formula)
-@@ -1681,6 +2332,8 @@
+@@ -1681,6 +2334,8 @@
      ];
    }
    showItems(keepIndex) {
@@ -9179,7 +9181,7 @@
      this.list.close();
      const tabs = this.itemTabs();
      this.grid.open(tr('아이템'), tabs, {
-@@ -1732,13 +2385,24 @@
+@@ -1732,13 +2387,24 @@
        },
        onCancel: back,
      });
@@ -9204,7 +9206,7 @@
      const items = a.allSkills().map(s => {
        const cost = a.skillMpCost(s), hpCost = a.skillHpCost(s);
        const slot = quickSlotOf({ kind: 'skill', id: s.id });
-@@ -1752,19 +2416,24 @@
+@@ -1752,19 +2418,24 @@
        onSelect: (it) => this.showSkillActions(it),
        onCancel: () => { this.grid.close(); this.reopenMain('skills'); },
      });
@@ -9232,7 +9234,7 @@
        { text: slot >= 0 ? tr('퀵슬롯 ({n}번에 등록됨)', { n: slot + 1 }) : tr('퀵슬롯에 등록'), id: 'quick', enabled: s.occasion !== 3,
          desc: tr('퀵슬롯 버튼(VR: X, PC: Q)을 누른 채 손을 옮기고 떼면 사용') },
        { text: tr('취소'), id: 'back' },
-@@ -1776,26 +2445,31 @@
+@@ -1776,26 +2447,31 @@
        },
        onCancel: back,
      });
@@ -9272,7 +9274,7 @@
      const P = $data.system.terms.params;
      const parts = [0, 2, 3, 4, 5, 6, 7].filter(i => after[i] !== before[i])
        .map(i => `${P[i]} ${after[i] > before[i] ? '+' : '−'}${Math.abs(after[i] - before[i])}`);
-@@ -1807,7 +2481,8 @@
+@@ -1807,7 +2483,8 @@
      this.grid.close();
      const slots = a.equips.map((e, slot) => {
        const d = itemData(e.kind, e.id);
@@ -9282,7 +9284,7 @@
      });
      this.list.open(tr('장비  ({name})', { name: a.name || '' }), slots, {
        index,
-@@ -1819,7 +2494,8 @@
+@@ -1819,7 +2496,8 @@
    // pointed at - what it changes, then what it is
    showEquipChoices(slot) {
      const a = G.state.party.leader();
@@ -9292,7 +9294,7 @@
      const party = G.state.party;
      const cands = [{ text: tr('(장비 해제)'), id: 0, desc: this.paramDelta(a, slot, kind, 0) }];
      for (const [id, n] of party.container(kind)) {
-@@ -1832,7 +2508,10 @@
+@@ -1832,7 +2510,10 @@
      this.grid.open(tr('{slot} 변경', { slot: this.slotName(slot) }), [{ label: this.slotName(slot), items: cands }], {
        tab: 0,
        onSelect: (it) => {
@@ -9304,7 +9306,7 @@
          G.combat.equipKey = null;
          G.audio?.playSystemSe(4);
          this.showEquipSlots(slot);
-@@ -1892,6 +2571,7 @@
+@@ -1892,6 +2573,7 @@
      const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
      const items = [
        { text: tr('VR 이동 속도'), id: 'vrSpeed', right: `×${s.vrSpeed ?? 2}`, desc: tr('스틱으로 걷는 속도 배율 (VR에서만)') },
@@ -9312,7 +9314,7 @@
        { text: tr('휘두르기 판정'), id: 'swing', right: SWING[s.swingLevel ?? 2], desc: tr('이 정도 세기로 휘둘러야 공격이 들어갑니다 (VR)') },
        { text: tr('이펙트 밝기'), id: 'fx', right: `${Math.round((s.fxBrightness ?? 0.5) * 100)}%`, desc: tr('번쩍임·빛·스킬 애니메이션의 밝기') },
        { text: tr('스킬 애니메이션'), id: 'anims', right: ANIMS[s.skillAnims || 'all'], desc: tr('원작 스킬·공격 애니메이션을 대상 위치에 재생합니다') },
-@@ -1909,6 +2589,7 @@
+@@ -1909,6 +2591,7 @@
        index,
        onSelect: (i, it) => {
          if (it.id === 'vrSpeed') s.vrSpeed = cycle([1, 1.5, 2, 2.5, 3], s.vrSpeed ?? 2);
@@ -9320,7 +9322,7 @@
          if (it.id === 'swing') s.swingLevel = ((s.swingLevel ?? 2) + 1) % 4;
          if (it.id === 'fx') s.fxBrightness = cycle([0.25, 0.5, 0.75, 1], s.fxBrightness ?? 0.5);
          if (it.id === 'anims') s.skillAnims = cycle(['all', 'skills', 'off'], s.skillAnims || 'all');
-@@ -1996,16 +2677,21 @@
+@@ -1996,16 +2679,21 @@
      const items = [
        { text: `${a.name || '???'}  Lv ${a.level}`, right: $data.classes[a.classId]?.name || '' },
        { text: `HP ${a.hp}/${a.mhp}`, right: `MP ${a.mp}/${a.mmp}` },
@@ -9345,7 +9347,7 @@
      if (name === 'Scene_ShortMove') { this.openBonfireWarp(); return; }
      if (name === 'Scene_ItemSynthesis') { this.openSynthesis(); return; }
      if (name === 'Scene_Keep' || name === 'Scene_Item_Keep') { this.openKeep(); return; }
-@@ -2013,25 +2699,39 @@
+@@ -2013,25 +2701,39 @@
      this.toast(tr('{label}: VR판에서는 아직 지원하지 않습니다', { label }));
    }
    openBonfireWarp() {
@@ -9398,7 +9400,7 @@
    }
    // Select Key Item (104): which key item; the variable gets its id (0: cancelled)
    openKeyItemChoice(varId) {
-@@ -2212,9 +2912,8 @@
+@@ -2212,9 +2914,8 @@
    }
    closeShop() { this.list.close(); this.sceneOpen = null; this.shopKeep = false; }
    showShopCommand(entries, index = 0) {
@@ -9410,7 +9412,7 @@
      ], {
        index,
        onSelect: (i, it) => {
-@@ -2236,17 +2935,51 @@
+@@ -2236,17 +2937,51 @@
      const msg = this.shopKeep ? K.toKeep : K.toBag;
      if (msg) this.toast(msg);
    }
@@ -9467,7 +9469,7 @@
        index: at,
        onSelect: (i, it) => {
          at = i;
-@@ -2321,36 +3054,52 @@
+@@ -2321,36 +3056,52 @@
        onCancel: back,
      });
    }
@@ -9531,7 +9533,7 @@
          this.showShopQuantity(e, back, it.step === 'max' ? max : n + it.step, i);
        },
        onAdjust: dx => { this.showShopQuantity(e, back, n + dx, this.list.index); return true; },
-@@ -2359,11 +3108,46 @@
+@@ -2359,11 +3110,46 @@
    }
  
    // ---------------------------------------------------------------- frame
@@ -9579,7 +9581,7 @@
      if (anyPanel) this.placeRoot();
      if (this.banner) {
        this.banner.t += dt;
-@@ -2374,15 +3158,21 @@
+@@ -2374,15 +3160,21 @@
        }
        this.drawBanner();
      }
@@ -9606,7 +9608,7 @@
      }
      this.updateBossPrompt(dt);
      this.updateRemote();
-@@ -2393,7 +3183,26 @@
+@@ -2393,7 +3185,26 @@
        if (before !== this.toasts.length || G.frame % 6 === 0) this.drawToasts();
      }
      this.drawHud();
@@ -9633,7 +9635,7 @@
      this.updatePointerLine();
    }
    updateHudFollow() {
-@@ -2406,11 +3215,23 @@
+@@ -2406,11 +3217,23 @@
      this.camera.getWorldPosition(head);
      this.hud.mesh.lookAt(head);
    }

@@ -2969,3 +2969,8 @@ build, Ruff, 8 packaging and 7 Python protocol cases. An in-memory module-loader
 probe restoring only the old menu guard fails the new actual-R battle-access
 regression; the fixed guard passes. No checkout rollback, native event edits,
 actual save writes, achievement writes or physical-headset playtest occurred.
+
+Current source comparison: runtime 5cd0ffe2d2c4ad9b0be8c3db46a2a8ad10248858 (0.2.50),
+48 originals retained, 15 unchanged after import moves, 33 modified, 50 new and
+0 missing; 4,759 added/982 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
