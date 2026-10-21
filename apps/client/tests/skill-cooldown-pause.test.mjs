@@ -106,6 +106,50 @@ function environment(t, fighting = true) {
   return { actor, state, map, combat, ui, input, frame, key, xr, open, close, jump(dt) { G.time += dt; G.frame++; } };
 }
 
+test('R uses battle commands while an entrance disables the exploration menu, then respects the flag after battle', t => {
+  const e = environment(t, false), troopId = 901;
+  const previousTroops = $data.troops;
+  t.after(() => { $data.troops = previousTroops; });
+  $data.troops = []; $data.troops[troopId] = { id: troopId };
+  const battle = { done: false, enemies: [] };
+  e.combat.startBattle = () => { e.combat.battles.push(battle); return battle; };
+  e.map.interpreter.setup([
+    { code: 135, indent: 0, parameters: [0] },
+    { code: 301, indent: 0, parameters: [0, troopId, false, true] },
+    { code: 0, indent: 0, parameters: [] },
+  ]);
+  e.map.interpreter.update();
+  assert.equal(e.state.system.menuDisabled, true);
+  assert.equal(e.map.interpreter.waitMode, 'battle');
+  assert.equal(e.combat.inCombat, true);
+  e.open(false); e.close();
+  e.ui.openMenu(); e.key('KeyR');
+  assert.equal(e.ui.menuSection, 'skills', 'R also switches from the ordinary battle menu');
+  e.close();
+  assert.equal(e.state.system.menuDisabled, true, 'opening Skills must not clear the native flag');
+  battle.done = true; battle.result = 0; e.map.interpreter.update();
+  assert.equal(e.combat.inCombat, false);
+  e.key('KeyR');
+  assert.equal(e.ui.menuOpen, false, 'an ended battle does not bypass exploration-menu restrictions');
+});
+
+for (const blocked of ['dialogue', 'script', 'transfer', 'shop', 'prompt', 'dead', 'arena']) {
+  test(`R retains the ${blocked} guard during a battle with the exploration menu disabled`, t => {
+    const e = environment(t);
+    e.state.system.menuDisabled = true;
+    if (blocked === 'dialogue') e.ui.showMessage({ lines: ['Synthetic dialogue'], position: 2 });
+    if (blocked === 'script') e.map.interpreter.setup([{ code: 230, indent: 0, parameters: [60] }]);
+    if (blocked === 'transfer') e.map.transferring = true;
+    if (blocked === 'shop') e.ui.sceneOpen = 'shop';
+    if (blocked === 'prompt') e.ui.prompt = { shown: true, left: 10 };
+    if (blocked === 'dead') e.combat.playerDead = true;
+    if (blocked === 'arena') G.arena = { busy: true };
+    assert.equal(e.ui.toggleSkillsMenu(), false);
+    assert.equal(e.ui.menuOpen, false);
+    assert.equal(e.state.system.menuDisabled, true);
+  });
+}
+
 for (const vr of [false, true]) test(`${vr ? 'VR' : 'PC'} R Skills keeps the same cooldown and blocked quick slot throughout a long menu pause`, t => {
   const e = environment(t); e.combat.payUsable($data.skills[1], 'skill'); e.open(vr);
   e.ui.skillsBrowser.setQuery('Synthetic skill 1'); e.frame();

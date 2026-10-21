@@ -1,6 +1,6 @@
 {
   "name": "blacksouls2-vr-community-fork",
-  "version": "0.2.49",
+  "version": "0.2.50",
   "private": true,
   "type": "module",
   "description": "Modified BLACK SOULS II VR fork with source-based checks and release packaging",

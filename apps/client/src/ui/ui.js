@@ -2090,7 +2090,9 @@ export class UI {
   // ---------------------------------------------------------------- menus
   toggleSkillsMenu() {
     const interpreter = G.map?.interpreter;
-    if (!G.map || G.map.transferring || !G.state?.party.leader() || G.state.system.menuDisabled
+    // The native flag disables the exploration menu, not battle commands.
+    // Some boss entrances retain it throughout the fight.
+    if (!G.map || G.map.transferring || !G.state?.party.leader() || G.state.system.menuDisabled && !G.combat?.inCombat
       || G.combat?.playerDead || this.sceneOpen || this.keyboard.visible || this.prompt?.shown || this.remote?.shown
       || this.messageBusy() || this.dialogueActive()
       || interpreter?.running() && interpreter.waitMode !== 'battle') return false;

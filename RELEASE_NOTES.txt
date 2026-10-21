@@ -1,4 +1,8 @@
-BLACK SOULS II VR 0.2.49
+BLACK SOULS II VR 0.2.50
+
+Grand Guignol Skills menu
+- R opens Skills during Grand Guignol and other battles whose entrances disable
+  the exploration menu. Dialogue and cutscenes still control when menus can open.
 
 Bonus Action skill chains
 - R Skills shows earned Bonus Actions and your queued skills.

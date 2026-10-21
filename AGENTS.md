@@ -2942,3 +2942,30 @@ Current source comparison: runtime b3560c989ed76ea59bc71d0900c985c4348910e6 (0.2
 48 originals retained, 15 unchanged after import moves, 33 modified, 50 new and
 0 missing; 4,757 added/982 removed lines in modified originals after import
 normalization. Historical screenshot labels and pins are unchanged.
+
+## Battle Skills and exploration-menu restrictions (0.2.50)
+
+Grand Guignol's original approach (Map372/event15) runs Change Menu Access with
+parameter 0 before transferring through Map373 into the Map374 autorun battle.
+The flag is already set on the first attempt. VX Ace checks menu_disabled when
+calling the exploration menu; its battle commands remain separate. The R guard
+incorrectly rejected that flag even during an actual unfinished battle, while
+the ordinary battle-menu path already allowed access.
+
+R may ignore the exploration-only flag when CombatSystem.inCombat identifies an
+unfinished local battle. Do not clear or serialize a replacement for the native
+flag. Other guards, including active dialogue, interpreter scene waits, transfer,
+death, shops, prompts and victory handling, remain authoritative. Once the battle
+ends, the exploration restriction applies again. Never special-case a boss ID.
+
+Synthetic regressions execute the real Change Menu Access and Battle Processing
+commands, use actual R keyboard updates and live CombatSystem battle ownership,
+and verify reopening/switching/closing Skills plus post-battle restrictions.
+Original event records and player saves are read-only and excluded from tests
+and distribution. No physical headset or full boss playthrough is claimed.
+
+Local 0.2.50 gates: 1,295 JavaScript tests pass (8 added), ESLint, production
+build, Ruff, 8 packaging and 7 Python protocol cases. An in-memory module-loader
+probe restoring only the old menu guard fails the new actual-R battle-access
+regression; the fixed guard passes. No checkout rollback, native event edits,
+actual save writes, achievement writes or physical-headset playtest occurred.
