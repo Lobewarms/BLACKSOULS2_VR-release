@@ -3038,3 +3038,13 @@ final difficulty table; both installed Theora videos decode in isolated Chrome
 with no playback/network errors. Concurrent movie commands wait without
 replacing active playback; waiting picture controllers complete only their own
 native cancellation. No original game/save/account writes or headset claims.
+
+Current 0.2.51 runtime source comparison: c17176beccfbd0b1e7008a7ecd2810622d6852ca; original upstream ZIP
+commit d39c2afd830c7be7fbbe2a86380f9c490e377bf7, SHA-256
+fc161fb7ef0cc754991d56ba872eeef0cbba84d5d7bf7cab21089da1aec2b770.
+The content comparison retains all48 original modules:
+15 unchanged after import moves,
+33 modified, 55 new fork runtime modules,
+0 missing; modified-original summary +5134/-1064.
+The literal public diff retains moved import-path changes. Historical image
+versions, source pins and upstream/fork labels remain unchanged.
