@@ -45,6 +45,7 @@ export class Interpreter {
     this.mapId = G.map.mapId;
     this.eventId = eventId;
     this.list = list;
+    this.walkSpeed = G.map.playerChar?.moveSpeed;     // (the player's speed as it began - its fight is walked at it: c301)
   }
   running() { return !!this.list; }
   terminate() { this.list = null; this.child = null; }
@@ -706,6 +707,10 @@ export class Interpreter {
     this.battle = G.combat.startBattle({
       troopId, canEscape: p[2], canLose: p[3], event: this.event(), interpreter: this,
     });
+    // (the original fights it in a battle scene of its own, where the speed a scene left the player at - 린다메아's, slowed
+    // to 2 by her blow - never shows: the player walks it at the speed it had as the event began; after it, the event's
+    // own commands set it as they do - her 이벤트 후：이동 속도 조정)
+    this.battle.walkSpeed = (this.root || this).walkSpeed;
     this.waitMode = 'battle';
     // a fight started by touching / talking to an event no longer holds the map: the event's commands
     // wait for the result on their own while menus, exits and other events stay usable

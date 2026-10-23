@@ -50,6 +50,8 @@ const DESK_SWING = 0.32;       // (PC) s a click's blow takes (its hits from a q
 // slant a fifth); a dodge DODGE_STAMINA; running in a fight RUN_STAMINA a second, none coming back meanwhile - run out,
 // one walks until RUN_AGAIN has come back. Struck at by another player (PvP), one is in a fight for PVP_FIGHT s after
 const GUARD_STAMINA = 0.05, DODGE_STAMINA = 0.15, RUN_STAMINA = 0.15, RUN_AGAIN = 0.3, PVP_FIGHT = 8;
+// a blow of one's own: a PC click's, a VR swing that lands, a charged one (each / the weapon's pace - weaponPace)
+const BLOW_STAMINA = 0.1, BLOW_STAMINA_VR = 0.08, CHARGED_STAMINA = 0.2;
 // none comes back while the guard is up - a perfect guard gives PERFECT_STAMINA back at once. (PC) a click a moment
 // early - a blow or a stagger still ending, a shot not ready - is kept INPUT_BUFFER s and taken as soon as it can be
 const PERFECT_STAMINA = 0.3, INPUT_BUFFER = 0.3;
@@ -1538,14 +1540,25 @@ export class CombatSystem {
   deskShieldUp() { return this.shieldOut && (this.deskShieldT || 0) > 0.01; }
   // in a fight: with the enemies (inCombat), or struck at by another player not long ago (PvP - PVP_FIGHT s)
   fighting() { return this.inCombat || G.time < (this.pvpFightUntil ?? -99); }
+  // (player.js) the speed the player walks at in an event's fight - the one it had as that event began (interpreter.js
+  // c301); null: its own
+  battleWalkSpeed() { return this.battles.find(b => !b.done && b.walkSpeed > 0)?.walkSpeed ?? null; }
   // (player.js) running: always, but in a fight not while winded - stamina run out, until RUN_AGAIN has come back
   canRun() { return !this.winded; }
   // (player.js) a dodge takes DODGE_STAMINA; none when there is not enough left for one (as a swing)
   takeDodge() {
     if (this.stamina <= 0.05) return false;
-    this.stamina = Math.max(0, this.stamina - DODGE_STAMINA); this.staminaDelay = Math.max(this.staminaDelay, 0.6);
+    this.useStamina(DODGE_STAMINA, 0.6);
     return true;
   }
+  // stamina spent - a blow, a guard, a dodge, running, a Break -, coming back again after wait s; none spent in 흑기사
+  // 린다메아's duel, where it is unlimited (duelStamina)
+  useStamina(n, wait) {
+    if (this.duelStamina()) return;
+    this.stamina = Math.max(0, this.stamina - n); this.staminaDelay = Math.max(this.staminaDelay, wait);
+  }
+  // 흑기사 린다메아's duel on (inDuel - neither she nor the player can die while it lasts): the player's stamina unlimited
+  duelStamina() { return this.enemies.some(e => e.alive && this.inDuel(e)); }
   // (PC) the turn from the body's own space - where the eyes are, turned as the body is but not tipped as they look up
   // or down - to the camera's: what is held still at the side (deskswing.js DESK_REST, DESK_SHIELD_DOWN) stays there as
   // one looks about
@@ -3477,7 +3490,7 @@ export class CombatSystem {
     } else if (guarded && (shieldHit || blockable)) {
       blocked = true;
       dmg = Math.round(dmg * (this.hasShield ? 0.25 : 0.5) / Math.max(0.5, actor.grd));      // (방어 효과율)
-      this.stamina = Math.max(0, this.stamina - GUARD_STAMINA); this.staminaDelay = 1;
+      this.useStamina(GUARD_STAMINA, 1);
       this.guardTing(ep);
       this.reportStruck(e, 1);
     } else {
@@ -3871,11 +3884,12 @@ export class CombatSystem {
     this.staminaDelay = Math.max(0, this.staminaDelay - dt);
     const fight = this.fighting();
     if (fight && G.player?.runningNow) {
-      this.stamina = Math.max(0, this.stamina - RUN_STAMINA * dt); this.staminaDelay = Math.max(this.staminaDelay, 0.3);
+      this.useStamina(RUN_STAMINA * dt, 0.3);
       if (this.stamina <= 0) this.winded = true;
     }
     if (this.staminaDelay <= 0 && !this.guardUp) this.stamina = Math.min(1, this.stamina + 0.45 * dt);      // (not while guarding)
     if (this.winded && (this.stamina >= RUN_AGAIN || !fight)) this.winded = false;
+    if (this.duelStamina()) { this.stamina = 1; this.winded = false; }          // (흑기사 린다메아's duel: unlimited)
     this.rangedCooldown = Math.max(0, this.rangedCooldown - dt);
     this.updateGuard();
     this.updateDeskShield(dt);
@@ -4057,7 +4071,7 @@ export class CombatSystem {
       if (e.marker && e.state !== 'windup' && e.state !== 'act') this.dropMarker(e);
       if (e.sky && !paused) this.skyHold(e, dt);           // (gone up into the sky: stays up there - bossmoves.js)
       else if (e.landing || e.diving) this.skyLand(e);
-      if (e.lift > 0 && !e.sky && !(e.diving && e.alive) && !(e.state === 'windup' && (e.move === 'leap' || e.move === 'farOrb')) && !(e.state === 'act' && ['recoil', 'farOrb', 'cloakLeap'].includes(e.act?.kind))) e.lift = Math.max(0, e.lift - 16 * dt);
+      if (e.lift > 0 && !e.sky && !(e.diving && e.alive) && !(e.state === 'windup' && (e.move === 'leap' || e.move === 'farOrb')) && !(e.state === 'act' && ['recoil', 'farOrb', 'cloakLeap'].includes(e.act?.kind))) e.lift = Math.max(0, e.lift - (this.skyDrop(e) || 16) * dt);
       // (a far orb's: gone with the move it was for - cut short, the boss fallen)
       if (e.orb && !(e.state === 'windup' && e.move === 'farOrb')) this.dropOrb(e);
       if (e.act?.orb && !e.act.burst && e.state !== 'act') { this.root.remove(e.act.orb); e.act.orb.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); }); e.act.orb = null; e.act.burst = true; }
@@ -5462,9 +5476,7 @@ export class CombatSystem {
       const head = this.targetHead(e);
       plan.cx = head.x; plan.cz = head.z;
       e.marker = new FloorMarker(this.root, { ...plan, color: MARK.heavy, label: plan.hits > 1 ? `×${plan.hits}` : '' });
-      const ep = e.worldPos(new THREE.Vector3());
-      G.audio?.playSe(G.seAt('Jump1', 90, 70), ep);
-      G.audio?.playSe(G.seAt('Wind4', 70, 80), ep);
+      // (no sound of its own as it goes up: its skill's - the original's - plays where it lands, landLeap)
       G.coop?.onLeap?.(e);
     }
     const k = THREE.MathUtils.clamp((el - crouch) / Math.max(0.1, e.timer0 - crouch), 0, 1);
@@ -5472,7 +5484,12 @@ export class CombatSystem {
     const h = THREE.MathUtils.smootherstep(Math.min(1, k / 0.75), 0, 1);          // across while going up
     e.fx = plan.sx + (tx - plan.sx) * h; e.fy = plan.sy + (ty - plan.sy) * h;
     const H = plan.height;
-    if (plan.dive) { e.lift = H * (1 - k * k * k); return; }        // (hangs up there, then down all at once)
+    if (plan.dive) {
+      // (hangs up there, then down all at once: 뛰어넘기's straight down at its speed - it lands as the mark runs out)
+      const drop = this.skyDrop(e), left = (1 - k) * Math.max(0.1, e.timer0 - crouch);
+      e.lift = drop > 0 ? H * Math.min(1, left * drop / H) : H * (1 - k * k * k);
+      return;
+    }
     e.lift = k < 0.45 ? H * (1 - (1 - k / 0.45) ** 2) : k < 0.78 ? H : H * (1 - ((k - 0.78) / 0.22) ** 2);
   }
   landLeap(e) {
@@ -5489,12 +5506,12 @@ export class CombatSystem {
     this.spawnSparks(at.clone().setY(at.y + 0.1), new THREE.Vector3(1, 0, 0), 14, 0xc8b090);
     const head = G.player.headWorld(new THREE.Vector3());
     this.strikeAlliesInPlan(e, s, plan, plan.hits);
-    // (down from the sky - a dive: the ground shakes a little and both hands feel it, more the nearer it lands)
+    // (down from the sky - a dive: the ground shakes hard and both hands feel it, more the nearer it lands)
     if (plan.dive) {
       const d = Math.hypot(head.x - at.x, head.z - at.z);
       if (d < 18) {
         const k = 1 - d / 18;
-        G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 0.2 + 0.3 * k);
+        G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 1 + 0.8 * k, 0.5);
         G.input.haptic('left', 0.45 + 0.4 * k, 170); G.input.haptic('right', 0.45 + 0.4 * k, 170);
       }
     }
@@ -5504,12 +5521,12 @@ export class CombatSystem {
       // under it: thrown up into the air (not when it was slipped in a dodge); off a perfect guard it only jolts -
       // the ground and both hands shake hard
       if (parried) {
-        G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 0.8);
+        G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 1.3, 0.45);
         G.input.haptic('left', 1, 220); G.input.haptic('right', 1, 220);
       } else if (!(G.player.invuln > 0) && !this.playerDead) G.player.knockback(0, 0, 0, LEAP_LAUNCH);
     } else if (!plan.dive && Math.hypot(head.x - at.x, head.z - at.z) < plan.r + 3) {
-      // the ground shakes around it
-      G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 0.5);
+      // the ground shakes around it, hard
+      G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 1, 0.4);
       G.input.haptic('left', 0.45, 90); G.input.haptic('right', 0.45, 90);
     }
     this.endMove(e, 1.2);
@@ -6506,9 +6523,6 @@ export class CombatSystem {
     Object.assign(plan, { jumped: true, sx: at.sx, sy: at.sy, jumpAt: at.j, height: at.h, cx: at.cx, cz: at.cz });
     this.dropMarker(e);
     e.marker = new FloorMarker(this.root, { ...plan, color: MARK.heavy, label: plan.hits > 1 ? `×${plan.hits}` : '' });
-    const ep = e.worldPos(new THREE.Vector3());
-    G.audio?.playSe(G.seAt('Jump1', 90, 70), ep);
-    G.audio?.playSe(G.seAt('Wind4', 70, 80), ep);
     return true;
   }
   // (guest) the host's charging boss ran into the host there: it stops and bounces back here too
@@ -6570,7 +6584,7 @@ export class CombatSystem {
                 this.playerHitEnemy(e, power, crit, this.prevTip, { melee: true, strong, charge });
               }
               G.input.haptic('right', 0.9, 70);
-              this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.1) / this.weaponPace); this.staminaDelay = 0.8;
+              this.useStamina((charge >= 0.35 ? CHARGED_STAMINA : BLOW_STAMINA_VR) / this.weaponPace, 0.8);
             }
           }
           if (landed && this.charge && charge >= 0.35) { this.charge.spent = true; this.charge.level = 0; }
@@ -6598,7 +6612,7 @@ export class CombatSystem {
         if (!this.swing && this.stamina > 0.05 && !this.staggered()) {
           this.swing = { t: 0, hit: new Set(), charge };
           if (!this.weapon.userData.fist) this.deskSwing.begin(this.swing, G.time);      // (a cut in the chain, or charged: a thrust)
-          this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.12) / this.weaponPace); this.staminaDelay = 0.7;
+          this.useStamina((charge >= 0.35 ? CHARGED_STAMINA : BLOW_STAMINA) / this.weaponPace, 0.7);
           G.audio?.playSe(G.seAt('Wind7', 60, charge >= 0.35 ? 100 : 140));
         }
       }
@@ -6957,7 +6971,7 @@ export class CombatSystem {
   breakOnHit(e, skill, src) {
     this.breakArm = null;
     this.breakCooldown = G.time + Math.max(0.9, this.coolSeconds(skill));
-    this.stamina = Math.max(0, this.stamina - 0.2); this.staminaDelay = 0.8;
+    this.useStamina(0.2, 0.8);
     if (this.heldBoss(e)) return;
     if (!e.battle) {
       const sym = [...this.symbols.values()].find(x => x.enemy === e);
@@ -7006,7 +7020,7 @@ export class CombatSystem {
   // the cannon's shell bursts at each one it goes through and where it stops
   fireGunBreak(skill) {
     this.breakCooldown = G.time + Math.max(0.9, this.coolSeconds(skill));
-    this.stamina = Math.max(0, this.stamina - 0.2); this.staminaDelay = 0.8;
+    this.useStamina(0.2, 0.8);
     const gun = this.offGun;
     let from = null, dir;
     if (gun) {
@@ -7193,7 +7207,7 @@ export class CombatSystem {
         G.audio?.playSe(G.seAt('Parry', 95, s.kind === 'shield' ? 110 : 130), c.at);
         this.spawnSparks(c.at, c.dir, 12, 0xffe8b0);
         G.input.haptic('right', 1, 100);
-        this.stamina = Math.max(0, this.stamina - 0.1); this.staminaDelay = 0.8;
+        this.useStamina(0.1, 0.8);
         G.coop.sendClash(p.id, s.side, s.kind === 'shield' ? 1 : 2);
         if (s.kind === 'shield') this.bounce();
         break;
@@ -7214,7 +7228,7 @@ export class CombatSystem {
     G.input.haptic(side, [0, 1, 1, 0.8, 0.45, 0.3][k], k <= 3 ? 90 : 50);
     this.pvpFightUntil = G.time + PVP_FIGHT;
     const cost = k === 1 ? GUARD_STAMINA / 2 : k === 4 ? GUARD_STAMINA / 5 : 0;
-    if (cost) { this.stamina = Math.max(0, this.stamina - cost); this.staminaDelay = 0.8; }
+    if (cost) this.useStamina(cost, 0.8);
     return true;
   }
   // (PvP) a spell or a thrown thing of this player's - one aimed at foes - reached another player (t: its body as seen
@@ -7271,7 +7285,7 @@ export class CombatSystem {
     } else if (this.isBlocking(ep)) {
       how = 'guard';
       dmg = Math.round(dmg * (this.hasShield ? 0.25 : 0.5) / Math.max(0.5, actor.grd));
-      this.stamina = Math.max(0, this.stamina - GUARD_STAMINA); this.staminaDelay = 1;
+      this.useStamina(GUARD_STAMINA, 1);
       this.guardTing(ep);
     } else {
       G.screen.hurtFlash(1);

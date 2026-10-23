@@ -4,14 +4,15 @@
 //  farOrb      it flies back off the player and up, a huge orb swelling before it, and hurls the orb onto the circle laid at
 //              the player's feet (the circle follows them until a moment before)
 //  blinkChain  gone, and there behind the player: a line laid through them, a dash along it - three times over
+//              (흑기사 린다메아's: east, west, south or north of them, at random each time)
 //  starSpin    a star of beams out from the boss, turning round it while it fills: it strikes where the arms are when full
 //  lattice     a lattice of beams laid round the player: one way first, then across
 //  stripes     bands across the floor, through the boss: every other one, then the ones between, then the first ones again
 //  cloakLeap   up in a swirl of its cloak, straight up out of sight at once (흑기사 린다메아's 뛰어넘기): the form the original
 //              changes it into then stays up there (skyHold); with none it drops down behind the player
-// 흑기사 린다메아 has her own: her lance from behind (관통창, blinkChain), void lances in a lattice (허공창), the punishment in
-// bands (형벌), the black light as a turning star (흑사광), the black sanctions - three heavy cuts from behind (검은 제재 /
-// 검은 극형) -, her leap in the cloak (뛰어넘기) and Noah's apocalypse hurled from afar (노아의 묵시록).
+// 흑기사 린다메아 has her own: her lance from a side of the player (관통창, blinkChain), void lances in a lattice (허공창), the
+// punishment in bands (형벌), the black light as a turning star (흑사광), the black sanctions - three heavy cuts from a side (검은
+// 제재 / 검은 극형) -, her leap in the cloak (뛰어넘기) and Noah's apocalypse hurled from afar (노아의 묵시록).
 // And 윈터벨의 바람's wind blows the player up into the sky, to drop them when its 낙하 comes (liftInfo, player.js liftUp).
 // A boss that changes into a form with no picture of its own goes up into the sky, out of sight, and comes down as it changes back
 // (skyHold: 린다메아 and 이디스 after their 뛰어넘기, 윈터벨의 바람 as it blows the player up); a mount drawn in its rider's picture
@@ -33,6 +34,8 @@ const LIFT_TOP = 5.5;            // m: how high the wind blows the player
 const SKY_LIFT = 15;             // m: how high a boss gone up into the sky is
 const SKY_SEEN = 8;              // m: higher than this it is out of sight
 const SKY_RISE = 40;             // m/s: how fast it springs up there (out of sight in a fifth of a second)
+const CLOAK_RISE = 150;          // m/s: 뛰어넘기's spring (흑기사 린다메아, 잿빛 독수리 이디스) - out of sight in a few frames
+const SKY_DROP = 90;             // m/s: how fast one of them comes down out of the sky - a dive, or just down
 
 // (흑기사 린다메아's skills, by name - Korean, Japanese, Chinese, English)
 const LINDA = [
@@ -204,8 +207,8 @@ export const bossMoves = {
         return true;
       case 'cloakLeap': {
         this.applySkillToSelf(e, s);
-        G.audio?.playSe(G.seAt('Wind4', 100, 60), ep);
-        G.audio?.playSe(G.seAt('Jump1', 90, 70), ep);
+        // (its skill's own animation and sound - 린다메아's cloak, 이디스's wings: 翼羽ばたき)
+        if (s.animation_id > 0) G.screen.playAnimationOn(ep.clone().setY(ep.y + (e.h || 1.8) * 0.5), s.animation_id, { world: true, size: this.enemySize(e) });
         this.spawnGlow(ep.clone().setY(ep.y + (e.h || 1.8) * 0.4), { color: 0x2a1030, size: (e.h || 1.8) * 1.4, life: 0.4, grow: 1.6 });
         if (e.puppet) { this.endMove(e, 0); return true; }
         // straight up, out of sight at once (the form the original turns it into then takes over up there - skyHold)
@@ -244,7 +247,7 @@ export const bossMoves = {
       case 'cloakLeap': {
         // up: as fast as it springs into the sky (skyHold); then it waits up there a moment for the form it changes into
         if (a.phase === 'up') {
-          e.lift = Math.min(SKY_LIFT, (e.lift || 0) + SKY_RISE * dt);
+          e.lift = Math.min(SKY_LIFT, (e.lift || 0) + CLOAK_RISE * dt);
           if (e.lift < SKY_SEEN && ((a.trail -= dt) <= 0 || a.trail === undefined)) {
             a.trail = 0.04;
             const p = e.worldPos(new THREE.Vector3()); p.y += (e.h || 1.8) * 0.5;
@@ -259,7 +262,7 @@ export const bossMoves = {
             const d = (3 + Math.random()) / T, x = tx + Math.cos(away + da) * d, y = ty + Math.sin(away + da) * d;
             if (G.map.grid.valid(Math.round(x), Math.round(y)) && G.map.walkable(Math.round(x), Math.round(y)) && lineOfSight(pc.fx, pc.fy, x, y)) { to = [x, y]; break; }
           }
-          Object.assign(a, { phase: 'down', t: 0, dur: 0.45, x0: e.fx, y0: e.fy, x1: to[0], y1: to[1], H: e.lift });
+          Object.assign(a, { phase: 'down', t: 0, dur: Math.max(0.1, (e.lift || 0) / SKY_DROP), x0: e.fx, y0: e.fy, x1: to[0], y1: to[1], H: e.lift });
           return true;
         }
         const k = Math.min(1, a.t / a.dur), h = THREE.MathUtils.smootherstep(k, 0, 1);
@@ -328,15 +331,24 @@ export const bossMoves = {
   },
 
   // ---- the blink chain ------------------------------------------------------------------------------------------------
-  // where it comes out: behind the player as they look (or behind one it goes for, seen from the boss), else beside them
-  blinkSpot(e) {
+  // where it comes out: behind the player as they look (or behind one it goes for, seen from the boss), else beside them.
+  // 흑기사 린다메아 (compass): east, west, south or north of the one she goes for - which, at random each time (one that
+  // has no floor or is cut off by a wall left out)
+  blinkSpot(e, compass = false) {
     const tg = e.tgt?.stands && e.tgt.alive ? e.tgt : null;
     const pc = G.map.playerChar, at = tg ? [tg.fx, tg.fy] : [pc.fx, pc.fy];
-    let back;
-    if (tg) back = Math.atan2(at[1] - e.fy, at[0] - e.fx);
-    else { const f = G.player.forward2D(); back = Math.atan2(-f.z, -f.x); }
-    for (const da of [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4]) {
-      const d = (BLINK_D[0] + Math.random() * (BLINK_D[1] - BLINK_D[0])) / T, a = back + da;
+    let ways;
+    if (compass) {
+      ways = [0, Math.PI / 2, Math.PI, -Math.PI / 2];
+      for (let i = ways.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ways[i], ways[j]] = [ways[j], ways[i]]; }
+    } else {
+      let back;
+      if (tg) back = Math.atan2(at[1] - e.fy, at[0] - e.fx);
+      else { const f = G.player.forward2D(); back = Math.atan2(-f.z, -f.x); }
+      ways = [0, 0.45, -0.45, 0.9, -0.9, 1.4, -1.4].map(da => back + da);
+    }
+    for (const a of ways) {
+      const d = (BLINK_D[0] + Math.random() * (BLINK_D[1] - BLINK_D[0])) / T;
       const x = at[0] + Math.cos(a) * d, y = at[1] + Math.sin(a) * d;
       const tx = Math.round(x), ty = Math.round(y);
       if (!G.map.grid.valid(tx, ty) || !G.map.walkable(tx, ty) || !lineOfSight(at[0], at[1], x, y)) continue;
@@ -365,7 +377,7 @@ export const bossMoves = {
       case 'out': {
         // gone (a dark flicker), and there
         const from = e.worldPos(new THREE.Vector3());
-        const to = this.blinkSpot(e);
+        const to = this.blinkSpot(e, !!this.lindaKind(s));
         if (!to) { this.endMove(e, 0.6); return; }
         this.spawnGlow(from.setY(from.y + (e.h || 1.8) * 0.5), { color: this.lindaKind(s) ? 0x200818 : 0xc8c8ff, size: e.h || 1.8, life: 0.25, grow: 1.4 });
         e.fx = to[0]; e.fy = to[1]; e.lastFx = undefined;
@@ -527,7 +539,7 @@ export const bossMoves = {
   // changed back, it comes down (the lift falls away as any lift does)
   skyHold(e, dt) {
     if (e.puppet || !e.alive || e.state === 'windup' || e.state === 'act') return;
-    e.lift = Math.min(SKY_LIFT, (e.lift || 0) + SKY_RISE * dt);
+    e.lift = Math.min(SKY_LIFT, (e.lift || 0) + (this.cloakLeaper(e) ? CLOAK_RISE : SKY_RISE) * dt);
     // (a dark trail as it rises out of sight)
     if (e.lift < SKY_SEEN && (e.skyTrail = (e.skyTrail || 0) - dt) <= 0) {
       e.skyTrail = 0.07;
@@ -537,6 +549,18 @@ export const bossMoves = {
     e.landing = true;
   },
   skyHidden(e) { return !!e.sky && (e.lift || 0) > SKY_SEEN; },
+  // one that goes up with 뛰어넘기 - 흑기사 린다메아, 잿빛 독수리 이디스: its skills have one, or the form it looks as up in the
+  // sky (lookAs) does
+  cloakLeaper(e) {
+    const id = e?.lookAs || e?.b?.enemyId;
+    if (!id) return false;
+    const memo = (this._cloakIds ||= new Map());
+    if (!memo.has(id)) memo.set(id, !!$data.enemies[id]?.actions?.some(a => $data.skills[a.skill_id] && this.specialFamily($data.skills[a.skill_id]) === 'cloakLeap'));
+    return memo.get(id);
+  },
+  // (combat.js) how fast one up in the sky comes down - a dive, or just down: 뛰어넘기's (CLOAK_RISE) as fast as it went up
+  // (0: as any other)
+  skyDrop(e) { return this.cloakLeaper(e) ? SKY_DROP : 0; },
   // back from the sky while still high up (combat.js transformEnemy: diving): its next blow - the one the original forces on it
   // then, 린다메아's 허공창 - comes down on the player as a dive from up there (combat.js updateLeap), its spot marked on the
   // floor at once; it hangs a moment and then is down all at once

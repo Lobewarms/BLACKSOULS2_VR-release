@@ -207,10 +207,10 @@ export class ScreenFx {
   // and (setting 피격 흔들림, on unless turned off: in a headset a moving view can make people sick) the view
   // is knocked away from the blow and shudders back, rolling and nodding a little with it - big enough to be
   // felt in a headset (up to 8 cm and 2.2 degrees, 0.3 s). dir: from the attacker to the player (x, z)
-  hitShake(dir, strength = 1) {
+  hitShake(dir, strength = 1, dur = 0.3) {
     if (G.settings.hitShake === false) return;
     const l = Math.hypot(dir?.x || 0, dir?.z || 0) || 1;
-    this.shake = { t: 0, dur: 0.3, amp: 0.08 * strength, rot: THREE.MathUtils.degToRad(2.2) * strength,
+    this.shake = { t: 0, dur, amp: 0.08 * strength, rot: THREE.MathUtils.degToRad(2.2) * strength,
       x: (dir?.x || 0) / l, z: (dir?.z || 0) / l, seed: Math.random() * 10 };
   }
   // around drawing a frame: the rig moves for the picture only, so nothing in the game sees it

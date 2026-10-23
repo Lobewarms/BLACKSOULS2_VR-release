@@ -238,8 +238,9 @@ export class Player {
         this.floorY = floorY;
       }
       this.rig.position.y = this.floorY + hop;
-      // (no steps while a lift carries the player - lift.js)
-      if (!G.lift?.riding) this.updateFootsteps(dt, pc.realMoveSpeed?.() > 4 || input.running(), !!hop);
+      // (no steps while a lift carries the player - lift.js -, nor on a move with its walking turned off - 린다메아's blow
+      // sliding the player back: the original's steps come on the walking's frames)
+      if (!G.lift?.riding && pc.walkAnime) this.updateFootsteps(dt, pc.realMoveSpeed?.() > 4 || input.running(), !!hop);
       this.afterMove();
       return;
     }
@@ -257,7 +258,7 @@ export class Player {
       // (running - in a fight it costs stamina, and with none left one walks till some is back: combat.js canRun)
       const run = input.running() && G.combat?.canRun?.() !== false;
       this.runningNow = run && (fwd !== 0 || side !== 0);
-      let speed = originalSpeed(pc.moveSpeed + (run ? 1 : 0));
+      let speed = originalSpeed((G.combat?.battleWalkSpeed?.() ?? pc.moveSpeed) + (run ? 1 : 0));
       if (G.combat?.inCombat && G.combat.guardUp) speed *= 0.55;
       mvx = (f.x * fwd - f.z * side) * speed * dt / T;
       mvy = (f.z * fwd + f.x * side) * speed * dt / T;
@@ -337,7 +338,7 @@ export class Player {
     if (d > 1.5 || airborne || (this.fallV || 0) > 1) return;
     const speed = d / Math.max(dt, 1e-3);
     if (speed < 0.4) { this.stepPhase = Math.min(this.stepPhase ?? 0.7, 0.7); return; }  // stopped: the next step comes soon
-    const full = originalSpeed(G.map.playerChar.moveSpeed + (running ? 1 : 0));
+    const full = originalSpeed((G.combat?.battleWalkSpeed?.() ?? G.map.playerChar.moveSpeed) + (running ? 1 : 0));
     const rate = (running ? 60 / 16 : 60 / 20) * THREE.MathUtils.clamp(speed / full, 0.45, 1);
     this.stepPhase = (this.stepPhase ?? 0.7) + dt * rate;
     if (this.stepPhase < 1) return;

@@ -60,8 +60,9 @@ export class PlayerChar extends GameCharacter {
     super.forceMoveRoute(route);
   }
   setDirection(d) {
-    // forced turns would rotate the user's view: only track the logical direction
-    if (d) this.direction = d;
+    // forced turns would rotate the user's view: only track the logical direction - not while it is fixed (a move route's
+    // "move backward" steps back facing as it was: each step the same way, as the original's)
+    if (!this.directionFix && d) this.direction = d;
     this.stopCount = 0;
   }
 }
