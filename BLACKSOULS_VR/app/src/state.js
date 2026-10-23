@@ -248,6 +248,8 @@ export class BattlerBase {
     this.buffs.forEach((lv, i) => { if (lv > 0) out.push(64 + (lv - 1) * 8 + i); else if (lv < 0) out.push(80 + (-lv - 1) * 8 + i); });
     return out;
   }
+  // their times left (s), in buffIcons' order
+  buffTimes() { const out = []; this.buffs.forEach((lv, i) => { if (lv) out.push(this.buffTime[i]); }); return out; }
   // script 172 回復反転: <HP回復無効:p> / <HP回復反転:p> (MP too) on its states / equipment - a heal it gets comes to
   // nothing p% of the time, or turns into as much damage (허약, 꺼지지 않는 화염, 신어의 반지, 불길한 상의, 천수 영역).
   // What a heal of v (kind 0 HP, 1 MP) comes to

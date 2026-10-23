@@ -16,6 +16,7 @@ const tmpTurn = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
 // 20 frames walking and 16 running (a step on animation patterns 1 and 3); tag 0 is silent. Played a little
 // quieter than the script's volume (STEP_VOLUME)
 const STEP_VOLUME = 0.8;
+const DODGE_BUFFER = 0.3;               // s a dodge pressed a moment early is kept (combat.js INPUT_BUFFER for a click)
 // the original's walking speed in m/s, PC and VR alike (Game_CharacterBase#distance_per_frame: 2^speed / 256 of a tile a
 // frame, 60 frames a second): speed 4 is the player's own - 3.75 tiles a second -, 도도 달리기 (CE43: Change Speed) makes
 // it 5, and running (Game_Player#dash?: no map of this game holds it back) is one more - twice as fast
@@ -189,6 +190,7 @@ export class Player {
     this.dodge.cooldown = Math.max(0, this.dodge.cooldown - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.dodging = false;             // (moving in a dodge this frame - its last step too: enemies let it through)
+    this.runningNow = false;          // (running this frame, moving: what costs stamina in a fight - combat.js)
 
     // ---- view rotation ----
     if (G.vr) {
@@ -252,13 +254,20 @@ export class Player {
       const f = this.forward2D();
       // stick y negative = forward
       const fwd = -mv.y, side = mv.x;
-      let speed = originalSpeed(pc.moveSpeed + (input.running() ? 1 : 0));
+      // (running - in a fight it costs stamina, and with none left one walks till some is back: combat.js canRun)
+      const run = input.running() && G.combat?.canRun?.() !== false;
+      this.runningNow = run && (fwd !== 0 || side !== 0);
+      let speed = originalSpeed(pc.moveSpeed + (run ? 1 : 0));
       if (G.combat?.inCombat && G.combat.guardUp) speed *= 0.55;
       mvx = (f.x * fwd - f.z * side) * speed * dt / T;
       mvy = (f.z * fwd + f.x * side) * speed * dt / T;
-      // (not the press that just closed a message - A is both)
-      if ((input.dodge() && !G.ui.consumedConfirm || this.wantDodge) && this.dodge.cooldown <= 0) {
-        this.wantDodge = false;
+      // (not the press that just closed a message - A is both; a dodge takes stamina - none without it: combat.js
+      // takeDodge; none while staggered - PvP. A press a moment early - the last dodge's cooldown or a stagger still
+      // running - is kept DODGE_BUFFER s and taken as soon as it can be)
+      if (input.dodge() && !G.ui.consumedConfirm) this.dodgeAskedAt = G.time;
+      const asked = this.wantDodge || G.time - (this.dodgeAskedAt ?? -99) <= DODGE_BUFFER;
+      if (asked && this.dodge.cooldown <= 0 && !G.combat?.staggered?.() && (G.combat?.takeDodge?.() ?? true)) {
+        this.wantDodge = false; this.dodgeAskedAt = -99;
         let dx = f.x * fwd - f.z * side, dy = f.z * fwd + f.x * side;
         const l = Math.hypot(dx, dy);
         if (l < 0.2) { dx = -f.x; dy = -f.z; } else { dx /= l; dy /= l; }   // default: backstep
@@ -313,7 +322,7 @@ export class Player {
     // (an event's "move forward" must go there, not where the head happens to turn)
     if (!G.map.interpreter.running()) pc.direction = this.facingDir();
     this.updateHeight(dt);
-    this.updateFootsteps(dt, input.running(), this.jumpY > 0.05 || this.dodge.t > 0);
+    this.updateFootsteps(dt, this.runningNow, this.jumpY > 0.05 || this.dodge.t > 0);
     this.afterMove();
   }
 

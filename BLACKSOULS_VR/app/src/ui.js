@@ -39,6 +39,8 @@ function composeMats(d, word) {
 }
 // a long name cut to fit its row (… at its end)
 const clipText = (t, max) => { const a = [...String(t || '')]; return a.length > max ? a.slice(0, max - 1).join('') + '…' : a.join(''); };
+// where the map shows (설정 → 지도): in VR over the right hand (as it starts), else a corner of the view
+const minimapWhere = () => (G.vr && minimapPlace().hand ? tr('지금 있는 곳 둘레의 지도를 오른손 위에 띄웁니다') : tr('지금 있는 곳 둘레의 지도를 화면 구석에 띄웁니다'));
 // the rows of the settings menu (showSettingsMenu): coming back from one of them goes back there, not to the menu
 const SETTING_IDS = ['minimap', 'turn', 'diff', 'options', 'adjust', 'spectator'];
 // 하늘 색's list (the first: the original's black - sky.js FOG)
@@ -1012,11 +1014,13 @@ export class UI {
     this.root.add(this.bannerPanel.mesh);
     this.toastPanel = new Panel(900, 300, 0.75);
     this.root.add(this.toastPanel.mesh);
-    this.hud = new Panel(512, 232, 0.17, { depthTest: true });
-    this.hud.mesh.renderOrder = 900;
+    // the status panel: over all the world (PC and VR) - a raised shield, a wall, the marks over heads, skill animations -,
+    // under the screen's tone, flash and fade as before (screen.js: 2990-3000) and the windows
+    this.hud = new Panel(512, 232, 0.17);
+    this.hud.mesh.renderOrder = 2989;
     // (co-op) the voice chat marks just right of it, at its top (voicemarks.js - drawVoiceBadge): with it wherever it goes
-    this.voiceBadge = new Panel(VOICE_BADGE[0], VOICE_BADGE[1], 0.17 * VOICE_BADGE[0] / 512, { depthTest: true });
-    this.voiceBadge.mesh.renderOrder = 900;
+    this.voiceBadge = new Panel(VOICE_BADGE[0], VOICE_BADGE[1], 0.17 * VOICE_BADGE[0] / 512);
+    this.voiceBadge.mesh.renderOrder = this.hud.mesh.renderOrder;
     this.voiceBadge.mesh.position.set((this.hud.widthM + this.voiceBadge.widthM) / 2 + 0.17 * 10 / 512, (this.hud.heightM - this.voiceBadge.heightM) / 2 - 0.17 * 6 / 512, 0);
     this.hud.mesh.add(this.voiceBadge.mesh);
     this.voiceBadgeKey = '';
@@ -1704,7 +1708,7 @@ export class UI {
     const c = G.coop, P = G.state.party, rows = [];
     if (P.gold > 0) rows.push({ text: tr('소울'), right: P.gold.toLocaleString(), kind: 'gold', id: 0, n: P.gold });
     for (const kind of ['item', 'weapon', 'armor']) {
-      for (const [id, n] of P.container(kind)) {
+      for (const [id, n] of [...P.container(kind)].sort((x, y) => x[0] - y[0])) {          // (by number, as the item lists)
         if (n > 0 && c.giveable(kind, id)) { const d = itemData(kind, id); rows.push({ text: d.name, icon: d.icon_index, right: String(n), desc: d.description, kind, id, n }); }
       }
     }
@@ -2163,10 +2167,14 @@ export class UI {
     const mv = G.scripts?.menuVar, sen = mv && (!mv.switchId || G.state.sw(mv.switchId)) ? G.state.v(mv.variable) : null;
     // the player's states, by their icons as the original's battle status shows them (poison, a resin, a boss's rule
     // going round - 그랑・기뇰's 악랄영역): a row under the rest, only while there are any
-    // (and its buffs / debuffs, by the original's arrows - 목수의 못, a curse)
-    const icons = [...leader.states.map(id => $data.states[id]?.icon_index || 0), ...leader.buffIcons()].filter(i => i > 0).slice(0, 12);
+    // (and its buffs / debuffs, by the original's arrows - 목수의 못, a curse), each with the seconds it has left on it (as
+    // the original's ステート残りターン puts a state's turns left on its icon in a fight - here they run all the time)
+    const timers = G.state.system.stateTimers || {}, buffT = leader.buffTimes();
+    const marks = [...leader.states.map(id => [$data.states[id]?.icon_index || 0, timers[id]]), ...leader.buffIcons().map((ic, k) => [ic, buffT[k]])]
+      .filter(([ic]) => ic > 0).slice(0, 12);
+    const icons = marks.map(m => m[0]), lefts = marks.map(m => (m[1] > 0 ? Math.ceil(m[1]) : null));
     this.drawVoiceBadge();
-    const key = `${leader.hp}/${leader.mhp}/${leader.mp}/${leader.mmp}/${G.state.party.gold}/${G.combat?.stamina?.toFixed?.(2)}/${sen}/${icons.join(',')}`;
+    const key = `${leader.hp}/${leader.mhp}/${leader.mp}/${leader.mmp}/${G.state.party.gold}/${G.combat?.stamina?.toFixed?.(2)}/${sen}/${icons.join(',')}/${lefts.join(',')}`;
     if (key === this.lastHud) return;
     this.lastHud = key;
     const p = this.hud;
@@ -2174,6 +2182,11 @@ export class UI {
     p.clear();
     windowBg(ctx, 2, 2, canvas.width - 4, (icons.length ? 232 : 188) - 4, 0.72);
     icons.forEach((ic, i) => drawIcon(ctx, ic, 24 + i * 38, 188, 34));
+    // (the time left: over the icon's right side, bold, in the crisis colour - as the original draws a state's turns)
+    ctx.font = `bold 27px ${FONT}`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 5; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.fillStyle = textColor(17);
+    lefts.forEach((n, i) => { if (n === null) return; const x = 24 + i * 38 + 34, y = 188 + 17; ctx.strokeText(String(n), x, y); ctx.fillText(String(n), x, y); });
+    ctx.textAlign = 'left';
     const r = Math.max(0, leader.hp / Math.max(1, leader.mhp));
     ctx.fillStyle = 'rgba(60,10,10,0.9)'; ctx.fillRect(22, 20, canvas.width - 44, 28);
     ctx.fillStyle = r > 0.3 ? '#b8222a' : '#ff3030'; ctx.fillRect(22, 20, (canvas.width - 44) * r, 28);
@@ -2292,7 +2305,7 @@ export class UI {
   showSettingsMenu(id) {
     const s = G.settings;
     const items = [
-      { text: tr('지도'), id: 'minimap', right: s.minimap !== false ? tr('켬') : tr('끔'), desc: tr('지금 있는 곳 둘레의 지도를 화면 구석에 띄웁니다') },
+      { text: tr('지도'), id: 'minimap', right: s.minimap !== false ? tr('켬') : tr('끔'), desc: minimapWhere() },
       { text: tr('회전 방식: {v}', { v: s.snapTurn ? tr('스냅 {a}°', { a: s.snapAngle }) : tr('부드럽게') }), id: 'turn' },
       { text: tr('난이도(적 공격력): ×{v}', { v: s.difficulty.toFixed(2) }), id: 'diff' },
       { text: tr('전투·화면 설정'), id: 'options' },
@@ -2352,22 +2365,27 @@ export class UI {
       else if (id === 'opacity') set('opacity', Math.round(clamp(p.opacity + dx * 0.1, 0.2, 1) * 10) / 10);
       else if (id === 'shape') set('shape', p.shape === 'round' ? 'square' : 'round');
       else if (id === 'rotate') set('rotate', !p.rotate);
+      else if (id === 'hand') set('hand', !p.hand);
       else if (id === 'reset') { s.minimapPlace = undefined; G.saveSettings?.(); }
     };
     if (G.minimap) G.minimap.preview = true;
     const pct = v => `${Math.round((v + 1) * 50)}%`;
     const items = [
-      { text: tr('지도 표시'), id: 'on', right: s.minimap !== false ? tr('켬') : tr('끔'), desc: tr('지금 있는 곳 둘레의 지도를 화면 구석에 띄웁니다') },
+      { text: tr('지도 표시'), id: 'on', right: s.minimap !== false ? tr('켬') : tr('끔'), desc: minimapWhere() },
+      // (VR: over the right hand, or a corner of the view - its place there only then)
+      G.vr && { text: tr('위치'), id: 'hand', right: p.hand ? tr('오른손') : tr('시야 구석'), desc: tr('오른손: 오른손 위에 떠 있습니다 · 시야 구석: 늘 시야에 보입니다') },
       { text: tr('모양'), id: 'shape', right: p.shape === 'round' ? tr('원형') : tr('사각'), desc: tr('고르거나 좌우로 바꿉니다') },
       { text: tr('방향'), id: 'rotate', right: p.rotate ? tr('보는 방향이 위') : tr('북쪽이 위'),
         desc: p.rotate ? tr('지도가 보는 방향에 맞춰 돌고, 나는 늘 가운데에 있습니다') : tr('원작 화면처럼: 맵 끝에서는 지도가 멈추고 나만 움직입니다') },
       { text: tr('크기'), id: 'size', right: `${Math.round(p.size * 100)}%`, desc: tr('좌우로 조절합니다') },
       { text: tr('불투명도'), id: 'opacity', right: `${Math.round(p.opacity * 100)}%`, desc: tr('좌우로 조절합니다') },
       { text: tr('보이는 범위'), id: 'zoom', right: tr('{n}칸', { n: MINIMAP_ZOOMS[p.zoom] }), desc: tr('좌우로 조절합니다') },
-      { text: tr('가로 위치'), id: 'x', right: pct(p.x), desc: tr('0%: 왼쪽 끝, 100%: 오른쪽 끝 (좌우로 조절)') },
-      { text: tr('세로 위치'), id: 'y', right: pct(p.y), desc: tr('0%: 아래 끝, 100%: 위 끝 (좌우로 조절)') },
+      ...(G.vr && p.hand ? [] : [
+        { text: tr('가로 위치'), id: 'x', right: pct(p.x), desc: tr('0%: 왼쪽 끝, 100%: 오른쪽 끝 (좌우로 조절)') },
+        { text: tr('세로 위치'), id: 'y', right: pct(p.y), desc: tr('0%: 아래 끝, 100%: 위 끝 (좌우로 조절)') },
+      ]),
       { text: tr('기본값으로'), id: 'reset' },
-    ];
+    ].filter(Boolean);
     this.list.open(tr('지도'), items, {
       index,
       onSelect: (i, it) => { step(it.id, 1); this.showMinimapMenu(i); },
@@ -2556,18 +2574,20 @@ export class UI {
     });
   }
   // what can go into a slot: three a row like the items and skills (how many on the right), and below, the one
-  // pointed at - what it changes, then what it is
+  // pointed at - what it changes, then what it is. In the original's order (Window_EquipItem): by number, the empty one -
+  // taking it off - last
   showEquipChoices(slot) {
     const a = G.state.party.leader();
     const kind = slot === 0 ? 'weapon' : 'armor';
     const party = G.state.party;
-    const cands = [{ text: tr('(장비 해제)'), id: 0, desc: this.paramDelta(a, slot, kind, 0) }];
-    for (const [id, n] of party.container(kind)) {
+    const cands = [];
+    for (const [id, n] of [...party.container(kind)].sort((x, y) => x[0] - y[0])) {
       const d = itemData(kind, id);
       if (!d || !d.name || !this.canEquip(a, kind, d, slot)) continue;
       cands.push({ text: d.name, icon: d.icon_index, id, right: `${n}`,
         desc: [this.paramDelta(a, slot, kind, id), stripEscapes(d.description || '')].filter(Boolean).join('  ·  ') });
     }
+    cands.push({ text: tr('(장비 해제)'), id: 0, desc: this.paramDelta(a, slot, kind, 0) });
     this.list.close();
     this.grid.open(tr('{slot} 변경', { slot: this.slotName(slot) }), [{ label: this.slotName(slot), items: cands }], {
       tab: 0,
@@ -2627,11 +2647,13 @@ export class UI {
   showOptionsMenu(index = 0) {
     const s = G.settings;
     const SWING = [tr('약하게'), tr('보통'), tr('강하게'), tr('아주 강하게')];
+    const WEIGHT = [tr('끔'), tr('약하게'), tr('보통'), tr('강하게')];
     const ANIMS = { all: tr('모두'), skills: tr('스킬만 (일반 공격 제외)'), off: tr('끔') };
     const RESPAWN = { map: tr('맵을 나갔다 오면'), slow: tr('1분 뒤 (멀리 있을 때)'), original: tr('원작대로 10초 뒤') };
     const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
     const items = [
       { text: tr('휘두르기 판정'), id: 'swing', right: SWING[s.swingLevel ?? 2], desc: tr('이 정도 세기로 휘둘러야 공격이 들어갑니다 (VR)') },
+      { text: tr('무기 무게감'), id: 'weight', right: WEIGHT[s.weaponWeight ?? 2], desc: tr('무거운 무기일수록 세게 휘두르면 늦게 따라오고 멈춰도 더 나가며, 수평으로 들면 처집니다 · 가벼운 무기는 손에 딱 붙어 있습니다 (VR)') },
       { text: tr('이펙트 밝기'), id: 'fx', right: `${Math.round((s.fxBrightness ?? 0.5) * 100)}%`, desc: tr('번쩍임·빛·스킬 애니메이션의 밝기') },
       { text: tr('스킬 애니메이션'), id: 'anims', right: ANIMS[s.skillAnims || 'all'], desc: tr('원작 스킬·공격 애니메이션을 대상 위치에 재생합니다') },
       { text: tr('적이 벽 통과'), id: 'walls', right: s.enemyThroughWalls === false ? tr('끔') : tr('켬'), desc: tr('쫓아오는 적이 벽이나 소품에 끼지 않고 통과합니다') },
@@ -2649,6 +2671,7 @@ export class UI {
       index,
       onSelect: (i, it) => {
         if (it.id === 'swing') s.swingLevel = ((s.swingLevel ?? 2) + 1) % 4;
+        if (it.id === 'weight') { s.weaponWeight = ((s.weaponWeight ?? 2) + 1) % 4; G.combat?.weaponLag.setSway(G.combat.weaponSway()); }
         if (it.id === 'fx') s.fxBrightness = cycle([0.25, 0.5, 0.75, 1], s.fxBrightness ?? 0.5);
         if (it.id === 'anims') s.skillAnims = cycle(['all', 'skills', 'off'], s.skillAnims || 'all');
         if (it.id === 'walls') s.enemyThroughWalls = s.enemyThroughWalls === false;

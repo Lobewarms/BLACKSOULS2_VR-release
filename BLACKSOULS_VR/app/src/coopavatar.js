@@ -307,6 +307,7 @@ export class CoopAvatar {
     // the hands, and what they hold
     for (const side of ['left', 'right']) {
       const h = this.hands[side], d = p[side === 'right' ? 'R' : 'L'] || {};
+      h.lowered = !!d.lo;
       if (d.h && !h.model && !h.loading) {
         h.loading = true;
         makeHand(side).then(model => { if (this.gone) { model.dispose(); return; } h.model = model; h.hand.add(model.root); });
@@ -332,6 +333,7 @@ export class CoopAvatar {
       if (!h.kind || !h.item.visible || !h.item.children.length) continue;
       h.item.updateWorldMatrix(true, false);
       if (h.kind === 'shield') {
+        if (h.lowered) continue;                 // (a PC player's shield held down at its side: no guard)
         h.box ||= localBox(h.item);
         if (!h.box.isEmpty()) out.push({ side, kind: 'shield', box: h.box, m: h.item.matrixWorld });
       } else {

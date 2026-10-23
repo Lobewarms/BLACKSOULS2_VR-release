@@ -3,9 +3,10 @@
 // (rmwindow.js) - round (as it starts), or square. Turned with the view (as it starts), the player stays in its middle; north up it
 // goes as the original's screen: it follows the player, but stops at the map's edges, where the player alone moves on
 // (Game_Map#set_display_pos; a map smaller than it stays in its middle; a looping map goes on round). PC: a corner of
-// the screen; VR: of the view, in front of everything. Its shape, turning, place, size, opacity and how much it shows
-// are the player's (menu → 설정 → 지도). Hidden while an event, a message or a menu holds the player - but in its own
-// menu, where it shows what the settings do.
+// the screen; VR: just over the right hand, turned to the eyes (as it starts - as the status panel over the left), or
+// a corner of the view, in front of everything. Its shape, turning, place, size, opacity and how much it shows are the
+// player's (menu → 설정 → 지도). Hidden while an event, a message or a menu holds the player - but in its own menu,
+// where it shows what the settings do.
 import * as THREE from 'three';
 import { G } from './globals.js';
 import { render2D, loadTilesetImages } from './mapmesh.js';
@@ -17,8 +18,11 @@ const PX = 320;                            // its canvas, square
 const S = PX / 160;                        // canvas pixels per original pixel (a window of 160 x 160)
 const INSET = 10;                          // the map inside the window's frame (original pixels)
 export const MINIMAP_ZOOMS = [9, 13, 17, 25];     // tiles across (the original's screen showed 17 x 13)
-export const MINIMAP_DEFAULTS = { size: 0.25, x: 1, y: 1, zoom: 2, opacity: 1, shape: 'round', rotate: true };
+export const MINIMAP_DEFAULTS = { size: 0.25, x: 1, y: 1, zoom: 2, opacity: 1, shape: 'round', rotate: true, hand: true };
 const REFRESH = 1 / 20;                    // s between redraws
+const HAND_SIZE = 0.6;                     // m across at size 1, on the hand (0.15 m as it starts)
+const HAND_UP = 0.07, HAND_BACK = 0.04;    // m: its foot over the hand, and back from the fist toward the wrist (off the blade)
+const _m = new THREE.Matrix4(), _back = new THREE.Vector3(), UP = new THREE.Vector3(0, 1, 0);
 
 export function minimapPlace() {
   const p = { ...MINIMAP_DEFAULTS, ...(G.settings.minimapPlace || {}) };
@@ -29,6 +33,7 @@ export function minimapPlace() {
   p.opacity = clamp(+p.opacity || MINIMAP_DEFAULTS.opacity, 0.2, 1);
   p.shape = p.shape === 'square' ? 'square' : 'round';
   p.rotate = p.rotate !== false;
+  p.hand = p.hand !== false;               // (VR: over the right hand; else a corner of the view)
   return p;
 }
 
@@ -99,12 +104,25 @@ export class Minimap {
     this.wait = REFRESH;
     this.draw(p);
   }
-  // PC: in the screen's corner (a share of its height, its x / y from -1 left / bottom to 1 right / top); VR: as far to
-  // the side as a share of the view, a metre off, turned to the eyes
+  // PC: in the screen's corner (a share of its height, its x / y from -1 left / bottom to 1 right / top); VR: just over
+  // the right hand, turned to the eyes - in the player's own space (the rig's) as the hand is, so it goes with the hand
+  // however one moves; over what the hand holds -, or as far to the side as a share of the view, a metre off, turned to
+  // the eyes
   place(p) {
-    const mesh = this.mesh;
-    if (!G.vr) {
-      const cam = this.camera, d = 0.5;
+    const mesh = this.mesh, cam = this.camera;
+    const grip = G.vr && p.hand ? G.input?.controllers?.right?.grip : null;
+    const parent = grip && grip.parent === cam.parent ? grip.parent : cam;
+    if (mesh.parent !== parent) parent.add(mesh);
+    if (parent !== cam) {
+      const size = p.size * HAND_SIZE;
+      mesh.scale.setScalar(size);
+      _back.set(0, 0, 1).applyQuaternion(grip.quaternion).setY(0);
+      if (_back.lengthSq() > 1e-6) _back.setLength(HAND_BACK);
+      mesh.position.copy(grip.position).add(_back);
+      mesh.position.y += HAND_UP + size / 2;
+      mesh.quaternion.setFromRotationMatrix(_m.lookAt(cam.position, mesh.position, UP));
+    } else if (!G.vr) {
+      const d = 0.5;
       const h = 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * d, w = h * cam.aspect, size = p.size * h, gap = 0.025 * h;
       mesh.scale.setScalar(size);
       mesh.position.set(p.x * (w / 2 - size / 2 - gap), p.y * (h / 2 - size / 2 - gap), -d);

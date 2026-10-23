@@ -1,4 +1,4 @@
-﻿BLACK SOULS II VR  (version 2026.10.22-17)
+﻿BLACK SOULS II VR  (version 2026.10.23-10)
 ==================================
 
 An unofficial fan mod for playing BLACK SOULS II in first-person VR (PCVR).

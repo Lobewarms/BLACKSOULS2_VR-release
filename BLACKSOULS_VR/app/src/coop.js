@@ -247,7 +247,9 @@ function checkHand(d) {
   if (h === undefined || i === undefined) return null;
   const c = d.c === undefined ? null : nums(d.c, 3, 1) ? d.c : undefined;
   if (c === undefined) return null;
-  return { h, i, c };
+  // (lo: the shield held down at the side - a PC player's, out of its own view: shown, but no blade meets it)
+  if (d.lo !== undefined && d.lo !== 0 && d.lo !== 1) return null;
+  return { h, i, c, lo: d.lo || 0 };
 }
 function checkPose(m) {
   if (!isInt(m.s, 0, Number.MAX_SAFE_INTEGER) || !isInt(m.m, 0, 9999) || !nums(m.h, 4, 1e5) || (m.j !== undefined && !isNum(m.j, 10))) return null;
@@ -782,6 +784,7 @@ export class Coop {
       case 'ow': this.onStruckMsg(m, from); break;
       case 'pv': this.onPvp(m, from); break;
       case 'cl': this.onClash(m, from); break;
+      case 'bn': this.onBounced(from); break;
       case 'sh': this.onShotMsg(m, from); break;
       case 'boss': if (this.role === 'host') this.onBossAsk(m, from); break;
       case 'ba': if (this.isAuthority()) this.onJoinAnswer(m, from); break;
@@ -2006,13 +2009,22 @@ export class Coop {
     if (G.combat.clashed(m.side, m.k) && m.k <= 2) this.send({ t: 'ow', id: 0, k: 1 });
   }
   // a blow of this player's reached another one (combat.js strikePlayer): the attack skill, how hard, and this
-  // player's numbers - the one struck works out the rest
-  sendPvp(to, s, mult, crit, actor, item = false) {
+  // player's numbers - the one struck works out the rest; sa: how much a swung blow wears its super armor down
+  sendPvp(to, s, mult, crit, actor, item = false, sa = 0) {
     const nums = ['atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'hp', 'mhp', 'mp', 'mmp', 'level'];
     const a = {};
     for (const k of nums) a[k] = Math.round(+actor[k] || 0);
     const el = (actor.atkElements?.() || []).filter(x => isInt(x, 1, 99)).slice(0, 8);
-    this.send({ t: 'pv', s, u: item ? 1 : 0, m: r3(mult), c: crit ? 1 : 0, a, el }, to);
+    this.send({ t: 'pv', s, u: item ? 1 : 0, m: r3(mult), c: crit ? 1 : 0, a, el, ...(sa > 0 ? { sa: r3(sa) } : {}) }, to);
+    if (sa > 0) (this.swungAt ||= new Map()).set(to, now());             // (a swung blow: it may be told it bounced - onBounced)
+  }
+  // a swung blow of this player's was taken on that one's shield (its onPvp): a light weapon bounces off it (combat.js
+  // bounce) - only just after this player swung at that one, once a blow
+  onBounced(from) {
+    const p = this.peers.get(from), at = this.swungAt?.get(from);
+    if (!p || !this.pvpWith(p) || !this.canSee(from) || p.pose?.m !== G.map?.mapId || !this.ready() || at === undefined || now() - at > 1.5) return;
+    this.swungAt.delete(from);
+    G.combat.bounce();
   }
   // another player's blow reached this one (PvP): judged here (combat.js pvpStruck) - and told to everyone ('ow')
   onPvp(m, from) {
@@ -2028,11 +2040,15 @@ export class Coop {
     const a = m.a && typeof m.a === 'object' ? m.a : null;
     const nums = ['atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'hp', 'mhp', 'mp', 'mmp', 'level'];
     if (!s || !isNum(m.m, 20) || m.m < 0 || !a || !nums.every(k => isNum(a[k], 1e9)) || !isList(m.el, 8) || !m.el.every(x => isInt(x, 1, 99))) return;
+    // (sa: how much it wears this one's super armor down - a swung blow, by its weapon; an older version sends none)
+    if (m.sa !== undefined && (!isNum(m.sa, 5) || m.sa < 0)) return;
     // (a stand-in for the striker: its numbers as sent, its attack's elements)
     const by = { ...Object.fromEntries(nums.map(k => [k, a[k]])), tp: 0, atkElements: () => m.el.slice(), elementRate: () => 1, isStateAffected: () => false };
     const c = p.avatar?.cur, from3 = c ? new THREE.Vector3(c.x, c.y - 0.6, c.z) : null;
-    const how = G.combat.pvpStruck(by, s, m.m, from3);
+    const how = G.combat.pvpStruck(by, s, m.m, from3, m.sa || 0);
     if (how && how !== 'dodge') this.send({ t: 'ow', id: 0, k: how === 'hit' ? 0 : how === 'guard' ? 1 : 2 });
+    // (a swung blow taken on this one's shield: the striker is told - a light weapon bounces off)
+    if ((how === 'guard' || how === 'perfect') && m.sa > 0 && G.combat.hasShield && G.combat.shieldOut) this.send({ t: 'bn' }, from);
   }
   // where the host stands, as this guest sees it (a mark that follows the host)
   hostChest(out) {
@@ -2908,6 +2924,8 @@ export class Coop {
       if (G.vr && hand?.root?.parent && shown(hand.root)) { d.h = worldXf(hand.root); d.c = (hand.last || [0, 0, 0]).map(r3); }
       const obj = side === 'right' ? G.combat?.weapon : G.combat?.shield;
       if (obj?.parent && !obj.userData.unarmed && obj.children.length && shown(obj)) d.i = worldXf(obj);
+      // (a PC shield down at the side - its guard not up: shown, but it stops no one's blade - combat.js deskShieldUp)
+      if (d.i && side === 'left' && !G.vr && G.combat.hasShield && !G.combat.deskShieldUp()) d.lo = 1;
       msg[side === 'right' ? 'R' : 'L'] = d;
     }
     // (what it holds ready or in hand instead - lookMsg U)

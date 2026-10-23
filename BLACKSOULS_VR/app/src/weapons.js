@@ -240,6 +240,7 @@ export function buildIconModel(iconIndex, { kind = 'weapon', wtype = 4, hand = '
     outer.position.set(FIST.x, 0, FIST.z);
     outer.userData.length = 0.12;                   // (what strikes: the fist's front, as a bare fist's)
     outer.userData.ranged = false;
+    outer.userData.fist = true;                     // (PC: a fist's own swing, not a blade's cuts - combat.js / deskswing.js)
     return outer;
   }
   const gripY = minY + adj.offset;
