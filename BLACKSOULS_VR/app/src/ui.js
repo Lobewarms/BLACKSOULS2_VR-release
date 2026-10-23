@@ -271,12 +271,15 @@ const SCROLL_PIECE = 512;          // original pixels of a scrolling text one te
 const SKIP_DWELL = 0.08;           // s a message stays up while メッセージスキップ is held (input.js skipHeld)
 const screenW = () => G.scripts?.screen?.[0] || 544;
 const screenH = () => G.scripts?.screen?.[1] || 416;
+// a row's description under a list (or the grid's): this many lines at most, broken between words, the last ending in '…'
+// when there is more
+const DESC_LINES = 2;
 class ListPanel {
   constructor(widthPx = 900, rows = 8, widthM = 0.9, { fit = false, drawW = 0 } = {}) {
     this.rows = rows;
     this.rowH = 64;
     this.fitRows = fit; this.drawW = drawW;
-    this.panel = new Panel(widthPx, 110 + rows * this.rowH + 56, widthM);
+    this.panel = new Panel(widthPx, 110 + rows * this.rowH + 24 + 32 * DESC_LINES, widthM);
     this.items = []; this.index = 0; this.top = 0; this.title = ''; this.look = 'window';
   }
   open(title, items, { onSelect, onCancel, onAdjust = null, index = 0, footer = '', look = '' } = {}) {
@@ -292,13 +295,32 @@ class ListPanel {
   }
   close() { this.panel.mesh.visible = false; }
   get visible() { return this.panel.mesh.visible; }
-  // the window's size and its first row's top (canvas pixels): a fitted list as tall as its title, rows and foot line
+  // the window's size and its first row's top (canvas pixels): a fitted list as tall as its title, rows and foot lines;
+  // either one a line taller when a row's description needs a second one
   layout() {
     const { canvas } = this.panel, W = this.drawW || canvas.width;
-    if (!this.fitRows) return { W, H: canvas.height, top: 100 };
+    const lines = this.descLines();
+    if (!this.fitRows) return { W, H: canvas.height - 32 * (DESC_LINES - Math.max(1, lines)), top: 100 };
     const top = this.title ? 100 : 24, shown = Math.max(1, Math.min(this.rows, this.items.length));
-    const foot = this.footer || this.items.some(it => it.desc) ? 56 : 24;
+    const foot = lines ? 24 + 32 * lines : 24;
     return { W, H: top + shown * this.rowH + foot, top };
+  }
+  // how many lines the rows' descriptions (or the foot line) take at the most: 0 (none) to DESC_LINES
+  descLines() {
+    const W = this.drawW || this.panel.canvas.width;
+    if (this.descFor === this.items && this.descFoot === this.footer && this.descW === W && this.descN0 === this.items.length) return this.descN;
+    const ctx = this.panel.ctx;
+    ctx.save();
+    ctx.font = `28px ${FONT}`;
+    let n = 0;
+    for (const d of [this.footer, ...this.items.map(it => it.desc)]) {
+      if (!d) continue;
+      n = Math.max(n, Array.isArray(d) ? 1 : wrapLines(ctx, stripEscapes(d), W - 72, DESC_LINES).length);
+      if (n >= DESC_LINES) break;
+    }
+    ctx.restore();
+    Object.assign(this, { descFor: this.items, descFoot: this.footer, descW: W, descN0: this.items.length, descN: n });
+    return n;
   }
   // the row under a point of the panel (a ray's uv), or -1
   rowAt(uv) {
@@ -385,7 +407,8 @@ class ListPanel {
     } else if (desc) {
       ctx.font = `28px ${FONT}`;
       ctx.fillStyle = textColor(0);
-      outlined(ctx, stripEscapes(desc).slice(0, 60), 36, H - 30);
+      const lines = wrapLines(ctx, stripEscapes(desc), W - 72, DESC_LINES);
+      lines.forEach((l, k) => outlined(ctx, l, 36, H - 30 - 32 * (lines.length - 1 - k)));
     }
     this.panel.fit(W, H);
     this.panel.commit();
@@ -444,7 +467,8 @@ class ListPanel {
     } else if (desc) {
       ctx.font = `28px ${FONT}`;
       ctx.fillStyle = 'rgba(230,220,200,0.85)';
-      ctx.fillText(stripEscapes(desc).slice(0, 60), 36, H - 30);
+      const lines = wrapLines(ctx, stripEscapes(desc), W - 72, DESC_LINES);
+      lines.forEach((l, k) => ctx.fillText(l, 36, H - 30 - 32 * (lines.length - 1 - k)));
     }
     this.panel.fit(W, H);
     this.panel.commit();
@@ -651,14 +675,25 @@ class MenuScreen {
 }
 
 // ------------------------------------------------------------------ grid panel (3 per row, tabs)
+// a text in lines no wider than maxW: broken between words where it has spaces - a word longer than a line, and a text
+// with none (Japanese, Chinese), between letters -, at most maxLines, the last ending in '…' when there is more
 function wrapLines(ctx, text, maxW, maxLines) {
-  const out = [];
+  const fits = t => ctx.measureText(t).width <= maxW;
+  const lines = [];
   let line = '';
-  for (const ch of String(text || '').replace(/\r?\n/g, ' ')) {
-    if (ctx.measureText(line + ch).width > maxW) { out.push(line); line = ch; if (out.length >= maxLines) break; }
-    else line += ch;
+  const flush = () => { lines.push(line.trimEnd()); line = ''; };
+  for (const tok of String(text || '').replace(/\r?\n/g, ' ').trim().match(/\s+|\S+/g) || []) {
+    if (/^\s/.test(tok)) { if (line) line += ' '; continue; }
+    if (fits(line + tok)) { line += tok; continue; }
+    if (line.trim() && fits(tok)) { flush(); line = tok; continue; }
+    for (const ch of tok) { if (line && !fits(line + ch)) flush(); line += ch; }
   }
-  if (out.length < maxLines && line) out.push(line);
+  if (line.trim()) flush();
+  if (lines.length <= maxLines) return lines;
+  const out = lines.slice(0, maxLines);
+  let last = out[maxLines - 1];
+  while (last && !fits(last + '…')) last = last.slice(0, -1);
+  out[maxLines - 1] = last.trimEnd() + '…';
   return out;
 }
 class GridPanel {

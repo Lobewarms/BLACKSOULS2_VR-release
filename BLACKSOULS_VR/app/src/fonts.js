@@ -18,6 +18,7 @@ const LANG_FONTS = {
   ko: ['NanumGothic', 'Nanum Gothic', 'Malgun Gothic', '\uB9D1\uC740 \uACE0\uB515', 'Apple SD Gothic Neo', 'Noto Sans KR', 'Noto Sans CJK KR', 'Gulim', '\uAD74\uB9BC'],
   ja: ['VL Gothic', 'Meiryo', 'メイリオ', 'Yu Gothic', '游ゴシック', 'MS PGothic', 'ＭＳ Ｐゴシック', 'Hiragino Sans', 'Noto Sans JP', 'Noto Sans CJK JP'],
   zh: ['Microsoft YaHei', '微软雅黑', 'SimHei', '黑体', 'PingFang SC', 'Noto Sans SC', 'Noto Sans CJK SC'],
+  ru: ['Segoe UI', 'Arial', 'Noto Sans', 'DejaVu Sans', 'Liberation Sans'],          // (Cyrillic)
 };
 // (the same installed, by the full names a page can ask the system for one by - for the Han letters' own font)
 const LOCAL_FONTS = {

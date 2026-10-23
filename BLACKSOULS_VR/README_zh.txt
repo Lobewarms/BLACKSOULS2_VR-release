@@ -1,4 +1,4 @@
-﻿BLACK SOULS II VR  (版本 2026.10.24-1)
+﻿BLACK SOULS II VR  (版本 2026.10.24-5)
 ==================================
 
 用第一人称 VR (PCVR) 游玩黑魂2 (BLACK SOULS II) 的非官方粉丝 MOD。
