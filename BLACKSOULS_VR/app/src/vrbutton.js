@@ -150,6 +150,7 @@ export function createVRButton(renderer, opts = {}) {
   async function start() {
     state = 'starting';
     show('STARTING...', false);
+    delete button.dataset.xrError;
     log('ENTER VR');
     const t0 = performance.now();
     let s = null, ended = false;
@@ -183,6 +184,7 @@ export function createVRButton(renderer, opts = {}) {
         : `in VR, drawing into an XRWebGLLayer ${layer.framebufferWidth}x${layer.framebufferHeight}`);
     } catch (e) {
       warn('could not enter VR:', errText(e));
+      button.dataset.xrError = errText(e);       // (the launcher's auto VR says why)
       if (!renderer.xr.isPresenting) opts.restoreView?.();
       session = null;
       if (s) {

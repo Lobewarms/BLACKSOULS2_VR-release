@@ -5,7 +5,8 @@
 // Edge (WebXR), can enter VR by itself (it clicks the page's VR button through the browser's DevTools port) and
 // can add itself to the SteamVR library. VR saves and settings go to saves\ next to this exe.
 // "Run with SteamVR" makes only the game's own browser use SteamVR's OpenXR runtime (XR_RUNTIME_JSON), whatever
-// runtime the PC has active - inside VR the SteamVR dashboard then shows the desktop.
+// runtime the PC has active - inside VR the SteamVR dashboard then shows the desktop. So does a PC whose runtime is
+// Meta Horizon Link's, when SteamVR is installed: in a browser every headset session took about a minute to start there.
 // The browser's WebXR cannot make a VR controller vibrate; while SteamVR runs the launcher does it for the page
 // (SteamVrHaptics).
 // As its window opens it reads the share page's version.json once (Update): a newer version there shows a button
@@ -332,6 +333,16 @@ namespace BlacksoulsVR
                 "VR 自動開始: ゲームの読み込みが終わりませんでした。ウィンドウの VR ボタンを押してください。",
                 "自动进入 VR：游戏没有加载完成。请按窗口中的 VR 按钮。" } },
             { "VR 자동 시작 실패: {0} - 창의 VR 버튼을 눌러 주세요.", new[] { "Auto VR failed: {0} - press the VR button in the window.", "VR 自動開始に失敗: {0} - ウィンドウの VR ボタンを押してください。", "自动进入 VR 失败：{0} - 请按窗口中的 VR 按钮。" } },
+            { "VR 자동 시작: 헤드셋 모드로 들어갔습니다 ({0}초 걸림).", new[] { "Auto VR: entered the headset ({0} s).", "VR 自動開始: ヘッドセットモードに入りました ({0} 秒)。", "自动进入 VR：已进入头显模式 (用时 {0} 秒)。" } },
+            { "VR 자동 시작: 헤드셋 세션이 시작되기를 기다립니다...", new[] { "Auto VR: waiting for the headset session to start...", "VR 自動開始: ヘッドセットのセッションが始まるのを待っています...", "自动进入 VR：正在等待头显会话开始..." } },
+            { "VR 자동 시작: 헤드셋 세션을 시작하지 못했습니다 ({0}).", new[] {
+                "Auto VR: the headset session did not start ({0}).",
+                "VR 自動開始: ヘッドセットのセッションを開始できませんでした ({0})。",
+                "自动进入 VR：头显会话未能开始 ({0})。" } },
+            { "VR 자동 시작: {0}초를 기다려도 헤드셋 세션이 시작되지 않았습니다. 헤드셋 연결을 확인하세요 (늦게라도 시작되면 그대로 플레이하면 됩니다).", new[] {
+                "Auto VR: no headset session after {0} s. Check the headset's connection (if it starts later after all, just play on).",
+                "VR 自動開始: {0} 秒待ってもヘッドセットのセッションが始まりません。ヘッドセットの接続を確認してください (後から始まればそのまま遊べます)。",
+                "自动进入 VR：等待 {0} 秒后头显会话仍未开始。请检查头显的连接 (如果之后开始了，直接继续玩即可)。" } },
             { "SteamVR로 실행 (VR 안에서 SteamVR 대시보드로 데스크톱 보기)", new[] {
                 "Run with SteamVR (see the desktop in VR through the SteamVR dashboard)",
                 "SteamVR で実行 (VR の中で SteamVR ダッシュボードからデスクトップを見る)",
@@ -344,6 +355,22 @@ namespace BlacksoulsVR
                 "VR runtime: SteamVR (this game window only). If SteamVR is off, it starts when the game window opens.",
                 "VR ランタイム: SteamVR (このゲームウィンドウのみ)。SteamVR が起動していなければゲームウィンドウが開くときに起動します。",
                 "VR 运行时：SteamVR (仅本游戏窗口)。若 SteamVR 未运行，游戏窗口打开时会自动启动。" } },
+            { "VR 런타임(OpenXR): SteamVR (이 게임만 - Meta Link의 런타임은 브라우저에서 VR 시작에 1분쯤 걸림)   ·   PC 기본: {0}", new[] {
+                "VR runtime (OpenXR): SteamVR (this game only - with Meta Link's runtime a browser takes about a minute to enter VR)   ·   PC default: {0}",
+                "VR ランタイム (OpenXR): SteamVR (このゲームのみ - Meta Link のランタイムではブラウザが VR に入るまで 1 分ほどかかる)   ·   PC の既定: {0}",
+                "VR 运行时 (OpenXR)：SteamVR (仅本游戏 - 使用 Meta Link 的运行时，浏览器进入 VR 需要约 1 分钟)   ·   电脑默认：{0}" } },
+            { "VR 런타임(OpenXR): {0}   ·   브라우저에서는 VR 시작에 1분쯤 걸립니다 (SteamVR을 설치하면 바로 시작)", new[] {
+                "VR runtime (OpenXR): {0}   ·   a browser takes about a minute to enter VR with it (at once with SteamVR installed)",
+                "VR ランタイム (OpenXR): {0}   ·   ブラウザでは VR に入るまで 1 分ほどかかります (SteamVR をインストールするとすぐ)",
+                "VR 运行时 (OpenXR)：{0}   ·   浏览器进入 VR 需要约 1 分钟 (安装 SteamVR 后可立即开始)" } },
+            { "VR 런타임: SteamVR (이 게임 창만). Meta Horizon Link의 런타임은 브라우저에서 VR이 시작되기까지 1분쯤 걸려서, Link 헤드셋을 SteamVR로 씁니다. SteamVR이 꺼져 있으면 게임 창이 열릴 때 켜집니다.", new[] {
+                "VR runtime: SteamVR (this game window only). With Meta Horizon Link's runtime a browser takes about a minute to enter VR, so the Link headset is used through SteamVR. If SteamVR is off, it starts when the game window opens.",
+                "VR ランタイム: SteamVR (このゲームウィンドウのみ)。Meta Horizon Link のランタイムではブラウザが VR に入るまで 1 分ほどかかるため、Link のヘッドセットを SteamVR 経由で使います。SteamVR が起動していなければゲームウィンドウが開くときに起動します。",
+                "VR 运行时：SteamVR (仅本游戏窗口)。使用 Meta Horizon Link 的运行时，浏览器进入 VR 需要约 1 分钟，因此通过 SteamVR 使用 Link 头显。若 SteamVR 未运行，游戏窗口打开时会自动启动。" } },
+            { "VR 런타임: Meta Horizon Link. 브라우저에서는 VR이 시작되기까지 1분쯤 걸립니다 (ENTER VR을 누른 뒤 기다리세요). SteamVR을 설치하면 런처가 SteamVR로 실행해서 바로 시작됩니다.", new[] {
+                "VR runtime: Meta Horizon Link. A browser takes about a minute to enter VR with it (wait after ENTER VR). With SteamVR installed, the launcher runs the game through SteamVR and it starts at once.",
+                "VR ランタイム: Meta Horizon Link。ブラウザでは VR に入るまで 1 分ほどかかります (ENTER VR を押したらお待ちください)。SteamVR をインストールすると、ランチャーが SteamVR で実行するのですぐに始まります。",
+                "VR 运行时：Meta Horizon Link。浏览器进入 VR 需要约 1 分钟 (按 ENTER VR 后请等待)。安装 SteamVR 后，启动器会通过 SteamVR 运行，可立即开始。" } },
             { "SteamVR을 찾지 못해 PC 기본 VR 런타임으로 실행합니다.", new[] {
                 "SteamVR was not found: running with the PC's default VR runtime.",
                 "SteamVR が見つからないため、PC の既定の VR ランタイムで実行します。",
@@ -924,7 +951,11 @@ namespace BlacksoulsVR
         {
             string profile = AppPaths.ProfileFor(exe);
             Directory.CreateDirectory(profile);
-            string args = "--app=\"" + url + "\" --user-data-dir=\"" + profile + "\" --no-first-run --no-default-browser-check --window-size=1280,800";
+            // (CalculateNativeWinOcclusion off: a window that others cover - a video in front, the game opened behind them from
+            // the SteamVR library - counted as a hidden page, which WebXR refuses: "The page is not visible", and it was told
+            // of the headset only 100 s later; 2026-10-23)
+            string args = "--app=\"" + url + "\" --user-data-dir=\"" + profile + "\" --no-first-run --no-default-browser-check --window-size=1280,800"
+                + " --disable-features=CalculateNativeWinOcclusion";
             if (devtoolsPort > 0) args += " --remote-debugging-port=" + devtoolsPort;
             ProcessStartInfo psi = new ProcessStartInfo(exe, args) { UseShellExecute = false };
             if (xrRuntimeJson != null) psi.EnvironmentVariables["XR_RUNTIME_JSON"] = xrRuntimeJson;
@@ -1046,6 +1077,10 @@ namespace BlacksoulsVR
 
         public AutoVr(Action<string> log) { this.log = log; }
 
+        // how long one click's start may go on before it is given up, in seconds (Meta Horizon Link's runtime took 55 s here,
+        // others saw two minutes and more)
+        const int StartWait = 180;
+
         // waitNotSupported: how many half seconds "VR NOT SUPPORTED" may last (SteamVR starting up from cold takes a while;
         // the browser looks for the headset again every 5 s)
         public async Task<bool> Run(int devtoolsPort, string pageUrl, int waitNotSupported = 40)
@@ -1073,7 +1108,9 @@ namespace BlacksoulsVR
                 await GrantPermissions(devtoolsPort, pageUrl);
                 ws = new ClientWebSocket();
                 await ws.ConnectAsync(new Uri(wsUrl), CancellationToken.None);
-                const string probe = "(() => { const b = document.querySelector('#vrbtn button'); if (!b || !window.G || !G.ui) return null; const r = b.getBoundingClientRect(); return { text: b.textContent || '', x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()";
+                // the VR button (its text and middle), whether the game is in VR, why the last start failed (vrbutton.js), whether
+                // the page is shown
+                const string probe = "(() => { const b = document.querySelector('#vrbtn button'); if (!b || !window.G || !G.ui) return null; const r = b.getBoundingClientRect(); return { text: b.textContent || '', x: r.left + r.width / 2, y: r.top + r.height / 2, vr: !!G.vr, err: b.dataset.xrError || '', shown: document.visibilityState === 'visible' }; })()";
                 // up to three clicks: the page first moves the browser onto the headset's GPU (a few seconds on laptops
                 // with two GPUs) and puts the button back to ENTER VR when a start fails
                 int clicks = 0, notFound = 0;
@@ -1081,23 +1118,46 @@ namespace BlacksoulsVR
                 {
                     Dictionary<string, object> v = Util.Dict(await Eval(probe));
                     string text = Util.Str(v, "text", "");
+                    if (Util.Str(v, "vr", "") == "True") { log(Lang.S("VR 자동 시작: 헤드셋 모드로 들어갔습니다.")); return true; }     // (the player's own click)
                     if (text.IndexOf("ENTER VR", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         if (clicks == 3) break;
                         if (clicks > 0) log(Lang.S("VR 자동 시작: 다시 시도합니다..."));
                         clicks++;
+                        // a page that is not shown (its window covered or minimised) may not start a session: "The page is not visible"
+                        await Call(ws, "Page.bringToFront", new Dictionary<string, object>());
+                        for (int k = 0; k < 6 && Util.Str(v, "shown", "") != "True"; k++) { await Task.Delay(500); v = Util.Dict(await Eval(probe)); }
+                        if (!v.ContainsKey("x")) continue;
                         double x = Convert.ToDouble(v["x"]), y = Convert.ToDouble(v["y"]);
                         foreach (string type in new[] { "mouseMoved", "mousePressed", "mouseReleased" })
                         {
                             Dictionary<string, object> p = new Dictionary<string, object> { { "type", type }, { "x", x }, { "y", y }, { "button", "left" }, { "clickCount", 1 } };
                             await Call(ws, "Input.dispatchMouseEvent", p);
                         }
-                        for (int k = 0; k < 60; k++)
+                        // then for as long as the start goes on (STARTING... / VR ...): it used to be given up after 30 s and called
+                        // a failure, while on Meta Horizon Link's runtime the session came after 55 s
+                        Stopwatch since = Stopwatch.StartNew();
+                        string failed = null;
+                        bool told = false;
+                        while (failed == null && since.Elapsed.TotalSeconds < StartWait)
                         {
                             await Task.Delay(500);
-                            if (Convert.ToString(await Eval("!!(window.G && G.vr)")) == "True") { log(Lang.S("VR 자동 시작: 헤드셋 모드로 들어갔습니다.")); return true; }
-                            if (k >= 2 && Util.Str(Util.Dict(await Eval(probe)), "text", "").IndexOf("ENTER VR", StringComparison.OrdinalIgnoreCase) >= 0) break;
+                            Dictionary<string, object> w = Util.Dict(await Eval(probe));
+                            if (Util.Str(w, "vr", "") == "True")
+                            {
+                                int s = (int)Math.Round(since.Elapsed.TotalSeconds);
+                                log(s > 5 ? Lang.F("VR 자동 시작: 헤드셋 모드로 들어갔습니다 ({0}초 걸림).", s) : Lang.S("VR 자동 시작: 헤드셋 모드로 들어갔습니다."));
+                                return true;
+                            }
+                            if (since.Elapsed.TotalSeconds > 1 && Util.Str(w, "text", "").IndexOf("ENTER VR", StringComparison.OrdinalIgnoreCase) >= 0) failed = Util.Str(w, "err", "");
+                            else if (!told && since.Elapsed.TotalSeconds > 15) { log(Lang.S("VR 자동 시작: 헤드셋 세션이 시작되기를 기다립니다...")); told = true; }
                         }
+                        if (failed == null)
+                        {
+                            log(Lang.F("VR 자동 시작: {0}초를 기다려도 헤드셋 세션이 시작되지 않았습니다. 헤드셋 연결을 확인하세요 (늦게라도 시작되면 그대로 플레이하면 됩니다).", StartWait));
+                            return false;
+                        }
+                        if (failed != "") log(Lang.F("VR 자동 시작: 헤드셋 세션을 시작하지 못했습니다 ({0}).", failed));
                         await Task.Delay(1000);
                         continue;
                     }
@@ -1431,24 +1491,42 @@ namespace BlacksoulsVR
             return null;
         }
 
+        // the OpenXR runtime manifest a browser started from here loads: XR_RUNTIME_JSON when it is set (the OpenXR loader
+        // takes it over the PC's active runtime), else the PC's active runtime; null when there is none
+        static string ActiveRuntimePath()
+        {
+            string env = Environment.GetEnvironmentVariable("XR_RUNTIME_JSON");
+            if (!string.IsNullOrEmpty(env)) return env;
+            using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Khronos\OpenXR\1"))
+                return k == null ? null : k.GetValue("ActiveRuntime") as string;
+        }
+
+        static string RuntimeName(string p)
+        {
+            if (string.IsNullOrEmpty(p)) return null;
+            string l = p.ToLowerInvariant();
+            if (l.Contains("steamvr") || l.Contains("steamxr")) return "SteamVR";
+            if (l.Contains("oculus") || l.Contains("meta")) return "Meta (Oculus)";
+            if (l.Contains("mixedreality")) return "Windows Mixed Reality";
+            if (l.Contains("virtual desktop") || l.Contains("virtualdesktop")) return "Virtual Desktop";
+            return p;
+        }
+
         // the OpenXR runtime the browser's WebXR uses (SteamVR, Meta/Oculus, ...)
         public static string OpenXrRuntime()
         {
-            try
-            {
-                using (RegistryKey k = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\Khronos\OpenXR\1"))
-                {
-                    string p = k == null ? null : k.GetValue("ActiveRuntime") as string;
-                    if (string.IsNullOrEmpty(p)) return Lang.S("없음 (VR 런타임이 설치되지 않았거나 지정되지 않음)");
-                    string l = p.ToLowerInvariant();
-                    if (l.Contains("steamvr") || l.Contains("steamxr")) return "SteamVR";
-                    if (l.Contains("oculus") || l.Contains("meta")) return "Meta (Oculus)";
-                    if (l.Contains("mixedreality")) return "Windows Mixed Reality";
-                    if (l.Contains("virtual desktop") || l.Contains("virtualdesktop")) return "Virtual Desktop";
-                    return p;
-                }
-            }
+            try { return RuntimeName(ActiveRuntimePath()) ?? Lang.S("없음 (VR 런타임이 설치되지 않았거나 지정되지 않음)"); }
             catch { return Lang.S("알 수 없음"); }
+        }
+
+        // that runtime is Meta Horizon Link's (Meta / Oculus). A browser's headset session took 55 s to start on it, every
+        // time (Quest 3 on Air Link, Chrome and Edge 156, 2026-10-23): the browser's WebXR process runs sandboxed, where
+        // Meta's runtime may not create the named pipe it talks through ("Access is denied") and tries again five times,
+        // 11 s each - without the sandbox it started at once. Through SteamVR (which drives the Link headset) at once too
+        public static bool MetaActive()
+        {
+            try { return RuntimeName(ActiveRuntimePath()) == "Meta (Oculus)"; }
+            catch { return false; }
         }
 
         public static void WriteManifest()
@@ -1728,8 +1806,10 @@ namespace BlacksoulsVR
             launchBtn.Text = Lang.S("실행 (Launch)");
             savesBtn.Text = Lang.S("세이브 폴더 열기");
             if (newer != null) updateBtn.Text = Lang.F("새 버전 받기 ({0})", newer[0]);
-            xrLabel.Text = steamRtBox.Checked && SteamVr.RuntimeJson() != null
-                ? Lang.F("VR 런타임(OpenXR): SteamVR (이 게임만 - 위 설정)   ·   PC 기본: {0}", SteamVr.OpenXrRuntime())
+            bool steamVr = SteamVr.RuntimeJson() != null, meta = SteamVr.MetaActive();
+            xrLabel.Text = steamRtBox.Checked && steamVr ? Lang.F("VR 런타임(OpenXR): SteamVR (이 게임만 - 위 설정)   ·   PC 기본: {0}", SteamVr.OpenXrRuntime())
+                : meta && steamVr ? Lang.F("VR 런타임(OpenXR): SteamVR (이 게임만 - Meta Link의 런타임은 브라우저에서 VR 시작에 1분쯤 걸림)   ·   PC 기본: {0}", SteamVr.OpenXrRuntime())
+                : meta ? Lang.F("VR 런타임(OpenXR): {0}   ·   브라우저에서는 VR 시작에 1분쯤 걸립니다 (SteamVR을 설치하면 바로 시작)", SteamVr.OpenXrRuntime())
                 : Lang.F("VR 런타임(OpenXR): {0}   ·   게임은 브라우저의 WebXR로 이 런타임을 씁니다", SteamVr.OpenXrRuntime());
             UpdateSteamButton();
             CheckGame(); CheckRtp();
@@ -1896,12 +1976,16 @@ namespace BlacksoulsVR
             }
             bool autoVr = cfg.AutoVr || opt.Vr;
             int devtools = autoVr ? Util.FreePort() : 0;
-            // SteamVR: the option, or started from the SteamVR library (SteamVR is what is running then)
+            // SteamVR: the option, or started from the SteamVR library (SteamVR is what is running then), or the PC's runtime
+            // is Meta Horizon Link's - a minute for every VR start in a browser there, at once through SteamVR (MetaActive)
             string runtime = null;
-            if (cfg.SteamVrRuntime || opt.Launch)
+            bool meta = !cfg.SteamVrRuntime && !opt.Launch && SteamVr.MetaActive();
+            if (cfg.SteamVrRuntime || opt.Launch || meta)
             {
                 runtime = SteamVr.RuntimeJson();
-                if (runtime != null) Log(Lang.S("VR 런타임: SteamVR (이 게임 창만). SteamVR이 꺼져 있으면 게임 창이 열릴 때 켜집니다."));
+                if (runtime != null) Log(meta ? Lang.S("VR 런타임: SteamVR (이 게임 창만). Meta Horizon Link의 런타임은 브라우저에서 VR이 시작되기까지 1분쯤 걸려서, Link 헤드셋을 SteamVR로 씁니다. SteamVR이 꺼져 있으면 게임 창이 열릴 때 켜집니다.")
+                    : Lang.S("VR 런타임: SteamVR (이 게임 창만). SteamVR이 꺼져 있으면 게임 창이 열릴 때 켜집니다."));
+                else if (meta) Log(Lang.S("VR 런타임: Meta Horizon Link. 브라우저에서는 VR이 시작되기까지 1분쯤 걸립니다 (ENTER VR을 누른 뒤 기다리세요). SteamVR을 설치하면 런처가 SteamVR로 실행해서 바로 시작됩니다."));
                 else if (cfg.SteamVrRuntime) Log(Lang.S("SteamVR을 찾지 못해 PC 기본 VR 런타임으로 실행합니다."));
                 if (runtime != null && Browser.GameWindowOpen()) Log(Lang.S("게임 창이 이미 열려 있어 VR 런타임 설정이 그 창에는 적용되지 않습니다. 게임 창을 닫고 다시 실행하세요."));
             }
