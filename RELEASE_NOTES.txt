@@ -1,0 +1,19 @@
+BLACK SOULS II VR 0.2.53
+
+- Improved Quest Link startup compatibility with current Chrome and Edge, with
+  longer connection waits and the existing cancellation and recovery controls.
+- More natural chained sword cuts and charged thrusts on PC; VR blades respond
+  to weapon weight, with an adjustable weight setting.
+- Updated stamina costs, dodge and attack buffering, shield presentation and
+  multiplayer stagger rules. R Skills, Bonus Actions and paused cooldowns remain.
+- Updated Lindamea attacks and restored lift platforms and university scenery.
+- Uses the original game's fonts, window colors and scrolling-text behavior.
+  Added Russian launcher and in-game menus, plus two-line item descriptions.
+- Multiplayer text and voice chat, microphone controls, mute controls and shared
+  loot. Voice transmission requires enabling your microphone in the chat menu.
+- Preserves the existing save handling, game discovery, updater, portrait/HUD,
+  terrain, status-effect and combat fixes. Original game files are not included.
+
+Download the setup EXE for Windows, or the portable ZIP. Install over your
+existing mod installation to keep its saves and settings. Keep the launcher
+open while playing. Headset startup depends on Quest Link/SteamVR being ready.

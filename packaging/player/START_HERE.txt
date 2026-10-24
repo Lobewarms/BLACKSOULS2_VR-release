@@ -1,0 +1,60 @@
+BLACK SOULS II VR - How to play
+
+START PLAYING
+1. Open BLACK SOULS II VR from the Start menu (or run BlacksoulsVR.exe).
+2. The app looks for your game automatically. Choose a copy if several are found.
+   If none is found, click Browse and choose your original game folder, containing Game.exe.
+3. Choose Play on PC or Play in VR, then click the large Launch button.
+   Keep the launcher open while playing.
+4. On PC, click inside the game window to capture your mouse.
+
+PC CONTROLS
+WASD: move             Shift: run             Mouse: look
+Left click: attack     Right click: guard     Space: dodge
+E / Enter: interact    Tab: menu               Esc: cancel
+N: full area map. Click menu entries and Back, or use arrows and Enter.
+Scroll long menus with the mouse wheel or drag their scrollbar.
+Menu commands follow the original game: Items, Skills, Equipment, Status,
+Covenants, Save and Game End. Mod tools (F1 in the menu): Map, Load, Co-op, Settings.
+PC HUD and circular minimap are translucent; pickups appear at the lower right.
+See CONTROLS_en.txt for all controls.
+
+META QUEST 3 / PC VR
+Connect your headset to your Windows PC using Quest Link, Air Link or Virtual
+Desktop before launching the game. Click ENTER VR at the bottom of the game window.
+Quest needs the PC to run the game; the mod does not run on the headset by itself.
+
+Left stick: move       Right stick: turn      Right-hand swing: attack
+Left grip: guard       A: dodge / confirm     Y: menu / B: cancel
+Flick the right stick down to interact.
+To collect a world item, bring your right hand close and squeeze its grip.
+An empty left hand can also collect items. With a shield, left grip still guards.
+Successful grabs give a short vibration.
+The minimap is above your left controller. Open Menu > Map for the full area.
+The map shows your position, facing direction and named exits. B returns.
+
+NEED HELP?
+You need Windows 10/11, an up-to-date Chrome or Edge, and your original game.
+If VR NOT SUPPORTED appears, start Quest Link or SteamVR, close the game window,
+then click Launch again. For missing tiles or emotes, the optional RPG Maker
+VX Ace RTP may help. README_en.txt contains the full setup guide.
+
+SAVES AND UPDATES
+Your game folder is remembered after you launch the game.
+Mod saves are in the saves folder beside BlacksoulsVR.exe. Your original game and
+saves are not changed. Setup keeps mod saves during upgrades and uninstall.
+Click Check for updates in the launcher. When a new version is available, click
+Download update, then open setup when prompted. Your saves are kept.
+
+STEAM ACHIEVEMENTS
+Use your installed Steam copy of BLACK SOULS II and keep Steam signed in while
+playing. The launcher log shows "Steam achievements connected" when ready.
+Achievements follow the original game's event conditions in both PC and VR play.
+Unconfirmed earned achievements are kept with your mod save for a later retry.
+Earlier progress counts when the original game checks its achievement condition
+again; loading an old save does not automatically unlock every past milestone.
+
+CREDITS
+VR mod by Lobewarms:
+https://github.com/Lobewarms/BLACKSOULS2_VR-release
+Free distribution only. See LICENSE and RELEASE_NOTES.txt. No original game files included.

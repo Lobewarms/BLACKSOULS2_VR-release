@@ -1,2 +1,4 @@
-* -text
-.gitattributes export-ignore
+* text=auto eol=lf
+*.exe -text
+*.glb -text
+*.zip -text

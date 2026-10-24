@@ -1,0 +1,20 @@
+{
+  "name": "@blacksouls-vr/client",
+  "version": "0.2.53",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "@webxr-input-profiles/assets": "1.0.20",
+    "ogv": "1.9.0",
+    "three": "0.170.0"
+  },
+  "devDependencies": {
+    "vite": "8.3.4"
+  }
+}

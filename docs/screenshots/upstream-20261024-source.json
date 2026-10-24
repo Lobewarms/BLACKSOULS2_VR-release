@@ -1,0 +1,368 @@
+{
+  "upstreamCommit": "938b527835b6abbc9d2a55ce91ea5df85b0acbe6",
+  "forkRuntimeCommit": "27a4434a05b12943b6e975ff6d5b0ad48ae19429",
+  "version": "0.2.53",
+  "modules": [
+    {
+      "upstream": "BLACKSOULS_VR/app/src/allies.js",
+      "fork": "apps/client/src/entities/allies.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/arena.js",
+      "fork": "apps/client/src/combat/arena.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/assets.js",
+      "fork": "apps/client/src/data/assets.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/audio.js",
+      "fork": "apps/client/src/ui/audio.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/balloons.js",
+      "fork": "apps/client/src/ui/balloons.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/bossmoves.js",
+      "fork": "apps/client/src/combat/bossmoves.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/character.js",
+      "fork": "apps/client/src/entities/character.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/collision.js",
+      "fork": "apps/client/src/world/collision.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/combat.js",
+      "fork": "apps/client/src/combat/combat.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/coop.js",
+      "fork": "apps/client/src/network/coop.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/coopavatar.js",
+      "fork": "apps/client/src/network/coopavatar.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/coopchat.js",
+      "fork": "apps/client/src/network/coopchat.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/coopguard.js",
+      "fork": "apps/client/src/network/coopguard.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/coopnet.js",
+      "fork": "apps/client/src/network/coopnet.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/coopvoice.js",
+      "fork": "apps/client/src/network/coopvoice.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/coopworld.js",
+      "fork": "apps/client/src/network/coopworld.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/data.js",
+      "fork": "apps/client/src/data/data.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/deskswing.js",
+      "fork": "apps/client/src/combat/deskswing.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/emotes.js",
+      "fork": "apps/client/src/ui/emotes.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/fonts.js",
+      "fork": "apps/client/src/ui/fonts.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/gamemap.js",
+      "fork": "apps/client/src/world/gamemap.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/globals.js",
+      "fork": "apps/client/src/core/globals.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/hands.js",
+      "fork": "apps/client/src/vr/hands.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/hangul.js",
+      "fork": "apps/client/src/ui/hangul.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/i18n.js",
+      "fork": "apps/client/src/ui/i18n.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/input.js",
+      "fork": "apps/client/src/core/input.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/interpreter.js",
+      "fork": "apps/client/src/game/interpreter.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/lift.js",
+      "fork": "apps/client/src/world/lift.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/lying.js",
+      "fork": "apps/client/src/entities/lying.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/main.js",
+      "fork": "apps/client/src/core/main.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/mapanalysis.js",
+      "fork": "apps/client/src/world/mapanalysis.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/mapbuild.js",
+      "fork": "apps/client/src/world/mapbuild.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/maphints.js",
+      "fork": "apps/client/src/world/maphints.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/mapmesh.js",
+      "fork": "apps/client/src/world/mapmesh.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/markers.js",
+      "fork": "apps/client/src/world/markers.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/marshal.js",
+      "fork": "apps/client/src/data/marshal.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/minimap.js",
+      "fork": "apps/client/src/ui/navigation-map.js",
+      "status": "adapted-equivalent"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/mouselook.js",
+      "fork": "apps/client/src/core/input.js",
+      "status": "adapted-equivalent"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/pictures.js",
+      "fork": "apps/client/src/ui/pictures.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/player.js",
+      "fork": "apps/client/src/entities/player.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/poke.js",
+      "fork": "apps/client/src/game/poke.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/quickslots.js",
+      "fork": "apps/client/src/ui/quickslots.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/rmwindow.js",
+      "fork": "apps/client/src/ui/window-skin.js",
+      "status": "adapted-equivalent"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/rubyexpr.js",
+      "fork": "apps/client/src/game/rubyexpr.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/screen.js",
+      "fork": "apps/client/src/ui/screen.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/scriptdata.js",
+      "fork": "apps/client/src/data/scriptdata.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/sky.js",
+      "fork": "apps/client/src/world/sky.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/spectator.js",
+      "fork": "apps/client/src/vr/spectator.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/sprites.js",
+      "fork": "apps/client/src/entities/sprites.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/state.js",
+      "fork": "apps/client/src/game/state.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/telegraph.js",
+      "fork": "apps/client/src/combat/telegraph.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/theater.js",
+      "fork": "apps/client/src/ui/theater.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/tiles.js",
+      "fork": "apps/client/src/world/tiles.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/ui.js",
+      "fork": "apps/client/src/ui/ui.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/voicemarks.js",
+      "fork": "apps/client/src/network/voicemarks.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/vrbutton.js",
+      "fork": "apps/client/src/vr/vrbutton.js",
+      "status": "modified"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/weaponfx.js",
+      "fork": "apps/client/src/combat/weaponfx.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/weaponlag.js",
+      "fork": "apps/client/src/combat/weaponlag.js",
+      "status": "unchanged"
+    },
+    {
+      "upstream": "BLACKSOULS_VR/app/src/weapons.js",
+      "fork": "apps/client/src/combat/weapons.js",
+      "status": "modified"
+    }
+  ],
+  "newForkModules": [
+    "apps/client/src/combat/bonus-actions.js",
+    "apps/client/src/combat/desktop-weapon.js",
+    "apps/client/src/combat/gameplay-delay.js",
+    "apps/client/src/combat/menu-weapon-skills.js",
+    "apps/client/src/combat/usable-counts.js",
+    "apps/client/src/data/font-settings.js",
+    "apps/client/src/data/iconfallback.js",
+    "apps/client/src/data/regular-window.js",
+    "apps/client/src/entities/character-props.js",
+    "apps/client/src/entities/dialogue-camera.js",
+    "apps/client/src/entities/event-position.js",
+    "apps/client/src/entities/furniture.js",
+    "apps/client/src/entities/remains.js",
+    "apps/client/src/game/actor-equipment.js",
+    "apps/client/src/game/environment-state.js",
+    "apps/client/src/game/manual-save-menu.js",
+    "apps/client/src/game/movement-speed.js",
+    "apps/client/src/game/savefiles.js",
+    "apps/client/src/game/savepresentation.js",
+    "apps/client/src/game/shop-exchange.js",
+    "apps/client/src/game/steam-achievements.js",
+    "apps/client/src/game/world-pause.js",
+    "apps/client/src/game/world-pickup.js",
+    "apps/client/src/network/enemy-art.js",
+    "apps/client/src/network/enemy-resources.js",
+    "apps/client/src/network/enemy-status.js",
+    "apps/client/src/network/voice-packets.js",
+    "apps/client/src/ui/battler-status.js",
+    "apps/client/src/ui/bonfire-travel.js",
+    "apps/client/src/ui/classic-menu.js",
+    "apps/client/src/ui/desktop-hud.js",
+    "apps/client/src/ui/desktop-layout.js",
+    "apps/client/src/ui/duel-countdown.js",
+    "apps/client/src/ui/dungeon-status.js",
+    "apps/client/src/ui/i18n-ru.js",
+    "apps/client/src/ui/movie-codec.js",
+    "apps/client/src/ui/movie-player.js",
+    "apps/client/src/ui/movie-presentation.js",
+    "apps/client/src/ui/reward-feed.js",
+    "apps/client/src/ui/scroll-text.js",
+    "apps/client/src/ui/skill-browser.js",
+    "apps/client/src/ui/skill-profile.js",
+    "apps/client/src/ui/xr-status.js",
+    "apps/client/src/vr/frame-status.js",
+    "apps/client/src/vr/viewmode.js",
+    "apps/client/src/world/ambient-tone.js",
+    "apps/client/src/world/area-profiles.js",
+    "apps/client/src/world/atmosphere.js",
+    "apps/client/src/world/bridges.js",
+    "apps/client/src/world/environment-effects.js",
+    "apps/client/src/world/exit-routes.js",
+    "apps/client/src/world/floor-autotiles.js",
+    "apps/client/src/world/foliage.js",
+    "apps/client/src/world/map-geometry.js",
+    "apps/client/src/world/passage-grades.js",
+    "apps/client/src/world/weather.js",
+    "apps/client/src/world/world-tone.js"
+  ],
+  "counts": {
+    "modified": 39,
+    "unchanged": 17,
+    "adapted-equivalent": 3
+  },
+  "modifiedDirectModulesNormalizedAdded": 6346,
+  "modifiedDirectModulesNormalizedRemoved": 2911
+}

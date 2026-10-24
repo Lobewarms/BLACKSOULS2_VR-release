@@ -1,0 +1,24 @@
+{
+  "name": "blacksouls2-vr-community-fork",
+  "version": "0.2.53",
+  "private": true,
+  "type": "module",
+  "description": "Modified BLACK SOULS II VR fork with source-based checks and release packaging",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "npm run dev --workspace @blacksouls-vr/client",
+    "build": "npm run build --workspace @blacksouls-vr/client",
+    "lint": "eslint apps/client/src apps/client/tests apps/client/vite.config.js eslint.config.js --max-warnings 0",
+    "test": "npm test --workspace @blacksouls-vr/client",
+    "package": "npm run build && python tooling/release/package_release.py"
+  },
+  "devDependencies": {
+    "eslint": "10.13.0",
+    "globals": "17.13.0"
+  },
+  "workspaces": [
+    "apps/client"
+  ]
+}

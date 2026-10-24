@@ -1,0 +1,104 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  launcher:
+    name: Build and test Windows launcher and updates
+    runs-on: windows-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build launcher and test discovery, updates and engine hosting
+        shell: pwsh
+        run: ./tooling/release/build_launcher.ps1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: windows-launcher
+          path: |
+            apps/launcher/dist/BlacksoulsVR.exe
+            apps/launcher/dist/BlacksoulsVR.Engine.exe
+            apps/launcher/dist/engine-build.json
+            apps/launcher/dist/SteamAchievements.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  checks:
+    name: Checks (${{ matrix.os }})
+    needs: launcher
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: windows-launcher
+          path: apps/launcher/dist
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '24'
+          cache: npm
+          package-manager-cache: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.13'
+          cache: pip
+          cache-dependency-path: requirements-dev.txt
+      - run: npm ci --ignore-scripts
+      - run: python -m pip install -r requirements-dev.txt
+      - name: Install co-op server package
+        run: python -m pip install -e ./packages/coop-server
+      - name: JavaScript lint
+        run: npm run lint
+      - name: Build browser app and resolve npm dependencies
+        run: npm run build
+      - name: Python lint
+        run: python -m ruff check .
+      - name: JavaScript regression tests
+        run: npm test
+      - name: Python protocol tests
+        run: python -m unittest discover -s packages/coop-server/tests -p "test_*.py" -v
+      - name: Packaging and portable launcher tests
+        run: python -m unittest discover -s tests/packaging -p "test_*.py" -v
+      - name: Build distribution and checksum
+        run: python tooling/release/package_release.py
+      - name: Build installable Python wheel
+        run: python -m pip wheel --no-deps --wheel-dir dist ./packages/coop-server
+      - name: Build Windows setup EXE from verified distribution
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          ./tooling/release/build_installer.ps1 -Archive "dist/BLACKSOULS_VR_$version.zip" -Version $version
+      - name: Test setup, upgrade, uninstall and save retention
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          ./tooling/release/test_installer.ps1 -Installer "dist/BLACKSOULS_VR_Setup_$version.exe"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: mod-package-${{ matrix.os }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14

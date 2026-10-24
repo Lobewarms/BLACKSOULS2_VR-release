@@ -1,0 +1,187 @@
+﻿BLACK SOULS II VR - Controls  (version 0.2.53)
+================================================
+
+New in 0.2.53
+- PC sword clicks chain different cuts; a charged blow thrusts. In VR, adjust
+  Weapon weight in combat settings to change blade follow-through.
+- Running in a fight, dodging and attacks spend stamina. When exhausted, walk
+  until enough stamina returns. Lindamea's immortality duel has unlimited stamina.
+- In multiplayer, / opens text chat on PC; Enter sends and Esc closes it.
+  In VR, use the chat slot in the emote ring or Co-op > Chat and voice.
+  Enable your microphone there to talk. You can choose a device or mute players.
+- Lift platforms, original fonts/window colors and scrolling text are supported.
+
+
+Confusion ending correctly
+- Curing or ending Rampage stops queued automatic hits, follow-up skills and
+  unlaunched gun rounds, and restores manual attacks and skills immediately.
+- Already-fired projectiles and paid weapon-skill cooldowns continue normally.
+
+Combat and event fidelity fixes
+- Attacks, skills and projectiles now use the original critical scaling, critical
+  evasion, counter, reflection and substitution rules. Each repeated strike gets
+  its own chance to hit; weapon arts keep their own authored repeat count.
+- Bonus Actions remain available when an ordinary action is already ready.
+- Enemy skills respect Silence, seals and resources. An enemy with no usable
+  action waits. Rampage forces normal attacks rather than permitting manual arts.
+- Delayed strikes, NPC cooldowns, map events, movement routes and timers pause
+  with local menus. Companion status durations refresh and survive save/load.
+- Nested confirmations preserve the original choice group. Original event
+  movies play on PC and in VR; use Play/A/Enter if prompted, or Skip/B/Esc.
+
+Grand Guignol Skills menu
+- R opens Skills during Grand Guignol and other battles whose entrances disable
+  the exploration menu. Dialogue and cutscenes still control when menus can open.
+
+Bonus Action skill chains
+- R Skills shows earned Bonus Actions and your queued skills.
+- With extra actions available, select skills, then press R again or click Cast
+  to use them in order. In VR, use the Cast button. Remove last and Clear edit
+  the plan; Esc/Back cancels it without spending actions or resources.
+- Each cast spends one earned action and uses its own costs and cooldowns.
+  An unavailable skill stops the remaining chain without spending for that cast.
+  Temporary weapon switching preserves earned actions and uses the art's stats.
+
+Lindamea battle
+- Cinematic backsteps no longer slow your movement during real-time combat.
+- Her shared immortality phase shows its remaining time below the enemy HP bar.
+  The countdown pauses with the fight when a blocking menu is open.
+
+Performance update
+- More responsive Skills browsing with large skill lists and many owned weapon arts.
+  Costs, cooldowns and skill requirements stay up to date while you browse.
+- Maps with many exits or scenery events do less repeated work during exploration.
+
+VR
+--
+Move              Left stick (click the stick: run / walk)
+Turn              Right stick left / right
+Attack            Swing the weapon in your right hand (guns, bows, the staff that shoots magic: right trigger)
+Charged blow      Hold the right trigger, then swing
+Break             Hold the left trigger and swing with your right hand (a gun in the shield slot: left trigger fires)
+Guard             Left grip - shield toward the attack (raise it just before the hit: perfect guard)
+Dodge             A
+Disarm            Click the right stick
+Examine / talk    Flick the right stick down
+Jump              Flick the right stick up
+Quick slots       Hold X, move your left hand onto a slot, release X
+Spells / throws   Pick from the quick slots, aim with your right hand, right trigger
+Weapon arts       Pick from the quick slots, then hit an enemy with the weapon
+Emotes            Hold B, move your right hand onto a balloon, release B
+Resins            Held in the left hand: rub along the blade of the right-hand weapon
+Herb bottle       Held in the hand: bring it to your mouth
+Blood vial        Held in the hand: stab it into your body
+Menu              Y
+Confirm           A (or point with the laser, right trigger)
+Cancel            B
+In menus          Right stick (number input: left / right = digit, up / down = value)
+Weapon hold       Menu -> weapon / shield model adjust
+
+PC
+--
+Move              W A S D (Shift: run)
+Look              Mouse (click the game view to lock it)
+During dialogue   Camera turns toward the speaker once. Hold right mouse and drag
+                  to look around; release it to click dialogue choices.
+Attack            Left click (hold and release: charged blow)
+Break             Hold F (or the wheel button), then left-click and release
+                  A gold weapon-tip glow shows Break is ready. Keep F held until
+                  the hit. F alone does not swing; shield-slot guns fire directly.
+Guard             Right click
+Dodge             Space
+Disarm            H
+Jump              C
+Examine / talk /  E / Enter
+confirm
+Quick slots       Hold Q and pick with the mouse / keys 1-8
+Emotes            Hold T and pick with the mouse
+Menu              Tab
+Cancel            Esc
+In menus          Arrow keys (number input: left / right = digit, up / down = value)
+
+USING SKILLS FROM THE MENU
+-------------------------
+On PC, press R to open Skills directly; press R again to close it. E remains
+Examine/Talk. Click a skill, or select it and press Enter, to use it immediately.
+Face a nearby visible enemy for attacks; if no valid target is in view, nothing
+is spent. In VR, point and confirm with the trigger/A, or use the stick and A.
+Quick slots still prepare spells and weapon arts for manual aiming/striking. Healing and
+support take effect normally. Dodge and manual Break retain their dedicated
+actions. Common-event skills return to the game to run their event.
+Costs, weapon requirements, seals and cooldowns still apply. Field-only utility
+skills cannot be used during combat. Quick-slot assignments stay as you set them.
+Skill cooldowns and shared action recovery pause with the world, including while
+R Skills is open. Accepted action-consuming skills, including healing and buffs,
+return to gameplay automatically so recovery can progress. Reopening R freezes
+the remaining time too. Pure out-of-combat utility can stay open.
+
+FINDING AND FAVORITING SKILLS
+----------------------------
+Use Favorites, All, Weapon Arts, Attack, Healing, Buffs or Debuffs to narrow the
+list. A skill may appear in more than one category. Favorites appear first.
+Select a skill and press F, or use Favorite, to mark/unmark it. Q or Quick-slot
+opens slot assignment for your usual learned or currently granted skills.
+Unavailable rows remain inspectable and favoritable, with current costs and
+the reason they cannot be used. Borrowed-only arts use R as described below.
+On PC, press / or click the search field, then type a name. Enter or Esc finishes
+typing and returns to the list; Clear resets the search. Your favorites, category, search
+and selected skill are remembered separately for each character. In VR, use the
+visible category, Favorite and Quick-slot controls with the pointer or stick.
+Smaller windows show the full current category with previous/next arrows;
+Left/Right also changes category. Two lines of the original skill description
+are shown, with the complete longer text available on the profile pages.
+
+ARTS FROM WEAPONS IN YOUR BAG
+----------------------------
+R also lists arts from weapons, offhand guns and shields in your bag. The selected action
+shows its source weapon's original icon/name and the costs with that weapon.
+Using the art from R chooses a compatible owned weapon for that action, then
+your usual equipment resumes. Repeats and projectiles keep that action's weapon
+stats and effects. Equip permissions, seals, costs and cooldowns still apply.
+Break skills still prepare the next real hit; strike within three seconds.
+Disarming cancels that preparation. Compatible equipped gear is preferred;
+swapping within a weapon family uses the highest owned +N refinement.
+Main profile stats describe your current equipment. Action weapon and skill
+costs show what the selected skill will use. Source weapon names are searchable.
+Q works for learned or currently granted skills. An art borrowed only from an
+unequipped weapon is used directly from R; equip its source weapon before
+assigning it to a quick slot. Quick slots keep their usual equipped-weapon rules.
+
+YOUR PROFILE IN SKILLS
+----------------------
+The Skills menu shows your current party leader's original portrait, HP, MP, TP,
+stamina and all eight current stats, including Luck. Page through every active
+status effect and buff with original icons, plus useful damage, recovery and cost
+modifiers. Healing restrictions and the selected skill's HP/MP/TP costs, cooldown
+or reason it cannot be used are shown too.
+Use Previous/Next on the profile. On PC, Page Up/Page Down or the mouse wheel over
+the profile also turn pages. In VR, point at the page buttons and confirm.
+The profile stays beside the skill browser and quick-slot assignment picker.
+Smaller PC windows stack the panels and page resources and stats as well.
+
+BUYING LARGER QUANTITIES
+-----------------------
+Use +/-100 or +/-1,000 when available, or choose Max. Max selects the affordable
+amount; confirm on the first row to buy. Your bag holds up to 9,999 per item.
+Storage uses its own limits, and exchanges still require their materials.
+
+BONUS ACTION
+------------
+During combat, after a normal eligible action, each Bonus Action trait rolls once:
++50% is a 50% chance for one follow-up, and +100% guarantees one. Sources stack.
+Spend the earned follow-ups on your next attacks or eligible combat skills.
+Each follow-up consumes one count and cannot roll more follow-ups. There is no
+three-second timeout; unused follow-ups clear when combat ends. The HUD shows
+the original source icon and the number of follow-ups left.
+Skills share action recovery with attacks. An earned follow-up can begin during
+the previous action's trailing recovery. Every action keeps its own full
+recovery, so a new normal chain waits until the final follow-up has recovered.
+Active attack motions, burst spacing, MP and stamina costs, and skill cooldowns
+still apply. Items and utility actions do not count.
+This works with PC, VR and skills used directly from the R menu.
+
+BONFIRE TRAVEL
+--------------
+Highlight a destination to see its position on the original world map and both
+description lines. Confirm to travel, or cancel to return. The map and list
+rearrange to fit smaller PC windows and keep the same selection when entering VR.

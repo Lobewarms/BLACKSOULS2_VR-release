@@ -1,0 +1,19 @@
+{
+  "commit": "938b527835b6abbc9d2a55ce91ea5df85b0acbe6",
+  "normalization": "utf8-lf",
+  "repository": "https://github.com/Lobewarms/BLACKSOULS2_VR-release",
+  "repository_paths": {
+    "BlacksoulsVR.cs": "BLACKSOULS_VR/launcher_source/BlacksoulsVR.cs",
+    "BuildInfo.cs": "BLACKSOULS_VR/launcher_source/BuildInfo.cs"
+  },
+  "schema": 1,
+  "source_sha256": {
+    "BlacksoulsVR.cs": "86f0a11ff4916e4cc18b7ca6df1d40bdcb5c23b6c7584d6f1d345293ebe3be1a",
+    "BuildInfo.cs": "7dd5ad3b34be21bd497bfa7b6b011ed32613570efbf5e1f3dc4ddcb1be5a3960"
+  },
+  "upstream_source_sha256": {
+    "BlacksoulsVR.cs": "3b80a0521afa5ae6b4a88e13891e3dc108876e27e5b2520a892186726ab13517",
+    "BuildInfo.cs": "07f32a082e2639b5328f21be026165ae76078d3ead2150de520653be0f650b86"
+  },
+  "version": "2026.10.24-5"
+}

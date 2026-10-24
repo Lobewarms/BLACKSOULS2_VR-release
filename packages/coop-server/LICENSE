@@ -1,0 +1,20 @@
+Copyright (c) 2026 Lobewarms. All rights reserved, except as allowed below.
+
+BLACK SOULS II VR is a fan-made VR mod. You may:
+- download it from this repository and use it to play your own copy of BLACK SOULS II;
+- record, stream and publish videos of play, monetized ones included;
+- modify it and distribute modified versions free of charge, provided that you credit the original
+  (https://github.com/Lobewarms/BLACKSOULS2_VR-release) and state clearly that your version is
+  modified and not the original.
+
+You may not:
+- sell it or any modified version, or distribute either for any payment;
+- distribute it, or a modified version, together with any of the original game's files.
+
+To share the unmodified mod, please share a link to this repository rather than the files.
+
+Third-party components inside the package keep their own licenses: three.js and the WebXR hand
+models in app/vendor (MIT - their license files are included there).
+
+BLACK SOULS II and its assets belong to their rights holders. None of the game's files are part of
+this package or this repository, and nothing here grants any right to them.

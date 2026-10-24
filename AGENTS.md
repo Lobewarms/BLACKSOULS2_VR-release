@@ -1,0 +1,3164 @@
+# Developer notes: BLACK SOULS II VR
+
+## Product requirements
+
+This is a client application for players. Keep the installer, launcher, help,
+README and release notes focused on installing, launching, controls, saves and
+troubleshooting. Do not put repository structure, libraries, build commands or
+CI/CD explanations into player screens or guides. Keep developer documentation
+in this AGENTS.md; include it in the installed application for developer access,
+without displaying it during setup or linking it from the player menu.
+Retain the original-author credits and license files. Player-facing branding
+uses BLACK SOULS II VR; contribution provenance belongs in developer notes and
+the pull request, rather than repeated community-edition banners.
+
+## Project background
+
+Modified community fork by dimasma0305, integrating Lobewarms release 2026.10.24-5
+at 938b527835b6abbc9d2a55ce91ea5df85b0acbe6. The published upstream launcher
+source is pinned under apps/engine and compiled as BlacksoulsVR.Engine.exe.
+Our source-built BlacksoulsVR.exe detects games first, hosts the engine's launcher
+form and supplies the fork updater described below. The upstream checker is
+disabled before the original form is constructed. Do not claim headset playtesting from CI results.
+
+## Structure
+
+`apps/launcher/` is the Windows discovery bootstrap; build it with
+`./tooling/release/build_launcher.ps1` before packaging locally. It uses the Windows
+.NET Framework compiler and system libraries, with no runtime package downloads.
+
+
+```text
+apps/client/                    npm workspace: Vite browser app
+  src/
+    core/ data/ game/ world/     runtime, loading, interpreter, map systems
+    entities/ combat/ ui/       characters, battles, presentation
+    network/ vr/               co-op, headset and controller support
+  public/                      runtime configuration and legacy map-editor data
+  tests/                       JavaScript regression tests
+apps/engine/                   pinned upstream C# engine source and provenance
+packages/coop-server/           installable Python package
+  src/blacksouls_vr_coop/       runtime and CLI
+  tests/                       co-op protocol tests
+packaging/                     distribution mappings and portable adapters
+vendor/launcher/               historical executable fixture and provenance
+tooling/release/               release builder and verifier
+tests/packaging/               package and portable-entry integration tests
+docs/                          original multilingual guides
+.github/workflows/             CI and release automation
+```
+
+Architecture and runtime compatibility details are below.
+
+## Libraries and build tooling
+
+- **Three.js 0.170.0** is installed through npm, matching the upstream renderer revision.
+- **@webxr-input-profiles/assets 1.0.20** supplies the hand models; their bytes match upstream.
+- **Vite 8.3.4** resolves imports and bundles the client and dependencies for offline use.
+- **ESLint** and **Ruff** lint first-party JavaScript and Python.
+- The Python server uses a standard **src-layout package and Hatchling** wheel build.
+  Its runtime uses standard-library `asyncio`; no pip dependencies are required to
+  run the server from the portable ZIP.
+
+The npm workspace lockfile records exact versions and integrity hashes. Dependency
+licenses are emitted into the browser build. Generated files and npm packages are
+not committed to source control.
+
+## Develop
+
+Use **Node.js 24** and **Python 3.13** from the repository root:
+
+```sh
+npm ci --ignore-scripts
+python -m pip install -r requirements-dev.txt
+python -m pip install -e ./packages/coop-server
+npm run lint
+npm test
+npm run build
+python -m ruff check .
+python -m unittest discover -s packages/coop-server/tests -v
+python -m unittest discover -s tests/packaging -v
+npm run package
+```
+
+`npm run build` produces `apps/client/dist/`. `npm run package` also creates the portable
+ZIP and checksum in root `dist/`. To build the installable server wheel:
+
+```sh
+python -m pip wheel --no-deps --wheel-dir dist ./packages/coop-server
+python -m blacksouls_vr_coop --help
+```
+
+`npm run dev` starts Vite on localhost. The frontend still needs the original launcher's
+backend for `/api`, `/game` and `/rtp`. Start the launcher with your game folder and set
+`BLACKSOULS_VR_BACKEND` to that local backend URL before starting Vite. Vite forwards
+those paths to it. The co-op relay is separate from the game-data backend.
+
+Tests use synthetic game data, in-memory protocol streams and an isolated portable
+Python launch. No game files or headset are needed for CI. Successful CI does not
+replace a PCVR playtest; headset rendering and full story-event compatibility remain
+manual checks.
+
+## Build the Windows installer
+
+Install Inno Setup 6 on Windows, then after `npm run package`:
+
+```powershell
+./tooling/release/build_installer.ps1 -Archive dist/BLACKSOULS_VR_0.2.2.zip -Version 0.2.2
+```
+
+The installer bundles the verified portable distribution and creates Start menu
+shortcuts. Its default writable location is `%LOCALAPPDATA%\Programs\BLACKSOULS-VR`.
+Player-created saves are retained during upgrades and uninstall. The setup EXE is
+currently unsigned. Python is only needed by players who host the optional co-op relay.
+
+## CI/CD
+
+Pushes to `main` and pull requests run lint, tests, the Vite production build, portable
+package tests and Python wheel creation on **Windows and Linux**. Each run provides
+ZIP, checksum and wheel artifacts, retained for 14 days. Windows additionally builds
+an Inno Setup EXE and verifies installation against the file manifest, upgrade,
+uninstall and retention of player-created saves.
+
+A `v*` tag runs the same checks. After success, publishing downloads the tested
+Linux artifact, checks its version and checksum, and promotes it to a GitHub Release.
+It also promotes the tested Windows setup EXE and its checksum. It does not rebuild
+the client. Existing releases are never overwritten.
+
+For the next release, update the root and client `package.json`, the server's
+`pyproject.toml` and `__init__.py`, then run `npm install --package-lock-only` and commit.
+After green CI, push the matching tag, for example:
+
+```sh
+git tag v0.2.3
+git push origin v0.2.3
+```
+
+No personal token secret is needed. Check jobs have read-only repository permissions;
+only publishing has `contents: write`. Actions are SHA-pinned; Dependabot checks
+npm workspaces, Python build tooling and Actions weekly.
+
+
+## Architecture details
+
+This is a modified fork of Lobewarms' BLACK SOULS II VR mod.
+
+## Client
+
+`apps/client` is an npm workspace. Vite resolves browser modules, bundles the
+application and Three.js, and emits runtime model files and dependency licenses.
+No CDN or runtime npm installation is needed by players.
+
+Source groups under `apps/client/src/`:
+
+- `core/`: boot, shared runtime context, input
+- `data/`: asset/database loading, Ruby Marshal reader, extracted game scripts
+- `game/`: state, Ruby-expression adapter, event interpreter and interaction
+- `world/`: maps, collision, geometry, tiles, sky and markers
+- `entities/`: player and character behavior, sprites, allies and poses
+- `combat/`: battle logic, boss moves, weapons and effects
+- `ui/`: HUD, inventory slots, localization, pictures, sound and presentation
+- `network/`: co-op state, transport and validation
+- `vr/`: headset/controller integration, hand models and spectator view
+
+The migration updates relative imports while preserving gameplay behavior. Existing
+systems still share the upstream `G` context; directory separation is not a claim
+that all engine systems have been decoupled.
+
+`public/` holds files whose runtime URLs are part of the launcher's contract.
+In particular, `src/maphints.user.json` stays at that URL for compatibility with
+the upstream map editor. It is editable data, not an unbundled source module.
+
+## Server
+
+`packages/coop-server` is a standard Python `src/`-layout package with a pinned
+Hatchling build backend, wheel metadata, console command and package-local tests.
+Its runtime uses standard-library asyncio, retaining the existing co-op protocol
+and requiring no third-party runtime installation in portable releases.
+
+The installed CLI is `blacksouls-vr-coop`; the module entry point is
+`python -m blacksouls_vr_coop`. Config defaults to the current working directory,
+or the `BLACKSOULS_VR_COOP_CONFIG` path when set. The portable adapter sets that
+path next to `coop_server.py`, preserving the old release behavior.
+
+## Packaging
+
+`apps/engine/` contains the pinned upstream launcher sources. The Windows build
+validates their LF-normalized hashes, compiles the engine and emits binary/source
+provenance. Packaging verifies those bindings. `vendor/launcher/` remains only
+for verifying historical releases; new packages never fall back to its binary.
+
+`packaging/distribution.json` maps repository inputs to the launcher's runtime tree.
+Only declared files, Vite's build output and the server package sources enter the
+portable ZIP. Tooling validates paths, source boundaries, engine provenance and
+licenses. Generated outputs stay ignored under `dist/` and `apps/client/dist/`.
+
+```text
+BLACKSOULS_VR/                  generated release layout
+  BlacksoulsVR.exe
+  coop_server.py                compatibility adapter
+  coop_server.cmd
+  server/blacksouls_vr_coop/    portable Python package
+  app/
+    index.html
+    assets/                    bundled client and Three.js
+    models/hands/              npm WebXR assets
+    licenses/                  third-party licenses
+    devserver.json
+    version.txt
+    src/maphints.user.json      legacy map-editor URL
+```
+
+CI builds and tests on Windows and Linux. Tag releases promote the already-tested
+Linux artifact to GitHub Releases, together with its checksum and installable Python
+wheel. The publish job does not rebuild the browser application.
+
+## Windows setup
+
+`packaging/windows/setup.iss` uses Inno Setup 6 to install the verified portable
+payload per user. `tooling/release/build_installer.ps1` verifies the input ZIP,
+compiles the installer and writes its SHA-256. Windows CI silently installs it,
+compares every installed file with the distribution manifest, checks upgrade and
+uninstall, and confirms player-created saves survive both. The release job promotes
+that tested EXE unchanged alongside the portable ZIP. It contains all mod files,
+not the original game or a bundled browser. The engine is built from pinned source.
+
+## Unused metadata cleanup
+
+The root version.json was stale upstream release metadata, unreferenced by this
+fork and excluded from distribution. It has been removed. The manifest already
+records the fork version, so FORK_VERSION.txt is no longer generated. The old
+packaged FORK_README.md duplicated the player guides and is no longer shipped.
+Setup removes those two superseded documents on upgrade. START_HERE.txt is the
+player entry point; this AGENTS.md carries development notes. Keep upstream.json:
+it supplies the launcher's integrity check. Preserve app/version.txt until the
+upstream launcher contract is independently checked; devserver.json and map hints
+are consumed by the client. Original multilingual documentation is retained.
+
+Update versions through parsed fields in package-lock.json; never do a global
+substring replacement, which can also alter dependency versions and URLs.
+
+## Automatic game discovery
+
+The native bootstrap checks the saved launcher.json gameDir first without editing
+other settings, then scans common user/game directories and Steam libraryfolders.vdf.
+A candidate must have Game.exe plus extracted System.rvdata2 or a version-3 RGSS
+archive header, and its folder name or Game.ini title must identify BLACK SOULS II.
+A folder explicitly selected by the user only needs valid game-data markers.
+The scanner skips reparse points and inaccessible directories, bounds recursion,
+directory count and elapsed time, and supports cancellation. A single copy is
+prefilled automatically; multiple copies require selection; Browse is the fallback.
+There is no universal BLACK SOULS II install directory; do not promise whole-disk detection.
+
+The original launcher receives --game through its Options parser and
+retains game validation, localization, VR options, server, saves and browser launch.
+The source launcher hosts that form in the same process. Config remains at the original
+launcher location; the original launcher persists the selection when Launch is used.
+All original CLI diagnostics pass through. The engine is compiled from pinned
+upstream sources under a different filename beside the bootstrap.
+
+CI builds and tests the Windows bootstrap once, then downloads the identical
+artifact into both packaging jobs. It does not commit generated executables.
+The package verifier validates the engine's source/build provenance and manifest
+checksums for both executables. Original pre-bootstrap releases remain verifiable.
+Tests cover real Windows process argument round trips, Unicode, wrong game titles,
+extracted/packed candidates, multiple copies, nested roots, Steam libraries, limits,
+cancellation and preserving settings. No original game is used or executed by tests.
+
+## Runtime bug fixes (0.2.3)
+
+- Input: blur previously cleared keyboard state only. Mouse buttons, prior button
+  edges, accumulated look movement and wheel could remain latched without mouseup.
+  Blur now clears desktop input; pointer unlock releases the mouse while retaining
+  Escape so the same press can still cancel a menu. Tests reproduce both sequences.
+- Assets: failed image/canvas promises were cached forever. Successful and pending
+  requests are still shared, but null/rejected results evict their exact cache entry
+  so later requests can retry. Tests fail once then succeed, including canvas loads.
+- Marshal: plain strings were UTF-8 decoded before their following encoding ivars.
+  Shift-JIS bytes C2 A9 were therefore irreversibly turned into copyright-sign text.
+  Wrapped strings now retain bytes until encoding is known; object links get the
+  final decoded value. Tests preserve UTF-8 and binary behavior too.
+- Saves: HTTP/listing failures could become an empty list, bypassing overwrite
+  confirmation. Manual saving now requires a successfully parsed slot inventory.
+  Save transport validates response status, slot entries and core saved-state shape;
+  legacy missing metadata becomes an empty metadata object without losing the slot.
+  Failed loads toast and return null; callers retain menus and never enter that
+  state. Manual writes toast on network failure as well as HTTP failure. New player
+  messages are translated in all four supported UI languages.
+
+The runtime tests use synthetic data and simulated browser events/network replies.
+The save compatibility test round-trips the actual GameState serializer/parser.
+Input, image-cache and text-encoding tests were run against the unmodified code and
+failed before their fixes. No original game or headset playtest was available.
+
+## Corpse rendering and initial choice highlight (0.2.4)
+
+User reports: corpses drawn upright and dialogue choices not highlighting the
+first answer. CharacterSprite.isCorpseGraphic already recognized Japanese corpse,
+DamageN and stationary-skeleton sheets, but layMode used blocking priority to
+stand them up. Recognized event corpse graphics now choose lie before wall,
+priority and acting overrides, leaving collision properties untouched. Added
+bounded English corpse/cadaver/dead-body graphic names without matching Undead
+characters. Walking skeletons, living actors and doors keep their existing modes.
+
+The user's first-choice preference overrides the old intentional misselection
+prevention script port. Local and remote dialogue choice panels open at index 0.
+The frame opening choices still returns before processing confirmation, so opening
+and choosing remain distinct actions. Disabled choices retain their enabled flag.
+Explicit unselected lists (index -1) are still supported by ListPanel when needed.
+
+Tests construct real Three.js meshes and UI panels using synthetic canvases. They
+assert horizontal geometry/upward normals, stable frame selection across viewer
+positions, revival back to an upright graphic, unchanged collision properties,
+first-row focus, no opening-frame answer and disabled-answer behavior. These tests
+failed against the prior runtime and pass after the fixes. No original game images
+or headset rendering are involved, so manual in-game visual verification remains.
+
+## Desktop swing and archived pistol icons (0.2.5)
+
+Desktop melee formerly rotated the hand in place and dipped the blade below the
+screen. desktop-weapon.js now provides camera-space wind-up, sweep, follow-through
+and recovery, with exact matching endpoints. The duration and active hit window
+remain unchanged. Equipment/mode changes cancel the prior desktop animation.
+Ranged weapons keep an aiming pose. visualLength separates scaled desktop barrel
+positions from the unchanged gameplay weapon length.
+
+The user's Hunter-class pistol issue was verified in their installed game: loose
+Graphics/System/IconSet.png is 384x936 (624 icons), while Silver Pistol armor 65
+requests icon 706. Game.rgss3a contains the complete 384x1300 sheet. The upstream
+engine prioritizes loose files, so iconPixels returned null and a generic model
+was used. Do not patch the original game or distribute its art.
+
+GameAssetCache.cs extracts only the archived IconSet entry, with bounded entry
+sizes and validated offsets, when its complete rows exceed the loose sheet's.
+The cache is written atomically under the installed mod's app/local-assets directory.
+Its metadata binds it to the selected game. The browser compares /api/ping.game
+before using it; complete low-numbered loose icons retain priority. The inventory
+and held models both select the appropriate sheet per icon. Asset revision changes
+invalidate equipment built before icons were ready. The original engine binary
+remains unchanged. Close/reopen the launcher after updating; direct launches of
+the engine bypass first-time cache preparation.
+
+Automated tests use synthetic RGSS3A archives/PNGs, verify source files stay intact,
+validate cache invalidation, overflow/truncation handling, matching-game guards,
+icon-based held pistol meshes and inventory art, correct desktop muzzle length,
+and a blade path crossing the screen with an exact return to rest. A private
+read-only verification against the user's actual archive confirmed identical
+recovered pixels. Private inspection files stay outside this repository under
+workspace .tools or the system temp directory, and never enter release packages.
+No game/headset playtest or new 3D model assets are claimed.
+
+
+## Furniture perspective (0.2.6)
+
+Furniture previously shared the character billboard path, so chairs, cabinets
+and bookcases could turn toward the camera. The low-block list also missed
+Inside_B single/damaged beds and several tables. Tile events never consulted
+that list and could stand a known bed upright because of its priority/flags.
+
+furniture.js provides explicit sheet/index profiles verified against the user's
+installed art. VXTileD and RoyalTileset-TileB chair views resolve to matching
+front/rear drawings and fixed map directions; Inside_B/VXTileD stools have their
+own profiles. Existing voxel geometry folds the art into horizontal seats,
+upright backrests and front/rear legs, retaining pixel edges and rear artwork.
+Transparent bottom margins are removed from leg spans so feet touch the floor.
+No game art is committed or packaged. Repeated map seating uses InstancedMesh
+per tile, with explicit instance-buffer disposal for maps and loop copies.
+
+furnitureFloor creates a rendering grid over the original lower floor layers;
+it never alters the gameplay grid, event priority or through state. Objects on
+impassable bases retain the existing wall/side-view rendering. The known upright
+cupboard/bookcase/piano/crate pieces use fixed boxes in map and tile-event paths.
+Known flat event furniture uses a low horizontal block. Doors, living actors,
+unknown art and special side-wall placement keep their existing rules. Tile-event
+arrangement keys now include mode, priority and through state for page changes.
+
+Validation: 33 JavaScript tests include real Three.js furniture geometry, shape
+normals, directions, unchanged collision, transparent foot margins, event page
+changes, fixed storage, full map build and instance disposal, with synthetic art.
+Private read-only inspection covered the installed tileset images and all 410
+map records: 234 eligible chair/stool placements across 22 maps, plus one matching
+event page. All 28 art profiles generated geometry with feet on y=0. A private
+perspective preview checked six representative models from front, rear and side
+at player eye height. These are geometry previews and data checks; no full-game
+or headset playtest is claimed. Private art and map files remain outside the
+repository under workspace .tools and must never enter release artifacts.
+
+
+## Loose books and desk support (0.2.7)
+
+The user identified books standing upright in the dream room. Installed Map101
+is named Library Dream and uses four loose Inside_C book/paper tiles (315, 318,
+319, 330). Their blocking flags sent them through the upright standee path.
+
+Explicit Inside_C 56-80 and VXTileD 204-205 loose-book/paper profiles now create
+thin horizontal pixel geometry: covers 1.5 px thick, open books 1 px, papers
+0.2 px (32 px per tile). These profiles are distinct from bed-height flat blocks,
+bookcases and the animated 本/浮遊本 character sheets. Do not use a broad book-name
+regex; the installed game also uses floating books as animated event characters.
+
+furnitureFloor examines a grid exposing only the lower layers. A book on a desk
+is extracted even when that desk is impassable; the desk's passage/counter flags
+and geometry stay intact. Map instances rest at the support's solidTop, otherwise
+at floorAt. Tile-event books request lying placement from spotOnSolid so they
+land on the supporting tabletop. Rendering never changes the gameplay grid,
+reading event priority or through state. Impassable wall bases keep their existing
+rendering; the loose-floor/desk rule does not flatten bookshelf/architectural art.
+
+Private read-only map inspection found 35 eligible placements across five maps,
+including 11 on tabletops and all four in Library Dream. Those four generated
+horizontal original-art geometry with thickness between 0.0094 and 0.0704 metres.
+Private eye-height geometry previews checked covers, open books and papers from
+front and rear. No original art or map records are committed or distributed.
+Book regression checks cover thin horizontal
+geometry, floor/table support, retained desks, no duplicate upright books and
+unchanged interaction/animated-character rules. Full game/headset playtesting
+remains separate from these geometry and data checks.
+
+
+## Retrieval beacon, remains, destination names and soul items (0.2.7)
+
+The user's translation clarification applies specifically to the teleport-circle
+labels, not the launcher. MapInfos editor names stay available for existing uses.
+loadMapNames preloads destination display_name values from the installed game,
+retaining a small text cache independently of full-map eviction. destinationName
+uses that title or the nearest named parent; failures/cycles fall back to localized
+Area {id} in ko/en/ja/zh. buildMapView resolves exit labels before constructing
+markers. This uses the installed game's translated names, not machine translation
+of game dialogue or a shipped map-name database. The dream library's exits include
+Dungeon and Room of Reminiscence; unnamed rooms use their parent/fallback.
+
+The original retrieval event is event 1 calling common event 32, using !Flame
+slot 5 with below-player priority. CharacterSprite now checks isSoulEvent before
+priority-based layMode, preserving the upright animated beacon without changing
+its retrieval logic. Corpse top quads are raised by 0.18 m (0.12 m for recognized
+skeletal corpse graphics) and gain pixel-shaped side geometry from the selected
+sheet frame. The side mesh is rebuilt only when the actual frame changes and is
+disposed on graphic/page changes and map removal. Slot 0 of 死体・血・サイン is bodies;
+the blood/sign slots keep their decal treatment. Existing living/walking-character
+rules remain. Explicit floor-bone tile profiles cover Dungeon_B 240-242/248-250,
+Outside_C 24-25 and VXTileE 28 with 3.5 px thickness. Outside_C aliases were verified
+pixel-identical to the reviewed bone art. Read-only inspection found 322 eligible
+floor-remains placements across 23 installed maps.
+
+Black Soul (item 17 / common event 221) and Tainted Black Soul (79 / 222) are
+intentionally consumable=false in the original database: their event handles
+quantity, confirmation, item removal, permanent parameter increases and SEN cost.
+The Ruby adapter lacked item_container queries and could not compile literal
+for i in 2..7 loops, so the entire removal/stat script failed. Added read-only
+item-container count access and translation of literal inclusive/exclusive integer
+for ranges. Preserve the database flag; forcing consumable=true would spend items
+before confirmation or twice. Actual single/batch scripts for both items were
+run privately against isolated inventory/actor state; all four removed the right
+quantity and applied HP, MP and parameters. No original game state/save was changed.
+
+45 client tests now pass. New checks cover range boundaries, item counts, use via
+the real CombatSystem/Interpreter with confirm/cancel, stat/SEN changes, upright
+retrieval beacons, corpse-side height/lifecycle, bone orientation, localized exit
+names, missing/cyclic-parent fallback and all four fallback languages. These tests
+and private artwork/data inspections do not constitute a full game/VR playtest.
+
+## Upstream merge and release updates (0.2.8)
+
+Merged upstream d39c2af (2026.10.18-1), preserving the source layout and community
+fixes. Imported the scriptdata parser and travel visibility/availability rules,
+plus the verified engine and original guides. Removed the root release ZIP and
+stale version.json introduced by that merge. Upstream ancestry is recorded.
+
+Translated script section names previously prevented bonfire tables from loading.
+The parser now falls back to script content, accepts both Ruby quote styles and
+spacing/defaults, and honors visibility, selection and erase switches. Synthetic
+regressions cover parsing and actual menu/transfer wiring.
+
+The original updater hardcodes Lobewarms, a date-version parser and an upstream-only
+URL allowlist. Passing --update-url cannot support fork SemVer. EngineHost.cs loads
+the verified engine assembly, temporarily sets its screenshot sentinel before
+constructing LauncherForm (skips CheckUpdateAsync), clears UpdateUrl, asserts that
+UpdateCheck stayed null, then restores Screenshot before the form is shown. It
+hides the old button and installs the source-controlled update button and localized
+status/progress text. The fork version/title survive language changes. The new
+engine resolves app/ from the entry assembly location. Tests instantiate the actual
+vendor form in a fresh temporary installation. The binary remains unchanged.
+
+package_release.py generates release.json inside the distribution, using
+GITHUB_REPOSITORY from Actions (or the local origin remote) and package.json's
+version. No owner, fork version or upstream URL is pinned in updater code. This
+file is consumed at runtime, unlike the removed upstream root version.json. The
+Windows setup URLs are supplied from the same verified identity. Keep the app's
+release.json beside its executable. Tag releases still promote the tested
+installer and ZIP after the existing checks pass.
+
+The updater uses GitHub's latest stable release API, numeric SemVer comparison,
+matching versioned setup/checksum assets from that repository, bounded installer
+size, exact byte count and SHA-256 before offering setup. Partial/failed downloads
+are removed, and unavailable updates never block playing. Setup targets the current
+installation directory and preserves saves using the existing installer contract.
+Players confirm closing the game before opening setup. Downloads are staged in
+the user's temporary directory. No API token or runtime package manager is needed.
+Diagnostic selftests pass through to the stock engine. --screenshot uses the hosted
+form without an online update check, so review images show the real fork UI.
+
+Native update tests cover version comparison, preview/downgrade behavior, fork URL
+selection, missing checksums, download/verification failures and real engine hosting.
+Packaging tests build under an alternate GITHUB_REPOSITORY to prevent accidentally
+pinning future forks to this owner. No automated result claims a headset playtest.
+
+## Save location language (0.2.9)
+
+VR save metadata formerly used mapName(), which reads RPG Maker editor labels
+from MapInfos. The user's existing saves had Japanese editor labels even though
+the corresponding game maps had English display_name values. Save/load/overwrite,
+title Continue and co-op save lists echoed those stored labels indefinitely.
+
+savepresentation.js preloads names for slot map IDs and resolves player-facing
+titles through the existing destinationName/translated parent fallback. The
+current map's parent chain is also loaded during map-view preparation, so new
+save metadata can use that name synchronously without adding any await between
+the state snapshot and POST serialization. Existing save metadata is only read,
+never migrated or rewritten by listing. Old saves without map IDs retain their
+original label. A title lookup failure uses the localized Area ID fallback and
+does not imply an empty save slot. New metadata date strings use fmtDate() rather
+than the browser default locale; numeric timestamps remain compatible.
+
+Tests cover stale editor labels, unnamed-room parent titles, duplicate slots,
+read failures, unchanged saved metadata and the actual co-op menu wiring. Save
+menu/notification translations are checked in all four supported languages with
+a Chinese browser locale. Original game data and player save files remain private
+and are never included in repository fixtures. No headset playtest is claimed.
+
+## Combat status and enemy names (0.2.10)
+
+Enemy bars previously rendered only HP and groggy to a 128x22 canvas, so there
+was no enemy name or state renderer. Player HUD states were icon-only, omitted
+iconless effects and did not invalidate when icon assets loaded. The new shared
+battler-status.js builds named states (priority order) plus parameter buffs and
+debuffs from the game database; missing artwork never removes the text label.
+
+The player HUD is larger, readable on its existing desktop/wrist anchors and does
+not depth-test against weapons or terrain. It shows four effects per page, cycles
+overflow every four seconds and points to the full Status menu list. Enemy bars
+are now 512x184 nameplates with names, the same HP/groggy values and four effect
+labels per page, cycling every three seconds. Text fits its allotted area. Both
+render caches include status identity, page and icon asset revision; otherwise
+textures are reused. Rebuilding an enemy clears the cache; removal disposes its
+nameplate texture/material. Existing combat values and status lifetimes are not
+changed. Labels hide for defeated, hidden or untargetable enemies and beyond 18m;
+normal world depth testing keeps them behind walls.
+
+Co-op snapshots carry optional top-level buffs metadata for normal and private
+enemies. The original 15-field normal / 17-field hallucination tuples stay intact,
+so older clients can ignore the extension and newer clients accept legacy hosts.
+Only eight integer levels in -2..2 are accepted. It is display metadata and does
+not change authoritative combat stats or guest hit reporting. Empty snapshots
+clear the indicators; host state IDs already use the existing transport.
+
+Regression tests use actual Three.js meshes, canvases with synthetic data and real
+BattlerBase state/buff methods. They cover missing icons, removal/expiry, all effect
+pages, menu overflow, late-asset invalidation, desktop/wrist anchors, name visibility,
+distance/hidden/death rules, disposal and co-op send/receive compatibility. A local
+browser preview checked the real UI canvases/3D nameplates for desktop and a
+simulated controller anchor using synthetic art. This is not a headset playtest.
+Temporary preview HTML and game assets must never enter the packaged app.
+
+
+## Navigation, menu usability and game artwork (0.2.11)
+
+User requirement: reuse the installed game's original assets whenever suitable,
+including status icons, tiles, fonts and window skin, before inventing replacement
+art. Never commit or distribute those original assets. Keep readable fallbacks
+when an asset is absent and simple navigation marks where no game asset exists.
+
+NavigationMap renders a north-up local map and current-area overview from MapGrid,
+the current map-view analysis and its already-loaded TileDrawer. The artwork raster
+is capped at 2048 pixels per side and built once per grid/analysis/drawer identity;
+the live position and head facing refresh at 10 Hz without rebuilding terrain.
+Non-loop windows clamp; looping windows wrap continuous tile-centre coordinates
+and draw adjacent copies. Exit cells share numbered destination legends; all
+legend entries remain reachable with arrows/stick or pointer buttons. Destination
+labels use translated display_name, never map editor names. Transfers discard
+old analysis; no tile, save, event or combat state is mutated by drawing. This is
+an area overview, not a route planner or guarantee of passage through event doors.
+
+PC N and Menu > Map open the overview. VR uses the menu and a left-controller
+minimap anchor above the existing HP panel. The minimap hides behind menus,
+messages, transfers, death and title; its display option persists with settings.
+Full-map Back works with cancel, N/menu, mouse or VR pointer. Main menu is one
+page with Character, Save / Load and Settings groups; returning restores the
+parent selection. Return to title has an in-app confirmation starting on Cancel.
+
+Window.png uses the VX Ace 128x128 background/frame/cursor layout. Eight frame
+slices exclude the central scroll-arrow artwork; cursor rendering includes its
+centre. All window art comes from loadUiAssets, and missing art keeps the existing
+fallback. Format coordinates were checked against the primary mkxp WindowVX
+implementation (https://github.com/Ancurio/mkxp/blob/master/src/windowvx.cpp).
+Status icons use the database icon_index (buff icons retain VX Ace indices),
+prefer the installed game's primary sheet and only use matching-game archived
+cells for icons beyond a short loose sheet. No substitute status artwork is made.
+
+Mouse selection uses the real canvas/camera ray and accepts only interactive
+hits. Opening blocking panels releases PC pointer lock; menu clicks must not
+capture it. Explicit clicks select hovered entries even when initially unselected.
+Tab switches refresh the item source before selection. Keep quantity Max/Zero
+and on-screen keyboard clicks distinct from their confirm actions.
+
+Regression tests exercise real gameplay-frame and co-op receive wiring for enemy
+labels and state/buff expiry, late icons, primary icon-cell identity, original
+window frame/cursor regions, map positions/loop seams/transfers/cache limits,
+legend pages, PC/VR menu controls and pointer interactions. A private browser
+preview used the installed game's artwork and map read-only, plus a simulated
+wrist anchor. This is not a headset playtest. Remove temporary preview HTML and
+all private art before building packages. The dev proxy changes Host to the chosen
+backend so the original launcher's localhost Host checks accept asset requests.
+
+## Repeated update checks (0.2.11)
+
+The .NET Framework WebClient removed its default User-Agent from the shared
+Headers collection after creating the first request. The first GitHub check
+succeeded, but subsequent checks returned HTTP 403 explicitly requiring a
+User-Agent. Set HttpWebRequest.UserAgent and Accept for every request, including
+release metadata, checksums and installer downloads. Preserve the verified
+repository/version identity and download checks. UI errors distinguish rate
+limits, server responses, missing releases, timeouts, TLS and connection failures;
+server-directed retry timing is respected and identical consecutive log entries
+are suppressed. The app does not infer that every failure means the user is offline.
+
+Native regressions use a local HTTP server and sequential requests to reproduce
+the consumed-header failure. Restoring the original behavior makes the second
+check fail. Three consecutive live GitHub checks also passed after the fix.
+
+
+## Separate desktop and VR presentation (0.2.11)
+
+PC panels reuse their original game canvases, with a screen-aligned camera anchor
+and sizes measured in CSS pixels. Fit the visible panel group inside the viewport,
+including message/choice offsets and perspective depth, independent of camera
+pitch, yaw, roll, FOV, zoom and resolution. Keep the HUD around 320 px at bottom
+left and minimap around 220 px at top right; actual painted HUD height determines
+the bottom margin. Menus hide the desktop HUD; VR retains the original head-facing
+menu anchor and wrist HUD. Reset root scale and panel parenting on session changes.
+Control hints are specific to keyboard/mouse or VR controllers in all four languages.
+Regression checks project actual Three.js panel corners to screen pixels and
+exercise resize, title, dialogue, transient panels and PC/VR transitions.
+
+The source-built launcher now presents PC/VR choices before play, while advanced
+RTP/browser/port/Steam integration and the diagnostic log are disclosures. Preserve
+the original engine's controls and event bindings when reparenting them. Selecting
+PC must clear both configuration AutoVr and hidden command-line VR/Steam overrides.
+The verified engine binary is not changed. Branding is embedded in the source
+launcher and Windows installer, including all native icon sizes and shortcut icons.
+
+## Generated launcher branding
+
+User explicitly requested generated app branding matching the game's atmosphere.
+This is an exception for launcher branding to the original-asset preference; do
+not replace the game's own status icons, window skin or tile art with generated art.
+Used the built-in image_gen tool, not the CLI. Project assets are
+apps/launcher/Assets/app-icon.png, apps/launcher/Assets/app-icon.ico and
+apps/launcher/Assets/launcher-banner.png. The ICO is a format conversion of the
+selected PNG into 16, 24, 32, 48, 64, 128 and 256 px frames, with no artistic editing.
+These are original community branding assets, not extracted game files or an
+original-author logo. Tests verify the embedded managed resources, native icon
+frames, installer shortcut target/icon and uninstall cleanup.
+
+Final icon prompt:
+"Use case: logo-brand. Create one original Windows application icon for a community BLACK SOULS II VR launcher. Square image, dark gothic fairy-tale RPG mood, reminiscent of an old illustrated storybook. A single bold ivory-white rabbit-eared silhouette emerging from an antique keyhole, framed by a restrained dark-silver thorn ring; tiny muted crimson glow behind it. Rich charcoal and black background filling the square, warm bone white foreground, one deep blood-red accent. Hand-painted pixel-art-inspired edges and restrained engraved shading; strong simple silhouette must remain readable at 32 by 32 pixels. Centered symbol with generous safe margins. Flat front view, no perspective or mockup. No words, no letters, no title text, no VR headset, no neon, no busy background, no gore, no watermark. Original fan-project emblem, not a reproduction of a game logo. Deliver polished square raster icon artwork."
+
+Final banner prompt (selected icon used only as a style/motif reference):
+"Use case: stylized-concept. Asset type: wide launcher banner, approximately 3.6:1 aspect ratio. The supplied image is a STYLE AND MOTIF REFERENCE ONLY, not a target to overwrite. Create a new original Gothic dark-fairy-tale storybook header to match that ivory rabbit-eared keyhole emblem. Deep nearly black charcoal paper background, restrained aged silver thorn engraving, desaturated crimson accent. Reserve the left 65 percent as very dark clean negative space so the app can draw a readable live title and short subtitle there; put a smaller ivory rabbit-eared keyhole emblem with a restrained thorn halo in the right third. Maintain graphic clarity and quiet edges, delicate engraving texture and subtle vignette. No words, no lettering, no buttons or interface baked in, no watermark, no gore, no neon. This is the final banner artwork to be embedded in a Windows game launcher, not an application mockup. Wide composition with low vertical height."
+
+
+## Empty icon cells and quick mouse presses (0.2.11)
+
+Read-only inspection of the installed game confirmed primary IconSet.png is
+384x936 with completely transparent cells 529 (Deadly Poison), 530 (Virulent
+Poison) and 561 (Oiled). The matching game's archive has artwork at those indices.
+Bounds alone were therefore insufficient. sheetForIcon now falls back for an
+entirely transparent primary cell only when the archive cell has visible alpha.
+Any visible primary pixel wins; failed/unavailable pixel reads keep the primary.
+Cache alpha results per canvas/icon, including failures, to avoid repeated pixel
+reads. Keep matching-game archive validation unchanged. Synthetic RGBA tests
+cover real cell coordinates, occupied/empty cells, errors and cache read counts.
+The private browser preview verified all three displayed Poison icons after this
+fix, as well as PC mouse opening of the map and simulated VR wrist placement.
+
+Mouse down/up can both arrive before the next animation frame. Buffer button
+press edges until endFrame so rapid completed clicks reach menus once, without
+changing held button state. Clear queued edges on blur and pointer unlock. A
+real Input/ListPanel regression reproduces this sequence and verifies one action.
+The title menu also counts as an active pointer UI even without menuOpen; clicking
+Continue/New Game must not request pointer lock. Gameplay clicks still capture it.
+
+
+## Borderless launcher and HUD clarity (0.2.11)
+
+The user explicitly requested borderless game-launcher chrome. Retain accessible
+close, minimize, maximize/restore, dragging, edge resize, keyboard close and
+working-area bounds rather than removing window management. Custom Close must
+use the original form's cleanup path. Advanced/settings controls remain native
+and preserve their original events. Keep all visible instructions and disclosures
+localized. A standard native language selector is preferable to unreadable styling;
+FlatStyle.Flat omitted its selected text in offscreen native renders.
+
+HUD resource labels/values belong with their corresponding gauges, with currency
+and the game's optional SEN variable on a separate row. Group original status
+icons and names together, preserve all status pages, and invalidate cached painting
+when player name or level changes. Use the game's Window palette for resource
+colors (HP20/21, MP22/23, stamina28/29) and retain real numeric values. Desktop
+bottom anchoring follows actual painted height; the VR minimap must clear the
+resized HUD geometry. Avoid new decorative status artwork or overlapping labels.
+
+## Themed scrolling (0.2.11)
+
+The launcher uses a dark track and ivory/gold thumb for its scroll surface and
+expanded log, retaining the original read-only TextBox and its selection/copy
+behavior. Preserve mouse wheel, drag, page clicks, keyboard navigation, focus
+visibility and clamping when resized or disclosures close. The DPI gate measures
+text fit and separation within the actual monitor work area; a fixed pixel width
+after 150 percent scaling incorrectly assumed a monitor larger than the CI runner.
+Include measured geometry in failures and exercise a small work area explicitly.
+
+Long in-game ListPanel/GridPanel menus reserve a right gutter and reuse the
+original Window frame/cursor artwork for track/thumb. Hide the bar when all rows
+fit. Mouse wheel, track clicks and dragging move the viewport without activating
+items, preserving the inventory column and explicitly unselected choices. VR
+retains stick navigation and cannot trigger an item through the bar. Regressions
+cover first/middle/last positions, partial rows, clamping, disabled items,
+unselected choices, stale hover, wheel routing and cancellation during scrolling.
+Esc/menu cancellation must take priority over wheel inertia or an active drag so
+that a scroll handler cannot consume and lose the cancel key edge.
+A private browser preview with
+the installed game's original skin/icons confirmed wheel and drag behavior and
+clear counts/text in long lists and inventories. Do not ship preview fixtures or
+the original game artwork used during this check.
+
+## Desktop player presentation (0.2.12)
+
+The user explicitly rejected the Character and Save/Load group layers added in
+0.2.11. The active design follows the installed original Scripts.rvdata2:
+Window_MenuCommand adds item, skill, equip, status; the active Covenants script
+adds partner; then save and game_end. Formation is commented out. Keep those seven
+commands directly accessible in that exact order, commands/economy at the left
+and party information at the right. Mod tools has a separate right-side button
+and F1 shortcut, with Map, Load, Co-op, Settings and pose tools. Returning from a
+core scene restores that row; Settings returns to Mod tools. Original Z/Enter and
+X/Esc support stays intact. Do not add categories around familiar game commands.
+
+Classic menu canvases are 320x960 and 960x960, matching the original 160/480 column
+split at twice the logical resolution. They share the original Window skin and
+actor face cells, with SEN and currency at the lower left. Do not invent party
+members or borrow unrelated portraits. Hide old commands before asynchronous
+save/load requests and only show the overview for the actual main menu.
+
+The original active battle face script crops x=0,y=38,w=96,h=24 from each actor's
+96px face cell. Use the runtime actor's faceName and faceIndex for the PC header.
+Window_Base's actual HP palette is 18->10, MP is 9->1, and gauge background is 19.
+Actor_bg1/2/3 belong to the original map HUD; gauge_bg belongs to enemy HP, so do
+not describe those as battle HUD artwork. These findings were verified against
+the installed game's live script/archive data; copied research assets remain
+outside Git and the distributed package.
+
+The desktop resource card has a fixed 256px painted height inside its 512px
+canvas. A separate 512x128 effect strip keeps the first four priority effects
+stable and directs overflow to Menu > Status. Do not time-cycle PC debuffs or
+move resource gauges when effects change. VR retains its previous wrist drawing.
+Translucent backgrounds preserve scene visibility; keep original icons, resource
+values and outlined text legible. Window has two alpha-composited background
+layers; count both when testing opacity. The PC mini-map is a 360px circle with
+terrain at alpha0.6, transparent surroundings, opaque player/exit markers, and a
+thin original-palette rim. Full maps and the VR mini-map retain their prior layout.
+
+Pickup notifications use a separate RewardFeed camera anchor, never the central
+menu-fitting root. Merge repeated identical gains, admit bursts calmly, bound the
+queue, pause hidden timers, and keep the painted feed below the central view at
+the lower right. Hidden narrow windows wait rather than overlap the HUD. Normal
+nonblocking PC notices also use a separate corner anchor. Preserve actual item
+and soul awards, source icons, co-op gifts and scripted event gains.
+
+PC choices resize to their contents, with hit targets following the actual row
+origin; blank titles do not reserve an empty header. Dialogue groups anchor along
+the screen edge specified by the original message position; speaker tabs fit the
+name. Preserve transparent/dim scripted backgrounds, disabled choices, number
+input, mouse/keyboard edges, scrolling and VR dimensions.
+
+PC equipment is a bounded visual wrapper around the original model, held low at
+the sides. Do not shorten combat reach or move the shield interception point.
+Hide PC held equipment during dialogue, shops, menus and transfers. VR controller
+transforms, grip adjustments and model proportions retain their original behavior.
+Regression checks project all weapon types/shields at several FOV/aspect ratios,
+exercise real combat frame visibility and swing endpoints, and verify those
+gameplay/VR invariants. UI checks cover original menu order, direct paths, exact
+game asset cells, alpha composition, compact choice hit targets, asynchronous
+save transitions and real loot rewards reaching the peripheral feed.
+
+Private browser QA rendered Map101 with original tiles, Window, icons and faces,
+checking exploration, the classic menu, dialogue, low weapons, translucent circular
+map and merged lower-right pickups. Review images are ignored under dist/previews.
+The temporary fixture and export middleware are outside distributed sources and
+must be removed from the client before building. The private data server uses an
+isolated temporary save directory; it must not modify the player's installed saves.
+
+## Resized panel GPU storage (0.2.13)
+
+The user's stretched Status screenshot exposed a GPU lifecycle bug. Panel.resize
+changed canvas dimensions while reusing an uploaded CanvasTexture. Three.js r170
+allocates immutable texStorage2D on the initial upload; subsequent texSubImage2D
+uploads cannot resize it. The renderer could retain Status pixels while the main
+menu used its narrow command geometry, or stretch old commands across Status.
+Node canvas/layout tests did not allocate GPU storage and missed the defect.
+
+Recreate the CanvasTexture and its Source whenever pixel dimensions change,
+preserve sampler/color/UV settings, update the existing material map and dispose
+the previous texture. Texture.copy shares Source, so restore the fresh Source
+after copying. Keep the mesh and material stable for pointer hit targets. An
+unchanged size is a no-op; world-width-only changes replace geometry without
+clearing the canvas or reallocating texture storage.
+
+Regression tests exercise actual main/status/equipment/back transitions, texture
+and source identities, disposal, unchanged/world-only resize and adaptive choice
+and speaker-name panels. Private browser QA reproduced distorted old pixels before
+the fix, then verified repeated Main > Status > Back > Equipment > Back > Status
+and dialogue on actual WebGL rendering with original game art. Test state remains
+synthetic and the fixture never reads or writes player saves. Preview fixtures and
+export helpers must stay outside production builds and release packages.
+
+## Live exits, complete choices and pointer handoff (0.2.14)
+
+Exit rings must follow the current usable event page, not only the pages present
+when the map mesh was built. GameMap.exitRevision invalidates route presentation
+after event page changes. collectCurrentExits reads live, non-erased event pages
+and the revision cache records pages during loading. Repeated null/erased-page
+callbacks are not route transitions and must not churn marker GPU resources.
+The collector uses current pages and runtime coordinates with the existing
+transfer-analysis rules. Update world
+markers and navigation analysis together, without rebuilding collision or geometry.
+Show rings immediately with cached/fallback destination names; asynchronous name
+loads must check the map, presentation token, revision and exit-array identity
+before refreshing labels. A moving event also invalidates its presented route.
+Preserve boss blocking, looping-map coordinates and integer tile-centre floor
+sampling. Dispose per-marker materials/geometries/label textures on rebuilds and
+retain the shared ring/column textures. Never synthesize a route from inactive
+pages, death common events, or unrelated cutscenes.
+
+PC dialogue answers must show their complete text, including long translations,
+instead of truncating consequential choices with ellipses. Wrap words and CJK
+characters, keep hit regions aligned with painted rows, and scroll excess options
+within a readable viewport budget. Wide choice boxes must clear the speaker tab.
+Number inputs and VR retain their established row dimensions and controls.
+
+Returning from pointer-driven UI must restore gameplay input without requiring an
+extra mouse click. Preserve intentional native Escape release from ordinary play,
+window blur, text entry and VR. Browser Escape may deny immediate pointer relock;
+use a bounded handoff and movement-key recovery rather than per-frame lock spam.
+Regression tests cover route page transitions, marker positions and disposal,
+wrapped choice text/hits/scrolling, and pointer pause/resume lifecycle. Private
+browser fixtures exercise the real renderer with original art and synthetic game
+state; remove them from the client before production builds.
+
+## VR world pickups (0.2.15)
+
+Read-only inspection of the installed original data confirmed that Mental Ward
+(Map012) exits to Lutwidge Town (Map005). Its item drops use trigger-0 !Flame
+events with ordinary positive item commands and collected pages; chests use the
+same original event pipeline. Keep original game data and private inspection
+scripts outside Git and release packages.
+
+Input.grabPressed buffers WebXR squeeze edges independently of combat polling.
+Fast start/end pairs between frames count once. Event-capable controllers must
+not replay delayed gamepad polling. Clear stale grabs on UI, session/source loss
+and controller replacement; grips held through a menu need a new squeeze.
+Preserve existing shield, pose, consumable and other sampled button semantics.
+
+WorldPickup runs after sprite placement. Check physical hand proximity to the
+actual visible mesh or slab, trim upright sprite alpha margins, require short
+head-to-hand reach and clear static-world sight lines. Ignore hidden, inactive,
+stale, occupied and boss-blocked targets. Shield grip keeps guard; the right
+grip and an empty left hand can collect. Detect positive event rewards only to
+identify object interactions, then dispatch Player.startActionEvent. Inventory,
+messages, choices, switches and network authority belong to the original event.
+Never give inventory directly from the grab handler.
+
+Action targeting uses rendered support positions and nearest map-loop copies.
+VR prioritizes actual controller aim before tile fallbacks; desktop keeps its
+tile-first behavior. Preserve script-facing direction and propagate refused
+starts instead of falling through to unrelated underfoot items.
+
+Regression tests exercise real GameEvent/Interpreter/GameParty transitions,
+collected pages, co-op refusal, hand ownership, occlusion, visual placement and
+WebXR squeeze/source lifecycle with synthetic fixtures. These are simulated
+controller tests, not a physical headset playtest.
+
+The clipped-command screenshot was a shared-canvas drawing-state leak:
+paintClassicMenu ended economy drawing with textAlign=right. A same-size list
+redraw reused that alignment and painted command text mostly left of the canvas.
+Set list text alignment explicitly and save/restore the appended economy's
+canvas state. Tests reproduce actual open/selection/hover/Status/Back redraws
+without resizing, and assert complete text bounds and stable texture identity.
+Fresh interactive browser verification was stopped by the user's physical
+Escape; do not claim that the current changes received a new browser playtest.
+
+The installed Run like Dodo skill 340 invokes common event 43, whose Normal/Fast
+choices run player move-route command 29 with speeds 4/5. It is a persistent route
+setting, not a battler status. Free Player locomotion must multiply its PC/VR,
+sprint and guard factors by the original exponential speed-index ratio. Keep
+forced routes on their own existing grid movement. Save optional start.moveSpeed,
+restore it when entering a world, and import original player.move_speed. Old or
+invalid values default to 4. Regression fixtures use synthetic skill/events;
+private read-only verification of the installed event confirmed 2x Fast distance
+and 1x after Normal without changing actual game files or saves.
+
+Co-op home snapshots must include the current live movement speed even if the
+player has not saved since choosing it. Preserve that speed during a summon and
+restore the home speed on return; the visited world's later route changes do
+not rewrite it. Legacy snapshots use their saved speed or the normal default.
+
+The Torture Chambers rack is Map 063 event 3 at (27,17), !$Map1_c direction 8,
+pattern 1: a 32x96 rack frame drawn from above. Its selected frame also leaves
+18 bottom rows transparent while an unrelated frame reaches the bottom, so
+all-frame margin minima suspended it by 0.84375m. Known rack and
+Map1_b table/bed frames use original selected pixels horizontally with visible
+thickness and floor-reaching supports sampled from their artwork. Keep adjacent
+shackle columns hanging and cupboards/instruments upright. Selected-frame base
+grounding is limited to verified stationary Map1_b/wooden-horse props; preserve
+wall attachments and actual top surfaces. Tests cover geometry, support height,
+source-frame selection, page changes and resource disposal. Private N-API canvas
+inspection used actual local art without computer control or saves access.
+
+## Gameplay effect audit (0.2.16)
+
+Keep walking speed, AGI, attack-count traits and extra-action traits separate.
+Original Game_Action.speed adds AGI, random order, item.speed and normal-attack
+feature 33 to choose turn order. It does not define walking or animation speed.
+AGI equipment/state multipliers already change real stats and formulas such as
+Triple Shot/Thousand Arrows. Enemy windups and companion movement/actions use AGI.
+Do not claim manual player actions reproduce the original turn-order scheduler.
+
+Feature 61 extra actions adapt to shorter player recovery using the same expected
+action-count idea as enemy actionPace: 1 plus the extra-action probabilities.
+Snapshot per action, shorten desktop swings and PC/VR ranged base recovery, and
+preserve burst spacing, hit counts, costs, deliberate charge time and turn-based
+skill cooldowns. A short desktop swing crossing its active interval during a
+slow frame must still hit once. Physical VR melee keeps its gesture thresholds
+and per-target debounce; do not turn one held pose into repeated free attacks.
+
+Weapon/state effects must use actual attack and damage paths. Normal attack state
+traits include death state 1, combine rates for a given state before rolling and
+apply original resistance/rate/LUK rules. This release retained the groggy
+replacement for stun; 0.2.17 below restores the original weapon status.
+Keep full legitimate attack counts (upgraded Hans' Machine Gun reaches 12 hits),
+with bounded validation for malformed values. Accuracy penalties, skill success
+rates and target critical evasion must participate in real hit/critical rolls.
+The base engine critical multiplier is 2, but later original Script218 overrides it with DIFFICULTY_SETTING row11 (3.0 for every installed difficulty). Read the parsed effective row at variable60; fall back to the base2 only when that data is absent.
+
+Script 193 reads damage-rate piercing tags from feature objects and a differently
+spelled additional tag from skills, while the installed data puts the former tag
+on many skills (including weapon 445's attack skill 591). Accepting both spellings
+on the skill is an intentional compatibility repair of that original data/script
+mismatch. Preserve physical/magical type and original feature-object tags.
+
+Passive EVA/MEV must work without a counter-on-evasion note. Original active script
+173 changes ordinary counters to apply the incoming hit first, then counter if
+the target can act. Select CNT before MRF, preserve evasion and miss application,
+and do not negate the incoming hit because CNT won. Normal counters use weapon
+attack-count traits for consistency with this port's normal attacks; original
+Ruby invokes item_apply directly, so this is a port adaptation rather than exact
+original counter repetition. Incoming criticals roll enemy CRI times (1-CEV)
+after hit/evasion/substitution and apply the original normal-game multiplier 2.
+Zero/absent CRI, full immunity, effect-only and noncritical skills do not consume
+an extra RNG roll. Guards and attack-first counters keep their existing order.
+Critical multiplication applies only to formula damage, not independent
+percentage HP effects attached to the same skill. Preserve the separate incoming
+damage multiplier for those percentage effects.
+Death-only enemy skills (e.g. skill 310) must
+use the existing death/save/revive flow after a real hit, respecting resistance
+and perfect guards. Existing nonfatal hostile-state scaling remains a separate
+real-time adaptation. Enemy regeneration must not depend on having state timers;
+positive HRG heals to maximum HP and never revives a dead enemy.
+Reflected death also targets the original spell caster, using that caster as both
+user and target for susceptibility/LUK. Preserve player death saves and enemy
+revival through the existing fall/death handlers; never invoke reflection again.
+
+Use synthetic database fixtures for shipped regressions. Read-only inspection of
+the installed original scripts/database stays private. These checks establish
+specific effect behavior, not exhaustive compatibility for every story event.
+The user chose gameplay effects first while the game was closed. The stationary
+skeleton screenshot remains unidentified and needs a later live inspection; do
+not claim this release fixes that particular object.
+
+## Weapon stun restoration (0.2.17)
+
+The user reported that Great Sword's advertised stun never triggers. Private
+read-only verification found weapon IDs 123-132 have feature 32/state 13/value
+0.8. Attack 1 and Mow Down 81 carry the normal-attack-state effect. State 13
+restricts actions, uses original icon 21, and lasts one turn. The inherited
+normal-attack loop explicitly skipped state 13 and converted its chance to a
+groggy bonus; 0.2.16 retained that exception, so it did not restore weapon stun.
+
+Apply weapon stun through the shared stateEffectChance/addEnemyState path,
+respecting actual hit, susceptibility, immunity, LUK and original ignore tags.
+The existing restriction handler cancels windups/actions and their telegraphs,
+prevents AI actions, and resumes after the enemy-state timer expires (one enemy
+turn is two seconds in this port). Existing status display uses the original
+state name and icon. Keep ordinary groggy/Break mechanics, but remove the old
+stun-to-groggy bonus now that the weapon's original status is applied directly.
+
+Four regressions failed against 0.2.16 and pass with the fix: actual attack
+interruption/status display/expiry/AI recovery, chance/resistance/immunity/misses,
+VR and direct-skill application, and independent groggy buildup. Private runtime
+verification used the installed Great Sword, Attack, Mow Down and Stun database
+records against synthetic battlers with no player-save access. Both attacks
+applied the real state, restricted actions, and expired after two seconds. Keep
+original data outside Git/releases; these checks are not a live headset playtest.
+
+## Dialogue transition presentation (0.2.18)
+
+The user reported flickering between normal HUD and dialogue. Map logic runs
+before UI input in a rendered frame. closeMessage cleared msg during UI.update,
+so HUD/minimap/backdrop/cursor could switch to gameplay before the next logic
+tick opened the following page. At high refresh rates several render frames can
+occur without an intervening logic tick. Desktop equipment has a separate earlier
+update and must follow the same presentation lifetime.
+
+Pass the source interpreter separately to showMessage. Track its root execution,
+map identity and map ID for presentation only; messageBusy must become false
+after an answer so that original event logic can proceed. Keep presentation
+stable through consecutive messages, choices, common-event children and scripted
+waits. Retain the acknowledged panel only until its source leaves the message
+wait, allowing the next page to replace it before rendering. Hide old text during
+explicit waits while preserving HUD suppression and backdrop. Release on root
+completion, reused interpreter setup, map/transfer changes, battle waits or death;
+explicitly clear held presentation on title/game-over transitions. Source-less
+UI prompts retain their existing immediate-close behavior. VR retains its wrist
+HUD and physical equipment presentation.
+
+Regression checks must reproduce map-logic-before-UI-input ordering, including
+frames with no logic tick. Assert real panel/HUD/minimap/backdrop/equipment and
+pointer state, original wait/choice effects, no opening-frame input reuse, and
+normal gameplay restoration. Use synthetic data and do not claim a physical
+headset or original-save playtest from these checks.
+
+## Original-game fidelity audit (0.2.19)
+
+Read-only checks covered 410 installed maps, common events, troop pages and the
+active original Ruby scripts. The script/formula inventory contained 4,344 calls,
+773 distinct snippets and 104 unsupported SteamUserStatsLite achievement calls.
+Every non-Steam snippet compiled in the adapter; compilation alone does not prove
+story compatibility. Steam achievements remain unsupported in the browser port.
+Keep all inspected original data, scripts and numeric reproductions outside Git
+and release packages. Shipped regressions use synthetic fixtures.
+
+Resource routing follows original Game_ActionResult/execute_damage: types 1/5
+take HP and 2/6 take MP; MP damage is capped by available MP. Drains return only
+the resource actually available, capped by the caster's maximum, and do not use
+recovery multipliers or recovery nullification. HP damage may still display
+overkill. Independent percentage effects are separate from formula criticals
+and drains. Use the same routing for player, enemy and reflected attacks.
+Normal enemy attack state effect 21/data 0 expands attacker attack-state traits,
+combines each state's rate and uses existing susceptibility/LUK/ignore rules.
+Keep the existing nonfatal hostile-state scaling and guard behavior as real-time
+adaptations. Verified original examples included Brain Sapper's MP Attack, Skull
+Shroom's Drain Mana, Star Spirit's Drain Life, Rotting Dog and Great Serpent.
+
+Co-op keeps existing 15/17-field enemy tuples. Optional top-level mp metadata
+and signed md hit changes carry resource loss/gain through existing peer/map
+authority and rate checks. Validate integer bounds, preserve zero and accept
+legacy messages without metadata. Fresh puppet snapshots must not rewind either
+a local MP loss or gain before its report reaches the host.
+
+Inventory gain/loss requests a map refresh, as original Game_Party.gain_item did;
+26 original item-conditioned event pages include key gates and Train Ticket.
+Include-equipped losses consume the bag first, then exactly the remaining
+shortage across party equipment. Equipment trades check ownership and slot type
+before moving anything. Player choices obey fixed/sealed slots and equip types;
+event changes can still clear fixed slots. Release newly invalid gear only after
+an actual equipment change, returning it to the bag unless force-changing.
+Active VXAce_SP1 repeats releases until stable; removing later gear can invalidate
+an earlier slot's permissions. Every productive pass removes at least one item.
+Previews simulate those releases without inventory changes. Loading existing
+gear is not a migration. Original Hunter's Attire seals the head slot.
+
+Original-save import keeps valid state_steps/state_turns and buffs/buff_turns.
+Convert remaining buff and leader timed-state turns at the existing six-second
+player/companion rate; persistent states receive no invented expiry. Retain
+legacy defaults when fields are absent and native-save serialization of clocks.
+
+Interpreter command 352 called a nonexistent UI method. It now opens the actual
+global save flow and waits through slot loading, overwrite confirmation, write,
+retry or cancel. Event Save closes back to the event; ordinary menu Save retains
+its return to the main menu. Stale map responses must not reopen departed panels.
+Common event 294's adjacent boss-skull choice blocks merge into one three-option
+menu under the original choice extension, so saving must not select a transfer.
+
+These checks verify specific rules, not a complete story or headset playthrough.
+Original turn order and the port's real-time action scheduler remain different.
+The previously reported stationary skeleton still needs live identification.
+
+## Area atmosphere and foliage (0.2.20)
+
+The user wants recognizable original-game atmosphere across locations and reports
+cut artwork, plain skies and cubic forest borders. Read-only metadata checks
+covered all 410 maps. Original map notes often specify tone, automatic weather
+and a map-fog image. Do not infer enclosure from weather or a nonempty parallax:
+342 maps have no parallax, including actual outdoor towns, forests and snow.
+Use verified tileset families and narrow source-tileset-guarded map exceptions;
+unrecognized and picture-only maps receive the neutral readable fallback.
+This is a shared presentation repair, not a claim of manually remodeling 410 maps.
+
+MapAtmosphere owns diffuse support, a restrained neutral local light and visibility
+distances. Original painted shadows should remain legible without a universal
+brown torch or black dungeon fog. Apply map tones through the natural-colour
+policy below once on entry; geometry
+rebuilds must retain scripted tone/weather changes. Missing tone/weather notes
+reset to neutral/none, like original automatic scripts 133/134. Title/game-over
+teardown clears generated weather/effects and the previous map's tone.
+
+WorldTone composes material shader hooks instead of adding framebuffer copies
+or per-eye passes. In the pinned Three r170 shaders, output color conversion
+precedes fog. Apply weighted grayscale, then signed RGB offsets after fog and
+before alpha premultiplication; retain alpha and handle linear output explicitly.
+Share uniforms, preserve original onBeforeCompile/cache keys, discover future
+dynamic meshes and retain materials only weakly. HUD, menus, pictures and overlays
+are excluded by render order/depth testing or an explicit worldTone opt-out.
+Background colors always derive from a raw clone rather than accumulating tint.
+These are RGSS-compatible color semantics, not proprietary GPU pixel equivalence.
+
+Automatic weather and interpreter command 236 use rain/storm/snow/none, power0-9
+and logic-frame interpolation. Weather is depth-tested world geometry: reusable
+buffers, ten particles per power level, no particle lights. Keep flakes small
+enough to avoid large white blocks near the eye. Cloud dimming composes once.
+The original RichFog, Sunshine_1/2 and fallen_leaves01-04 images supply map mist,
+light cards and twelve leaf styles; load them from the selected game at runtime.
+Generated effects have bounded draw/instance counts, fade near the head and
+dispose GPU resources on stop/transfer. Persist only original Game_System cue
+settings (rich fog, sunshine type/position and leaf type); Game_Temp particles
+never belong in saves. Import those four settings from original saves.
+Subtractive radial kurayami images are edge masks, not uniform fog density.
+
+Authored sky panoramas have priority. Outdoor profiles without a usable sky may
+borrow original cloud/star panoramas appropriate to their tone and region.
+Cloud fallbacks cover the horizon and poles with image detail; avoid a large
+plain lower band. Preserve the sky setting, cancellation tokens, fallback colors,
+cached horizon restoration on rebuild and single disposal of shared textures.
+The original moon-over-lake panorama is a sky despite its name containing 湖;
+only its water portion belongs on the ground plane. No original art is bundled.
+
+Connected tree artwork had been promoted to SOLID_MASS by component size,
+creating opaque backing, stretched sides and consumed canopy art. Verified
+foliage cells on do2 and the two snow sheets stay alpha-aware picture stacks
+even above impassable grass. Preserve pre-existing A3/A4 walls, forced solids,
+cliffs, rocks and buildings. Original MapGrid passage remains authoritative;
+removing an invented visual mass must not open blocked forest paths. Validate
+source-frame coverage, alpha silhouettes, unchanged architecture and collision
+with synthetic regression art. Private actual-asset checks remain outside Git.
+
+The do2 border cells128-167 also bake opaque RGB(8,9,22) into 2D empty space;
+cell137 is entirely this matte. The 3D presentation drawer makes only exact,
+edge-connected matte pixels transparent. Preserve enclosed equal-color pixels,
+dark bark and all unrelated sheets/cells. Cache the filtered per-tile canvas;
+unreadable pixel data conservatively uses the original image. Use untouched
+source pixels for joinsBelow/joinsBeside and logical assemblies: using masked
+alpha for connectivity split whole trees into independently placed fragments.
+The ordinary 2D TileDrawer remains unfiltered. Full-renderer QA confirmed attached
+canopies/trunks and removed panels after both geometry and source-matte fixes.
+
+Visual QA uses original map/asset rendering and disposable debug state, never
+player saves. Combat may be paused in a private review harness to keep cameras
+stationary; this is visual inspection, not a full playthrough or physical headset
+test. Temporary review pages and export controls must be removed before builds
+and kept out of production/release packages.
+
+## Water support, scenery grounding and picture cancel (0.2.21)
+
+The Carroll River report identified a boat and icy rock rendered at floor zero
+above the parallax water. Empty water cells must use the exact OPEN_LEVEL of
+the rendered water plane rather than a neighbor-height or zero fallback.
+Fully clear, impassable nonanimated source tiles over water are collision
+markers, not backed solid masses. Normalize their presentation only after
+confirming the source image loaded and every alpha is zero; low-alpha visible
+art and unavailable images must not qualify. Original grid passage is unchanged.
+
+Grounding must measure the pixels actually rendered at the foot: remove the
+same shadow removed by requestUpright and use its 0.4 alpha cutoff. An empty
+padded column beside an assembled stem is not a foot and cannot prevent the
+whole picture from dropping to its real support. Preserve elevated/arch/wall
+attachments and real counter support. Bound numeric horizontal key lookups in
+both map and event picture assembly; (width,y) aliases (0,y+1).
+
+Private full-sheet inspection supports selected-frame grounding for stationary
+object-sheet wagon/parasol frames, Other3 slots1-3 and Map1_a slots1/3/5.
+Other3 slot4 contains physical rocks/posts with animated water ripples; its
+per-direction bottom remains constant through all three animation patterns.
+Allow that animation while preserving normal-priority/no-through/no-movement
+guards. Reevaluate the profile at placement time so a same-graphic event page
+change cannot leave stale eligibility. Moving hands, flames, windows, nooses,
+wall altars, real flying actors and mounted pictures retain their existing rules.
+
+Private scans covered 410 original maps and all graphical event pages, using
+actual source canvases and entry reachability. The checks identify consistent
+water support, picture grouping and visible-foot geometry; they cannot prove
+every story-switch configuration or physical headset behavior. Review flags
+for wall/bridge attachments are not automatically confirmed floating bugs.
+Keep all original images/data, contact sheets and raw audit reports outside Git
+and releases. Shipped regressions use synthetic maps and artwork.
+
+Do not correct the Carroll ferry by stretching its stairs or raising water
+independently of its terrain. Verified VXTileE cells102/107 are complete bridge
+decks, not stairs. When such a deck is passable and not solid/pit, an underlying
+bank face must not split same-level floor components. The prior inferred drops
+sank connected islands from0 to-2 to-4 and placed water6.675m below the ferry
+landing. Correct deck classification joins the reachable islands at0, keeps the
+landing at0 and water at-.45tile (-.675m); all11 boats and the16 icy rocks/two
+posts then have their visible bottoms on that surface. Restrict to actual
+source-sheet identity/cells; rails, broken pieces, true stairs, inaccessible or
+blocked decks, walls and original passage flags retain their rules.
+
+The moon picture is owned by a separate original autorun, not by the action
+event's lifetime. Browser-native Escape pointer unlock may omit keydown, so
+queue the original RPG Maker B/code12 condition until the next map logic tick
+(G.frame epoch), surviving intervening render-only frames. Exclude scripted UI
+unlocks, busy UI, VR and focus loss; blur flushes the cue. Do not inject generic
+UI cancel, edit story switches directly or erase all pictures at event end.
+Private replay of the original Map9 telescope/autorun confirms picture1 is
+erased and switch393 clears while an unrelated persistent picture2 survives.
+The original Leave choice never displays the moon. Tests include async picture
+loading and ordinary keyboard/controller cancel behavior.
+
+## Horizon sky coverage and semantic viewer exit (0.2.22)
+
+Map9's authored Moon Lake panorama used the legacy cylinder plus a constant
+upper-hemisphere colour. Its 1280x720 aspect with two repeats ends the image at
+roughly41.46 degrees elevation, producing the reported large plain-blue circle.
+Keep the original horizon projection and add a small inward spherical cap with
+azimuthal UVs and a smooth overlap below the cylinder's top. Verified sky-only
+crops come from the selected game's original panoramas at runtime, never from
+bundled game images. Moon Lake's right30%/top256-of720 pixels contain stars
+without its moon, flare or water. Other audited named crops avoid churches,
+ships, mountains and sea. The Moon Surface's genuinely black empty space and
+unverified custom panoramas retain their original rules. Full-sky domes retain
+their existing projection. Resource cleanup must dispose both horizon/cap
+textures once; tests ray-check visible textured coverage through the zenith,
+preserve the original cylinder, and verify crops with synthetic marker pixels.
+
+The user's still-persistent moon was verified against the running .21 bundle;
+the missing path was Tab/M/N or left-Y opening the port menu/map. Those are
+different from original B and deliberately perform a scripted pointer unlock,
+so the earlier native-Escape bridge correctly did not run. Menu/map entry now
+asks PictureLayer to recognize an active autorun/parallel controller whose true
+B12 branch erases a currently visible named picture, then requests original B
+for the next map-logic epoch. The original controller performs its own switch
+and picture cleanup. Do not erase pictures directly or globally map menu keys
+to B. Ignore erased/inactive/action pages, Else/later unrelated erases, wrong
+button codes, unrelated picture IDs and hidden images. Keep persistent pictures
+and the newly opened port menu. Original Map9 data and real UI/Input were
+privately replayed for all four entry controls after12 viewing ticks; picture1
+and switch393 clear on the next tick while persistent picture2 survives.
+No original assets/data or private review controls enter the release.
+
+The original telescope autorun also repeats Show Picture every logic tick.
+Replacing its loaded image with null lets the asynchronous cache promise resolve
+only after that frame renders, causing flicker or invisibility at steady60Hz.
+Reuse ready artwork only for the same picture ID and name; reset the other
+Show Picture fields normally. Preserve identity checks for pending replacements
+and erasures. Regressions must render synchronously after each repeated show,
+and confirm a delayed image cannot resurrect a viewer cancelled from the menu.
+
+## Steam achievements from earned events (0.2.23)
+
+The104 distinct installed achievement snippets at140 event locations use an
+exact three-line SteamUserStatsLite singleton/set/update block. They previously
+failed Ruby compilation. Interpreter355 recognizes only that block, preserving
+the exact case, whitespace and UTF8 of its quoted API ID; general Ruby, formulas
+and previews do not gain a Steam helper. Record only an actually executing355/655
+block in an owned local game. Deny dev/map/save/timer launches, phantom/replay,
+spectator and developer-world sessions. Keep pending earned IDs in
+GameState.system.steamAchievements (bounded256, deduplicated) so ordinary mod
+saves retain them. Native confirmation alone removes a request. Capture its save
+identity across asynchronous requests; loading another save must not redirect an
+old response. Do not infer historical awards from boss switches or inventory.
+
+The launcher creates app/steam-session.json for its current session and serves
+a token-authenticated endpoint bound exclusively to127.0.0.1 on an ephemeral
+port. Accept only the selected game's localhost/127.0.0.1 origin and exact bridge
+Host; do not enable arbitrary CORS or bind to LAN. Limit concurrent requests,
+header/body sizes and total reading time. Delete only this launcher's own config
+on close. Do not block the UI on an in-flight Steam callback. A terminal native
+failure disposes the worker so a later attempt can reconnect after Steam starts.
+Keep credentials and connection details out of player screens and release files.
+
+SteamAchievements.exe is a separately source-built x86 child because the owned
+game's steam_api.dll is32-bit. Load that DLL by its full selected-game path, use
+only process-local app context3855540, verify Steam login/app/ownership/account,
+and shut down on launcher exit or stdin EOF. Never ship/copy the game DLL or
+create steam_appid.txt. The native API exposes only status and earned-name batches,
+with no clear/reset/stat editing. Enumerate published achievement names at runtime
+and reject any unknown name before a mutation. The current installed schema has
+102 achievements; script IDs absent from that schema cannot award.
+
+Manual dispatch waits for matching successful stats callbacks. On Windows,
+UserStatsReceived_t is24bytes but its packed CSteamID begins at offset12; a
+sequential managed ulong at16 silently rejects the correct account. Preserve the
+raw-byte ABI regression. SetAchievement/StoreStats returning true does not prove
+server persistence. Keep dirty IDs separate from initial downloaded/confirmed
+achievements; acknowledge only a matching successful UserStatsStored_t callback.
+Do not overlap stores or mistake a late callback for a newer batch. Preserve
+pending work on rejection, timeout or disconnection, with bounded quiet retries.
+
+Tests use fake native APIs and synthetic events, including Unicode IDs, offline
+recovery, failed stores, late callbacks, save identity, lifecycle and HTTP origin
+authorization. The private read-only probe against the installed game confirmed
+ready/102 names, including a Unicode identifier; a real process/HTTP bridge test
+and original server metadata routing also passed. No real achievement was set or
+stored during verification. Keep all original scripts/maps and private reports
+outside Git and release packages. CI builds/tests/promotes both launcher binaries;
+package checks require the x86 worker and exclude Steam DLLs/session credentials.
+
+## Battle tone lifetime (0.2.23)
+
+The clock-tower Troop187 turns the view white on turn1+20n and resets it on
+turn10+20n. Winning early left the global ScreenFx tone permanently white. VX Ace
+uses separate Game_Screen instances for map and troop, so bind interpreter223
+tone changes to their active battle (including common-event children), retain
+independent map tones, and drop battle channels on finish/reset. Stale troop
+continuations cannot repaint a map. Keep the authored blind/reset timing while
+the battle remains active; do not globally erase ordinary flashes or pictures.
+Private original-page replay reproduced white after victory before the fix and
+normal tone afterward. Synthetic regressions cover early victory, scheduled
+fade, common children, stale continuations, overlap and PC/VR owner cleanup.
+
+## University wide stairs and original falls (0.2.23)
+
+Map155 uses three-wide evilcastle_A5 stair flights. The fall-height solver's
+width>=3 flat-room rule merged those stairs with both landings, carrying the
+gallery's height into the hall and leaving an upright wall across the route.
+Original seven-row fall routes establish the gallery's height more reliably
+than the decorative wall-row count. Only this map supplies fallStairs rectangles
+with verified seven-tile rises. Exclude those cells from flat-room merging and
+propagate their rise between placed areas or from their single known landing.
+Do not globally reinterpret wide corridors or change original passage flags.
+
+The real original build retains all13 fall routes and78 shaft cells: hall31,23
+is0, gallery31,12 is7, the central eight-row flight rises smoothly0to7, the upper
+flight rises7to14, and the small side exit rises7to10. Original blocked31,3 stays
+solid; existing arrival/door logic retains authority. Wall caps/tops are local
+Map155 metadata. Synthetic regressions use the actual command analyzer and
+buildMapView, check wall triangles and both landings, and walk uphill/downhill
+with real Player.update/resolve and GameMap.playerEdgePassable. They preserve
+the original side-wall block and do not trigger falls on the ramp. Rendered
+review checked the approach, halfway point and gallery. Private source maps and
+art stay outside Git; dev previews disable saves and achievement submissions.
+
+## Desktop / headset handoff (0.2.24)
+
+The pinned Three r170 WebXRManager overwrites the shared application camera's
+projection, FOV and zoom with headset values. Its native-session end listener
+restores the entry framebuffer size/DPR but leaves that lens in place. Restore
+the saved desktop lens and projection inverse with the CURRENT window size/DPR
+only after manager sessionend; raw XRSession end runs before Three's cleanup.
+Use the first valid XR viewer pose to preserve world heading and authoritative
+current-map XZ. No delayed recenter may run after exit or capture an old map.
+On exit retain physical XZ/look, normalize rig yaw and camera roll, and preserve
+floor/jump/fall state. Title artwork uses entry-head coordinates even when an
+old G.map remains retained after returning to title.
+
+Input boundaries flush stale desktop and controller actions and require release
+of initially held XR controls. Desktop soft look resumes only when it was wanted,
+the page is focused and gameplay owns input. Menus/dialogue/name and number edits
+retain state and repaint before their first render in the new mode. Without a
+left controller, VR uses the small head-relative HUD until a wrist is available.
+Failed/late session grants, rejected exits and uncancellable setSession promises
+must not orphan a live session or clobber a newer attempt. Healthy exits do not
+restart the browser XR process; actual failed granted starts retain recovery.
+
+Spectator.prepare schedules the second WebGL context, compileAsync and hidden
+geometry/texture warmup after PC map presentation. sessionstart and the first
+unprepared XR render do not synchronously create/compile that monitor renderer.
+Keep its context and uploaded resources across sessions, guard superseded map
+preparations and restore frustum-culling flags after the hidden upload draw.
+
+Regressions execute the real pinned WebXRManager/camera lifecycle with synthetic
+platform frames and test input/UI ownership separately. Private rendered QA uses
+original maps with simulated headset lens changes; no physical Quest timing or
+headset playthrough was measured. Keep review controls/data outside releases.
+
+## Terrain continuity and source floor semantics (0.2.24)
+
+Private read-only height/edge analysis covers all410 original maps with the
+direct-transfer arrival union from maps and CommonEvents. A height difference alone is
+not a defect: ladders, side-facing stairs, authored terraces and genuine fall
+endpoints must retain their rules. Original images/data and generated audit
+reports remain outside Git/releases; shipped regressions use synthetic layouts.
+
+Hanover Map161's winding passage widens enough to become artificial flat rooms
+in the fall solver. It compressed an11-tile endpoint rise into one row. Only
+excessive inferred, unprofiled, non-ladder ramps can extend through unanchored
+degree-two passage groups. Bound the chain, require north/south endpoint rooms,
+reject side exits/protected cells/overlap, and distribute the same endpoint rise
+over its complete corridor. Preserve original fall rooms, shafts, explicit
+profiles, walls and passage flags. The real passage now spans12rows with rise
+11/12 per row; its original10-row cliff fall still drops10tiles.
+
+Stomach Map42's A4 source sheet 食肉園 (3) uses autotile kind123 as a passable
+checkerboard floor. That exact source/kind is excluded from wall-side inference
+per layer; a different lower wall layer must still count. No other source slot,
+kind or collision flag changes. The private real-map passable seam count drops
+from18 to0. The graveyard Map313 metal stair has a transfer door rather than an
+upper flat room; a bounded profile joins its original0/-2 endpoints through the
+flat middle landing at-1. Real-map seams drop3to0; adjacent walls remain solid.
+
+Unresolved narrow fall-map pockets inherit a level only when every placed,
+originally two-way-walkable boundary agrees on one flat height. Mixed/sloping,
+protected, blocked and unknown-room boundaries remain untouched. This completes
+Hanover's eight sideways grass/hay seams, including the10to0 default-height
+error at30,6to31,6, without altering its15 established fall edges or132 shaft cells.
+
+Continued ladder/fall runs join the neighboring facing surface, not a sloping
+cell's midpoint. Original Map56's0.5-tile ladder gap is gone; synthetic tests
+cover both endpoints and retain a genuine fall. Chaos Maps217/282 explicitly
+opt into passageLevels so blocked painted roof/lip contacts cannot merge separate
+floors. Only those opted-in maps prefer a fully two-way-walkable climb over a
+contradictory decorative wall between the same components; one blocked rung
+cannot qualify. Original passage/solid/pit/empty classifications are unchanged.
+Map217's wooden staircase and Map282's3to0 ladder each lose their one bad seam.
+
+The final common-transfer-aware410-map comparison has0 errors:92 candidate
+edges become60, exactly32 removed, with no new or increased gaps. Two false
+Hanover single-row steep ramps also disappear. Remaining candidate edges were
+checked against source art: stair/ladder side borders or authored side-facing
+steps; Winterbell's steep front flights have continuous shared endpoints. The
+Map309 roof flag is unreachable decorative art from both original arrivals.
+This is a source/geometry and movement audit, not every story-switch configuration
+or a physical headset playthrough. Preserve that distinction in release claims.
+
+## Natural environmental colours (0.2.25)
+
+The user now explicitly prefers natural source-art colours across every region,
+including green forest grass rather than the original heavy red/desaturated 2D
+screen grade. This supersedes the earlier instruction to reproduce complete
+automatic environmental tones. Do not recolour the original game files or turn
+authored autumn leaves, fire, blood or fantasy artwork into generic green art.
+
+The red forest was caused by the original Map161/44/162 note
+(34,-34,-34,170): weighted grayscale removes two thirds of source saturation,
+then channel offsets overpower the remaining green. Neutral lights and the
+pinned sRGB rendering path were verified; do not add compensating lamp tints,
+gamma changes or a second tone pass.
+
+ambientMapTone bounds environmental RGB spread to12, gray to12, and the common
+negative brightness to-24; positive common brightness is discarded. Preserve a
+small regional hint and darker nights without washing out source textures.
+MapAtmosphere adapts notes once on entry. Interpreter223 adapts the actual
+CommonEvent290 random weather/BGM list and exact restores of the current raw
+map-note tone. Troop-owned commands always retain original strength and lifetime.
+Unrelated scripted flashes, fades, blackouts and weather rules remain exact.
+Geometry rebuilds retain current scripted state.
+
+Adapt before the existing ScreenFx command. Its stored/networked tone is already
+display-ready; co-op must not normalize it again. No new screen channels, save
+fields or protocol metadata were introduced. WorldTone keeps its exact low-level
+math and original overlay exclusions.
+
+Private read-only post-policy audit reparsed all410 original maps:144 tones
+adapted,266 unchanged; all235 neutral maps and all29 snow maps unchanged.
+All4 CE290 candidates adapt. Across414 map/common-event tones,0 bounds violations
+and0 green-palette failures. Actual Map161 grass RGB(37,121,67) went from
+old(106,66,48) to new(36,104,53) in the original-source swatch calculation.
+Night surfaces retain a restrained cool cue. Raw reports/art stay outside Git.
+
+Browser visual QA used original Map161 before/after at the same camera plus
+Spore Forest38, Fuming Forest126, Snowy Road331 and night Town5. Green ground,
+source leaf colours, mushroom colours, neutral snow and readable night buildings
+were inspected; captures are private ignored previews. Actors were paused and
+saves isolated. This is not a physical headset or complete story playthrough.
+555 JavaScript regressions, ESLint, production build, Ruff and8 packaging tests
+passed locally. New regressions cover palette preservation, malformed bounds,
+real map/common-event/child execution, wait duration, cinematic map reset,
+battle ownership and real co-op screen transport.
+
+## Public project presentation
+
+The user requested the original fan-mod notice, free-distribution/streaming terms
+and original gameplay video on the main README, followed by an upstream PR with
+sample screenshots. Keep original-author credit and the actual LICENSE intact;
+the original video must not be presented as footage of every fork improvement.
+The selected, labelled application renders in docs/screenshots are authorized
+for public documentation. They are excluded by the release allowlist.
+Do not publish private audit reports, review controls, original asset files,
+game data or saves. Screenshot character values are test scene state, not proof
+of normal progression. Keep detailed developer change inventories in PRs or this
+file; the main README remains player-focused.
+
+### Correct upstream comparison
+
+The user challenged the red/green pair and explicitly requested real upstream
+versus fork images, a real source diff, and a PR edit. That pair rendered the
+fork twice while toggling raw/adapted map tone. Upstream d39c2af actually resets
+screen tone to zero on map entry; do not present the fork's raw-tone render as
+an upstream baseline. The misleading pair and older standalone HUD/menu samples
+were replaced by six actual paired captures; one labelled old launcher sample
+remains. No runtime changes accompany this correction.
+
+The private runner serves all60 hash-verified original ZIP app files unmodified
+and the actual production fork bundle in separate localhost origins, sharing
+the same isolated game-data backend. It adds identical private HTML capture
+controls only: pause actor logic, teleport to matching tiles, set yaw0/pitch.12,
+open/close the normal menu, capture. Rendering/material/light/tone APIs are not
+overridden. Both screenshots are1280x720 and have equal local camera positions
+and rotations; terrain determines the rig's world height independently.
+Pairs cover Map161 tile26,50 and Map101 tile22,23 (HUD/main menu).
+All upstream files remained byte-identical after capture.
+
+The public runtime diff compares literal upstream ZIP JS entries against fork
+786bdba, with moved filenames matched and line endings normalized. It includes
+actual import-path changes and35 new modules. The separate summary ignores
+relative JS import moves:48 original modules retained,20 unchanged,28 modified,
+0 missing, +2443/-620 lines in modified originals. Preserve attribution for
+the inherited20 unchanged runtime modules. Diff review artifacts contain mod
+source only; original game data, raw audit inputs and capture controls stay
+private. Fork runtime bundle SHA256 for these captures:
+b890a0e41b35a72792c872c4d1cc0a465fa038ab21e1628cdcd83526b2e21941.
+
+### Saved-frame verification
+
+The first comparison upload contained five identical black PNGs despite correct
+live browser previews. The private capture helper awaited a metadata POST after
+rendering and before reading the WebGL canvas; its non-preserved drawing buffer
+had already cleared. Snapshot the canvas synchronously immediately after the
+render, before any await/network work, then encode/upload that frozen snapshot.
+This changes capture timing only, not the renderer or source comparisons.
+Inspect every saved PNG itself and verify non-uniform pixels and distinct hashes
+before publishing. Metadata, valid PNG dimensions, HTTP200 and matching remote
+blob hashes do not establish that the visible image contains the rendered frame.
+The PR comparisons should be visible directly, with links to open each PNG.
+
+### Portrait context and supplied launcher capture
+
+The user asked why the player portrait is absent and supplied a launcher image
+for the PR. Read-only original Actors.rvdata2 inspection shows actor1 has empty
+face_name, character_name !Flame and class13. Direct map captures call newGame
+then jump past opening character setup, retaining this placeholder. The HUD and
+classic menu use the actual actor's faceName/faceIndex; no unrelated actor face
+should be inserted to decorate those comparisons. Label this test-state limit
+in the gallery and PR. Existing initialized gameplay portraits are a separate
+case; these captures do not verify them.
+
+The user-provided launcher screenshot is authorized for public documentation.
+It replaces the older standalone0.2.11 launcher sample and shows installed
+0.2.23 with a0.2.25 update available. Keep that version/update caption accurate.
+Copy its original PNG without visual edits, verify the published bytes, and
+include it as a standalone community screenshot in the upstream PR.
+
+## Original unnamed enemy labels (0.2.26)
+
+The user reported "Enemy157" above the worm-like battler. Read-only installed
+Enemies.rvdata2 verification shows157 has empty name/note and battler_name113.
+The original Game_Enemy and enemy-selection window use the database name
+directly; the custom HP/status script does not supply another name. No name
+override exists for this creature. Preserve its intentional blank name; do not
+infer a species from the picture, asset identifier, editor troop label or ID.
+
+ActionEnemy.drawBar now omits the debug-ID fallback and the unused title
+background when stripEscapes(name).trim() is empty. Health, groggy, status icons,
+visibility rules and existing texture lifetimes are unchanged. Keep the same
+canvas/texture size to avoid the earlier immutable GPU-storage resize bug.
+Named forms retain their actual names; transforming to/from unnamed forms must
+clear or restore the title through the existing cache/build lifecycle.
+The unused four-language Enemy{id} label entry was removed.
+
+Regressions execute the real enemy build/nameplate/transform path and verify
+half-health gauge width, status labels, formatting-only blank names, texture
+reuse and named-to-unnamed-to-named transitions. Use synthetic data in shipped
+tests; original databases and scripts stay in private read-only audit caches.
+
+Local verification passed557 JavaScript tests, ESLint, Ruff, production build
+and8 packaging tests. Private rendered QA placed the real installed enemy157
+in an isolated test scene at75% HP with original Sleep/Poison icons. Its title
+is absent while both gauges/effects remain visible. The saved PNG was opened
+and inspected; it is not a claim that this creature normally spawns in that room.
+
+The previous0.2.26 source comparison used runtime commit5788b62:
+48 original modules,20 unchanged after import moves,28 modified,35 new,0 missing;
+2542 added/646 removed lines in modified originals after import normalization.
+Existing six comparison images remain explicitly labelled0.2.25.
+
+## Repeated event choices and picture ownership (0.2.26)
+
+The reported Victoria meter is driven by original Troop213 and common events
+182/183/301. Its variable86 starts at0; authored actions add1 or2 and select
+discrete picture stages below5, from5 through9, and at10 or above. It is not a
+mouse-tapping meter. Preserve the original choices, conditions and numeric gates;
+do not automatically award relationship progress or add an invented input loop.
+
+The port retained merged-choice results after using them. Jump to Label could
+therefore revisit command102 and silently reuse an old answer. The first choice
+block now discards its already-applied result; each later merged block consumes
+its result once. New visits rebuild visible/enabled rows and ask the player again.
+
+Original Game_Interpreter routes picture commands to Game_Troop.screen in battle
+and Game_Map.screen otherwise. Game_Troop.clear clears its screen; Troop213 has
+no Erase Picture commands and relies on that ownership. The port's single global
+picture map leaked the meter into exploration. Battle buckets now isolate picture
+IDs, including child common events, and are released on battle end or combat
+reset. Map pictures survive. Stale commands and asynchronous image loads cannot
+restore an ended scope. Preserve the existing stage-play routing for its owner.
+
+Co-op's current picture messages have only map picture IDs, without a battle
+namespace. Do not pass battle-scoped show/move/erase into that map transport:
+it would read or delete an unrelated map picture with the same number. Ordinary
+map picture transport stays unchanged. Bind enemy skill common events to their
+specific battle so overlapping or later fights cannot steal a delayed command.
+
+Use neutral synthetic text/images and command sequences for public regressions.
+Keep original event data and scene artwork in private read-only caches; do not
+publish them or include explicit scene playback in visual QA. Tests cover repeat
+choices, merged/cancel/visibility mapping, staged numeric progress, overlapping
+picture IDs, delayed image loads, child ownership and combat cleanup.
+
+The combined0.2.26 source passes585 JavaScript regressions, ESLint, Ruff,
+production build,8 packaging tests and7 Python protocol tests locally. Choice
+regressions reproduced6 failures before the fix; scope regressions also caught
+reset-before-first-picture and completed-but-retained battle owners. Validation
+uses original numeric control-flow inspection plus neutral fixtures, not a full
+scene or physical-headset playthrough.
+
+## Main-project presentation
+
+At the user's request, the contribution drops self-referential community/fork
+notices from README, launcher, installer and player guides. The visible product
+name is BLACK SOULS II VR. The original Lobewarms credit, LICENSE, ownership
+requirements and free-distribution rules remain. Historical comparison captions
+and developer provenance remain accurate; do not relabel old screenshots as new
+renders or remove the original license's rules for distributing modified copies.
+
+Player release notes are RELEASE_NOTES.txt and portable outputs are
+BLACKSOULS_VR_<version>.zip. Packaging, CI, release publishing and installer
+upgrade cleanup must agree on those names. Retain the installer AppId and save
+paths so existing installations upgrade correctly; remove only the obsolete
+FORK_NOTICE.txt in addition to the two earlier superseded documents. Repository
+identity for live updates still comes from the build repository, and README
+release/issue links are relative so the same sources work in the main repository.
+
+## Installed-game speaker and area names (0.2.27)
+
+The reported Map276 nameplate was the Japanese direct override for Ghost
+Receptionist. The installed English game's name-window script translates it in
+show_name_window, after resolving the face/actor name. The port previously read
+only NAME_LIST and returned NW名前指定 overrides before those translations.
+
+Read static literal name aliases from that original method without evaluating
+Ruby. Keep aliases separate from the face table, preserve script order and
+if/elsif precedence, skip comments/interpolation/dynamic assignments, and support
+single/double quotes and literal OR branches. The original name-window method
+contains167 branches with169 source keys; independent private comparison found
+zero missing, extra or incorrect aliases, with all95 face-table entries retained.
+
+UI resolves literal overrides and face labels once when the message opens, so
+desktop/VR reflow cannot consume or erase a pending override twice. Apply aliases
+before the bounded non-Actor face-table fallback; five actual collision keys
+require that priority. The fallback covers the two remaining Polar Bear overrides.
+Preserve dynamic actor/custom names and authored garbled-name variants. Unknown
+labels retain their installed spelling; this restores the selected game's own
+localization rather than translating its entire story into the add-on UI language.
+No original translation table, database or scene artwork is shipped in tests.
+
+Co-op recognizes translated names only for speakers already allowlisted by the
+guest's installed data; legacy source labels use the same local resolver. Preserve
+validated player names, host-text limits and existing event-reference validation.
+
+Player-facing current/loading status, original-save rows, co-op member locations
+and exit analysis now use destinationName instead of mapName's editor labels.
+Map276's actual display_name is Mystery Maze. Original saves preload their names
+without mutating imported contents. Async co-op updates require the same active
+session, visible list and item-array identity before changing labels. Internal
+mapName remains available for developer tools; do not show editor suffixes/IDs
+in the normal current-area status.
+
+Local verification passed602 JavaScript regressions, ESLint, Ruff, production
+build and8 packaging tests. The real UI speaker resolver also matched every169
+installed alias and the Polar Bear fallback in a private metadata-only audit.
+This does not claim a full story or physical-headset playthrough.
+
+The public literal runtime comparison now uses commit78b691e (0.2.27):48 original
+modules retained,17 unchanged after import moves,31 modified,35 new,0 missing;
+2708 added/671 removed lines in modified originals after import normalization.
+The six actual comparison images remain explicitly labelled0.2.25.
+
+
+## Original material exchanges (0.2.28)
+
+White Crow's original Map152/event35 enables EasyCompose, opens its purchase-only
+shop, and resets that switch when the shop closes. Its 21 offers have zero money
+prices and item-material requirements. The port previously ignored those notes,
+so it displayed zero Souls and granted purchases without paying the material.
+
+Read the original EasyCompose module's SID, Word, Name, Title and NoDraw literals
+without executing Ruby. Gate material prices with that authored switch; do not
+hardcode the NPC, map, switch or Candy ID into production code. Preserve first
+matching tag per note line and last assignment for a repeated kind/ID. Support
+item, weapon and armor materials, omitted count1 and both colon forms; unknown
+kinds or absent database entries are skipped like the original. Malformed
+nonpositive or unsafe material counts block purchases rather than granting goods.
+
+A private read-only audit using real readScripts and exchangeRequirements matched
+all22 tagged database objects and all21 White Crow offers, with zero cost errors.
+The installed exchange uses Candy (item49/icon340): Rabbit Key5, Ore Slab10,
+Mysterious Shard5 and Goddess' Blood1. No original databases, script bodies,
+dialogue, artwork or raw audit reports are tracked or distributed.
+
+Show actual material names/icons, owned balance, per-unit and quantity totals.
+Respect NoDraw for all zero-money labels while retaining positive money costs.
+Clamp purchases by selected inventory capacity, money and every material. Keep
+the existing port's BAG_MAX; the former 99-per-transaction limit was removed in
+0.2.37 at the user's request. Do not alter old saves.
+Revalidate a positive integer quantity against all current balances before any
+payment or reward. Deduct materials once, then money, then grant purchased goods.
+
+The original storage script aliases Game_Party.item_container, item_number and
+max_item_number while its shop mode is active. Both material payment and received
+goods therefore use storage in that mode; ordinary mode uses the bag. Equipped
+materials are excluded. Respect storage sealing and limits, reset mode on shop
+close, and refresh dependent events after stored transactions. Selling retains
+its existing half-price money behavior and does not refund exchange materials.
+
+Public regressions use neutral synthetic records and the real UI/GameState/
+Interpreter paths for switch activation, scene wait/cancel, quantity selection,
+insufficient materials despite ample money, stored materials, mixed material kinds,
+combined money/material payment, stale confirmations and ordinary-shop behavior.
+
+Local verification passed648 JavaScript regressions, ESLint, Ruff, production
+build,8 packaging tests and7 Python protocol tests. These checks verify the
+exchange logic and metadata; they do not claim a complete story or physical
+headset playthrough. Existing inventory is not retroactively edited.
+
+The public literal runtime comparison now uses commit74121ea (0.2.28):48 original
+modules retained,17 unchanged after import moves,31 modified,36 new,0 missing;
+2800 added/685 removed lines in modified originals after import normalization.
+The six actual comparison images remain explicitly labelled0.2.25.
+
+
+## Weapon and skill execution audit (0.2.29)
+
+The user requested another complete effect audit after the material-exchange fix.
+Private read-only inventories covered500 weapons,260 armors,999 skills,252
+states,200 actors and70 classes. The note census contains32 categories, including
+non-angle turn-free markers; installed skill effects use10 ordinary effect codes.
+An effect tag's presence in a parser is not evidence its real action path uses it.
+Inspect player, enemy, companion, self/support and reflection routes separately.
+
+All640 damage-bearing skills were evaluated across eight isolated profiles:
+full resources, low caster HP, low target HP, both at1HP, unequal stats, low MP,
+state-dependent branches and scaled variables.5120 raw evaluator calls,5120
+public evalFormula calls and5120 computeDamage calls produced no warnings,
+exceptions, undefined/nonfinite raw values or invalid damage. This establishes
+formula execution for those profiles; it does not prove every effect/event branch
+or a full story/headset playthrough. Original formulas, scripts, databases, saves
+and private numeric reports must stay outside Git and releases.
+
+### Repaired mechanisms
+
+- Script160's Grit rule had no runtime handler. Read moduleNana's literal
+  STATE_KONJO/KONJO_* settings into scripts.guts, without hardcoded state59.
+  Apply the configured lethal-hit floor and threshold in shared resource damage;
+  MODE true allows a later hit to kill at the floor. MP damage, direct Death
+  effects and percentage recovery effects are separate. Preserve drain accounting.
+- Friendly/self skills now execute formula HP/MP damage as well as recovery,
+  all authored repeats, correct caster MAT/recipient REC/item-user PHA and effect
+  array order. Actual skill145 now loses300HP for100MP; skill803 repeats its
+  recovery three times. Enemy formula recovery (e.g.15) and MP effect12 work.
+- Scope8 support reaches the current living battle party, including companions.
+  Ally support delegates to the same effect path; companion buff clocks tick once
+  per actor when game logic runs and remain still while paused.
+- Legitimate7/9-repeat skills were truncated by5/6/8-hit caps. Use bounded
+  usableRepeats and randomTargetCount consistently across thrown items, projectiles,
+  bursts, volleys, follow-ups and enemy attack plans. Valid counts remain intact;
+  malformed counts are bounded64. Native normal single-target attacks multiply
+  item repeats by1+attack-count traits; all/random scopes receive no extra targets
+  from that trait. Machine gun plus the extra-attack ring legitimately reaches14;
+  repeated replacement attacks plus the ring reach6/9. Costs are paid per action.
+- Enemy custom HP conversion now heals its source after a real hit. User TP gain
+  uses TCR per landed target/repeat (309 installed skills have tp_gain; no installed
+  skills cost TP). Misses and perfect guards grant neither. Recovery inversion
+  does not alter native resource drains or direct custom conversion.
+- Debuffs include original user LUK, target susceptibility and script185's
+  ignore-luck/ignore-rate/forced tags. Preserve the port's existing0.6 incoming
+  nonfatal status/debuff factor as an explicit real-time adaptation.
+- Direct PC/VR Dodge respects the original Dodge skill seal. Required weapon
+  types use the original OR rule, including dual wield, and are rechecked when
+  a readied/armed skill fires after equipment changes. Newly granted feature14
+  immunity erases already present states on refresh without recursive removeState
+  calls or accidentally reviving Death at1HP. Feature13 resistance is distinct.
+- Companion hits use shared HP/MP damage/drains and Grit, apply status-only attacks,
+  normal-attack state traits, Death/resistance, buff effects, resource conversion,
+  hit/evasion, CRI/CEV and MRF. Companion timers do not modify leader timers.
+- Native Guard feature62/data1 reduces positive formula damage by2*GRD unless
+  script170's ignore-guard rule succeeds. Do not stack it with the existing manual
+  enemy guard0.3, player shield or companion timed-guard adapters. Healing and
+  independent percentage effects remain outside formula Guard.
+- Reflection delegates complete effects once to the original caster, including
+  hit/evasion, healing reversal, state removal and buffs. Keep battle death-owner
+  identity, auto-revival, resources and no recursive invocation. Script109 SP1
+  changes opposite? while magic_reflection is true: the reflected caster remains
+  opposed for state susceptibility/LUK even though caster and target are the same.
+  Do not incorrectly replace those original checks with friendly-state chances.
+- Common-event effect44 belongs to an action before target hit/evasion, once per
+  use. Move it out of per-hit handlers; many-target/long-repeat misses still run
+  one global event. Separate same-frame uses must not be suppressed by a generic
+  timestamp debounce. Preserve explicit battle ownership and map reservations.
+
+### Verification limits
+
+Use neutral synthetic fixtures for public regressions. Private reproductions use
+installed numeric metadata only and do not access player saves. Native turn order,
+manual gestures, timed recovery, free-turn markers and existing hostile-state
+scaling remain real-time adaptations; do not claim turn-for-turn equivalence.
+The new checks cover identified execution gaps and every database/formula record
+in the bounded audits. They do not establish that every possible equipment,
+resistance, story event and multiplayer combination was manually played.
+
+Target skill cancellation (script196) is evaluated after invocation selection;
+reflection/counter selection precedes item_apply in the original. Cancel the
+recipient's skill effects without refunding action costs or suppressing global
+events. Items with the same numeric ID are unaffected. Actual installed
+cancellation IDs are friendly skills; hostile-path tests establish generic
+source-rule support rather than claiming an installed offensive example.
+
+The final reachability audit found skills33/34 learned by the initial actor's
+class and skill34 in enemy292's actions. Revival scopes9/10 must select dead
+current-party/troop members (first/all), never heal a living caster by default.
+Do not spend player skill costs when there is no eligible recipient. Reuse the
+existing reviveEnemy lifecycle and the same troop entry; rewards are finalized
+once per unique defeated entry at battle end. Scope9/10 selection is separate
+from direct automatic revival, whose source break, immunity and timer handling
+also apply to companions. New logic never edits old player saves retroactively.
+
+Final local verification passed753 JavaScript regressions (105 added for this
+release), ESLint, Ruff, the production build,8 packaging tests and7 Python
+protocol tests. Targeted suites reproduce the repaired paths with synthetic
+records, including real action/Interpreter/companion lifecycle and battle-end
+reward handling. Preserve the audited distinction between passing formula
+profiles, passing mechanic regressions, and unperformed full story/headset runs.
+
+The public literal runtime comparison now uses commit9a69f17 (0.2.29):48 original
+modules retained,16 unchanged after import moves,32 modified,37 new,0 missing;
+3203 added/808 removed lines in modified originals after import normalization.
+The six actual comparison images remain explicitly labelled0.2.25.
+
+## Weapon-triggered Break lifecycle (0.2.30)
+
+King Club's normal-attack state 7 trait reached addEnemyState, which could put an
+acting enemy into recover for 0.4 seconds. enemyRestricted deliberately excludes
+Break states 7/8 because their AI restriction belongs to the stagger lifecycle.
+Consequently the enemy could chase/attack while its Hard Break state was still
+active. The normal-attack trait path now calls breakEnemy for states 7/8 after the
+same stateEffectChance roll. This preserves native susceptibility, immunity and
+LUK, drops the current action marker, enters stagger for 3.2/2.2 seconds, and lets
+the existing AI clear Break at the end. Other attack states retain addEnemyState.
+Do not replace the native proc roll with the manual weapon-break roll or change
+the existing explicit-Break damage adapters as part of this lifecycle repair.
+
+Five synthetic regressions exercise the actual shared player/companion path,
+marker cleanup and enemy AI expiry, accuracy and native chance boundaries,
+Stun 60%/susceptibility/immunity, and the granted critical-buff skill. The original
+Hard Break state itself makes Stun immune, so a successful Hard Break suppresses
+the separate Stun effect on that hit. Combat Rush is an active battle-only skill,
+costs 4 MP, and grants 30 percentage points CRI; equipping the club alone does not
+apply its buff. Existing real-time buff/cooldown timing remains unchanged.
+Original database records and the independent pre-fix reproduction remain in
+private tooling; public fixtures contain neutral synthetic records. These are
+mechanic regressions, not a claim of physical-headset or full-story playtesting.
+
+Local verification passed 758 JavaScript regressions, ESLint, Ruff, the production
+build, 8 packaging tests and 7 Python protocol tests.
+
+The literal upstream runtime comparison now uses commit 39953da (0.2.30):
+48 original modules retained, 16 unchanged after import moves, 32 modified,
+37 new, 0 missing; 3,206 added/808 removed lines in modified originals after
+import normalization. Actual comparison images remain labelled 0.2.25.
+
+## Authored creature battlebacks and enemy artwork (0.2.31)
+
+God's Odd Fish has an intentionally empty battler_name. All 16 directly authored
+encounters select its original transparent creature artwork with command 283
+before starting the troop. The port discarded that command outside the theater
+and fabricated a red plane for any null texture. Original Cache.load_bitmap
+returns a transparent empty_bitmap for empty filenames; no replacement image is
+implied. Bellman, Infinite Food and a Winterbell phase use the same backdrop-art
+mechanism. Reuse the installed files; never ship the source images or guess art
+from translated creature names.
+
+GameMap retains both current battleback layers and resets them to the new map's
+specified defaults on load. An event root captures its own change for the next
+battle; the battle stores a separate snapshot. Troop/common-event changes address
+their actual live owner through battleOf. Ended owners cannot alter another fight.
+The original engine has one fight and map-wide battleback settings; this port can
+run several fights. As an explicit concurrency adaptation, live troop changes
+stay on their battle and do not seed future unrelated encounters. Independent
+map events prepare future artwork without replacing an active theater backdrop.
+A troop's sole initially visible member is eligible for a backdrop body, including
+a later blank transformation; subsequent hidden-minion appearances do not change
+that original eligibility. Two-body mount encounters remain on their existing
+shared-art path. Only blank battlers may reuse a nonempty authored image with at
+least 1% fully transparent pixels and some alpha above the existing alpha-test
+threshold. Opaque scenery and empty images are never creature bodies. Both layer
+folders remain distinct. A validated backdrop phase takes precedence over generic
+sky inheritance; genuine aerial forms retain their previous art/sky behavior.
+The theater's explicit body overrides retain priority.
+
+Material visibility hides empty or failed bodies without hiding the battle,
+nameplate or hit dimensions, and survives unpair/revival/color/opacity animation.
+Failed texture promises are evicted, including stage pieces, so later requests
+can retry. Shared successful textures remain cached. Each asynchronous body build
+captures a generation and group identity; remove, same-ID revival and A-to-B-to-A
+transformations invalidate older continuations before they allocate a body.
+Optional co-op art metadata preserves the legacy 15/17-field tuples and validates
+bounded names against the recipient's fixed local battleback folders. Same-ID art
+changes rebuild once; legacy omitted metadata clears stale overrides. Deferred
+loads cannot resurrect art from an older snapshot.
+
+Private read-only audit covered 601 enemy records: 78 empty battler names, with
+4 initial production controllers, 1 debug-only controller and 4 transform-only
+forms among static troop/map references. Of 413 distinct nonempty battler names,
+412 resolve; the sole missing installed image belongs to a record without static
+initial/transform encounter references. All five creature backdrop variants were
+verified from the installed assets. Private actual-event reproduction exercised
+Map11 event32 command283/301 and troop331 through the real interpreter and combat
+constructor: one visible original 700x500 texture, alive controller, sky=false.
+It used a CPU canvas adapter and original read-only bytes, not GPU/headset play.
+Original databases, images, numeric audits and temporary review controls stay
+outside Git and release allowlists. Public regressions use neutral synthetic art.
+
+Local JavaScript verification passed 784 regressions, including 26 new cases for
+blank/art-backed bodies, retry caches, stale generations, live ownership,
+transformations, minions, mounts and real guest rendering/network validation.
+
+ESLint, Ruff, production build, 8 packaging tests and 7 Python protocol tests
+also passed locally for the enemy-artwork update.
+
+The literal source comparison now uses runtime a9b6649 (0.2.31): 48 original
+modules retained, 15 unchanged after import moves, 33 modified, 38 new, 0 missing;
+3,305 added/822 removed lines in modified originals after import normalization.
+The actual screenshot comparisons remain labelled 0.2.25.
+
+## Desktop Break readiness feedback (0.2.32)
+
+The held-Break glow was updated only inside updatePlayerAttack's VR branch.
+Desktop pressBreak supplied controller haptics and no visible readiness cue.
+Move the cue into the common combat frame after weapon pose/glow updates, so
+both desktop and VR receive it and paused frames can hide stale feedback.
+Use weaponSeg's rendered tip: PC visualLength includes viewmodel scaling while
+the physical/VR hit segment and combat reach retain their existing lengths.
+Desktop uses a smaller peripheral glow; VR retains its prior size. Hide the cue
+when paused, dead, disarmed, restrained, spectating, adjusting a grip or holding
+another action/item, when the weapon is invisible/detached/missing, and on reset.
+The original breakArmed result controls cooldowns and quick-slot arm expiry.
+
+Seven new synthetic regressions run real common combat frames, actual Input
+F/middle-mouse holds and releases, quick-slot arming/expiry, visible tip transforms,
+pause and hand transitions, plus real click/release Break swing dispatch. All
+seven failed against the unchanged prior runtime using private test tooling and
+pass with the repair. Holding the modifier alone still creates no attack or hit.
+Control guides in all four supported languages explain the ready glow and held
+modifier. No Break proc rates, costs, manual input rules or original assets are
+changed by this presentation repair. No GPU/headset playtest is claimed.
+
+Local verification passed 791 JavaScript regressions, ESLint, Ruff, production
+build, 8 packaging tests and 7 Python protocol tests.
+
+The literal source comparison now uses runtime dea954d (0.2.32): 48 original
+modules retained, 15 unchanged after import moves, 33 modified, 38 new, 0 missing;
+3,316 added/826 removed lines in modified originals after import normalization.
+Actual comparison images remain labelled 0.2.25.
+
+## Dialogue camera and native dungeon counter (0.2.33)
+
+Desktop conversation introductions use the initiating main event, map identity and
+interpreter execution, not a nearby name match. Turn smoothly for 0.38 seconds
+toward the visible standing sprite's upper body, respecting displaced sprites,
+looping maps, transparent margins and rig transforms. Pending sheets use the
+existing layMode classifier. Skip invisible/floor props, distant events and
+unowned narration. Manual motion or right-drag immediately cancels the turn;
+later pages and common-event children never recenter it. Ending/replacing an
+execution, transfers, death, menus, focus loss and VR discard it. VR head pose
+is never changed by this feature.
+
+Desktop dialogue keeps its cursor for choices. An unlocked, canvas-origin right
+drag feeds the existing finite/spike-filtered mouse look, suppressing pointer
+hover/confirm and gameplay mouse buttons. Leave, blur, text input, closing UI and
+view transitions flush held actions. A normal release retains accepted motion
+until endFrame so a quick drag/release still takes precedence over autofocus.
+The message footer and all four controls guides describe this interaction.
+
+The installed script142 module W_REGULAR configures the original persistent
+Layer indicator: map enabled by switch859, selector variable0, row variable119
+and item switch859 with native label color16. Read static literal configuration
+without executing Ruby; selectors, labels, suffixes, colors, icons and scene
+flags remain installed data. Unsupported replacements fail closed. The added
+panel is independent of the minimap toggle, below the desktop mini or adjacent
+to the wrist health panel. Hide it through dialogue/menu/death/transfers/title
+and honor the original battle-window settings. Do not guess membership from map
+names or reset/clamp the saved counter. CE276 increments119 on floor advance;
+depth117 is separate progression, incremented with difficulty60 by CE284, and
+shown in original resume/boss text, not a persistent W_REGULAR row.
+
+The right-hand Space-Time route deliberately calls CE266 to unequip actors1..10
+before storing their bag counts, CE267 to remove the stored bag, and starts a
+temporary actor11. CE269 death and CE288 allowed exit restore counts through268
+and restore the original actor without re-equipping slots. An isolated read-only
+actual-command inventory replay covered30 equipped copies and31 stored entries:
+both paths returned every original item to the bag with no quantity differences,
+errors or warnings. This is inventory/control replay, not a full story run.
+Preserve that native rule; no auto re-equip or item duplication workaround added.
+Public inventory regressions use neutral synthetic event sequences only.
+
+Local verification passed835 JavaScript regressions (44 new:10 camera,13 drag
+input,14 native counter,3 full-UI integration,4 inventory), ESLint, Ruff,
+production build,8 packaging tests and7 Python protocol tests. Tests exercise
+actual Input/Player/UI/Interpreter paths with synthetic data and canvas adapters;
+no GPU screenshot or physical-headset playtest is claimed.
+
+The literal source comparison now uses runtime32bd81b (0.2.33):48 original
+modules retained,15 unchanged after import moves,33 modified,41 new,0 missing;
+3,413 added/827 removed lines in modified originals after import normalization.
+Actual comparison images remain labelled0.2.25.
+
+## Initialized portrait and combat README previews (0.2.33)
+
+The main README gallery now uses four current standalone captures rather than
+the old direct-map placeholder actor. The production bundle is from runtime
+32bd81b, with actual initialized actor8, level54, face073b/index0 from a private
+save read into an isolated preview. All four captures verified desktopFace;
+the menu also verified menuFace. Preserve the v0.2.25 paired upstream images
+and their placeholder-portrait caveat; these are separate new gameplay samples.
+
+Combat preview: Map31, original event37 encounter and Fungi from Yuggoth106.
+Owned Fairy Powder24 was used through useQuickEntry/updateReady/fireReady;
+the real projectile and native item effect applied Sleep6 (original icon22).
+Automatic pause on a real enemy state retained the result for camera framing.
+The final native enemies have4200HP, one states[6] and one states[], with the
+normal name/health/status labels and selected player portrait visible. No
+enemy state, HP, portrait texture or HUD label was fabricated for the image.
+
+The private capture controls stage camera/map/actions, pause, and synchronously
+copy the freshly rendered canvas before awaiting network writes. Only the
+selected application PNGs enter docs/screenshots. The localhost preview blocks
+all API writes, holds selected saves in memory, and uses dev launches so no
+player save or Steam award is written. Original artwork/databases/saves, private
+metadata and controls remain outside Git. Forest is1280x720; other captures
+are1022x1004 from the normal browser viewport, without image edits. These are
+desktop previews, not a physical-headset playtest or new runtime release.
+
+
+## Bounded VR entry and first tracked render (0.2.34)
+
+Request immersive-vr synchronously inside the actual click activation. Never
+await GPU compatibility before that native permission request. Page-load and
+devicechange graphics warmup remains optional and bounded for desktop boot.
+After a grant, finish bounded GPU restoration and local-floor reference-space
+preflight before letting Three r170 own the session. Its manager captures the
+initial WebGL attributes, so it otherwise repeats makeXRCompatible even after
+successful warmup. During attachment only, serve that completed GPU request and
+the exact prepared reference-space type through temporary own methods on the
+native objects. Other reference types retain the original receiver. Restore
+exact own descriptors on every settlement, reject uncacheable methods before
+attachment, and never pass a proxy session to a native XR layer.
+
+Three r170 assumes its animation context exists when cleaning up an attached
+session. A genuinely pending setSession cannot safely be abandoned/reset and
+then allowed to attach over a new request. Retain ownership until settlement;
+show manual close/reopen guidance if it stalls. Late permission/preflight
+results cannot attach. Granted preflight failure closes its session before
+recovery. Cancellation closes only its owned grant. A slow native end permits
+EXIT VR retry for that session, never a competing request. Healthy short,
+hidden/dashboard and initially untracked sessions are not automatic failures.
+
+The localized bottom footer reports stages and cancellation without exposing
+exception strings or reloading unsaved play. Attachment success is distinct
+from a first rendered tracked pose. renderWithXrStatus draws first, checks the
+actual frame/session/reference and nonempty views, then notifies readiness once
+per native session. A null pose or failed main draw cannot clear the diagnostic
+wait. The 12-second tracking watchdog is informational, never an automatic end.
+
+A requestIdleCallback still executes on the main thread. An unprepared monitor
+renderer must not create a second context, compile or upload the whole map while
+XR presents. Check each preparation boundary and defer until desktop restoration;
+already-prepared spectator renderers are reused during VR. A pending compile
+settles before desktop resumption, without idle polling during VR.
+
+Regressions use fake native promises/timers, synthetic scenes and the actual
+pinned Three manager. They verify ownership, descriptor restoration, context
+loss, GPU-call deduplication, tracking, exit/re-entry and framebuffer/lens/DPR
+restoration. They do not prove hardware startup time or Quest 3 compatibility.
+
+Headset availability checks are bounded at 8 seconds with an explicit retry;
+post-reset support polling has a hard 15-second deadline even if a native query
+never settles. Quiet rechecks preserve failure/cancel guidance. Once an exit is
+requested, late tracking and its diagnostic timer cannot erase the exit status.
+See the WebXR specification's immersive-session user-activation requirement:
+https://www.w3.org/TR/webxr/#immersive-session-request-is-allowed
+
+Local gates: 867 JavaScript regressions pass (32 new), ESLint, Ruff, production
+build, 8 packaging regressions and 7 Python protocol regressions. The new coverage
+includes 25 lifecycle cases total, 6 rendered-frame readiness cases, 7 localized
+footer cases, and 10 spectator cases total; existing pinned-Three view-mode
+regressions also pass. No original assets/saves or private test controls added.
+
+The source comparison uses runtime f88b455f9bb3fb2b5d746c82ec408ba05b0ecec7 (0.2.34):
+48 original modules, 15 unchanged after import moves, 33 modified, 43 new,
+0 missing; 3,609 added/854 removed lines in modified originals after import
+normalization. Existing paired images remain v0.2.25 and initialized gameplay
+captures remain v0.2.33; no screenshot relabelling or hardware capture claimed.
+
+
+## Slow native permission and stuck exit recovery (0.2.35)
+
+The 20-second permission deadline in 0.2.34 can reject a viable native startup.
+The verified engine's AutoVr helper clicks ENTER VR up to 3 times, polls 30 seconds
+after each click but stops that wait when ENTER VR reappears, then retries after
+1 second. The permission request itself cannot be cancelled by a Promise race.
+At 20 seconds the old UI returned ENTER, so AutoVr submitted pending duplicates;
+WebXR normally rejects those while the first native create continues. A 55-second
+late grant was then discarded and ended without ever reaching Three's renderer.
+A private unchanged-module replay reproduced 3 page calls, 1 native create, 2
+pending-request rejections, 0 attachments and 1 late end. Public regressions use
+synthetic delayed promises, not copied engine implementation or original data.
+
+Keep the actual click request and extend its grace with soft progress feedback.
+Cancellation or timeout must retain pending native ownership until rejection or
+a real granted-session end. A stalled native end remains owned for retry. Manual
+Reset VR connection calls the existing same-origin engine endpoint, which maps
+its request's TCP client to Chromium's browser parent and terminates only that
+parent's device.mojom.XRDeviceService child. It does not restart Meta services,
+close the page or require a synthetic XRSession end. A reset is not proof that
+native cleanup completed; actual request settlement and raw session/manager
+cleanup still gate reentry. Pending Three setSession is never forcibly reset.
+
+The native Meta IPC failures and Link's own graphics-driver freeze warning are
+separate from this reproducible app timing bug. A public Meta investigation
+reports a similar named-pipe/AppContainer startup delay:
+https://developers.meta.com/horizon/feedback/vr/investigations/1070515512504086/
+Treat that investigation as a reported issue, not proof of causality for every
+headset. Do not add --no-sandbox, change global OpenXR selection, restart unrelated
+browsers or install/roll back drivers automatically. Keep native logs, process
+metadata and private inspection helpers outside the distribution. A scoped
+browser-service reset cannot guarantee recovery of a frozen Quest Link shell;
+manual headset/Link restart may still be required. No hardware recovery has been
+confirmed merely from the process state, a simulated promise or CI results.
+
+
+The final lifecycle uses 20-second soft feedback and 90-second hard diagnostic
+without forgetting the native promise. Explicit reset is eligible only for
+cancelled/stalled native permission or an exit that failed after 8 seconds,
+with manager attachment settled. The 10-second reset deadline is informational;
+its original operation remains owned until it actually settles. Reentry needs
+both that settlement and native rejection/end plus Three cleanup. Successful
+manual reset is not repeated by automatic failed-start recovery. A positive
+process-stop count alone does not fabricate session end or desktop readiness.
+Both recovery actions share a per-stage click guard, and all instructions are
+translated. The main adapter wires reset to the existing scoped local endpoint.
+
+Local gates: 881 JavaScript tests pass (14 additional), ESLint, production build,
+Ruff, 8 packaging and 7 Python tests. Lifecycle coverage now totals 37 cases,
+including a 55-second valid grant, 90-second stall, cancelled late grant, delayed
+reset/native end races, duplicate actions, reset false/rejection/timeout/no-end,
+unknown attachment refusal, automatic-reset deduplication and synchronous native
+request rejection. Four-language footer coverage totals 9 cases. Physical Quest
+restart/Link recovery and hardware startup latency remain unconfirmed; do not
+substitute the simulated native delays for a headset playtest.
+
+Current source comparison: runtime 07acc5999610f2d03b806609c5a97301830585d7 (0.2.35),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,676 added/856 removed lines in modified originals after
+import normalization. Paired screenshots remain 0.2.25 and initialized gameplay
+previews remain 0.2.33; no new hardware or gameplay screenshots are claimed.
+
+
+## VR world targeting and original counters (0.2.36)
+
+A controller can remain connected while Three r170 marks its target ray invisible
+on a frame with no input pose. Its old transform remains stored. World action
+previously used that stale horizontal direction and hand origin. Validate visibility,
+finite position/orientation and a meaningful horizontal component; otherwise use
+head direction and player origin together. If both rays are vertical, retain the
+logical player direction. Never rotate the VR headset to face an interaction.
+
+Original counter interactions reach the second cardinal cell. The old cone's
+1.7-tile limit rejected the Mental Ward counter NPC from the reachable approach,
+then its tile fallback used headset facing instead of controller aim. Only an
+actual intervening counter and a normal-priority event in that second cell extend
+cone reach. Floor props and ordinary distant events keep their existing limits.
+The VR tile fallback uses the same validated aim, with native underfoot/front/
+counter priority. Touch-trigger pages remain tile actions, not ranged cone targets.
+
+All VR and phantom starts retain active-page, erased/locked/pending, combat/arena
+and co-op authority checks through startActionEvent. An explicitly aimed cone
+refusal stops without activating unrelated loot. Native tile candidates instead
+continue after refusal, preserving guest-ineligible loot followed by an eligible
+exit/bonfire/boss. Desktop local tile dispatch remains the original GameMap path.
+The right trigger remains combat; right-stick-down is Examine/Talk.
+
+A private read-only original Map012 replay confirms sideways-head counter talk,
+missing/hidden/vertical/invalid-ray door and NPC fallback, and actual authored door
+conditions through the Interpreter: the locked page increments its variable
+without transfer, original unlocked pages transfer, and the inactive door remains
+inactive until its switch is enabled. No original maps/scripts or saves are copied
+into tests/distributions, and no save is written. Public fixtures are synthetic.
+
+Local gates: 896 JavaScript tests pass (15 additional; 23 world-action cases),
+ESLint, production build, Ruff, 8 packaging and 7 Python tests. New cases include
+the actual pinned Three controller null-pose lifecycle, invalid aim pairs, native
+counter negatives, touch-trigger direction, and real co-op refusal/exit routing.
+These are runtime regressions and original-data event replays, not a physical
+Quest 3 playtest or confirmation that every reported headset symptom is resolved.
+
+Current source comparison: runtime aff4cfac6663fbb919c68f8030fcc699967c19a9 (0.2.36),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,713 added/874 removed lines in modified originals after
+import normalization. Paired screenshots remain 0.2.25 and initialized gameplay
+previews remain 0.2.33; no new hardware or gameplay screenshots are claimed.
+
+
+## Bulk shop purchases (0.2.37)
+
+The user explicitly requested buying more than 99. GameParty already holds up to
+BAG_MAX=9999 per bag item; the shop separately limited every transaction to 99.
+Remove that batch cap without changing inventory representation or save formats.
+shopMaxBuy uses remaining destination capacity, money and each exchange material,
+bounded to safe integers. Free money prices impose no extra quantity cap; material
+prices still apply. Storage retains native default, per-item limits and sealing.
+This supersedes the historical instruction to retain the shop's 99-unit batch cap.
+
+Expose +/-100 and +/-1000 rows only when the current maximum reaches those steps.
+The original small-quantity rows remain unchanged, and the list's existing scroll
+handles larger dialogs. Max selects a quantity without purchasing; the first row
+confirms. All paths revalidate balances/capacity before any debit or award, including
+an inventory change after the dialog opened. Selling and crafting are unchanged.
+
+Bulk-only checkpoint: 905 JavaScript tests pass (9 additional transaction cases),
+ESLint, production build, Ruff, 8 packaging and 7 Python tests. The real UI/party
+regressions cover paid/free purchases above 99, all exchange material kinds,
+exact currency costs, bag/storage/custom limits, stored exchange isolation,
+stale confirmation without partial mutation, larger steps/Max/cancel, and party
+save roundtrip. Existing small-dialog and ordinary exchange regressions still pass.
+No original game files or player saves were changed.
+
+Bulk-only source checkpoint: runtime 7d424de950f8f5899215bd982911e69cf95e2f48 (0.2.37),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,720 added/878 removed lines in modified originals after
+import normalization. Paired screenshots remain 0.2.25 and initialized gameplay
+previews remain 0.2.33; no new gameplay screenshots are claimed.
+
+
+## Direct skill menu activation (0.2.37)
+
+The user additionally requested using skills normally from the Skills menu before
+0.2.37 was tagged. The old UI and useSkillFromMenu independently rejected all
+opponent scopes and battle-only skills, leaving most of the list quick-slot-only.
+A private read-only installed database audit found 990 named skills, including
+966 battle-only entries and 16 native menu-compatible friendly entries. The latter
+already passed hasEffect. Actual utility common-event skills also worked through
+the old path, so do not claim a notes-only filtering/common-event repair.
+
+Menu Use now invokes the same validated action as a quick slot without assigning
+or changing slots. Aimed spells prepare through readyUsable, weapon arts arm the
+existing next-hit path, and Dodge/Break retain their original special handling.
+An accepted opponent/battle action closes the menu so the next field frame can
+use it. Friendly heals stay in the menu; from='menu' is carried through the shared
+support path so common events close it and return to their original interpreter.
+No opponent skill is applied to the player as a friendly effect. Preparation does
+not pay early; actual attack/cast paths retain their existing payment/cancellation.
+
+skillUseStatus shares known/granted membership, dead/spectating/restrained/healing,
+occasion, seal, category/weapon, costs and cooldown checks between menu and quick
+entry. Both root and state-selected stage are checked. A dead actor cannot cast
+before the death flag catches up; a zero-HP death-state-immune actor retains the
+port's native deathless behavior. Occasion3 stays unavailable and occasion2 is
+blocked in combat. Occasion1 retains the port's existing field quick-action
+adaptation; this is not a claim of a native turn-based battle menu implementation.
+The action page shows blocked reasons or a translated aim/strike instruction.
+
+All four control guides explain direct menu use and larger purchases. Public
+regressions use real UI/GameState/Combat, real readiness/arming and common-event
+Interpreter paths with synthetic metadata. 28 new cases cover direct multi-repeat
+heals and exact HP/MP/TP payment, common-event ownership, battle support, offensive
+preparation/next-hit payment, unchanged slots, refusal and stale affordability,
+source/transformed requirements, revival eligibility, granted skills and death
+immunity. Existing support fixtures explicitly register their known skills.
+
+Final local gates: 933 JavaScript tests pass (37 additional across both requests),
+ESLint, production build, Ruff, 8 packaging and 7 Python tests. Focused menu/support/
+Break coverage totals 51 tests. This is runtime regression verification, not a
+physical-headset playtest. Original game files and player saves remain read-only.
+
+Current source comparison: runtime bf980de2289fe6de7dd63cadb1e2764ce5d5c3fd (0.2.37),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,759 added/908 removed lines in modified originals after
+import normalization. Historical screenshot captions and image pins are unchanged.
+
+
+## Immediate menu skills, R shortcut and dialogue ownership (0.2.38)
+
+The user clarified that menu skills should execute immediately, and changed the
+requested shortcut from E to R. Keep E/Enter/Z Examine/Talk. R opens the original
+Skills grid directly, toggles it closed on a fresh press, and switches into it
+from an ordinary menu. Ignore typing, unfocused/VR keyboard input, dialogue,
+scripted waits, transfers, disabled menus, death and unrelated modals. Preserve
+native battle-wait access and consume the opening frame so R+confirm cannot select
+or cast inadvertently. Do not change original RPG Maker input mappings for R.
+
+Menu use passes an explicit direct option through shared skill validation into
+performUsable. Ordinary spells launch their original projectile immediately;
+weapon arts apply the original skill immediately with authored target animation
+(including equipped-weapon animation for -1). Native projectile travel, repeats,
+all/random scopes, global effects and costs remain intact. Validate the existing
+gaze/range/grid-line-of-sight target before any charge, cooldown, disarm or pending
+preparation cleanup. Reject hidden/dead/held/unjoined/nonfinite targets. Failure
+keeps the menu and resources intact. Quick slots still arm/ready normally; Dodge
+and manual Break/GunBreak retain dedicated native actions. No global directUse
+flag is needed; its narrow test adapter now uses the explicit option.
+
+A read-only original-event audit matched the screenshot's poem to Map99/event2:
+a normal acknowledged text page, then a recognized title banner, then transfer
+to Map1 Crash Chamber. showMessage discarded heldMessage before its banner early
+return, losing the only handle that hid the previous shared panel. Hide the held
+page before replacing its owner. Reconcile ownerless panels and cancel an active
+message only when its actual execution/map/transfer ownership invalidates. Do not
+answer a choice, terminate a new execution, or discard authored defeat dialogue
+merely because playerDead or battle presentation changed. No auto-dismiss timer.
+
+Plain message pointer hits now feed the existing confirm path. A first click can
+reveal text and a fresh click acknowledges it; outside clicks do nothing. Choices
+and number input keep their exclusive controllers. The VR pointer line is visible
+for a current plain message so aiming and triggering works as on choices.
+
+Local gates: 977 JavaScript tests pass (44 additional: 24 direct-skill, 13 shortcut,
+7 message-lifecycle), ESLint, production build, Ruff, 8 packaging and 7 Python
+tests. New tests use real Combat/UI/Input/Interpreter and synthetic metadata.
+Direct skill tests cover actual projectile collision and immediate physical hits,
+PC/VR gaze/range/real-LOS refusal, hidden/untargetable/dead/held/unjoined/nonfinite
+targets, single payment/global dispatch, repeats/all/random scopes, quick-slot
+preservation and native animations. Dialogue cases include the text/banner/
+transfer sequence, execution replacement, death dialogue preservation, input
+hit-testing and exclusive choices. An in-memory unchanged-HEAD regression probe
+fails five new dialogue cases without rolling back checkout files. No original
+event text/data or private helpers are copied into the repository. Original game
+files and player saves remain read-only; no headset playtest is claimed.
+
+Current source comparison: runtime 91f884d1051f3f821ae86ad172c63fe1c062df5b (0.2.38),
+48 original modules retained, 15 unchanged after import moves, 33 modified,
+43 new and 0 missing; 3,816 added/917 removed lines in modified originals after
+import normalization. Historical screenshot captions and image pins are unchanged.
+
+
+## Bonus Action charges (0.2.39)
+
+The user approved a charge-based real-time adaptation of feature61. This
+supersedes 0.2.16's passive expected-action recovery multiplier; remove its unused
+helper and do not stack both mechanics. AGI and all original formulas remain.
+Each positive finite source rolls independently once per completed eligible
+ordinary player action. Clamp probability to1, preserve the originating object
+icon, and retain separately earned charges. Guaranteed sources do not call RNG.
+Bonus actions consume one charge and cannot roll new charges. Duration is three
+active seconds; menus, dialogue and XR-away pause it. UI quantizes display only.
+
+Keep the manager on CombatSystem, never serialized GameState/system or battler
+states. Context includes actual actor/id, map/id and state identity. Reset,
+death, transfer, load/title, spectating and loss of all positive sources discard
+charges and invalidate old tickets. A death-state-immune zero-HP actor preserves
+existing deathless behavior. Snapshot trait sources when an action begins.
+
+One ticket belongs to one user action, not each target, repeat, volley round,
+automatic follow-up or counter. Direct menu skills retain R and original target
+validation. Pure common-event/ritual/field-only utility, items, invalid targets,
+failed costs and preparation do not earn or spend charges. Normal resources,
+seals, equipment requirements, skill cooldowns and deliberate charging remain.
+Keep the active swing/gesture and burst tail protected; a consumed bonus skips
+its own normal trailing recovery too, so it remains useful after a slow input.
+VR requires a fresh qualifying physical stroke and cannot repeat on a held pose.
+
+PC adds a peripheral original-icon charge/timer row below fixed resources only
+while active; VR fits it alongside the existing wrist HUD and keeps its minimap
+clear. Use the winning trait icon, a valid original attack-skill fallback, or
+text alone. Do not fabricate icons or inject an actor status. Four-language
+player guides explain charges and unchanged costs/cooldowns. No original game
+data, private audit helpers or saves are distributed.
+
+
+Read-only source audit: installed positive/zero feature61 records occur in8 actors,
+9 classes,6 weapons,5 armors and20 states (two zero-valued state records are
+ignored). Actor featureObjects also includes sworn-spirit sources. Public tests
+use synthetic metadata rather than original records.
+
+The complete suite passes1,017 JavaScript tests,40 new cases:15 pure manager,
+19 combat integration (including nested ordinary/failed-roll same-menu recovery)
+and6 HUD cases. Existing speed tests now verify no passive acceleration; old
+volley fixtures supply real camera/map/target geometry rather than weakening
+production aim validation. The focused combat aggregate passes127 cases. Lint,
+production build, Ruff,8 packaging and7 Python tests pass. This does not claim a
+physical-headset playtest or measured gameplay latency.
+
+Regression review reproduced and fixed two pause interactions. Instantaneous
+menu-origin support recovery uses its short0.3-second UI clock so an ordinary
+heal can be cast again without closing Skills, even without a Bonus trait or
+after a failed roll. Field action progress, earned charge lifetime and live
+desktop guard lock remain paused through menus/dialogue/headset-away. A target
+leaving before the melee hit window cannot mint a charge, and an armed cooling
+skill cannot spend one. Utility growth/skill-learning effects alone are excluded.
+
+
+Current source comparison: runtime 37aa9b4745081ccedb00447f5b860d37024e80aa (0.2.39),
+48 original modules retained,15 unchanged after import moves,33 modified,
+43 new and0 missing;3,974 added/927 removed lines in modified originals after
+import normalization. The replaced passive helper and new charge manager leave
+the new-module count unchanged. Historical screenshot labels/pins remain intact.
+
+
+## Original bonfire travel map (0.2.39)
+
+Scene_ShortMove previously loaded MOVE_LIST/EXPLAN/CALL_COMMON but discarded
+MAPDATA/PLAYER_ICON/ICONLIST. Its UI rendered only a list and EXPLAN[0], so the
+original map preview was never implemented. A read-only native-script audit
+confirmed one shared Graphics/Pictures artwork with36 original-index leader
+markers, not a per-destination screenshot/minimap. The installed picture resolves
+case-insensitively. All36 parsed coordinates matched the original; optional
+ICONLIST is empty in the installed source. No original artwork/data is bundled.
+
+Read only bounded static literal configuration from the selected original script
+section, retaining named-section precedence. Missing config is null. Do not
+evaluate Ruby or invent filename aliases/default art. Marker type0 uses an
+original actor character sheet, idle front middle frame anchored centre/bottom;
+type1 is the authored centred square with optional size/colour; type2 is an
+original Picture anchored top-left. Keep native overlay switch gates and draw
+selected-player marker last. Filtered rows must use the original MOVE_LIST index.
+
+BonfireTravel owns a direct-root preview panel next to the existing destination
+ListPanel, fitting the entire artwork and all marker positions through one
+aspect-preserving transform. Both EXPLAN lines appear below it. Wide PC/VR uses
+two columns; narrow PC stacks the panels with fewer visible rows. Selection,
+scrolling, pointer geometry and view transitions retain their existing controls.
+Compact translated hints retain confirmation/cancellation guidance. Restore list
+dimensions and position only while its items array is still owned.
+
+Async assets bind generation, actual state/map identity, mapId, scene and list
+ownership. Late loads paint the current selection and cannot reopen/overwrite a
+new scene. Cancel/select/close/title invalidate synchronously; update also clears
+a stale bonfire scene/list after death, external transfer or state replacement.
+Null/rejected artwork leaves travel usable and does not retry every frame. Native
+switch eligibility and host/guest common-event authority are preserved, and a
+stale/double confirmation cannot transfer again or act on a replacement world.
+
+New synthetic coverage:4 parser cases,16 preview controller cases and7 actual
+UI/Input/Three scene cases. Tests cover original-index mapping, source character
+frames, optional native markers, both description lines, contain transforms,
+async ownership races, missing artwork, locked rows, once-only transfer/co-op
+common events, cancellation, ordinary menu restoration, readable projected
+bounds and PC/VR transitions. No physical-headset playtest is claimed.
+
+
+## Distant lethal projectile and field-symbol promotion (0.2.39)
+
+A distant bow hit can kill a dormant symbol body before its original event
+reaches command301/Battle Processing. startBattle reused that exact body and
+unconditionally changed its visual state from dying/dead to chase. Its battler
+retained Death, so AI/death checks skipped the nonliving body, but its standing
+billboard no longer entered collapse/fade cleanup. This explains the reported
+standing enemy silhouette without changing intentional shadow or phantom art.
+
+Promote a reused body to chase only while e.alive. Preserve already-partial or
+finished collapse, original HP, authored waits, event victory branches, disposal,
+rewards and unlocks. Three new regressions use real ActionEnemy materials, moving
+distant projectiles, symbol Interpreter command301, GameMap/GameState and actual
+Combat updates. Both immediate and authored-wait lethal cases failed before the
+fix and now finish the fade, dispose the billboard, execute the self switch and
+pay rewards once. A nonlethal control still chases with its actual reduced HP.
+No game records, player saves or private helpers enter these synthetic fixtures.
+
+Combined local gates after both additions:1,047 JavaScript tests pass (30 further
+cases:27 bonfire map and3 distant-death lifecycle), ESLint, production build,
+Ruff,8 packaging and7 Python tests. The preceding40 Bonus Action cases and all
+existing combat/UI regressions remain green. The earlier pending0.2.39 source
+checkpoint passed exact-head CI; final publication requires the new combined
+head to pass CI again. No physical-headset playtest is claimed.
+
+
+Combined source comparison: runtime 12f6835bc79e937047d3f3c679409848b19c3f5e (0.2.39),
+48 original modules retained,15 unchanged after import moves,33 modified,
+44 new and0 missing;4,141 added/935 removed lines in modified originals after
+import normalization. Historical screenshot labels/pins remain unchanged.
+
+## Bonus Action chains and shared combat recovery (0.2.40)
+
+The user approved replacing the three-second charge window with action chains,
+then clarified that rapidly repeated skills made Bonus Action ineffective.
+This supersedes the timing and final-bonus recovery rules in the0.2.39 section.
+Keep independent feature61 rolls, source icons, original formulas and costs.
+Earned follow-ups have no timer and cannot reroll. They bypass only the prior
+action's trailing recovery; every accepted action retains its own full recovery,
+so the final follow-up cannot start a fresh normal chain immediately.
+
+Direct and readied combat skills share a0.3-second active phase and0.9-second
+total action recovery, retaining multi-target/repeat/burst tails. Noneligible
+combat utility obeys the same action gate without spending or earning extras.
+Changing skill IDs, opening R, switching to melee/ranged, or consuming the last
+bonus cannot evade this gate. Per-skill cooldowns, HP/MP/TP/stamina, target
+validation, deliberate weapon charges and physical VR gestures remain intact.
+Instant menu support advances both action deadlines with its UI clock so the
+menu remains usable; field actions pause with dialogue/menu/headset-away.
+PC handsBusy includes the shared active phase to keep guarding out of casts.
+
+Bonuses belong to active local fights or engaged guest puppets, including death
+animations. Dormant/unjoined bodies do not make an encounter. Support outside
+combat cannot bank charges for the next fight. Prospective opening melee hits
+can begin a real encounter before their normal action completes. Clear unused
+extras and invalidate pending completions after the final Battle.finish, on
+direct removal of an active encounter, and existing reset/death/transfer/load
+ownership changes. Concurrent fights retain the chain until all have ended.
+Canceled support cannot roll. No chain metadata enters saves or battler states.
+
+PC and VR show only the remaining follow-up count and original source icon;
+remove the expiry/progress bar and its obsolete timer translation. Four-language
+controls explain the new recovery sequence. Keep historical screenshot captions
+and their source commits unchanged.
+
+Local gates:1,072 JavaScript tests pass (25 added:14 action-chain recovery and
+11 encounter/lifecycle regressions), ESLint, production build, Ruff,8 packaging
+and7 Python protocol tests. Synthetic tests cover real Combat/GameState/common
+frames, PC/VR actions, guest puppets, original death/victory ownership, instant
+menu support and paused field work. This is not a physical-headset playtest.
+Original game files, private helpers and player saves remain unchanged.
+
+Current source comparison: runtime97378d0a936a46743b98bcc929d639d19b6c1143 (0.2.40),
+48 original modules retained,15 unchanged after import moves,33 modified,
+44 new and0 missing;4,168 added/937 removed lines in modified originals after
+import normalization. Historical image versions and source pins are unchanged.
+
+## Chaos Dungeon skull saves (0.2.41)
+
+The original boss-skull common event294 and the dedicated final-room skull
+explicitly invoke command352 while ordinary menu saving can remain disabled.
+showManualSaveMenu incorrectly applied saveDisabled to both entry paths. Gate
+that flag only for ordinary menu requests; an authored event save retains its
+existing interpreter-owned async slot/overwrite/write/retry/cancel flow. Never
+temporarily enable saving in GameState or serialize a changed restriction.
+Keep co-op phantom/world ownership, battle-event exclusion, departed-map guards,
+normal overwrite confirmation and transport failures intact.
+
+A read-only installed-data trace found the shared path in9 boss-room maps plus
+the final-room direct352 event (10 skulls). No original event data or saves are
+changed by this repair. Synthetic regressions reproduce3 failures before the
+fix: event Save under command134's restriction, retry with saving disabled, and
+the merged skull Save/skip/leave choices. Four added cases cover permitted event
+saving with its restriction preserved, denied ordinary menu saving, phantom
+ownership and a disconnected world. Focused save/menu coverage passes44 tests.
+
+Local gates:1,076 JavaScript tests pass, ESLint, production build, Ruff,
+8 packaging tests and7 Python protocol tests. Original command352 was verified
+to guard only against battle context before opening Scene_Save; save_disabled
+is not its gate. No player save was modified or written during these tests.
+
+Current source comparison: runtimec8b3e29dc41c8d5ad88d35d7d320945faa67ef4a (0.2.41),
+48 originals,15 unchanged after import moves,33 modified,44 new and0 missing;
+4,168 added/937 removed lines in modified originals after import normalization.
+Historical image versions and source pins are unchanged.
+
+## Turn-end observation of successful Breaks (0.2.42)
+
+The user's Old King question exposed a real port timing mismatch. The original
+troop checks shadow Break/Hard Break states at turn end. Port staggers last2.2/
+3.2 seconds and a big follow-up ends them; the six-second troop poll could miss
+a successful Break. A read-only original-data replay reproduced a missed early
+Break, a counted late Break, and a late Break lost to a big hit. This is separate
+from the intended six-distinct-shadow requirement and the charging Break window.
+
+Retain transient evidence of successful Break7/8 on the exact owning Battle and
+enemy object. Only its current turn-ending troop interpreter may observe that
+evidence; ordinary state checks and combat effects still read actual states.
+Snapshot at the turn-end sweep and retain it through all pages, waits and child
+events; new observations during a wait remain pending unless a page consumes
+them. Use a stable end-turn page key across long waits. Expire observations after
+the full sweep and clear them on native explicit removal, Recover All, transform,
+death, battle end and reset. A dead mirror must never count twice. Do not extend
+stagger, damage/Break windows or state rates, and do not hardcode boss/map IDs.
+No evidence is serialized into GameState or player saves.
+
+Local gates:1,094 JavaScript tests pass (18 new Break-observation cases), ESLint,
+production build, Ruff,8 packaging tests and7 Python protocol tests. Coverage
+includes early/late normal and Hard Breaks, actual follow-up recovery, ordinary
+versus turn-end conditions, nested events, concurrent battles, asynchronous
+sweeps, explicit removal, failed rolls and all lifecycle clear paths. Existing
+nameplate-transform fixtures use the real cleanup helper. A private read-only
+original Enemy489/490/Troop539 replay counts six distinct shadows1..6 once each,
+removes the King's two phase states after6, and remains6 on the next turn.
+The former early/late/follow-up results0/1/0 now all count1. No original game
+data, player saves or private replay helpers enter the repository or release;
+no physical-headset playtest is claimed.
+
+Current source comparison: runtime5c2ac36dcc37e72a0b2d656386989223c4bff8ce (0.2.42),
+48 originals,15 unchanged after import moves,33 modified,44 new and0 missing;
+4,219 added/941 removed lines in modified originals after import normalization.
+Historical image versions and source pins are unchanged.
+
+## Party leader profile beside Skills (0.2.43)
+
+The R Skills grid and its nested Use/quick-slot picker share SkillProfile in
+ui/skill-profile.js. Read the current party leader's effective battler values:
+original face/name/class/level, HP/MP/TP/stamina and all eight parameters including LUK.
+Keep every state and buff accessible through paging with native icons; supported
+details include parameter rates, recovery/physical/magic/MP-cost rates,
+feature61 chance, action restrictions and script172 healing rules. Do not claim
+that the panel explains every arbitrary note tag. Show aggregate healing warnings
+and the selected effective skill's actual HP/MP/TP costs, cooldown or blocked
+reason without rolling healing, changing game metadata or casting on inspection.
+
+Wide PC and VR layouts pair the skill selection with the profile. Compact PC
+stacks them and pages resources/parameters too, preserving readable text and
+reachable controls. Profile Previous/Next works by pointer/VR confirmation;
+PageUp/PageDown and wheel-over-profile support PC. Consume profile input before
+skill confirmation, including decorative clicks, so paging cannot cast a skill.
+Live refresh retains selection. Bind sessions and asynchronous face loads to
+state/map/leader and panel ownership; restore the original grid/list layout on
+close, transfer, actor change, death or return to title. Reuse game window/cursor,
+faces and icons rather than distributing original art or inventing replacements.
+Keep synthetic model/layout/input/lifecycle regressions independent of installed
+game files and player saves. Four-language guides describe player controls only.
+
+Local gates:1,119 JavaScript tests pass (25 new profile model/controller and
+real UI/Input/Three integration cases), ESLint, production build, Ruff,
+8 packaging and7 Python protocol tests. Desktop visual checks include the
+initialized native portrait, domain warnings and a640x720 compact layout.
+The domain example is staged only in an isolated in-memory copy; no original
+game files or player saves are changed. No physical-headset playtest is claimed.
+
+Current source comparison: runtime c282b3970fabdaaa0a36b403ddea33964c916785
+(0.2.43),48 originals,15 unchanged after import moves,33 modified,45 new and
+0 missing;4,289 added/941 removed lines in modified originals after import
+normalization. Historical screenshot labels and source pins are preserved.
+
+## Skills browser and actor-scoped favorites (0.2.44)
+
+The user approved improving R Skills navigation without changing combat rules.
+Use Favorites/All/Weapon Arts/Attack/Healing/Buffs/Debuffs categories derived from
+the actor's real known/granted skills and native metadata; categories may overlap.
+Keep All complete and order favorites first, then stable skill ID. Restore the
+remembered tab; with no remembered tab, choose Favorites when saved favorites
+exist and All otherwise. Retain actor-scoped favorites/category/query/
+selected skill in application settings, without changing original game data.
+
+PC row click/Enter invokes the actual Combat skill-use authority directly.
+Unavailable skills remain inspectable, favoritable and assignable; refresh actual
+effective costs, seals, equipment/target/cooldown restrictions and reasons.
+F toggles the selected favorite. Q opens the separate quick-slot assignment
+picker. PC Slash or clicking the Search field focuses Unicode/IME input;
+Enter/Escape commits and blurs only,
+consuming the input edge so typing cannot cast, favorite or assign. Clear resets
+the query. VR retains visible category/Favorite/Quick-slot controls with native
+trigger/A and stick navigation; do not require keyboard text entry in VR.
+
+Wide layouts show all seven full category tabs. Compact layouts show the full
+active label and previous/next category arrows; retain left/right navigation.
+Show two selected native skill-description lines and retain the complete long
+description through profile paging, rather than modifying or truncating source
+metadata. Search commit consumes its input edge; only a fresh Enter may use a skill.
+
+Retain native game window/cursor/icons and the live SkillProfile during browsing
+and assignment, its safe paging and state/map/leader/async-face ownership guards.
+Do not introduce smart recommendations, synthetic stat bonuses or bypasses of
+normal combat recovery/costs. Keep responsive PC/VR layouts and four-language
+player guides. Regression fixtures use synthetic data and input; no original
+game files or player saves are changed. No physical-headset playtest is claimed.
+
+
+Local 0.2.44 gates: 1,154 JavaScript tests pass (35 added: 19 browser model/input,
+15 real UI/Input/Three integrations and 1 profile/shared-recovery consistency case),
+ESLint, production build, Ruff, 8 packaging and 7 Python protocol tests. Browser
+labels were checked in all 4 supported languages. Desktop visual checks cover
+search/favorites/native descriptions at 1020x1004 and the stacked 640x720 layout;
+physical-headset testing is not claimed. The screenshot uses an isolated copied
+character and intentionally pinned favorites, never a gameplay save write.
+Inspection retains all original cost/cooldown/target/action authority.
+
+Current source comparison: runtime 2b522bb715af9e22ddab4aa3cc7bb1cbaf435e9c (0.2.44),
+48 originals retained, 15 unchanged after import moves, 33 modified, 46 new and
+0 missing; 4,327 added/941 removed lines in modified originals after import
+normalization. Earlier screenshots and source labels retain their historical pins.
+
+## R actions using owned weapon arts (0.2.45)
+
+The user approved showing arts from owned unequipped weapons in R and using a
+compatible source for that action before resuming the usual loadout. Candidate
+sources are the party bag and current actor's equipment, not storage or another
+actor's equipped gear. Use native weapon skill grants and required weapon types;
+include main-hand weapons and offhand combat gear (guns/shields). Prefer the
+currently usable equipped source. When a swap is needed, use the highest owned
++N refinement within the same native family, otherwise a deterministic eligible
+source. Never substitute an unrelated family merely because its ID is larger.
+Respect equip permissions, fixed/sealed weapon slots and other-slot compatibility,
+including dual-wield/shield effects. Reject before payment when no valid source
+or target exists; keep native seals, HP/MP/TP costs, cooldowns and action recovery.
+
+Keep the real actor identity and equipment/inventory records unchanged. Use the
+action-scoped equipment overlay in game/actor-equipment.js with bounded cleanup;
+combat/menu-weapon-skills.js supplies the preview/action source context. Preserve that
+source's parameters and traits through repeats, projectiles and automatic follow-up
+callbacks, restoring the normal lookup after each scoped evaluation. Do not learn
+the borrowed skill, transfer inventory, serialize temporary gear or save it as the
+normal loadout. Preview must remain free of resource and state changes.
+
+Rows show the original source weapon icon/name, availability and source-aware
+skill costs; source names participate in search. The main profile retains the
+normal current-equipment resources/parameters, with the selected action's weapon
+and costs explained separately. Keep the Q distinction based on real allSkills:
+learned/currently granted skills remain normally assignable even when their R
+preview needs another weapon or use is blocked by costs/cooldown. Only an art
+absent from real allSkills and borrowed from an unequipped source is R-only;
+explain that equipping the source makes it available for normal assignment.
+Quick slots retain their existing equipped-weapon rules. Do not claim a held-model
+swap without implementing and verifying it. Keep synthetic regression fixtures,
+private original-data audits and player saves separate. No physical-headset
+playtest is claimed. Four-language player guides explain controls and sources.
+
+Native Break grants retain preparation followed by the next real hit, with the
+original three-second latch expiry. Retain the action source through that latch;
+consume it on the hit and release it on expiry or disarm. Do not turn preparation
+into an immediate hit or keep the borrowed source active after cancellation.
+
+Retire rebuilt held groups by disposing each owned geometry/material once;
+never dispose shared textures or controller hands. Source selection must not
+duplicate a weapon equipped in another slot without a real bag copy. Both the
+PC/VR source-to-normal graphics lifecycle and the dual-wield inventory case are
+covered by real runtime regressions.
+
+Local 0.2.45 gates: 1,194 JavaScript tests pass (30 new runtime and10 UI cases),
+npm lint/production build, Ruff,
+8 packaging and7 Python protocol tests. Desktop native-asset checks cover the
+Drake Sword+5/Dragon Shockwave source preview at1020x1004 and640x720. The public
+source screenshot is docs/screenshots/weapon-skills-0.2.45-owned-arts.png. No
+physical-headset playtest is claimed; original game files and player saves remain
+unchanged. Release/source-comparison updates remain a separate final step.
+
+Current source comparison: runtime a9a4a727e2a6ae911dc2abb5181823d8e31bdde1 (0.2.45),
+48 originals retained, 15 unchanged after import moves, 33 modified, 48 new and
+0 missing; 4,465 added/963 removed lines in modified originals after import
+normalization. Earlier screenshots and source labels retain their historical pins.
+
+## Paused skill cooldown clock (0.2.46)
+
+The user reported that skill cooldowns elapsed while R Skills paused the world.
+Absolute G.time deadlines must account for paused gameplay consistently in both
+the displayed remaining time and action eligibility. Synchronize the cooldown
+clock before paused reads and before every fresh deadline write, including
+stage/root cooldowns and alternate cast paths. Shift existing deadlines only
+for their owned paused interval; never retroactively add the earlier pause to
+a deadline just created in the menu or apply the same elapsed interval twice.
+Keep native skill durations, HP/MP/TP costs and shared action/cooldown authority.
+
+The user's clarified scope includes shared action recovery. This supersedes the
+earlier menu-origin UI-clock exception: remove pauseRecovery:false for menu
+actions, and freeze native skill deadlines plus shared active/recovery/field
+timers while the world is paused. An accepted action-consuming support skill
+(healing, buffs and similar effects) returns to gameplay so recovery progresses;
+reopening R pauses the remaining recovery again. Pure out-of-combat utility may
+stay open. Rejected uses must leave resources, recovery and the menu untouched.
+Keep native per-skill duration, shared recovery and burst-tail rules intact.
+Use synthetic regressions for paused status reads, accepted support returning
+to gameplay, reopening R during recovery, rejected uses, fresh writes, resume
+boundaries and stage/shared deadlines. No original files or player saves are
+changed, and no physical-headset playtest is claimed.
+
+Local 0.2.46 gates: 1,205 JavaScript tests pass (11 new cooldown/real UI cases),
+ESLint, production build, Ruff, 8 packaging and 7 Python protocol tests. Tests
+cover actual PC R/VR menu paths, paused/resumed native and shared recovery,
+new deadlines during pauses, repeated reads, stage clocks, authored reductions,
+rejected casts and accepted support returning to play. Core frame branches
+that skip Combat.update during headset-away or map loading still synchronize
+paused deadlines. No player saves/original records are changed; no physical
+headset playtest is claimed. Earlier screenshots retain their original versions.
+
+Current source comparison: runtime 4a82c174e1a17aab689dea8df17866619b45fd9c (0.2.46),
+48 originals retained, 15 unchanged after import moves, 33 modified, 48 new and
+0 missing; 4,493 added/970 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
+
+## Repeated UI and world work (0.2.47)
+
+The user requested overall performance improvements. Keep gameplay, live skill
+authority and original artwork intact; measure specific workloads rather than
+claiming an FPS or physical-headset improvement from helper timings.
+
+UI.update performs one complete Skills-browser row refresh before input, then
+refreshes the selected profile after input without repeating every skill plan.
+Query/category/favorite/use handlers still refresh their changed rows immediately.
+Real casts perform fresh authority checks; no status is cached across frames.
+Position the HTML search field once after final panel placement. Preserve native
+costs, cooldown pauses, same-frame profile selection and ownership cleanup.
+
+The synchronous menu planning scope shares normal-gear known IDs, owned-source
+enumeration and per-source equipment compatibility only for that rows call.
+Equipment overlays still evaluate their own grants, features and costs; never
+substitute normal-gear known IDs for the action overlay's skill availability.
+Do not cache actual-cast plans, actor statistics, costs, resource levels, seals,
+states or cooldown authority across frames. Retain source-context cleanup.
+
+A private synthetic probe ran actual UI/Input/Combat with no-op canvas drawing
+for 30 updates. Its local CPU workload samples were:
+
+| Known skills / owned sources | Before, ms per update | After, ms per update |
+| --- | --- | --- |
+| 8 / 0 | 0.578 | 0.589 |
+| 120 / 60 | 9.153 | 2.622 |
+| 300 / 100 | 32.628 | 6.158 |
+
+Across 30 updates, full row evaluations fell from 60 to 30. The larger workloads'
+status-plan counts fell from 10,860 to 5,460 and from 24,060 to 12,060. The small
+workload was essentially unchanged; stable panels requested no new texture
+uploads in either run.
+These local CPU workload samples do not measure rendering, GPU time, FPS or VR
+hardware. The private probe and synthetic inputs are not shipped game data.
+
+Two real UI/Input/Three regressions cover bounded row/status/search-position
+work with unchanged canvas commits, plus MP changes during confirmation to
+retain fresh rejection and same-frame profile feedback. Existing browser,
+profile and menu coverage remains 79 passing focused cases, with owned ESLint
+checks clean.
+
+World CPU changes reuse static exit-route analysis while observing map/page/list,
+common-event and nested route/fall dependencies. Active page, erase, movement,
+floor and loop behavior remain live. Tile-picture grouping watches member,
+character, mesh and metadata identities plus map/mapInfo callbacks and tileset
+identity, retaining late-art and same-metadata replacement behavior. Nine new
+synthetic regressions plus 24 existing cases pass; owned lint is clean. Private
+local helper medians changed from 0.4451 to 0.0089ms for 20 exits with 1,000
+commands and from 0.2635 to 0.0152ms for 1,000 static tile events. These CPU measurements do not
+establish a frame-rate gain. Combined release gates and source comparison are
+recorded after final validation.
+
+Large ordinary map buffers (at least 2,048 complete quads) use 32-tile spatial
+batches; smaller ordinary buffers keep their original single draw. Billboard
+buffers below that threshold also stay together, with corrected shader-aware
+bounds; larger ones split into the same 32-tile batches. Keep full quads and
+every attribute/index, shared materials/atlases and original collision/floor
+data. Ordinary bounds contain every actual vertex; billboard bounds contain
+all cylindrical rotations around native centers, including wide canopy edges
+and translated loop copies. Standing-picture merging is unchanged. Dispose
+owned chunk geometry once and shared materials/textures once through map teardown.
+
+Ten geometry regressions cover attribute/triangle preservation, threshold
+boundaries, wide/tall geometry, yaw/frustum/loop cases, real map build/collision
+and resource disposal. A private read-only native-asset Map161 replay compared
+the exact same scene/camera/time before and after culling at six yaw/pitch
+headings at 1280x720: every RGBA pixel matched. The north-facing example reduced
+submitted triangles from 166,384 to 90,728 and draw calls changed from 51 to 55.
+Choose coarse batches to limit extra draws; do not claim all viewpoints or
+devices gain the same amount. Original artwork and visual quality are unchanged.
+
+The read-only initialized-character browser comparison measured UI CPU work
+around 30ms before versus 7ms after per frame, across 240 measured frames after
+warmup. This includes real canvas/WebGL presentation and fresh skill checks;
+it is still a local sample, not a headset or universal FPS benchmark. Original
+game files, player saves, private controls and audit records remain excluded.
+
+Local 0.2.47 release gates: 1,228 JavaScript tests pass (23 added), ESLint,
+production build, Ruff, 8 packaging and 7 Python protocol cases. No physical
+headset playtest is claimed. Historical screenshot labels/pins are preserved.
+
+Current source comparison: runtime 457d5c625cbe95480d4004c7a1df9c22e9ee1df6 (0.2.47),
+48 originals retained, 15 unchanged after import moves, 33 modified, 49 new and
+0 missing; 4,593 added/980 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
+
+## Scripted battle movement and shared duel countdown (0.2.48)
+
+Lindamea's native pre-battle backstep route decelerates the player through speeds
+6/5/4/3/2 and leaves the final speed until its post-battle restoration. Native
+battles do not use free map movement, but this port applied that speed to real-time
+locomotion, reducing normal movement to one quarter. Retain raw forced-route speed
+and capture the previous free speed only for player routes containing positional
+movement and speed commands in the owning interpreter tree. A battle consumes its
+valid scene snapshot. PC/VR free locomotion may use it only during that active
+battle; completed battles, different characters and later speed writes invalidate
+it. Native speed-only choices, including Dodo Normal/Fast, stay authoritative even
+when writing the same value. Do not clamp all battles to a fixed normal speed or
+alter AGI, guard, sprint or boss balance to hide a cinematic carry-over.
+
+The shared immortality countdown uses actual player/enemy state timers and the
+existing timed shared Death-immunity criteria. It owns no clock or independent
+120-second deadline. Keep combat pauses, state removals and battle/world ownership
+authoritative. Paint a compact localized row below enemy HP, with the native state
+icon when available; preserve status-effect rows and reuse the nameplate texture.
+No native game records, actual player saves or private replay helpers are shipped.
+
+Local verification: 1,249 JavaScript tests pass (7 scene-speed and 14 countdown
+regressions added), ESLint, production build, Ruff, 8 packaging and 7 Python
+protocol tests. The private read-only native intro replay ended at raw speed 2
+with free-combat multipliers 1/2 for pre-scene Normal/Fast rather than 0.25.
+Separate synthetic PC and VR camera-projection previews retained the compact
+HP/timer/effects layout; pausing held the same actual lifetime across views.
+These are automated/projection checks, not a physical-headset playtest.
+
+Current source comparison: runtime 482765132b87c20bed6e4497f88607cd2f1be6d1 (0.2.48),
+48 originals retained, 15 unchanged after import moves, 33 modified, 50 new and
+0 missing; 4,649 added/982 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
+
+## Queued Bonus Action skills in R (0.2.49)
+
+The user explicitly chose selecting several skills in R, then closing R to cast
+them in order. Show earned count and queue capacity with native source/attack
+icons when available, plus Remove last, Clear and Cast controls. Keep every queued
+native name/icon accessible through the profile pages. Do not roll, pay, apply
+effects, consume extras or serialize drafts during selection. Without extras,
+retain the existing single-cast path. Dodge, Break preparation and ineligible
+utility cannot join a draft or silently cast and discard its contents.
+
+Draft capacity is the actual earned follow-up count, not one plus that count or
+an estimate from feature61 probabilities. R/Cast commits the plan; Esc/Back or
+leaving the Skills menu cancels an uncommitted draft. Released actions dispatch
+one at a time in gameplay, retaining their active/repeat tails, source equipment,
+native costs and cooldowns. Every actual cast freshly rechecks effective stage,
+skill ownership, equipment, eligibility, resources, target and extra-action
+authority. Invalid uses stop the remainder; never fall back to a new normal roll
+when earned actions disappear. The final bonus retains normal trailing recovery.
+
+Menu/headset/cutscene pauses freeze execution and existing clocks. Actor, state,
+map, map ID, generation and manager epoch own the transient queue. Death, world
+replacement, source loss and encounter completion invalidate it and pending work.
+
+Bonus ownership synchronization reads the actual normal loadout, so a temporary
+borrowed weapon cannot erase earned actions. Action tickets still capture that
+action's real feature61 sources before the normal-loadout synchronization. Their
+own sources govern a base action's roll, including borrowed-only sources; bonus
+tickets never reroll. Genuine normal-source removal changes the epoch and rejects
+stale completions. Preserve source-specific damage, costs and equipment cleanup.
+
+Local 0.2.49 gates: 1,287 JavaScript tests pass (38 added), ESLint, production
+build, Ruff, 8 packaging and 7 Python protocol cases. Tests exercise actual R
+keyboard and footer dispatch, free planning and cancellation, paused/resumed
+sequential casts, capacity and native restrictions, final recovery, fresh costs,
+cooldowns/targets/stages, every ownership invalidation and both directions of
+borrowed-weapon feature61 sources, plus PC/VR/compact layouts and four locales.
+
+Private visual QA uses a copied save and original Map101/portrait/icons read-only,
+with exactly two synthetic guaranteed feature61 sources in memory. Real manager
+begin/complete earns two extras and actual queueMenuSkill plans the two native
+skills. Desktop/compact/VR projection controls and native Queue hints were checked;
+field dispatch is covered by tests, not advanced by that capture harness. Private
+controls/captures and original records are excluded from releases. No actual save
+or achievement writes, and no physical-headset playtest is claimed.
+
+Current source comparison: runtime b3560c989ed76ea59bc71d0900c985c4348910e6 (0.2.49),
+48 originals retained, 15 unchanged after import moves, 33 modified, 50 new and
+0 missing; 4,757 added/982 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
+
+## Battle Skills and exploration-menu restrictions (0.2.50)
+
+Grand Guignol's original approach (Map372/event15) runs Change Menu Access with
+parameter 0 before transferring through Map373 into the Map374 autorun battle.
+The flag is already set on the first attempt. VX Ace checks menu_disabled when
+calling the exploration menu; its battle commands remain separate. The R guard
+incorrectly rejected that flag even during an actual unfinished battle, while
+the ordinary battle-menu path already allowed access.
+
+R may ignore the exploration-only flag when CombatSystem.inCombat identifies an
+unfinished local battle. Do not clear or serialize a replacement for the native
+flag. Other guards, including active dialogue, interpreter scene waits, transfer,
+death, shops, prompts and victory handling, remain authoritative. Once the battle
+ends, the exploration restriction applies again. Never special-case a boss ID.
+
+Synthetic regressions execute the real Change Menu Access and Battle Processing
+commands, use actual R keyboard updates and live CombatSystem battle ownership,
+and verify reopening/switching/closing Skills plus post-battle restrictions.
+Original event records and player saves are read-only and excluded from tests
+and distribution. No physical headset or full boss playthrough is claimed.
+
+Local 0.2.50 gates: 1,295 JavaScript tests pass (8 added), ESLint, production
+build, Ruff, 8 packaging and 7 Python protocol cases. An in-memory module-loader
+probe restoring only the old menu guard fails the new actual-R battle-access
+regression; the fixed guard passes. No checkout rollback, native event edits,
+actual save writes, achievement writes or physical-headset playtest occurred.
+
+Current source comparison: runtime 5cd0ffe2d2c4ad9b0be8c3db46a2a8ad10248858 (0.2.50),
+48 originals retained, 15 unchanged after import moves, 33 modified, 50 new and
+0 missing; 4,759 added/982 removed lines in modified originals after import
+normalization. Historical screenshot labels and pins are unchanged.
+
+## Combat and event fidelity audit fixes (0.2.51)
+
+The read-only native-script audit identified nineteen runtime defects plus a
+skipped movie command. Synthetic public regressions exercise production paths;
+private native scripts/databases/maps/saves stay outside Git and distribution.
+
+Combat invocation: use the final native critical multiplier table rather than
+an earlier overwritten method. Preview computeDamage never rolls. Executed
+critical-enabled damage rolls CRI plus the deliberate gesture bonus, then CEV;
+direct/R/projectile and reflected/companion paths share these semantics. Repeats
+roll HIT/EVA/CRI/CEV independently, including after a first miss. Only normal
+attacks inherit feature34 extra attacks. Followups multiply native random scope
+count by authored repeats. Physical direct and ranged arts invoke native CNT;
+the original custom counter still applies the incoming strike before answering.
+MRF precedes substitute selection; the selected substitute alone rolls HIT/EVA.
+Companion reflection targets the actual caster, with no recursive reflect/counter.
+
+Action choice: an already-ready normal action preserves the earned Bonus Action.
+Queued extras explicitly preferBonus and may never silently become normal casts.
+Enemy usable selection checks type42, skill44, resources, and base/state feature61.
+No usable native action means no invented basic attack. Confusion restriction1
+forces normal hostile attacks with real melee/projectile/cost routes, suppresses
+manual actions, guard and dodge, and clears prepared/queued actions. Free look,
+locomotion and R inspection remain real-time adaptations; never rotate a headset
+to simulate confusion. Preserve authored forced-action semantics separately.
+
+GameplayDelay replaces wall-clock action tails. Validate map object/id, state,
+actor and combat generation; explicit battle validity includes the current
+co-op puppetBattle, not just local battles. Ended battles and invalid owners
+cancel rather than leak attacks into the next scene. New jobs do not reenter a
+flush; optional cancellation cleanup is exactly once. R/dialogue/tracking-away
+pauses these tails and absolute NPC/companion cooldowns. Original committed
+wave/ground effects keep their deliberate alive/death behavior while ownership
+is active. Companion stateTimerRemaining belongs to the actor, refreshes on
+reapply, and survives JSON/native import and AllySystem resets. Removed states
+cannot retain timers. Local inspection stops map/side/troop interpreters, forced
+routes and the native timer; co-op guest inspection cannot pause host-owned
+world logic. An identified original B/Erase viewer advances only its owning
+interpreter through authored waits while menus suspend every other world clock.
+Map/state/page/list/execution changes, native erasure and a finite budget clear
+that cancellation; never advance unrelated routes, timers, events or scenes.
+
+Nested choice confirmations use a stack and restore merged group metadata.
+Original Play Movie c261 waits on an owned MoviePlayer handle. Invalidation,
+transfer, title, game over, skip and playback failure release the wait, media,
+textures, workers and audio context. PC uses a contained full-window player;
+VR uses a stationary aspect-correct screen with Play/Skip controls. Freeze while
+tracking is away; preserve the world's presentation after playback. Consume
+keyboard/mouse/XR/grab edges so transition input cannot become an attack.
+Chromium Theora fallback is pinned ogv1.9.0 loaded only when needed; Vite ships
+the minimal Ogg/Theora/Vorbis/Opus workers/WASM and their licenses. Resolve
+original Movies assets read-only; never bundle or transcode game assets into
+the release. No runtime CDN or codec download, no private game/save writes.
+Player-facing controls cover all four supported locales. No physical-headset
+playtest or exhaustive playthrough is claimed.
+
+Local 0.2.51 gates: 1,382 JavaScript tests pass (87 added), ESLint, production
+build, Ruff, 8 packaging and 7 protocol cases, plus Windows launcher checks.
+Private native-script replay confirms C0-C6 combat outcomes from the parsed
+final difficulty table; both installed Theora videos decode in isolated Chrome
+with no playback/network errors. Concurrent movie commands wait without
+replacing active playback; waiting picture controllers complete only their own
+native cancellation. No original game/save/account writes or headset claims.
+
+Current 0.2.51 runtime source comparison: c17176beccfbd0b1e7008a7ecd2810622d6852ca; original upstream ZIP
+commit d39c2afd830c7be7fbbe2a86380f9c490e377bf7, SHA-256
+fc161fb7ef0cc754991d56ba872eeef0cbba84d5d7bf7cab21089da1aec2b770.
+The content comparison retains all48 original modules:
+15 unchanged after import moves,
+33 modified, 55 new fork runtime modules,
+0 missing; modified-original summary +5134/-1064.
+The literal public diff retains moved import-path changes. Historical image
+versions, source pins and upstream/fork labels remain unchanged.
+
+## Confusion action lifetime and recovery ownership (0.2.52)
+
+After Rampage38 ended, the first delayed melee callback stopped but its already
+scheduled normal repeats, automatic followups and ranged burst callbacks did
+not check the state again. The long forced burst's shared active/recovery and
+ranged gates also survived the cure, making manual skill use remain blocked.
+Do not fix this by deleting native states, timers, skill cooldowns or saves.
+
+Each forced attack captures the live application of the restriction1 state in
+an ephemeral WeakMap token. Reapplying a still-active state refreshes it;
+remove/cure, resistance refresh and Recover All discard its token. A later
+application cannot revive earlier queued actions. Save JSON remains unchanged.
+Propagate this context through forced melee repeats, followups and unlaunched
+normal/native gun rounds. Already released projectiles retain normal flight
+and impact; their extra followups still respect the originating state lifetime.
+Do not attach this cancellation to independent enemy counter responses.
+
+Only the latest accepted forced action owns confusionAction. Any newly accepted
+manual action takes ownership of shared recovery, so stale cleanup cannot erase
+its delays. An expired forced owner releases only its shared gates, animation
+and remaining burst; paid native skill cooldowns remain authoritative. Actor
+state expiration runs before queued tails and forced dispatch, preventing one final automatic
+shot on the frame that removes the state. Reset clears transient ownership.
+
+Eight production-path regressions reproduce and verify melee repeats/followup,
+both gun burst forms, cure/reapply between frames, immunity/Recover All identity,
+manual skill recovery ownership and timed expiry ordering. The previous source
+fails four new regressions; all1,390 JavaScript tests pass after the repair.
+Original game records and player saves are read-only; no headset playtest claim.
+
+Current0.2.52 source comparison: runtime 8a0054bb772f701f51893e37fc04e6d3a0dfce01, actual upstream ZIP
+d39c2afd830c7be7fbbe2a86380f9c490e377bf7; all48 original modules retained,
+15 unchanged after import moves, 33
+modified, 55 new fork modules, 0 missing;
+modified-original summary +5174/-1069.
+The public literal diff retains import moves; historical screenshots keep their
+exact previous source pins. Local1,390tests, ESLint, build, Ruff,8packaging and
+7protocol cases passed. Windows distribution gates also run in CI.
+
+## Upstream integration (0.2.53)
+
+Integrates all eleven upstream commits after d39c2afd830c7be7fbbe2a86380f9c490e377bf7
+through 938b527835b6abbc9d2a55ce91ea5df85b0acbe6 (2026.10.24-5). The merge records
+upstream ancestry and combines each changed module with the fork implementation;
+do not replace the fork with the flat upstream app or bundled executable.
+
+Preserve R Skills/profile/favorites/borrowed arts/queued Bonus Actions, native
+action eligibility, independent repeats and Confusion lifetime, gameplay-owned
+delays, save import/manual-save validation, desktop/VR transitions, translucent
+HUD/navigation, terrain classifications and original asset precedence.
+
+Adapted upstream systems include weapon-weight VR lag, PC chained cuts/thrusts,
+buffered attack/dodge input, stamina and PvP poise/bounce, Lindamea attack/audio
+changes, lift routes and university terrain, multiplayer chat/Opus voice/shared
+loot/world-server administration, Russian, native fonts/window tone/scroll text,
+distance-scaled labels and two-line item descriptions. Existing equivalents
+replace upstream minimap.js (navigation-map.js), mouselook.js (Input's validated
+pointer/dialogue input) and rmwindow.js (window-skin.js). No duplicate UI/menu or
+mouse-filter system is installed. Never ship upstream __pycache__ or game data.
+
+Quest entry removes the optional layers request and masks misleading
+XRSession.renderState.layers only when neither required nor optional features
+explicitly requested layers. Retain the exact native XRSession identity and the
+synchronous click request. A sealed incompatible property fails cleanly before
+renderer attachment. Connection deadline is 180 seconds. Existing cancellation,
+late grants, reference-space fallbacks, GPU recovery and desktop restoration
+remain authoritative. No parallel requestSession workaround is permitted.
+
+Analog triggers/grips use 0.6/0.35 press/release hysteresis. World squeeze events
+retain their between-frame buffering; poll-only analog grips share thresholds
+without replaying held grips through menus, source replacement or XR transitions.
+Rejected Dodge presses cannot be buffered through native seals or Confusion.
+PvP stagger/protection/fight deadlines and worn-poise age pause with R/headset
+inspection just like skill recovery; resumed gameplay advances them normally.
+PC shield presentation fits narrow camera views but retains the previous actual
+guard interception point; VR continues using the physical shield position.
+
+Chat typing blocks gameplay keys/movement/attacks. Voice uses explicit microphone
+enablement, bounded packet/decode queues and stale-session/device guards. Ending
+or muting stops playback. A real Chrome155 synthetic-oscillator smoke exercised
+MediaStreamTrackProcessor, Opus AudioEncoder, wire transport, AudioDecoder and
+playback without opening a hardware microphone. Private loopback tests use three
+actual TCP clients for map-local voice, global chat and world administration.
+
+apps/engine pins exact upstream C# source, repository path, raw Git byte hashes
+and LF-normalized source hashes. Windows validates and compiles it, producing
+engine-build.json binding that binary to its source tree and upstream commit.
+New packaging requires the generated engine and matching provenance; the legacy
+vendor EXE is only a historical verification fixture. Do not claim the compiled
+binary equals the publisher's EXE hash. Existing discovery/themed bootstrap,
+repository-derived updater, original-game read-only behavior and Steam bridge
+remain in the wrapper. CI shares the same compiled engine artifact across both
+package jobs. Source-engine tests serve only synthetic temporary archives/files.
+
+Local gates: 1,450 JavaScript tests, ESLint, production Vite build (all four voice
+icons bundled), Ruff, 14 Python protocol cases, 13 packaging cases, wheel build
+and 265 Windows native checks passed. Native checks include 13 source-engine
+loopback/API/archive/Unicode/isolation cases and 102 update/actual EngineHost
+checks. Local Inno compiler is unavailable; CI must complete installer build,
+manifest/upgrade/uninstall/save-retention checks before publishing. No physical
+Quest/headset, WAN or microphone-hardware playtest is claimed. No original game
+files, player saves or Steam achievements were changed for validation.
+
+Current0.2.53 runtime pin: 27a4434a05b12943b6e975ff6d5b0ad48ae19429. Literal
+diff and machine-readable pairs in docs/screenshots/upstream-20261024-* compare
+actual upstream938b527 source against that committed runtime:59 modules covered,
+17 unchanged after import normalization,39 modified,3 explicit adapted-equivalent
+pairs,57 extra fork modules; direct-match modifications +6346/-2911. Historical
+0.2.25 screenshots and earlier0.2.52 diff remain explicitly labelled and pinned.

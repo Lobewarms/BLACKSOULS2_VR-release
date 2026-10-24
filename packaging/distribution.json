@@ -1,0 +1,28 @@
+{
+  "files": {
+    "packaging/player/START_HERE.txt": "START_HERE.txt",
+    "apps/launcher/dist/BlacksoulsVR.exe": "BlacksoulsVR.exe",
+    "apps/launcher/dist/SteamAchievements.exe": "SteamAchievements.exe",
+    "apps/launcher/dist/BlacksoulsVR.Engine.exe": "BlacksoulsVR.Engine.exe",
+    "apps/launcher/dist/engine-build.json": "engine-build.json",
+    "apps/engine/upstream.json": "engine-upstream.json",
+    "packaging/runtime/coop_server.py": "coop_server.py",
+    "packaging/runtime/coop_server.cmd": "coop_server.cmd",
+    "packaging/runtime/world_server.py": "world_server.py",
+    "packaging/runtime/world_server.cmd": "world_server.cmd",
+    "docs/upstream/CONTROLS_en.txt": "CONTROLS_en.txt",
+    "docs/upstream/CONTROLS_ja.txt": "CONTROLS_ja.txt",
+    "docs/upstream/CONTROLS_ko.txt": "CONTROLS_ko.txt",
+    "docs/upstream/CONTROLS_ru.txt": "CONTROLS_ru.txt",
+    "docs/upstream/CONTROLS_zh.txt": "CONTROLS_zh.txt",
+    "docs/upstream/README_en.txt": "README_en.txt",
+    "docs/upstream/README_ja.txt": "README_ja.txt",
+    "docs/upstream/README_ko.txt": "README_ko.txt",
+    "docs/upstream/README_ru.txt": "README_ru.txt",
+    "docs/upstream/README_zh.txt": "README_zh.txt"
+  },
+  "trees": {
+    "apps/client/dist": "app",
+    "packages/coop-server/src/blacksouls_vr_coop": "server/blacksouls_vr_coop"
+  }
+}

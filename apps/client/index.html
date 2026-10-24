@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BLACK SOULS II VR</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #030305; color: #d8d0c0; font: 14px "Malgun Gothic", sans-serif; overflow: hidden; }
+  #app { position: fixed; inset: 0; }
+  #hud { position: fixed; left: 12px; top: 10px; right: 12px; display: flex; gap: 14px; align-items: flex-start; pointer-events: none; z-index: 2; }
+  #status { background: rgba(0,0,0,.55); padding: 6px 10px; border-radius: 6px; }
+  #vrbtn { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 3;
+    display: flex; flex-direction: column; align-items: center; gap: 8px; width: max-content; max-width: calc(100vw - 24px); }
+  #vrbtn #VRButton { width: 100px; padding: 12px 6px; border: 1px solid #fff; border-radius: 4px; background: rgba(0,0,0,.1);
+    color: #fff; font: 13px sans-serif; text-align: center; opacity: .5; outline: none; cursor: pointer; }
+  #vrbtn #VRButton:hover:enabled { opacity: 1; }
+  #vrbtn #VRButton:disabled { cursor: auto; }
+  #vrbtn #VRButton.wide { width: 150px; }
+  #vrbtn .xr-status { display: flex; flex-direction: column; align-items: center; gap: 6px; box-sizing: border-box; order: -1;
+    width: max-content; max-width: min(400px, calc(100vw - 24px)); padding: 9px 12px; border: 1px solid rgba(216,208,192,.35);
+    border-radius: 5px; background: rgba(6,5,8,.88); color: #f0ece4; font: 13px/1.4 "Malgun Gothic", sans-serif; text-align: center; }
+  #vrbtn .xr-status[hidden], #vrbtn .xr-status [hidden] { display: none; }
+  #vrbtn .xr-status__help { color: #d8d0c0; font-size: 12px; }
+  #vrbtn .xr-status__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+  #vrbtn .xr-status__cancel, #vrbtn .xr-status__recover { width: auto; max-width: 100%; padding: 6px 12px; border: 1px solid #c6baa2;
+    border-radius: 4px; background: #26222b; color: #fff; font: inherit; opacity: 1; cursor: pointer; }
+  #vrbtn .xr-status__cancel:hover:enabled, #vrbtn .xr-status__recover:hover:enabled { background: #3a333e; }
+  #vrbtn .xr-status__cancel:focus-visible, #vrbtn .xr-status__recover:focus-visible { outline: 2px solid #e2d4b7; outline-offset: 2px; }
+  #vrbtn .xr-status__cancel:disabled, #vrbtn .xr-status__recover:disabled { cursor: wait; }
+  /* while the headset is on, the page shows the player's view for people watching */
+  #spectator { position: fixed; inset: 0; width: 100%; height: 100%; display: none; z-index: 1; background: #000; }
+  body.spectating #spectator { display: block; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="hud">
+  <div id="status">로딩 중...</div>
+</div>
+<div id="vrbtn"></div>
+<script type="module" src="/src/core/main.js"></script>
+</body>
+</html>

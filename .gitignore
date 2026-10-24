@@ -1,0 +1,15 @@
+node_modules/
+.venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+dist/
+coverage/
+*.egg-info/
+*.log
+coop_server.json
+saves/
+Game.exe
+Game.rgss3a
+steam-session.json
+steam_appid.txt
