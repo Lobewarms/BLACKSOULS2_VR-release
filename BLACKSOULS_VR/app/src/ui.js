@@ -24,7 +24,7 @@ const VOICE_LABEL = () => ({ off: tr('끔'), listen: tr('듣기만'), talk: tr('
 const VOICE_BADGE = [64, 112], VOICE_PIC = 72;
 // the status panel: its window's width (original pixels), the states' icons on its row; how big it is - in metres (VR,
 // over the left hand) and, on PC (in the bottom left corner), as a share of the screen's height - for each of those pixels
-const HUD_W = 320, HUD_ICONS = 12, HUD_M = 0.17 / 256, DESK_HUD = 0.35 / 256;
+const HUD_W = 320, HUD_ICONS = 12, HUD_M = 0.136 / 256, DESK_HUD = 0.28 / 256;
 // (the compose shop - scriptdata.js composeShop) what a good takes besides its price, from its note's <合成設定:kind,id,n>
 // lines, as the script reads them (a count left out: 1; a kind other than 0-2 or a thing that is not there: left out)
 function composeMats(d, word) {
@@ -1057,9 +1057,9 @@ export class UI {
     this.hud = new Panel(HUD_W * MS, (PAD * 2 + LINE * 4.5) * MS, HUD_M * HUD_W);       // (as tall as it gets: with the icons' row)
     this.hud.mesh.renderOrder = 2989;
     // (co-op) the voice chat marks just right of it, at its top (voicemarks.js - drawVoiceBadge): with it wherever it goes
-    this.voiceBadge = new Panel(VOICE_BADGE[0], VOICE_BADGE[1], 0.17 * VOICE_BADGE[0] / 512);
+    this.voiceBadge = new Panel(VOICE_BADGE[0], VOICE_BADGE[1], HUD_M / MS * VOICE_BADGE[0]);
     this.voiceBadge.mesh.renderOrder = this.hud.mesh.renderOrder;
-    this.voiceBadge.mesh.position.set((this.hud.widthM + this.voiceBadge.widthM) / 2 + 0.17 * 10 / 512, (this.hud.heightM - this.voiceBadge.heightM) / 2 - 0.17 * 6 / 512, 0);
+    this.voiceBadge.mesh.position.set((this.hud.widthM + this.voiceBadge.widthM) / 2 + HUD_M / MS * 10, (this.hud.heightM - this.voiceBadge.heightM) / 2 - HUD_M / MS * 6, 0);
     this.hud.mesh.add(this.voiceBadge.mesh);
     this.voiceBadgeKey = '';
     this.raycaster = new THREE.Raycaster();
