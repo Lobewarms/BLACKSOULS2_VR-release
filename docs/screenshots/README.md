@@ -122,11 +122,28 @@ reading a locally owned game. Original game artwork belongs to its rights holder
 
 ## Runtime source diff
 
+The current v0.2.53 integration compares upstream2026.10.24-5 at
+938b527835b6abbc9d2a55ce91ea5df85b0acbe6 with fork runtime
+27a4434a05b12943b6e975ff6d5b0ad48ae19429.
+[Read the current literal source diff](upstream-20261024-runtime.diff) or its
+[file-by-file source record](upstream-20261024-source.json).
+
+Of59 upstream JavaScript modules,17 are unchanged after relative-import moves,
+39 have fork modifications, and3 use existing fork equivalents: minimap to
+navigation-map, mouselook to Input, and rmwindow to window-skin. Those substitutions
+are explicitly paired in the diff, rather than claimed byte-identical. There
+are57 additional fork runtime modules. Modified direct matches contain6,346
+added/2,911 removed lines after import normalization. The literal diff retains
+import-path changes. The image pairs above retain their original capture pins;
+they do not depict the October24 upstream release.
+
+### Preserved v0.2.52 source comparison
+
 [Read the literal JavaScript source diff](upstream-runtime.diff).
 It compares original ZIP entries with the committed fork files, matching moved
 modules by filename. The diff retains actual import-path changes and normalizes
 line endings. It includes new fork runtime modules and is intended for review.
-The current source comparison is version 0.2.52 at commit
+This earlier source comparison is version 0.2.52 at commit
 8a0054bb772f701f51893e37fc04e6d3a0dfce01; the captured image pairs above remain
 the labelled version 0.2.25 comparison.
 The complete PR also contains the launcher, build tools, tests and documentation.

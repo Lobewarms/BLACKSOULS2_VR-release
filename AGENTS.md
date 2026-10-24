@@ -3155,3 +3155,10 @@ checks. Local Inno compiler is unavailable; CI must complete installer build,
 manifest/upgrade/uninstall/save-retention checks before publishing. No physical
 Quest/headset, WAN or microphone-hardware playtest is claimed. No original game
 files, player saves or Steam achievements were changed for validation.
+
+Current0.2.53 runtime pin: 27a4434a05b12943b6e975ff6d5b0ad48ae19429. Literal
+diff and machine-readable pairs in docs/screenshots/upstream-20261024-* compare
+actual upstream938b527 source against that committed runtime:59 modules covered,
+17 unchanged after import normalization,39 modified,3 explicit adapted-equivalent
+pairs,57 extra fork modules; direct-match modifications +6346/-2911. Historical
+0.2.25 screenshots and earlier0.2.52 diff remain explicitly labelled and pinned.
