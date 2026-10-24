@@ -1,10 +1,12 @@
 // Language of the parts this VR version adds - menus, settings, notices, status lines. The game's own text
 // (dialogue, names, descriptions, map names, battle messages) is never touched.
-// It is chosen in the launcher (?lang=ko|en|ja|zh on the page address); without one, the browser's language.
+// It is chosen in the launcher (?lang=ko|en|ja|zh|ru on the page address); without one, the browser's language.
 // tr('한국어 원문', { name }) -> the text in that language ({name} filled in); a missing entry falls back to Korean.
 // A key may carry a context after '|' ('무기|equip') when one Korean word needs two translations.
 
-export const LANGS = ['ko', 'en', 'ja', 'zh'];
+import { RUSSIAN } from './i18n-ru.js';
+
+export const LANGS = ['ko', 'en', 'ja', 'zh', 'ru'];
 
 function pick() {
   try {
@@ -18,7 +20,7 @@ const current = pick();
 try { document.documentElement.lang = current; } catch { /* no document (workers) */ }
 
 export function lang() { return current; }
-const LOCALES = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN' };
+const LOCALES = { ko: 'ko-KR', en: 'en-US', ja: 'ja-JP', zh: 'zh-CN', ru: 'ru-RU' };
 export function fmtDate(ms) { try { return new Date(ms).toLocaleString(LOCALES[current]); } catch { return new Date(ms).toLocaleString(); } }
 
 // [Korean, English, Japanese, Chinese (simplified)]
@@ -557,9 +559,120 @@ const ENTRIES = [
   ['스틱 좌우(PC ←→)로 1개씩 · A/트리거로 판매 · B 취소', 'Stick left/right (PC ←→): one at a time · A/trigger sells · B cancels', 'スティック左右 (PC ←→) で1個ずつ · A/トリガーで売却 · B キャンセル', '摇杆左右 (PC ←→) 逐个调整 · A/扳机出售 · B 取消'],
   ['전부 ({n}개)', 'All ({n})', '全部 ({n}個)', '全部 ({n}个)'],
   ['{name} 판매', 'Sell {name}', '{name} を売却', '出售 {name}'],
+  ["커뮤니티 서버 {n}", "Community server {n}", "コミュニティサーバー {n}", "社区服务器 {n}", "Сервер сообщества {n}"],
+  ["커뮤니티 서버 추가 (IP·포트·PIN 입력)", "Add a community server (IP, port, PIN)", "コミュニティサーバーを追加（IP・ポート・PIN）", "添加社区服务器（IP·端口·PIN）", "Добавить сервер сообщества (IP, порт, PIN)"],
+  ["다른 사람이 켠 커뮤니티 서버로 들어갑니다", "Join a community server someone else runs", "ほかの人が開いたコミュニティサーバーに入ります", "进入别人开启的社区服务器", "Подключиться к серверу сообщества, который запустил кто-то другой"],
+  ["추가한 커뮤니티 서버 목록 비우기", "Clear the community servers you added", "追加したコミュニティサーバーを消す", "清除已添加的社区服务器", "Удалить добавленные серверы сообщества"],
+  ["커뮤니티 서버가 예전 버전입니다", "The community server is an older version", "コミュニティサーバーが古いバージョンです", "社区服务器是旧版本", "Сервер сообщества старой версии"],
+  ["커뮤니티 서버 세이브 불러오기", "Load a community-server save", "コミュニティサーバーのセーブを読み込む", "读取社区服务器存档", "Загрузить сохранение сервера сообщества"],
+  ["커뮤니티 서버의 진행을 본편으로 가져옵니다", "Bring your community-server progress into the game itself", "コミュニティサーバーでの進行を本編に持ってきます", "把社区服务器的进度带回本篇", "Перенести прогресс с сервера сообщества в саму игру"],
+  ["커뮤니티 서버 {d}", "Community server {d}", "コミュニティサーバー {d}", "社区服务器 {d}", "Сервер сообщества {d}"],
+  ["커뮤니티 서버 {d}에 연결하는 중...", "Connecting to community server {d}...", "コミュニティサーバー {d} に接続中...", "正在连接社区服务器 {d}...", "Подключение к серверу сообщества {d}..."],
+  ["커뮤니티 서버 {d}: 시작 방법을 골라 주세요", "Community server {d}: choose how to start", "コミュニティサーバー {d}: 始め方を選んでください", "社区服务器 {d}：请选择开始方式", "Сервер сообщества {d}: выберите, как начать"],
+  ["커뮤니티 서버 {d}: 오프닝 (도서관의 꿈에 오면 세계에 들어갑니다)", "Community server {d}: the opening (you enter the world on reaching the Dream Library)", "コミュニティサーバー {d}: オープニング（図書館の夢に着くと世界に入ります）", "社区服务器 {d}：开场（到达图书馆之梦时进入世界）", "Сервер сообщества {d}: вступление (вы войдёте в мир, дойдя до Библиотеки снов)"],
+  ["커뮤니티 서버 {d}: 세계에 들어가는 중...", "Community server {d}: entering the world...", "コミュニティサーバー {d}: 世界に入っています...", "社区服务器 {d}：正在进入世界...", "Сервер сообщества {d}: вход в мир..."],
+  ["커뮤니티 서버 {d} ({n}명)", "Community server {d} ({n} players)", "コミュニティサーバー {d}（{n}人）", "社区服务器 {d}（{n}人）", "Сервер сообщества {d} (игроков: {n})"],
+  ["커뮤니티 서버에서 나가기", "Leave the community server", "コミュニティサーバーから出る", "离开社区服务器", "Покинуть сервер сообщества"],
+  ["오프닝을 혼자 진행하고, 도서관의 꿈에 오면 세계에 들어갑니다", "Play the opening alone, then enter the world on reaching the Dream Library", "オープニングを一人で進め、図書館の夢に着くと世界に入ります", "独自进行开场，到达图书馆之梦时进入世界", "Пройти вступление в одиночку, затем войти в мир у Библиотеки снов"],
+  ["커뮤니티 서버 세이브로 이어서 합니다", "Continue from a community-server save", "コミュニティサーバーのセーブから続けます", "从社区服务器存档继续", "Продолжить с сохранения сервера сообщества"],
+  ["커뮤니티 서버의 세계와 게임 판본이 다릅니다", "Your game's edition differs from the community server's world", "コミュニティサーバーの世界とゲームの版が違います", "游戏版本与社区服务器的世界不同", "Издание вашей игры отличается от мира сервера сообщества"],
+  ["커뮤니티 서버와 이 게임의 버전이 다릅니다", "The community server and this game are different versions", "コミュニティサーバーとこのゲームのバージョンが違います", "社区服务器与本游戏版本不同", "У сервера сообщества и этой игры разные версии"],
+  ["커뮤니티 서버 세이브 {n}번에 저장했습니다", "Saved to community-server slot {n}", "コミュニティサーバーセーブ {n} に保存しました", "已保存到社区服务器存档 {n}", "Сохранено в слот сервера сообщества {n}"],
+  ["커뮤니티 서버 세이브 — 저장할 슬롯", "Community-server save — choose a slot", "コミュニティサーバーセーブ — 保存するスロット", "社区服务器存档 — 选择存档位", "Сохранение сервера сообщества — выберите слот"],
+  ["아이템 공유: 누가 얻든 모두가 같이 받음", "Shared loot: whatever anyone gets, everyone gets", "アイテム共有: 誰が得ても全員が受け取る", "物品共享：任何人获得的，所有人都会获得", "Общая добыча: что получает один, получают все"],
+  ["아이템 공유 없음 (얻은 사람만)", "No shared loot (only the one who gets it)", "アイテム共有なし（得た人だけ）", "不共享物品（仅获得者本人）", "Без общей добычи (только тот, кто получил)"],
+  ["{name} 님이 얻은 {item}[을;를] 함께 받았습니다", "Shared from {name}: {item}", "{name} さんが得た {item} を一緒に受け取りました", "一同收到了 {name} 获得的 {item}", "Общая добыча от {name}: {item}"],
+  ["VR 모드 버전이 서로 다릅니다 (모두 같은 버전으로 업데이트하세요)", "The VR mod versions differ (everyone needs the same version)", "VRモッドのバージョンが違います（全員同じバージョンに更新してください）", "VR 模组版本不同（请都更新到同一版本）", "Версии VR-мода различаются (у всех должна быть одна версия)"],
+  ["{name} 님이 들어오지 못했습니다: {why}", "{name} could not come in: {why}", "{name} さんは入れませんでした：{why}", "{name} 无法进入：{why}", "{name} не смог(ла) войти: {why}"],
+  ["게임 판본(버전·번역)이 서로 다릅니다", "The game copies differ (version or translation)", "ゲームの版（バージョン・翻訳）が違います", "游戏版本（版本·翻译）不同", "Копии игры различаются (версия или перевод)"],
+  ["PIN을 여러 번 틀려 이 주소가 잠시(10분) 막혔습니다", "Too many wrong PINs: this address is shut out for a while (10 min)", "PINを何度も間違えたため、このアドレスはしばらく（10分）ブロックされました", "PIN 输错多次，此地址被暂时封锁（10 分钟）", "Слишком много неверных PIN: этот адрес временно заблокирован (10 мин)"],
+  ["야외 맵의 원작 배경 그림(하늘·바다·우주 등)을 하늘에 두릅니다 (끄면 하늘 색의 하늘)", "Wraps the original background picture of outdoor maps (sky, sea, space...) round the sky (off: the sky colour)", "屋外マップの原作の背景画（空・海・宇宙など）を空にめぐらせます（オフにすると空の色の空）", "把室外地图的原作背景图（天空、大海、宇宙等）环绕在天空中（关闭则为天空颜色）", "Оборачивает оригинальную фоновую картинку уличных карт (небо, море, космос...) вокруг неба (выкл.: цвет неба)"],
+  ["하늘 색", "Sky colour", "空の色", "天空颜色", "Цвет неба"],
+  ["{name} 님이 접속했습니다", "{name} joined", "{name} さんが入りました", "{name} 已加入", "{name} присоединился(ась)"],
+  ["{name} 님이 나갔습니다", "{name} left", "{name} さんが出ました", "{name} 已离开", "{name} вышел(ла)"],
+  ["채팅", "Chat", "チャット", "聊天", "Чат"],
+  ["한/영", "KO/EN", "韓/英", "韩/英", "KO/EN"],
+  ["입력하고 Enter (Esc: 닫기)", "Type, then Enter to send (Esc: close)", "入力して Enter（Esc: 閉じる）", "输入后按 Enter（Esc: 关闭）", "Наберите текст и нажмите Enter, чтобы отправить (Esc: закрыть)"],
+  ["마이크 {n}", "Microphone {n}", "マイク {n}", "麦克风 {n}", "Микрофон {n}"],
+  ["마이크 권한은 PC 화면에서 허용해 주세요 (VR에 들어가기 전에 켜 두면 편합니다)", "Allow the microphone on the PC screen (easier: turn it on before entering VR)", "マイクの許可はPCの画面でしてください（VRに入る前にオンにすると楽です）", "请在电脑屏幕上允许麦克风（进入 VR 前打开更方便）", "Разрешите микрофон на экране ПК (проще включить его до входа в VR)"],
+  ["마이크가 켜졌습니다 (음성 채팅)", "Microphone on (voice chat)", "マイクがオンになりました（ボイスチャット）", "麦克风已开启（语音聊天）", "Микрофон включён (голосовой чат)"],
+  ["마이크를 쓸 수 없습니다 (브라우저가 막았습니다)", "The microphone cannot be used (the browser blocked it)", "マイクを使えません（ブラウザがブロックしました）", "无法使用麦克风（浏览器已阻止）", "Микрофон недоступен (браузер его заблокировал)"],
+  ["마이크를 열지 못했습니다", "Could not open the microphone", "マイクを開けませんでした", "无法打开麦克风", "Не удалось открыть микрофон"],
+  ["듣기만", "Listen only", "聞くだけ", "只听", "Только слушать"],
+  ["말하기와 듣기", "Talk and listen", "話す・聞く", "说话和收听", "Говорить и слушать"],
+  ["{name} (음소거)", "{name} (muted)", "{name}（ミュート）", "{name}（已静音）", "{name} (без звука)"],
+  ["고르면 음소거하거나 아이템·소울을 줄 수 있습니다", "Pick to mute, or to give items or souls", "選ぶとミュートやアイテム・ソウルを渡せます", "选择后可静音，或赠送物品·魂", "Выберите, чтобы заглушить или отдать предметы или души"],
+  ["음소거 풀기", "Unmute", "ミュート解除", "取消静音", "Включить звук"],
+  ["음소거", "Mute", "ミュート", "静音", "Заглушить"],
+  ["이 사람의 채팅과 목소리", "This player's chat and voice", "この人のチャットと声", "此玩家的聊天和语音", "Чат и голос этого игрока"],
+  ["아이템·소울 주기", "Give items or souls", "アイテム・ソウルを渡す", "赠送物品·魂", "Отдать предметы или души"],
+  ["채팅·음성", "Chat and voice", "チャット・ボイス", "聊天·语音", "Чат и голос"],
+  ["채팅 보내기·기록, 음성 채팅과 마이크", "Send a chat line, the log, voice chat and the microphone", "チャット送信・履歴、ボイスチャットとマイク", "发送聊天·记录、语音聊天与麦克风", "Отправка сообщения, журнал, голосовой чат и микрофон"],
+  ["채팅 보내기", "Send a chat line", "チャットを送る", "发送聊天", "Отправить сообщение"],
+  ["한 줄을 모두에게 보냅니다 (PC: / 키)", "A line to everyone (PC: the / key)", "一行を全員に送ります（PC: / キー）", "向所有人发送一行（PC: / 键）", "Сообщение для всех (ПК: клавиша /)"],
+  ["채팅 기록 ({n})", "Chat log ({n})", "チャット履歴（{n}）", "聊天记录（{n}）", "Журнал чата ({n})"],
+  ["채팅, 들어오고 나간 사람, 보스 처치", "The chat, who came and went, and bosses beaten", "チャット、出入りした人、ボス撃破", "聊天、进出的人、击败的Boss", "Чат, кто пришёл и ушёл, побеждённые боссы"],
+  ["채팅 알림", "Chat notices", "チャット通知", "聊天通知", "Уведомления чата"],
+  ["받은 채팅을 말풍선과 함께 알림으로도 띄웁니다", "Also shows the chat lines you get as notices (besides the balloons)", "受け取ったチャットを吹き出しと一緒に通知でも表示します", "收到的聊天除气泡外也以通知显示", "Показывать полученные сообщения ещё и уведомлениями (кроме облачков)"],
+  ["음성 채팅", "Voice chat", "ボイスチャット", "语音聊天", "Голосовой чат"],
+  ["말하기를 고른 동안, 함께하는 중에만 마이크가 열립니다", "The microphone is open only while Talk is chosen and you play together", "「話す」を選んでいる間、一緒に遊んでいるときだけマイクが開きます", "仅在选择说话且一起游玩时才打开麦克风", "Микрофон открыт, только когда выбрано «Говорить» и вы играете вместе"],
+  ["마이크", "Microphone", "マイク", "麦克风", "Микрофон"],
+  ["기본 장치", "Default device", "既定のデバイス", "默认设备", "Устройство по умолчанию"],
+  ["사용 중", "In use", "使用中", "使用中", "Используется"],
+  ["눌러서 장치 목록에서 고릅니다", "Select it to pick from the list of devices", "決定するとデバイスの一覧から選べます", "确定后从设备列表中选择", "Выберите, чтобы выбрать из списка устройств"],
+  ["시스템에서 기본으로 정한 마이크", "The system's default microphone", "システムの既定のマイク", "系统默认的麦克风", "Микрофон системы по умолчанию"],
+  ["이 마이크로 말합니다", "Talk with this microphone", "このマイクで話します", "使用这个麦克风说话", "Говорить в этот микрофон"],
+  ["고른 마이크가 없어 기본 장치를 씁니다", "The microphone picked is not there: using the default device", "選んだマイクが見つからないので既定のデバイスを使います", "找不到所选的麦克风，改用默认设备", "Выбранного микрофона нет: используется устройство по умолчанию"],
+  ["음성 크기", "Voice volume", "声の大きさ", "语音音量", "Громкость голоса"],
+  ["다른 사람 목소리 크기 (좌우로 조절)", "The others' voices (left / right to adjust)", "ほかの人の声の大きさ（左右で調整）", "其他人的音量（用左右调整）", "Голоса других (влево / вправо — настроить)"],
+  ["채팅 기록", "Chat log", "チャット履歴", "聊天记录", "Журнал чата"],
+  ["지금 있는 곳 둘레의 지도를 화면 구석에 띄웁니다", "Shows a map of the area round you in a corner of the view", "今いる場所の周りの地図を画面の隅に表示します", "在画面角落显示当前位置周围的地图", "Показывает карту местности вокруг вас в углу обзора"],
+  ["지금 있는 곳 둘레의 지도를 오른손 위에 띄웁니다", "Shows a map of the area round you over your right hand", "今いる場所の周りの地図を右手の上に表示します", "在右手上方显示当前位置周围的地图", "Показывает карту местности вокруг вас над правой рукой"],
+  ["위치", "Place", "位置", "位置", "Место"],
+  ["오른손", "Right hand", "右手", "右手", "Правая рука"],
+  ["시야 구석", "Corner of the view", "視界の隅", "视野角落", "Угол обзора"],
+  ["오른손: 오른손 위에 떠 있습니다 · 시야 구석: 늘 시야에 보입니다", "Right hand: floats over your right hand · Corner of the view: always in sight", "右手：右手の上に浮かびます · 視界の隅：常に視界に表示されます", "右手：浮在右手上方 · 视野角落：始终显示在视野中", "Правая рука: парит над правой рукой · Угол обзора: всегда на виду"],
+  ["모양", "Shape", "形", "形状", "Форма"],
+  ["원형", "Round", "円形", "圆形", "Круглая"],
+  ["사각", "Square", "四角", "方形", "Квадратная"],
+  ["고르거나 좌우로 바꿉니다", "Select it, or left / right, to change it", "決定または左右で切り替えます", "确定或左右切换", "Выберите или нажмите влево / вправо, чтобы изменить"],
+  ["방향", "Facing", "向き", "朝向", "Ориентация"],
+  ["보는 방향이 위", "Where you look is up", "見ている方向が上", "视线方向朝上", "Вверху — куда вы смотрите"],
+  ["북쪽이 위", "North up", "北が上", "北方朝上", "Север вверху"],
+  ["지도가 보는 방향에 맞춰 돌고, 나는 늘 가운데에 있습니다", "The map turns with your view; you stay in its middle", "地図が見ている方向に合わせて回り、自分は常に中央にいます", "地图随视线旋转，你始终在中间", "Карта поворачивается вместе со взглядом, вы всегда в центре"],
+  ["원작 화면처럼: 맵 끝에서는 지도가 멈추고 나만 움직입니다", "As the original's screen: at the map's edges the map stops and only you move", "原作の画面と同じく、マップの端では地図が止まり自分だけが動きます", "与原作画面一样：在地图边缘地图停止，只有你移动", "Как экран оригинала: у краёв карты карта останавливается и движетесь только вы"],
+  ["불투명도", "Opacity", "不透明度", "不透明度", "Непрозрачность"],
+  ["지도 표시", "Show the map", "マップ表示", "显示地图", "Показывать карту"],
+  ["크기", "Size", "サイズ", "大小", "Размер"],
+  ["보이는 범위", "Area shown", "表示範囲", "显示范围", "Видимая область"],
+  ["{n}칸", "{n} tiles", "{n}マス", "{n}格", "{n} клеток"],
+  ["가로 위치", "Horizontal position", "横位置", "水平位置", "Положение по горизонтали"],
+  ["0%: 왼쪽 끝, 100%: 오른쪽 끝 (좌우로 조절)", "0%: left edge, 100%: right edge (left / right to adjust)", "0%：左端、100%：右端（左右で調整）", "0%：左端，100%：右端（用左右调整）", "0%: левый край, 100%: правый край (влево / вправо — настроить)"],
+  ["세로 위치", "Vertical position", "縦位置", "垂直位置", "Положение по вертикали"],
+  ["0%: 아래 끝, 100%: 위 끝 (좌우로 조절)", "0%: bottom edge, 100%: top edge (left / right to adjust)", "0%：下端、100%：上端（左右で調整）", "0%：下端，100%：上端（用左右调整）", "0%: нижний край, 100%: верхний край (влево / вправо — настроить)"],
+  ["기본값으로", "Back to the defaults", "初期値に戻す", "恢复默认", "По умолчанию"],
+  ["원작 배경 그림이 없는 곳의 하늘 색 (원작: 검정)", "The sky where the map has no background picture (the original: black)", "背景画のない場所の空の色（原作：黒）", "没有背景图的地方的天空颜色（原作：黑色）", "Небо там, где у карты нет фоновой картинки (в оригинале: чёрное)"],
+  ["직접 설정", "Custom", "カスタム", "自定义", "Свой"],
+  ["검정 (원작)", "Black (original)", "黒（原作）", "黑色（原作）", "Чёрный (оригинал)"],
+  ["밤하늘", "Night sky", "夜空", "夜空", "Ночное небо"],
+  ["어스름", "Dusk", "夕闇", "暮色", "Сумерки"],
+  ["흐린 하늘", "Overcast", "曇り空", "阴天", "Пасмурно"],
+  ["맑은 하늘", "Clear sky", "晴れた空", "晴空", "Ясное небо"],
+  ["노을", "Sunset", "夕焼け", "晚霞", "Закат"],
+  ["안개", "Mist", "霧", "雾", "Туман"],
+  ["색", "Colour", "色", "颜色", "Цвет"],
+  ["고르면 다음 색, 좌우로도 바꿉니다", "Select for the next colour, or left / right", "決定で次の色、左右でも変えられます", "确定切换下一个颜色，左右也可切换", "Выберите для следующего цвета или нажмите влево / вправо"],
+  ["빨강", "Red", "赤", "红", "Красный"],
+  ["초록", "Green", "緑", "绿", "Зелёный"],
+  ["파랑", "Blue", "青", "蓝", "Синий"],
+  ["좌우로 조절합니다", "Adjust with left / right", "左右で調整します", "用左右调整", "Настраивается влево / вправо"],
+  ["원작대로 (검정)", "As the original (black)", "原作どおり（黒）", "按原作（黑色）", "Как в оригинале (чёрное)"],
+  ["◀  {n}개  ▶  {verb}", "◀  {n}  ▶  {verb}", "◀  {n}個  ▶  {verb}", "◀  {n}个  ▶  {verb}", "◀  {n}  ▶  {verb}"],
+  ["무기 무게감", "Weapon weight", "武器の重さ", "武器重量感", "Вес оружия"],
+  ["무거운 무기일수록 세게 휘두르면 늦게 따라오고 멈춰도 더 나가며, 수평으로 들면 처집니다 · 가벼운 무기는 손에 딱 붙어 있습니다 (VR)", "The heavier the weapon, the more it lags a hard swing, carries on when you stop and sags held level · light weapons stay fixed in the hand (VR)", "重い武器ほど強く振ると遅れてついてきて、止めても流れ、水平に持つと垂れ下がります · 軽い武器は手にぴったり (VR)", "武器越重，用力挥动时越会慢一步跟上，停下也会多冲一点，水平拿着会下垂 · 轻武器紧握在手 (VR)", "Тяжёлое оружие отстаёт при резком взмахе, проносится дальше и провисает · лёгкое сидит в руке намертво (VR)"],
 ];
 
-const DICT = { en: new Map(), ja: new Map(), zh: new Map() };
+const DICT = { en: new Map(), ja: new Map(), zh: new Map(), ru: RUSSIAN };
 for (const [ko, en, ja, zh] of ENTRIES) { DICT.en.set(ko, en); DICT.ja.set(ko, ja); DICT.zh.set(ko, zh); }
 export const KEYS = ENTRIES.map(e => e[0]);       // (for the build check: every tr() key is here)
 

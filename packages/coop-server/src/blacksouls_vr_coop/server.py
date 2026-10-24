@@ -64,6 +64,9 @@ FAILS = 5                            # wrong PINs from one address ...
 FAIL_WINDOW = 600                    # ... within this many seconds ...
 BAN = 600                            # ... ban it for this long
 PER_ADDRESS = 8                      # connections at once from one address (players behind one router: as many as may play)
+# why one could not come in, as the window says it
+REFUSED = {'bad': '접속이 잘못됨', 'pin': 'PIN이 틀림', 'version': 'VR 모드(또는 서버) 버전이 다름', 'banned': '차단된 사람',
+           'full': '인원이 다 참', 'game': '게임 판본(버전·번역)이 다름', 'blocked': 'PIN을 여러 번 틀려 잠시 막힌 주소'}
 MAX_CONNECTIONS = 32
 PING_EVERY = 20                      # s between the server's pings (a browser answers them by itself)
 IDLE = 60                            # s without a word from a player (not even a pong): its connection is dead
@@ -414,8 +417,7 @@ class Hub:
         peer = writer.get_extra_info('peername') or ('?', 0)
         address = peer[0]
         loopback = is_loopback(address)
-        t = time.monotonic()
-        if self.banned.get(address, 0) > t or self.connections >= MAX_CONNECTIONS or self.per_address.get(address, 0) >= PER_ADDRESS:
+        if self.connections >= MAX_CONNECTIONS or self.per_address.get(address, 0) >= PER_ADDRESS:
             writer.close()
             return
         self.connections += 1
@@ -423,6 +425,13 @@ class Hub:
         player = None
         try:
             await asyncio.wait_for(handshake(reader, writer), AUTH_WAIT)
+            if self.banned.get(address, 0) > time.monotonic():
+                # (shut out for a while - a few wrong PINs from this address: told so; it heard only that the server did
+                # not answer, and so did everyone else behind the same router)
+                say(f'들어오지 못함: ({address}) - {REFUSED["blocked"]}', 'refused: blocked (wrong PINs)')
+                writer.write(frame(1, json.dumps({'t': 'deny', 'why': 'blocked'}).encode()))
+                await writer.drain()
+                return
             nonce = secrets.token_hex(16)
             writer.write(frame(1, json.dumps({'t': 'challenge', 'nonce': nonce, 'v': VERSION}).encode()))
             await writer.drain()
@@ -443,6 +452,8 @@ class Hub:
             elif len(self.players) - (1 if role == 'host' and self.host() else 0) >= self.cfg['maxPlayers']:      # (a host coming back takes its old place)
                 why = 'full'
             if why:
+                # (said here too: whoever runs the server sees why one could not come in - it heard only the buzzer)
+                say(f'들어오지 못함: {name or "?"} [{tag or "-"}] ({address}) - {REFUSED.get(why, why)}', f'refused: {why}')
                 writer.write(frame(1, json.dumps({'t': 'deny', 'why': why}).encode()))
                 await writer.drain()
                 return

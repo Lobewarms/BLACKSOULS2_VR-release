@@ -12,7 +12,7 @@ Meta Quest 3 connects through Quest Link, Air Link or Virtual Desktop.
 
 Prefer a ZIP? Download the **portable ZIP** from the same release page.
 Setup and controls are in the README / CONTROLS files inside the ZIP
-(English, Japanese, Korean and Simplified Chinese).
+(English, Japanese, Korean, Simplified Chinese and Russian).
 
 Run the installer, then open **BLACK SOULS II VR** from the Start menu.
 A desktop shortcut is optional during setup.

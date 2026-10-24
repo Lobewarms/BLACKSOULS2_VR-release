@@ -4,6 +4,8 @@
 // player's head as the original's balloons do, its last frame held a while - over its own head in its own view too
 // (looking up shows it - main.js updatePlayerBalloon), and playing together, over its figure for the others (coop.js
 // poseMsg: the player's balloon). Letting go near the middle puts up nothing. Never in an event, a message or a menu.
+// Playing together, a chat slot (a speech balloon) stands under the ring, outside it - the balloons keep their places:
+// let go on it, the chat keyboard opens (coopchat.js - VR has no button left for it; PC has its / key too).
 import * as THREE from 'three';
 import { G } from '../core/globals.js';
 import { BALLOON_TIME, balloonSheetNow } from './balloons.js';
@@ -16,6 +18,7 @@ const SLOT_SIZE = 0.066;
 const HOLD = 2;              // s its last frame stays up once it has come up (the coming up itself: BALLOON_TIME)
 const AGAIN = 0.2;           // s with none up before the same one comes up again (so the others see it come anew)
 const LAST = 12;             // balloon ticks left that show its last frame (balloons.js balloonFrame)
+const CHAT_AT = -(RING_R + 0.085);   // m: the chat slot's place, under the ring
 
 export class EmoteRing {
   constructor() {
@@ -33,6 +36,22 @@ export class EmoteRing {
     this.sel = -1;
     this.cur = new THREE.Vector2();
     this.vrMode = false;
+    this.chat = null;          // the chat slot (made the first time it is wanted)
+  }
+  // the chat slot under the ring, shown while playing together
+  chatSlot() {
+    if (!this.chat) {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 128;
+      const tex = new THREE.CanvasTexture(canvas);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(SLOT_SIZE, SLOT_SIZE), overlayMaterial(tex));
+      mesh.renderOrder = 1100;
+      mesh.position.set(0, CHAT_AT, 0);
+      this.group.add(mesh);
+      this.chat = { canvas, tex, mesh, chat: true };
+    }
+    return this.chat;
   }
   // a slot for each balloon of the sheet (made once it has come)
   build(sheet) {
@@ -56,6 +75,8 @@ export class EmoteRing {
     const sheet = balloonSheetNow();
     if (!sheet) return false;
     if (!this.slots.length) this.build(sheet);
+    const together = !!G.chat?.on;
+    if (together || this.chat) this.chatSlot().mesh.visible = together;
     const right = G.vr ? G.input.controllers.right : null;
     this.vrMode = !!right;
     if (right) {
@@ -97,25 +118,29 @@ export class EmoteRing {
     } else {
       this.cur.x += G.input.mouse.dx * 0.0006;
       this.cur.y -= G.input.mouse.dy * 0.0006;
-      if (this.cur.length() > RING_R + 0.03) this.cur.setLength(RING_R + 0.03);
+      // (down to the chat slot too, while it is there)
+      const reach = this.chat?.mesh.visible && this.cur.y < -RING_R * 0.6 ? -CHAT_AT + 0.02 : RING_R + 0.03;
+      if (this.cur.length() > reach) this.cur.setLength(reach);
     }
     const lim = RING_R + 0.05;
-    this.cursor.position.set(THREE.MathUtils.clamp(this.cur.x, -lim, lim), THREE.MathUtils.clamp(this.cur.y, -lim, lim), 0.001);
+    this.cursor.position.set(THREE.MathUtils.clamp(this.cur.x, -lim, lim), THREE.MathUtils.clamp(this.cur.y, this.chat?.mesh.visible ? CHAT_AT - 0.03 : -lim, lim), 0.001);
     const n = this.slots.length;
     let sel = -1;
-    if (n && this.cur.length() > DEAD) {
+    if (this.chat?.mesh.visible && Math.hypot(this.cur.x, this.cur.y - CHAT_AT) < SLOT_SIZE * 0.8) sel = 'chat';
+    else if (n && this.cur.length() > DEAD) {
       const step = 2 * Math.PI / n;
       sel = ((Math.round((Math.PI / 2 - Math.atan2(this.cur.y, this.cur.x)) / step) % n) + n) % n;
     }
     if (sel !== this.sel) {
       this.sel = sel;
       this.redraw();
-      if (sel >= 0) { G.input.haptic('right', 0.25, 18); G.audio?.playSystemSe(0); }
+      if (sel !== -1) { G.input.haptic('right', 0.25, 18); G.audio?.playSystemSe(0); }
     }
     this.slots.forEach((s, i) => s.mesh.scale.setScalar(i === this.sel ? 1.3 : 1));
+    this.chat?.mesh.scale.setScalar(this.sel === 'chat' ? 1.3 : 1);
     return this.sel;
   }
-  redraw() { this.slots.forEach((s, i) => this.drawSlot(s, i === this.sel)); }
+  redraw() { this.slots.forEach((s, i) => this.drawSlot(s, i === this.sel)); if (this.chat?.mesh.visible) this.drawSlot(this.chat, this.sel === 'chat'); }
   drawSlot(s, on) {
     const ctx = s.canvas.getContext('2d'), sh = this.sheet;
     ctx.clearRect(0, 0, 128, 128);
@@ -125,6 +150,15 @@ export class EmoteRing {
     ctx.lineWidth = on ? 7 : 3;
     ctx.strokeStyle = on ? '#ffd27a' : 'rgba(200,180,140,0.55)';
     ctx.stroke();
+    if (s.chat) {
+      // Native silence balloon (ellipsis) is the chat affordance, matching the
+      // other ring assets instead of introducing replacement artwork.
+      ctx.imageSmoothingEnabled = false;
+      const row = Math.min(7, sh.rows - 1);
+      ctx.drawImage(sh.canvas, Math.min(7, sh.cols - 1) * 32, row * 32, 32, 32, 16, 16, 96, 96);
+      s.tex.needsUpdate = true;
+      return;
+    }
     // the balloon as it stands once it has come up: its row's last frame, its pixels kept sharp
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(sh.canvas, Math.min(7, sh.cols - 1) * 32, (s.id - 1) * 32, 32, 32, 16, 16, 96, 96);
@@ -151,7 +185,8 @@ export class Emotes {
       if (!input.emoteHeld()) {                      // let go: what is under the hand comes up
         const sel = ring.sel;
         ring.close();
-        if (sel >= 0) this.put(ring.slots[sel].id);
+        if (sel === 'chat') G.chat?.openKeyboard();
+        else if (sel >= 0) this.put(ring.slots[sel].id);
       }
       return;
     }

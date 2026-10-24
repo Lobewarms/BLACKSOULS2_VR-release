@@ -163,6 +163,7 @@ export async function sayAt(ref, { names = null, vis = null, name = '' } = {}) {
     while (list[i + 1]?.code === 401) raw.push(String(list[++i].parameters?.[0] ?? ''));
   } else if (cmd.code === 105) {
     msg.position = 1; msg.scroll = true;
+    msg.speed = isI(cmd.parameters?.[0], 1, 8) ? cmd.parameters[0] : 2; msg.noFast = !!cmd.parameters?.[1];
     while (list[i + 1]?.code === 405) raw.push(String(list[++i].parameters?.[0] ?? ''));
   }
   const ci = cmd.code === 102 ? at.i : cmd.code === 101 && list[i + 1]?.code === 102 ? i + 1 : -1;

@@ -20,6 +20,8 @@ import { FONT, drawIcon, stripEscapes, iconAssetRevision } from '../ui/ui.js';
 import { QuickRing, quickSlots, entryData } from '../ui/quickslots.js';
 import { FloorMarker, MARK } from './telegraph.js';
 import { buildIconModel, getAdjust, setAdjust, resetAdjust, defaultAdjust } from './weapons.js';
+import { DeskSwing } from './deskswing.js';
+import { WeaponLag, weaponSway } from './weaponlag.js';
 import { WeaponFx, ELEMENT_FX } from './weaponfx.js';
 import { desktopRest, desktopSwing, desktopModel, desktopShield, desktopShieldGuardPoint, desktopEquipmentHidden } from './desktop-weapon.js';
 import { BonusActions } from './bonus-actions.js';
@@ -53,6 +55,36 @@ const PERFECT_GUARD = 0.25, POWER_BUFF = { mult: 1.5, time: 5 }, GUARD_BUFF = { 
 const GUARD_COOLDOWN = 0.5, GUN_PARRY = 0.35;
 const DESK_ACT = 0.3;          // (PC) a shot, a cast or a throw let go keeps the hands busy this long: the guard down (handsBusy)
 const SKILL_RECOVERY = 0.9;    // shared combat-skill cadence, including casts without their own cooldown
+const DESK_SWING = 0.32;       // (PC) s a click's blow takes (its hits from a quarter of the way to over two thirds of it)
+// stamina: a blow taken on the guard costs GUARD_STAMINA (a VR blade taken on the shield half of it, turned aside by its
+// slant a fifth); a dodge DODGE_STAMINA; running in a fight RUN_STAMINA a second, none coming back meanwhile - run out,
+// one walks until RUN_AGAIN has come back. Struck at by another player (PvP), one is in a fight for PVP_FIGHT s after
+const GUARD_STAMINA = 0.05, DODGE_STAMINA = 0.15, RUN_STAMINA = 0.15, RUN_AGAIN = 0.3, PVP_FIGHT = 8;
+// a blow of one's own: a PC click's, a VR swing that lands, a charged one (each / the weapon's pace - weaponPace)
+const BLOW_STAMINA = 0.1, BLOW_STAMINA_VR = 0.08, CHARGED_STAMINA = 0.2;
+// none comes back while the guard is up - a perfect guard gives PERFECT_STAMINA back at once. (PC) a click a moment
+// early - a blow or a stagger still ending, a shot not ready - is kept INPUT_BUFFER s and taken as soon as it can be
+const PERFECT_STAMINA = 0.3, INPUT_BUFFER = 0.3;
+// a weapon's weight (weaponPace): what it does to 민첩 - 1 + its AGI / 200, or the square root of an AGI rate it puts on -
+// kept within PACE_MIN..PACE_MAX (1: a weapon that leaves AGI be, as before). A light one (above 1) swings quicker (PC:
+// its blow takes DESK_SWING / pace) and costs less stamina a blow (/ pace); a heavy one the other way - and in VR its
+// blade is the harder to swing and sags (weaponlag.js weaponSway)
+const PACE_MIN = 0.65, PACE_MAX = 1.35;
+// (PvP) super armor (강인도) holds only while attacking (attacking): POISE_ATTACK / pace^2.2 - a plain weapon's 0.35,
+// broken by one light blow; the heaviest's 0.9, by about two plain ones; a light one's less - and not attacking only
+// POISE_IDLE: any one blow breaks it, a light one's a heavy weapon's too. The blows of a player that land wear it by
+// their weapon's POISE_HIT / pace (1.5 times charged); worn through, one is staggered (stagger: STAGGER_T s of no attack,
+// guard, dodge, item or skill) and the wear is gone; through the stagger and STAGGER_GUARD s after nothing wears it
+// (no stun-lock). Not struck for POISE_REGEN s, the wear is gone too
+const POISE_HIT = 0.5, POISE_ATTACK = 0.35, POISE_IDLE = 0.2, STAGGER_T = 0.6, STAGGER_GUARD = 0.4, POISE_REGEN = 3;
+// (PvP) a light weapon's (pace above 1) swung blow taken square on a shield bounces off: its holder is staggered for
+// BOUNCE_T s (shorter than a hit's), with no stronger super armor after - an opening for the one who took it
+const BOUNCE_T = 0.35;
+// (PC) the shield up before the eyes while the guard is up; otherwise down on the relaxed left arm at the side, its face
+// out (a little forward) - in the body's own space (deskBody): out of view ahead (the largest too), seen looking down,
+// where the others see it
+const DESK_SHIELD_DOWN = { p: new THREE.Vector3(-0.55, -0.8, 0), q: new THREE.Quaternion().setFromEuler(new THREE.Euler(0, -Math.PI / 2 - 0.26, 0)) };
+const PITCH_AXIS = new THREE.Vector3(1, 0, 0), _shP = new THREE.Vector3(), _shQ = new THREE.Quaternion();
 // how long a boss rests between two of its own moves (s, random between)
 const BOSS_MOVE_REST = [2.5, 5];
 const FOLLOW_REST = 0.3;          // the breath between an action and the one it goes on with (使用後追加行動)
@@ -381,6 +413,13 @@ const SHOT_BY_ICON = { 796: 'gun', 779: 'bow', 426: null, 422: 'magic' };
 // blow on all within this reach (m), the reach shown (staffBurst)
 const STAFF_BURST = 2.6;
 const BURST_GAP = 0.08;          // s between the bullets of a burst
+// a weapon's pace (PACE_MIN..PACE_MAX, 1: none) from what it does itself to AGI - not the wearer's own AGI
+function weaponPace(item) {
+  if (!item) return 1;
+  let p = 1 + (item.params?.[6] || 0) / 200;
+  for (const f of item.features || []) if (f.code === 21 && f.data_id === 6 && f.value > 0) p *= Math.sqrt(f.value);
+  return THREE.MathUtils.clamp(p, PACE_MIN, PACE_MAX);
+}
 function shotStyle(item) {
   if (!item) return null;
   if (item.icon_index in SHOT_BY_ICON) return SHOT_BY_ICON[item.icon_index];
@@ -713,6 +752,9 @@ export class CombatSystem {
     this.stamina = 1; this.staminaDelay = 0;
     this.healing = null;
     this.swing = null;            // desktop swing animation
+    this.deskSwing = new DeskSwing();     // (PC) how a held weapon's blows move: cuts in a chain, a charged thrust - deskswing.js
+    this.weaponLag = new WeaponLag();     // (VR) the blade swung after the hand as its weight has it - weaponlag.js
+    this.weaponPace = 1;                  // the weapon's weight (weaponPace): its blows' pace, their stamina, super armor
     this.weapon = null; this.shield = null; this.wtype = 0;
     this.prevTip = new THREE.Vector3(); this.prevBase = new THREE.Vector3(); this.hasPrev = false;
     this.prevRel = new THREE.Vector3();   // the tip relative to the body last frame (swing speed)
@@ -948,6 +990,9 @@ export class CombatSystem {
   // (keepState: a save is being loaded - the fights going away belong to the game left behind, not to it)
   reset({ keepState = false, carry = false } = {}) {
     this.confusionAction = this.confusionSwing = null;
+    this.poiseWear = 0; this.poiseAt = this.staggerUntil = this.staggerGuardUntil = this.pvpFightUntil = -99;
+    this.winded = false; this.attackAskedAt = this.swingingUntil = -99;
+    this.weaponLag.settle();
     this.delayedActions?.clear();
     this.menuWeaponVisual = null; this._menuWeaponContext = null;
     for (const battle of this.battles || []) this.clearTroopBreaks(battle);
@@ -1506,21 +1551,27 @@ export class CombatSystem {
       // (rings and oaths: twice the souls, twice the drop chance; the experience rate)
       // (the difficulty: more souls the harder - but for <お金変動無効> - and so on, script 218)
       const party = G.state.party, dropRate = (party.partyAbility(5) ? 2 : 1) * difficultyRate(10);
-      for (const e of battle.enemies) {
-        if (e.escaped || e.hidden) continue;       // (VX Ace's rewards are the fallen's: not one that left - enemyEscape -, nor one that never came out)
-        const note = e.data.note || '';
-        gold += /<お金変動無効>/.test(note) ? e.data.gold || 0 : Math.round((e.data.gold || 0) * difficultyRate(9));
-        exp += /<経験値変動無効>/.test(note) ? e.data.exp || 0 : Math.round((e.data.exp || 0) * difficultyRate(8));
-        for (const di of e.data.drop_items || []) {
-          if (di.kind > 0 && di.denominator > 0 && Math.random() * di.denominator < dropRate) {
-            const kind = ['', 'item', 'weapon', 'armor'][di.kind];
-            G.state.party.gainItem(kind, di.data_id, 1);
-            G.ui.notifyGain(kind, di.data_id, 1);
+      // (the developer's world, its rule shareLoot: the drops and the souls go to everyone on the server as well -
+      // coop.js noteGain; a hallucination's fight is its seer's own)
+      const coop = !battle.private ? G.coop : null;
+      if (coop) coop.lootDepth++;
+      try {
+        for (const e of battle.enemies) {
+          if (e.escaped || e.hidden) continue;       // (VX Ace's rewards are the fallen's: not one that left - enemyEscape -, nor one that never came out)
+          const note = e.data.note || '';
+          gold += /<お金変動無効>/.test(note) ? e.data.gold || 0 : Math.round((e.data.gold || 0) * difficultyRate(9));
+          exp += /<経験値変動無効>/.test(note) ? e.data.exp || 0 : Math.round((e.data.exp || 0) * difficultyRate(8));
+          for (const di of e.data.drop_items || []) {
+            if (di.kind > 0 && di.denominator > 0 && Math.random() * di.denominator < dropRate) {
+              const kind = ['', 'item', 'weapon', 'armor'][di.kind];
+              G.state.party.gainItem(kind, di.data_id, 1);
+              G.ui.notifyGain(kind, di.data_id, 1);
+            }
           }
         }
-      }
-      if (gold && party.partyAbility(4)) gold *= 2;
-      if (gold) { party.gainGold(gold); G.ui.notifyGold?.(gold); }
+        if (gold && party.partyAbility(4)) gold *= 2;
+        if (gold) { party.gainGold(gold); G.ui.notifyGold?.(gold); }
+      } finally { if (coop) coop.lootDepth--; }
       if (exp) for (const a of party.members()) a.changeExp(a.currentExp + Math.floor(exp * a.exr));
       G.state.system.winCount++;
       if (battle.event) this.defeated.set(battle.event, G.time);
@@ -1762,6 +1813,7 @@ export class CombatSystem {
       kind: spec.kind, wtype: spec.wtype, hand: spec.hand, large: spec.large, span: spec.span, adjust: adjOf(spec) });
     // (what the weapon shoots on the trigger / a click, if anything: a gun's bullet, a bow's arrow - shotStyle)
     this.shotKind = shotStyle(ws?.item);
+    this.weaponPace = weaponPace(ws?.item); this.poiseWear = 0;          // (super armor: whole again for the new one)
     // a hold pose set by hand (grip adjust mode) replaces the default placement in VR
     const handPose = (obj, spec) => {
       const g = adjOf(spec)?.grip;
@@ -1783,6 +1835,7 @@ export class CombatSystem {
       this.weapon.userData.unarmed = true;
       this.weapon.userData.length = 0.11;
     }
+    this.weapon.userData.fist = !ws || !!wModel?.userData.fist;      // (claws, knuckles, bare hands)
     if (vr) {
       // WebXR grip space: -Z runs out of the top of the fist -> blade along -Z
       ctrl.right.grip.add(this.weapon);
@@ -1790,9 +1843,15 @@ export class CombatSystem {
       this.weapon.position.set(0, 0, 0.03);
       if (!handPose(this.weapon, ws) && this.weapon.userData.ranged) this.weapon.userData.alignRay = 'right';
       if (this.shotKind === 'gun') this.addLaser(this.weapon);
+      // (a blade swung after the hand as its weight has it; a gun or bow, aimed, and a fist held fast)
+      this.weaponLag.reset(this.weapon, this.weaponSway());
     } else {
+      this.weaponLag.reset(null, null);
       G.three.camera.add(this.weapon);
-      desktopRest(this.weapon, 'right', !!this.shotKind, G.three.camera);
+      // (a blade is held and swung as deskswing.js has it - at rest at the hip, the point down, its blows cuts and a
+      // thrust; a fist keeps its own swing, a gun or bow its place low right)
+      this.deskSwing.reset(this.weapon, !this.weapon.userData.fist && !this.weapon.userData.ranged);
+      if (this.weapon.userData.ranged) desktopRest(this.weapon, 'right', true, G.three.camera);
     }
     this.shield = null;
     this.offGun = null;
@@ -1823,7 +1882,7 @@ export class CombatSystem {
           handPose(this.shield, os);
         } else {
           G.three.camera.add(this.shield);
-          desktopShield(this.shield, 0, G.three.camera);
+          this.shield.position.copy(DESK_SHIELD_DOWN.p); this.shield.quaternion.copy(DESK_SHIELD_DOWN.q);    // (updateDeskShield)
         }
       }
     }
@@ -1848,26 +1907,64 @@ export class CombatSystem {
     for (const resource of materials) resource.dispose();
   }
   // the weapon / shield in the hands - unless they are put away (무장해제), or the hand holds something else.
-  // (PC: a shield only comes into view while the guard is up - updateDeskShield; held low all the time it hid the
-  // status window and part of the view)
+  // (PC: a shield comes into view only while the guard is up - updateDeskShield; held before the eyes all the time it
+  // hid the status window and part of the view - and is down at the left side otherwise, out of view but still held)
   showArms() {
     const hidden = !G.vr && desktopEquipmentHidden(G.ui, G.map?.transferring);
     if (this.weapon) this.weapon.visible = !hidden && !this.disarmed && !this.ready && !(this.held && this.held.how !== 'rub');
     this.shieldOut = !!this.shield && !this.disarmed && !(this.held && this.held.how === 'rub');
-    if (this.shield) this.shield.visible = !hidden && this.shieldOut && (G.vr || !this.hasShield || (this.deskShieldT || 0) > 0.01);
+    if (this.shield) this.shield.visible = !hidden && this.shieldOut;
   }
   updateDesktopEquipment() {
     if (G.vr) return;
-    if (!this.swing) desktopRest(this.weapon, 'right', !!this.shotKind, G.three.camera);
+    if (!this.swing && (this.weapon?.userData.ranged || this.weapon?.userData.fist)) desktopRest(this.weapon, 'right', !!this.shotKind, G.three.camera);
     if (this.offGun) desktopRest(this.offGun, 'left', true, G.three.camera);
     this.showArms();
   }
-  // PC: the shield comes up from below into its place while the guard is up, and goes down out of view again
+  // PC: the shield comes up from the left side into its place before the eyes while the guard is up, and goes down to
+  // the side again - out of view there, still held (others see it so; it stops nothing there: deskShieldUp)
   updateDeskShield(dt) {
     if (G.vr || !this.shield || !this.hasShield) return;
     const t = this.deskShieldT = THREE.MathUtils.clamp((this.deskShieldT || 0) + (this.guardUp && this.shieldOut ? dt : -dt) / 0.12, 0, 1);
-    desktopShield(this.shield, t, G.three.camera);
-    this.shield.visible = this.shieldOut && t > 0.01 && !desktopEquipmentHidden(G.ui, G.map?.transferring);
+    const k = t * t * (3 - 2 * t), body = this.deskBody();
+    _shP.copy(DESK_SHIELD_DOWN.p).applyQuaternion(body); _shQ.copy(body).multiply(DESK_SHIELD_DOWN.q);
+    // Fit the raised pose to the desktop camera, then blend from the body-side
+    // carry. This presentation fit leaves the gameplay guard point unchanged.
+    desktopShield(this.shield, 1, G.three.camera);
+    this.shield.position.lerpVectors(_shP, this.shield.position, k);
+    this.shield.quaternion.slerpQuaternions(_shQ, this.shield.quaternion, k);
+    this.shield.visible = this.shieldOut && !desktopEquipmentHidden(G.ui, G.map?.transferring);
+  }
+  // (PC) the shield up, or on its way up: what stops a shot (VR: the shield wherever the hand holds it)
+  deskShieldUp() { return this.shieldOut && (this.deskShieldT || 0) > 0.01; }
+  // in a fight: with the enemies (inCombat), or struck at by another player not long ago (PvP - PVP_FIGHT s)
+  fighting() { return this.inCombat || G.time < (this.pvpFightUntil ?? -99); }
+  // (player.js) running: always, but in a fight not while winded - stamina run out, until RUN_AGAIN has come back
+  canRun() { return !this.winded; }
+  // (player.js) a dodge takes DODGE_STAMINA; none when there is not enough left for one (as a swing)
+  takeDodge() {
+    if (this.stamina <= 0.05) return false;
+    this.useStamina(DODGE_STAMINA, 0.6);
+    return true;
+  }
+  // stamina spent - a blow, a guard, a dodge, running, a Break -, coming back again after wait s; none spent in 흑기사
+  // 린다메아's duel, where it is unlimited (duelStamina)
+  useStamina(n, wait) {
+    if (this.duelStamina()) return;
+    this.stamina = Math.max(0, this.stamina - n); this.staminaDelay = Math.max(this.staminaDelay, wait);
+  }
+  // 흑기사 린다메아's duel on (inDuel - neither she nor the player can die while it lasts): the player's stamina unlimited
+  duelStamina() { return this.enemies.some(e => e.alive && this.inDuel(e)); }
+  // (PC) the turn from the body's own space - where the eyes are, turned as the body is but not tipped as they look up
+  // or down - to the camera's: what is held still at the side (deskswing.js DESK_REST, DESK_SHIELD_DOWN) stays there as
+  // one looks about
+  deskBody() { return (this._deskBody ||= new THREE.Quaternion()).setFromAxisAngle(PITCH_AXIS, -(G.player?.pitch || 0)); }
+  // (VR) how the blade in hand is swung after the hand (weaponlag.js weaponSway - by its weight, length and the setting
+  // 무기 무게감); a gun, bow or fist held fast (null)
+  weaponSway() {
+    const w = this.weapon;
+    if (!G.vr || !w || w.userData.ranged || w.userData.fist) return null;
+    return weaponSway(this.weaponPace, w.userData.length, G.settings.weaponWeight ?? 2);
   }
   // 무장해제 (VR: right stick click, PC: H): the weapon and shield go away with the sound of gear coming off,
   // the bare hands show, and nothing the hands do hits - no swing, Break, shot or weapon art, so no one is cut
@@ -1878,7 +1975,7 @@ export class CombatSystem {
     if (on) this.menuWeaponVisual = null;
     // what the hands were doing with them ends (a weapon art is paid only when it lands: nothing is lost)
     this.hasPrev = false; this.charge = null; this.deskCharge = null; this.breakArm = null;
-    if (this.swing) { this.swing = null; if (!G.vr) desktopRest(this.weapon, 'right', !!this.shotKind, G.three.camera); }
+    if (this.swing) { this.swing = null; if (this.weapon && !G.vr) this.deskSwing.reset(this.weapon, this.deskSwing.blade); }
     if (on) this.skillArm = null;
     if (this.breakGlow) this.breakGlow.visible = false;
     this.showArms();
@@ -2058,6 +2155,7 @@ export class CombatSystem {
     if (!item || this.spectating) return false;
     if (this.manualConfusionBlocked()) return false;
     if (this.restrained && from !== 'quick') { this.restrainedBuzz(); return false; }
+    if (this.staggered() && from === 'menu') { G.audio?.playSystemSe(3); return false; }      // (staggered - PvP)
     if (from === 'menu' && this.inCombat && G.state.party.leader()?.itemSealed()) {
       G.ui.toast(`${stripEscapes(item.name)}: ${tr('봉인되어 있습니다')}`, item.icon_index); G.audio?.playSystemSe(3);
       return false;
@@ -2424,6 +2522,7 @@ export class CombatSystem {
     const fail = msg => { G.ui.toast(`${name}: ${msg}`, obj.icon_index); G.audio?.playSystemSe(3); return false; };
     if (this.manualConfusionBlocked()) return fail(tr('혼란 중에는 일반 공격을 합니다'));
     if (this.restrained) { this.restrainedBuzz(); return false; }
+    if (this.staggered()) { G.audio?.playSystemSe(3); return false; }            // (staggered - PvP: nothing for a moment)
     if (this.healing) return fail(tr('다른 아이템을 쓰는 중'));
     if (obj.occasion === 3) return fail(tr('사용할 수 없습니다'));
     if (obj.occasion === 2 && this.inCombat) return fail(tr('전투 중에는 쓸 수 없습니다'));
@@ -2436,7 +2535,7 @@ export class CombatSystem {
       obj = status.skill;
       // the original battle commands that already have their own button here
       if (obj.id === 12) {
-        if (G.player.dodge.cooldown > 0) return fail(tr('잠시 후에 다시'));
+        if (G.player.dodge.cooldown > 0 || this.stamina <= 0.05) return fail(tr('잠시 후에 다시'));
         G.player.wantDodge = true; return true;
       }
       // a weapon's own move takes the weapons up again (무장해제 ends)
@@ -3124,7 +3223,7 @@ export class CombatSystem {
     }
     r.marker.setProgress(1);
     const fire = G.vr ? G.input.xrPressed('right', 0) : G.input.attackPressed();
-    if (fire) this.fireReady();
+    if (fire && !this.staggered()) this.fireReady();
   }
   fireReady() {
     if (this.manualConfusionBlocked()) { this.cancelReady(); return false; }
@@ -4290,7 +4389,7 @@ export class CombatSystem {
     } else if (guarded && (shieldHit || blockable)) {
       blocked = true;
       if (!this.nativeGuarded(actor)) dmg = Math.round(dmg * (this.hasShield ? 0.25 : 0.5) / Math.max(0.5, actor.grd));      // (방어 효과율)
-      this.stamina = Math.max(0, this.stamina - 0.22); this.staminaDelay = 1;
+      this.useStamina(GUARD_STAMINA, 1);
       this.guardTing(ep);
       this.reportStruck(e, 1);
     } else {
@@ -4372,6 +4471,7 @@ export class CombatSystem {
   // a perfect guard's reward: a fifth of the HP back, then for a few seconds stronger blows and DEF / MDF up
   perfectGuardReward(actor) {
     this.powerUntil = this.guardUntil = G.time + POWER_BUFF.time;
+    this.stamina = Math.min(1, this.stamina + PERFECT_STAMINA);
     if (actor.hp > 0) actor.hp = Math.min(actor.mhp, actor.hp + Math.round(actor.mhp * GUARD_BUFF.heal));
   }
   // a grab winding up: dark red motes drawn in along its band, from its far end to the one reaching out - a
@@ -4422,7 +4522,7 @@ export class CombatSystem {
   // that, it comes up after it the same way
   updateGuard() {
     const held = G.input.block() && !this.playerDead && !this.gripAdjust && !this.disarmed && !this.restrained && !this.manualConfusionBlocked() && !this.noGuard();
-    const want = held && !this.handsBusy();
+    const want = held && !this.handsBusy() && !this.staggered();
     if (want && !this.guardUp && G.time >= (this.guardDownAt ?? -99) + GUARD_COOLDOWN) {
       this.guardUp = true;
       if (!this.guardWanted) this.guardRaisedAt = G.time;
@@ -4700,7 +4800,7 @@ export class CombatSystem {
 
   paused() {
     const m = G.map;
-    return !m || m.transferring || G.ui.msg || G.ui.menuOpen || G.ui.sceneOpen ||
+    return !m || m.transferring || G.ui.msg || G.ui.menuOpen || G.ui.sceneOpen || G.chat?.typing ||
       (m.interpreter.running() && m.interpreter.waitMode !== 'battle') ||
       !!G.coop?.heldByScene?.();             // (co-op guest: the host's scene holds it as it holds the host)
   }
@@ -4718,9 +4818,17 @@ export class CombatSystem {
         (G.state.party.leader()?.hp || 0) > 0) { this.playerDead = false; this.deathHandled = false; }
     const paused = this.paused();
     this.updateConfusion(dt, paused);
-    // stamina
-    this.staminaDelay = Math.max(0, this.staminaDelay - dt);
-    if (this.staminaDelay <= 0) this.stamina = Math.min(1, this.stamina + 0.45 * dt);
+    // stamina - running in a fight wears it down (player.js runningNow), nothing coming back meanwhile; run out, one
+    // walks till RUN_AGAIN is back (canRun)
+    this.staminaDelay = Math.max(0, this.staminaDelay - (paused || G.xrAway ? 0 : dt));
+    const fight = this.fighting();
+    if (!paused && !G.xrAway && fight && G.player?.runningNow) {
+      this.useStamina(RUN_STAMINA * dt, 0.3);
+      if (this.stamina <= 0) this.winded = true;
+    }
+    if (!paused && !G.xrAway && this.staminaDelay <= 0 && !this.guardUp) this.stamina = Math.min(1, this.stamina + 0.45 * dt);      // (not while guarding)
+    if (this.winded && (this.stamina >= RUN_AGAIN || !fight)) this.winded = false;
+    if (this.duelStamina()) { this.stamina = 1; this.winded = false; }          // (흑기사 린다메아's duel: unlimited)
     if (!paused && !G.xrAway) this.rangedCooldown = Math.max(0, this.rangedCooldown - dt);
     this.updateGuard();
     this.updateDeskShield(dt);
@@ -4740,7 +4848,7 @@ export class CombatSystem {
     if (!paused && !this.playerDead) {
       this.updatePlayerAttack(dt);
       this.updateSymbols(dt);
-    }
+    } else { this.weaponLag.settle(); this.attackAskedAt = -99; }       // (held still meanwhile: straight in the hand, swung from there again)
     // (PC: whatever took the hands this frame - a blow, a cast, a drink - has the guard down before any blow lands)
     if (this.guardUp && this.handsBusy()) this.updateGuard();
     this.updateWeaponGlow();
@@ -4785,7 +4893,7 @@ export class CombatSystem {
       if (!e || e.battle || !e.mesh || G.arena?.hides(ev) || e.offStage) continue;
       const set = this.symbolSetting(ev);
       const dist = Math.hypot(e.fx - pc.fx, e.fy - pc.fy);
-      const range = (G.input.running() ? set.dashRange : set.range) * 1.3 + 0.5;
+      const range = (G.input.running() && this.canRun() ? set.dashRange : set.range) * 1.3 + 0.5;
       // (stealthed - 안 보이는 후추, 보이지 않는 몸 - the map's monsters do not notice the player; a boss still does)
       const hidden = G.state.system.stealthSteps > 0 && !this.symbolIsBoss(s);
       const down = this.spectating || !!G.coop?.respawning;      // (co-op: watching a fight fallen, or on its way back)
@@ -4903,7 +5011,7 @@ export class CombatSystem {
       if (e.marker && e.state !== 'windup' && e.state !== 'act') this.dropMarker(e);
       if (e.sky && !paused) this.skyHold(e, dt);           // (gone up into the sky: stays up there - bossmoves.js)
       else if (e.landing || e.diving) this.skyLand(e);
-      if (e.lift > 0 && !e.sky && !(e.diving && e.alive) && !(e.state === 'windup' && (e.move === 'leap' || e.move === 'farOrb')) && !(e.state === 'act' && ['recoil', 'farOrb', 'cloakLeap'].includes(e.act?.kind))) e.lift = Math.max(0, e.lift - 16 * dt);
+      if (e.lift > 0 && !e.sky && !(e.diving && e.alive) && !(e.state === 'windup' && (e.move === 'leap' || e.move === 'farOrb')) && !(e.state === 'act' && ['recoil', 'farOrb', 'cloakLeap'].includes(e.act?.kind))) e.lift = Math.max(0, e.lift - (this.skyDrop(e) || 16) * dt);
       // (a far orb's: gone with the move it was for - cut short, the boss fallen)
       if (e.orb && !(e.state === 'windup' && e.move === 'farOrb')) this.dropOrb(e);
       if (e.act?.orb && !e.act.burst && e.state !== 'act') { this.root.remove(e.act.orb); e.act.orb.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); }); e.act.orb = null; e.act.burst = true; }
@@ -6318,9 +6426,7 @@ export class CombatSystem {
       const head = this.targetHead(e);
       plan.cx = head.x; plan.cz = head.z;
       e.marker = new FloorMarker(this.root, { ...plan, color: MARK.heavy, label: plan.hits > 1 ? `×${plan.hits}` : '' });
-      const ep = e.worldPos(new THREE.Vector3());
-      G.audio?.playSe(G.seAt('Jump1', 90, 70), ep);
-      G.audio?.playSe(G.seAt('Wind4', 70, 80), ep);
+      // (no sound of its own as it goes up: its skill's - the original's - plays where it lands, landLeap)
       G.coop?.onLeap?.(e);
     }
     const k = THREE.MathUtils.clamp((el - crouch) / Math.max(0.1, e.timer0 - crouch), 0, 1);
@@ -6328,7 +6434,12 @@ export class CombatSystem {
     const h = THREE.MathUtils.smootherstep(Math.min(1, k / 0.75), 0, 1);          // across while going up
     e.fx = plan.sx + (tx - plan.sx) * h; e.fy = plan.sy + (ty - plan.sy) * h;
     const H = plan.height;
-    if (plan.dive) { e.lift = H * (1 - k * k * k); return; }        // (hangs up there, then down all at once)
+    if (plan.dive) {
+      // (hangs up there, then down all at once: 뛰어넘기's straight down at its speed - it lands as the mark runs out)
+      const drop = this.skyDrop(e), left = (1 - k) * Math.max(0.1, e.timer0 - crouch);
+      e.lift = drop > 0 ? H * Math.min(1, left * drop / H) : H * (1 - k * k * k);
+      return;
+    }
     e.lift = k < 0.45 ? H * (1 - (1 - k / 0.45) ** 2) : k < 0.78 ? H : H * (1 - ((k - 0.78) / 0.22) ** 2);
   }
   landLeap(e) {
@@ -6345,12 +6456,12 @@ export class CombatSystem {
     this.spawnSparks(at.clone().setY(at.y + 0.1), new THREE.Vector3(1, 0, 0), 14, 0xc8b090);
     const head = G.player.headWorld(new THREE.Vector3());
     this.strikeAlliesInPlan(e, s, plan, plan.hits);
-    // (down from the sky - a dive: the ground shakes a little and both hands feel it, more the nearer it lands)
+    // (down from the sky - a dive: the ground shakes hard and both hands feel it, more the nearer it lands)
     if (plan.dive) {
       const d = Math.hypot(head.x - at.x, head.z - at.z);
       if (d < 18) {
         const k = 1 - d / 18;
-        G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 0.2 + 0.3 * k);
+        G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 1 + 0.8 * k, 0.5);
         G.input.haptic('left', 0.45 + 0.4 * k, 170); G.input.haptic('right', 0.45 + 0.4 * k, 170);
       }
     }
@@ -6360,12 +6471,12 @@ export class CombatSystem {
       // under it: thrown up into the air (not when it was slipped in a dodge); off a perfect guard it only jolts -
       // the ground and both hands shake hard
       if (parried) {
-        G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 0.8);
+        G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 1.3, 0.45);
         G.input.haptic('left', 1, 220); G.input.haptic('right', 1, 220);
       } else if (!(G.player.invuln > 0) && !this.playerDead) G.player.knockback(0, 0, 0, LEAP_LAUNCH);
     } else if (!plan.dive && Math.hypot(head.x - at.x, head.z - at.z) < plan.r + 3) {
-      // the ground shakes around it
-      G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 0.5);
+      // the ground shakes around it, hard
+      G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), 1, 0.4);
       G.input.haptic('left', 0.45, 90); G.input.haptic('right', 0.45, 90);
     }
     this.endMove(e, 1.2);
@@ -7078,7 +7189,7 @@ export class CombatSystem {
       } else if (p.owner === 'enemy') {
         // a shot is stopped only where it actually meets the shield (one that goes through a guard passes it)
         let shielded = false;
-        if (this.shield && this.hasShield && (G.vr || this.shield.visible) && (!p.pierce || (this.guardUp && !this.disarmed && G.time - (this.guardRaisedAt ?? -99) <= PERFECT_GUARD))) {
+        if (this.shield && this.hasShield && (G.vr || this.deskShieldUp()) && (!p.pierce || (this.guardUp && !this.disarmed && G.time - (this.guardRaisedAt ?? -99) <= PERFECT_GUARD))) {
           if (G.vr) this.shield.getWorldPosition(tmpA);
           else desktopShieldGuardPoint(tmpA, G.three.camera, this.deskShieldT || 0);
           if (pos.distanceTo(tmpA) < 0.32) shielded = true;
@@ -7385,9 +7496,6 @@ export class CombatSystem {
     Object.assign(plan, { jumped: true, sx: at.sx, sy: at.sy, jumpAt: at.j, height: at.h, cx: at.cx, cz: at.cz });
     this.dropMarker(e);
     e.marker = new FloorMarker(this.root, { ...plan, color: MARK.heavy, label: plan.hits > 1 ? `×${plan.hits}` : '' });
-    const ep = e.worldPos(new THREE.Vector3());
-    G.audio?.playSe(G.seAt('Jump1', 90, 70), ep);
-    G.audio?.playSe(G.seAt('Wind4', 70, 80), ep);
     return true;
   }
   // (guest) the host's charging boss ran into the host there: it stops and bounces back here too
@@ -7410,11 +7518,12 @@ export class CombatSystem {
 
   // ---- player attacks -----------------------------------------------------------------------
   updatePlayerAttack(dt) {
-    if (this.manualConfusionBlocked()) return;
-    if (!this.weapon || this.gripAdjust || this.ready || this.held || this.disarmed || this.restrained || this.spectating) { this.charge = null; this.deskCharge = null; return; }
+    if (this.manualConfusionBlocked()) { this.weaponLag.settle(); this.attackAskedAt = -99; return; }
+    if (!this.weapon || this.gripAdjust || this.ready || this.held || this.disarmed || this.restrained || this.spectating) { this.charge = null; this.deskCharge = null; this.weaponLag.settle(); return; }
     const ranged = this.weapon.userData.ranged;
     if (G.vr) {
-      // swing detection
+      // swing detection (the blade where its weight has it: weaponlag.js)
+      this.weaponLag.update(dt);
       const base = tmpA, tip = tmpB;
       this.weaponSegment(base, tip);
       // recent tip positions: a hit needs a real swing (fast AND a long enough arc), not a flick. Speed
@@ -7432,7 +7541,8 @@ export class CombatSystem {
         const level = SWING_LEVELS[G.settings.swingLevel ?? 2] || SWING_LEVELS[2];
         // a fist moves slower and shorter than a blade's tip
         const [needSpeed, needTravel] = this.weapon.userData.unarmed ? [level[0] * 0.65, level[1] * 0.6] : level;
-        if (speed > needSpeed && travel > needTravel) {
+        if (speed > needSpeed && travel > needTravel) this.swingingUntil = G.time + 0.25;      // (attacking - super armor)
+        if (speed > needSpeed && travel > needTravel && !this.staggered()) {
           const power = THREE.MathUtils.clamp(0.6 + (speed - needSpeed) / 5, 0.6, 1.4) * (this.stamina > 0.1 ? 1 : 0.5);
           const charge = this.charge?.level || 0, strong = speed > needSpeed * 1.5;
           const contacts = this.allTargets().filter(e => this.segmentHitsEnemy(e, this.prevBase, this.prevTip, base, tip));
@@ -7456,7 +7566,7 @@ export class CombatSystem {
                 this.playerHitEnemy(e, power, false, this.prevTip, { melee: true, strong, charge, critBonus: speed > needSpeed + 4.5 ? 0.35 : 0 });
               }
               G.input.haptic('right', 0.9, 70);
-              this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.1)); this.staminaDelay = 0.8;
+              this.useStamina((charge >= 0.35 ? CHARGED_STAMINA : BLOW_STAMINA_VR) / this.weaponPace, 0.8);
             }
           }
           if (landed && !stroke.completed) { this.completePlayerAction(stroke.action); stroke.completed = true; }
@@ -7469,24 +7579,27 @@ export class CombatSystem {
       }
       this.prevBase.copy(base); this.prevTip.copy(tip); this.prevRel.copy(rel); this.hasPrev = true;
       if (G.input.breakPressed() && !G.ui.consumedConfirm) this.pressBreak();
-      if (ranged && G.input.xrPressed('right', 0) && !G.ui.pointerTarget) this.fireRanged();
+      if (ranged && G.input.xrPressed('right', 0) && !G.ui.pointerTarget && !this.staggered()) this.fireRanged();
     } else {
       // desktop: click to swing - hold the click to charge, the swing comes on letting go (ranged weapons shoot)
       const eligible = !ranged && this.meleeBonusEligible();
-      const swingRecovering = this.swing && this.swing.t / (this.swing.duration || 0.32) >= 0.7;
+      const swingRecovering = this.swing && this.swing.t / (this.swing.duration || DESK_SWING) >= 0.7;
       const canSwing = !this.swing || swingRecovering && eligible && this.bonusAvailable();
-      if (G.input.attackPressed() && canSwing && this.stamina > 0.05) {
-        if (ranged) this.fireRanged();
-        else if (this.playerActionReady(eligible)) this.deskCharge = G.time;
+      if (G.input.attackPressed()) this.attackAskedAt = G.time;
+      if (G.time - (this.attackAskedAt ?? -99) <= INPUT_BUFFER && canSwing && this.deskCharge == null && this.stamina > 0.05 && !this.staggered()) {
+        if (ranged) { if (this.fireRanged()) this.attackAskedAt = -99; }
+        else if (this.playerActionReady(eligible)) { this.attackAskedAt = -99; this.deskCharge = G.time; }
       }
       if (this.deskCharge != null && !G.input.mouseHeld(0)) {
         const charge = THREE.MathUtils.clamp((G.time - this.deskCharge - 0.15) / 1.0, 0, 1);
         this.deskCharge = null;
-        if (canSwing && this.stamina > 0.05) {
-          const action = this.beginPlayerAction(eligible, { active: 0.32 * 0.7, recovery: 0.32, targeted: true });
+        if (canSwing && this.stamina > 0.05 && !this.staggered()) {
+          const duration = DESK_SWING / (this.weaponPace || 1);
+          const action = this.beginPlayerAction(eligible, { active: duration * 0.7, recovery: duration, targeted: true });
           if (!action) return;
-          this.swing = { t: 0, hit: new Set(), charge, duration: 0.32, action };
-          this.stamina = Math.max(0, this.stamina - (charge >= 0.35 ? 0.25 : 0.12)); this.staminaDelay = 0.7;
+          this.swing = { t: 0, hit: new Set(), charge, duration, action };
+          if (!this.weapon.userData.fist) this.deskSwing.begin(this.swing, G.time);
+          this.useStamina((charge >= 0.35 ? CHARGED_STAMINA : BLOW_STAMINA) / (this.weaponPace || 1), 0.7);
           G.audio?.playSe(G.seAt('Wind7', 60, charge >= 0.35 ? 100 : 140));
         }
       }
@@ -7496,7 +7609,7 @@ export class CombatSystem {
         const duration = s.duration || 0.32, before = Math.min(1, s.t / duration);
         s.t += dt;
         const k = Math.min(1, s.t / duration);
-        desktopSwing(this.weapon, k, G.three.camera);
+        if (this.weapon.userData.fist) desktopSwing(this.weapon, k, G.three.camera);
         // A short recovery can cross the whole hit window in one rendered frame.
         if (before < 0.7 && k > 0.25) {
           const head = G.player.headWorld(new THREE.Vector3());
@@ -7536,7 +7649,11 @@ export class CombatSystem {
           if (s.action && !s.hit.size) s.action.eligible = false;
           this.completePlayerAction(s.action); s.completed = true;
         }
-        if (k >= 1 || k >= 0.7 && s.action?.ticket?.bonus) { this.swing = null; desktopRest(this.weapon, 'right', ranged, G.three.camera); }
+        if (k >= 1 || k >= 0.7 && s.action?.ticket?.bonus) { this.swing = null; if (this.weapon.userData.fist) desktopRest(this.weapon, 'right', ranged, G.three.camera); }
+      }
+      if (!this.weapon.userData.fist) {
+        this.deskSwing.update(this.weapon, dt, G.time, this.swing, this.swing ? Math.min(1, this.swing.t / (this.swing.duration || DESK_SWING)) : 0,
+          this.deskCharge != null ? this.chargeLevel() : null, this.deskBody());
       }
     }
   }
@@ -7899,7 +8016,7 @@ export class CombatSystem {
     if (context && this._menuWeaponContext !== context) return this.withMenuWeapon(context, () => this.breakOnHit(e, skill, src));
     this.breakArm = null;
     this.breakCooldown = G.time + Math.max(0.9, this.coolSeconds(skill));
-    this.stamina = Math.max(0, this.stamina - 0.2); this.staminaDelay = 0.8;
+    this.useStamina(0.2, 0.8);
     if (this.heldBoss(e)) return;
     if (!e.battle) {
       const sym = [...this.symbols.values()].find(x => x.enemy === e);
@@ -7955,7 +8072,7 @@ export class CombatSystem {
   fireGunBreak(skill) {
     if (this.manualConfusionBlocked()) return false;
     this.breakCooldown = G.time + Math.max(0.9, this.coolSeconds(skill));
-    this.stamina = Math.max(0, this.stamina - 0.2); this.staminaDelay = 0.8;
+    this.useStamina(0.2, 0.8);
     const gun = this.offGun;
     let from = null, dir;
     if (gun) {
@@ -8094,7 +8211,9 @@ export class CombatSystem {
   // guard and perfect guard, and the damage by the striker's own numbers against its own (pvpStruck)
   swingAtPlayers(hitTest, opts) {
     if (!G.coop?.pvpAny || !G.coop.active || this.spectating || this.playerDead) return;
-    for (const t of G.coop.pvpTargets()) if (hitTest(t)) this.strikePlayer(t, opts);
+    // (a swung blow wears the other's super armor down by its weapon's weight - more charged)
+    const poise = POISE_HIT / this.weaponPace * ((opts?.charge || 0) >= 0.35 ? 1.5 : 1);
+    for (const t of G.coop.pvpTargets()) if (hitTest(t)) this.strikePlayer(t, { ...opts, poise });
   }
   // (PvP, VR) this blade's path meets another player's weapon or shield as this world shows them (coop avatars'
   // heldShapes) - bladeMeets says how: held off ('block', 'guard': this swing does not go through to that one - a
@@ -8140,8 +8259,9 @@ export class CombatSystem {
         G.audio?.playSe(G.seAt('Parry', 95, s.kind === 'shield' ? 110 : 130), c.at);
         this.spawnSparks(c.at, c.dir, 12, 0xffe8b0);
         G.input.haptic('right', 1, 100);
-        this.stamina = Math.max(0, this.stamina - 0.1); this.staminaDelay = 0.8;
+        this.useStamina(0.1, 0.8);
         G.coop.sendClash(p.id, s.side, s.kind === 'shield' ? 1 : 2);
+        if (s.kind === 'shield') this.bounce();
         break;
       }
     }
@@ -8158,8 +8278,9 @@ export class CombatSystem {
       this.spawnSparks(at, new THREE.Vector3(0, 1, 0), 8, 0xffe8b0);
     } else G.audio?.playSe(G.seAt('Sword1', 70, 150), at);
     G.input.haptic(side, [0, 1, 1, 0.8, 0.45, 0.3][k], k <= 3 ? 90 : 50);
-    const cost = k === 1 ? 0.1 : k === 4 ? 0.03 : 0;
-    if (cost) { this.stamina = Math.max(0, this.stamina - cost); this.staminaDelay = 0.8; }
+    this.pvpFightUntil = G.time + PVP_FIGHT;
+    const cost = k === 1 ? GUARD_STAMINA / 2 : k === 4 ? GUARD_STAMINA / 5 : 0;
+    if (cost) this.useStamina(cost, 0.8);
     return true;
   }
   // (PvP) a spell or a thrown thing of this player's - one aimed at foes - reached another player (t: its body as seen
@@ -8180,7 +8301,7 @@ export class CombatSystem {
   }
   // a blow of this player's reached another one (t: its body as seen here): what it is - the attack skill, how hard,
   // this player's numbers - goes to it
-  strikePlayer(t, { power = 1, charge = 0, crit = false } = {}) {
+  strikePlayer(t, { power = 1, charge = 0, crit = false, poise = 0 } = {}) {
     const hits = (this.pvpHits ||= new Map());
     if (G.time - (hits.get(t.id) || -9) < 0.45) return;            // (one swing passing through counts once)
     hits.set(t.id, G.time);
@@ -8192,16 +8313,17 @@ export class CombatSystem {
     if (G.time - (this.pvpBeat?.get(t.id) || -9) < 0.45) mult *= 0.5;       // (its parry beaten aside: weaker)
     const critical = !!crit && skill.damage?.critical !== false && Math.random() < 0.35 + (actor.cri || 0);
     if (critical) mult *= this.criticalMultiplier();
-    G.coop.sendPvp(t.id, skill.id, mult, critical, actor);
+    G.coop.sendPvp(t.id, skill.id, mult, critical, actor, false, poise);
     const at = new THREE.Vector3(t.x, t.y + 1.2, t.z);
     G.audio?.playSe(G.seAt(critical ? 'Slash11' : 'Slash1', 90, 95), at);
     G.input.haptic('right', 0.9, 70);
   }
   // (PvP) another player's blow reached this one: judged here. by: a stand-in for the striker (its numbers as sent);
   // from: where it stands. What came of it: 'dodge' | 'perfect' | 'guard' | 'hit' | '' (nothing: fallen, watching)
-  pvpStruck(by, skill, mult, from) {
+  pvpStruck(by, skill, mult, from, sa = 0) {
     const actor = G.state.party.leader();
     if (!actor || this.playerDead || this.spectating || !skill) return '';
+    this.pvpFightUntil = G.time + PVP_FIGHT;            // (struck at - dodged, guarded or not: in a fight)
     const head = G.player.headWorld(new THREE.Vector3());
     if (G.player.invuln > 0) { G.audio?.playSystemSe(18); G.input.haptic('left', 0.2, 30); G.input.haptic('right', 0.2, 30); return 'dodge'; }
     let dmg = 0;
@@ -8215,7 +8337,7 @@ export class CombatSystem {
     } else if (this.isBlocking(ep)) {
       how = 'guard';
       dmg = Math.round(dmg * (this.hasShield ? 0.25 : 0.5) / Math.max(0.5, actor.grd));
-      this.stamina = Math.max(0, this.stamina - 0.22); this.staminaDelay = 1;
+      this.useStamina(GUARD_STAMINA, 1);
       this.guardTing(ep);
     } else {
       G.screen.hurtFlash(1);
@@ -8241,9 +8363,39 @@ export class CombatSystem {
       }
       this.applyBuffEffects(actor, skill, TURN_SECONDS);
     }
+    if (how === 'hit' && sa > 0) this.poiseHit(sa, ep);             // (a blow that landed - not a guarded or dodged one)
     if (actor.hp <= 0) this.playerFalls(null);
     return how;
   }
+  // ---- (PvP) super armor (강인도 - POISE_HIT) ----
+  // attacking: a blow swung or being charged (PC), the blade swung a moment ago or a charge held (VR)
+  attacking() { return !!this.swing || this.deskCharge != null || (this.charge?.level || 0) > 0 || G.time < (this.swingingUntil ?? -99); }
+  poiseMax() { return this.attacking() ? POISE_ATTACK / Math.pow(this.weaponPace, 2.2) : POISE_IDLE; }
+  // a player's blow that landed wears it by sa (its weapon's - swingAtPlayers); worn through: staggered
+  poiseHit(sa, from) {
+    if (G.time < (this.staggerGuardUntil ?? -99)) return;                  // (staggered a moment ago: nothing wears it)
+    if (G.time - (this.poiseAt ?? -99) > POISE_REGEN) this.poiseWear = 0;    // (not struck a while: whole again)
+    this.poiseAt = G.time;
+    this.poiseWear = (this.poiseWear || 0) + sa;
+    if (this.poiseWear < this.poiseMax()) return;
+    this.poiseWear = 0;
+    this.stagger(from);
+  }
+  // staggered: the blow, charge or drink in hand cut off; no attack, guard (updateGuard), dodge (player.js), item or
+  // skill (useQuickEntry, useItem) for STAGGER_T s - a harder jolt than a plain blow's
+  stagger(from, t = STAGGER_T, guarded = true) {
+    this.staggerUntil = G.time + t;
+    if (guarded) this.staggerGuardUntil = this.staggerUntil + STAGGER_GUARD;
+    if (this.swing) { this.swing = null; if (this.weapon && !G.vr && this.weapon.userData.fist) this.weapon.rotation.set(0.35, 0.15, 0); }
+    this.deskCharge = null; this.charge = null; this.healing = null;      // (a drink cut off: the item not used)
+    const head = G.player.headWorld(new THREE.Vector3()), at = from || head;
+    G.screen.hitShake(new THREE.Vector3(head.x - at.x, 0, head.z - at.z), guarded ? 1.8 : 1);
+    G.input.haptic('left', 1, 220); G.input.haptic('right', 1, 220);
+  }
+  staggered() { return G.time < (this.staggerUntil ?? -99); }
+  // a swung blow of this player's taken square on another's shield (VR: met there - clashWithPlayers; else told -
+  // coop.js onBounced): a light weapon bounces off it (BOUNCE_T)
+  bounce() { if (this.weaponPace > 1 && !this.weapon?.userData.ranged && !this.playerDead) this.stagger(null, BOUNCE_T, false); }
   swingAtNpcs(hitTest) {
     if (G.map.interpreter.running() || G.coop?.phantom) return;
     for (const ev of G.map.eventList) {

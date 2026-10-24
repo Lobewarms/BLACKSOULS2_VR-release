@@ -6,6 +6,8 @@ import { G } from '../core/globals.js';
 import { loadRvdata } from './data.js';
 import { bytesToString } from './marshal.js';
 import { readRegularWindow } from './regular-window.js';
+import { fontSettings, menuParts } from './font-settings.js';
+export { fontSettings } from './font-settings.js';
 
 async function inflate(bytes) {
   const ds = new DecompressionStream('deflate');
@@ -429,7 +431,7 @@ export async function loadScriptData() {
 }
 // what the game's scripts set up, from their sections ([name, source] in the game's order)
 export function readScripts(entries) {
-  const out = { names: {}, nameAliases: {}, bonfires: [], bonfireMap: null, symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null, regularWindow: null };
+  const out = { names: {}, nameAliases: {}, bonfires: [], bonfireMap: null, symbols: {}, fontSize: 0, screen: null, sen: null, menuVar: null, synthesis: null, keep: null, difficulty: null, exchangeShop: null, guts: null, regularWindow: null, fonts: null, partnerCommand: '', placeWindow: null };
   const want = { name: 'ネームウィンドウ', bonfire: '篝火移動', symbol: 'シンボル' };
   // (each by its section's name as the game names it - else by what it holds: a translation may name the section otherwise,
   // and none of it was read - no bonfire to travel to, no speakers' names, the roaming monsters' own settings gone)
@@ -442,6 +444,7 @@ export function readScripts(entries) {
   for (const [name, src] of entries) {
     const speakers = speakerSource(src);
     readSpeakerTables(speakers, out); readSpeakerAliases(speakers, out);
+    menuParts(src, out);
     // font size / screen size: the last assignment in script order wins (comment lines skipped)
     const live = src.split(/\r?\n/).filter(l => !/^\s*#/.test(l)).join('\n');
     for (const m of live.matchAll(/Font\.default_size\s*=\s*(\d+)/g)) out.fontSize = +m[1];
@@ -462,6 +465,7 @@ export function readScripts(entries) {
       else if (!byContent[k] && holds[k](src)) byContent[k] = src;
     }
   }
+  out.fonts = fontSettings(entries.map(entry => entry[1]));
   for (const key of Object.keys(want)) for (const src of byName[key] || (byContent[key] ? [byContent[key]] : [])) {
     if (key === 'bonfire') {
       out.bonfires.push(...bonfireList(src));

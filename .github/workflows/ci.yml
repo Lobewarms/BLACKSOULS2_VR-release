@@ -31,6 +31,8 @@ jobs:
           name: windows-launcher
           path: |
             apps/launcher/dist/BlacksoulsVR.exe
+            apps/launcher/dist/BlacksoulsVR.Engine.exe
+            apps/launcher/dist/engine-build.json
             apps/launcher/dist/SteamAchievements.exe
           if-no-files-found: error
           retention-days: 14

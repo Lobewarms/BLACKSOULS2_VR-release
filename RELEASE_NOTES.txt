@@ -1,99 +1,19 @@
-BLACK SOULS II VR 0.2.52
+BLACK SOULS II VR 0.2.53
 
-Confusion ending correctly
-- Curing or ending Rampage stops queued automatic hits, follow-up skills and
-  unlaunched gun rounds, and restores manual attacks and skills immediately.
-- Already-fired projectiles and paid weapon-skill cooldowns continue normally.
+- Improved Quest Link startup compatibility with current Chrome and Edge, with
+  longer connection waits and the existing cancellation and recovery controls.
+- More natural chained sword cuts and charged thrusts on PC; VR blades respond
+  to weapon weight, with an adjustable weight setting.
+- Updated stamina costs, dodge and attack buffering, shield presentation and
+  multiplayer stagger rules. R Skills, Bonus Actions and paused cooldowns remain.
+- Updated Lindamea attacks and restored lift platforms and university scenery.
+- Uses the original game's fonts, window colors and scrolling-text behavior.
+  Added Russian launcher and in-game menus, plus two-line item descriptions.
+- Multiplayer text and voice chat, microphone controls, mute controls and shared
+  loot. Voice transmission requires enabling your microphone in the chat menu.
+- Preserves the existing save handling, game discovery, updater, portrait/HUD,
+  terrain, status-effect and combat fixes. Original game files are not included.
 
-Combat and event fidelity fixes
-- Attacks, skills and projectiles now use the original critical scaling, critical
-  evasion, counter, reflection and substitution rules. Each repeated strike gets
-  its own chance to hit; weapon arts keep their own authored repeat count.
-- Bonus Actions remain available when an ordinary action is already ready.
-- Enemy skills respect Silence, seals and resources. An enemy with no usable
-  action waits. Rampage forces normal attacks rather than permitting manual arts.
-- Delayed strikes, NPC cooldowns, map events, movement routes and timers pause
-  with local menus. Companion status durations refresh and survive save/load.
-- Nested confirmations preserve the original choice group. Original event
-  movies play on PC and in VR; use Play/A/Enter if prompted, or Skip/B/Esc.
-
-Grand Guignol Skills menu
-- R opens Skills during Grand Guignol and other battles whose entrances disable
-  the exploration menu. Dialogue and cutscenes still control when menus can open.
-
-Bonus Action skill chains
-- R Skills shows earned Bonus Actions and your queued skills.
-- With extra actions available, select skills, then press R again or click Cast
-  to use them in order. In VR, use the Cast button. Remove last and Clear edit
-  the plan; Esc/Back cancels it without spending actions or resources.
-- Each cast spends one earned action and uses its own costs and cooldowns.
-  An unavailable skill stops the remaining chain without spending for that cast.
-  Temporary weapon switching preserves earned actions and uses the art's stats.
-
-Lindamea battle
-- Cinematic backsteps no longer slow your movement during real-time combat.
-- Her shared immortality phase shows its remaining time below the enemy HP bar.
-  The countdown pauses with the fight when a blocking menu is open.
-
-Performance improvements
-- More responsive Skills browsing with large skill lists and many owned weapon arts.
-  Costs, cooldowns and skill requirements stay up to date while you browse.
-- Reduced repeated work in maps with many exits or scenery events, while keeping
-  changes to events, routes and map artwork responsive.
-- Reduced rendering work for scenery outside the camera view in large areas,
-  preserving the original artwork, appearance and collision.
-
-Skill cooldowns during menus
-- Skill cooldowns and shared action recovery pause with the world, including
-  while R Skills is open. Return to gameplay to resume them.
-- Accepted action-consuming skills, including healing and buffs, return to the
-  game automatically. Reopening R freezes their remaining recovery too.
-  Pure out-of-combat utility can stay open. Native durations and costs still apply.
-
-Use arts from owned weapons
-- R Skills includes arts from weapons, offhand guns and shields in your bag. See the source
-  weapon's original icon/name and the costs for the selected action.
-- Use a compatible source weapon for that action, then resume your usual gear.
-  Repeats and projectiles retain its weapon stats and effects; normal equipment,
-  cost, target, recovery and cooldown requirements still apply.
-- Borrowed-only arts are used directly from R. Equip their source weapon before
-  assigning to a quick slot; learned/currently granted skills keep normal Q access.
-- Main profile stats show current equipment; the selected action lists its weapon
-  and costs separately. Search also finds source weapon names.
-- Compatible equipped gear is preferred, with the highest owned +N when swapping
-  within a weapon family. Break still prepares the next real hit for three seconds;
-  disarming cancels its preparation.
-
-Finding and using skills
-- Browse Favorites, All, Weapon Arts, Attack, Healing, Buffs and Debuffs.
-  Favorites appear first; each character remembers their view and selection.
-- Press / or click Search to find skills on PC. Click a skill or press Enter
-  to use it directly; while typing in search, Enter/Esc returns to the list.
-- Press F to favorite, or Q to assign a quick slot. VR has visible controls
-  for categories, favorites and assignment alongside its normal navigation.
-- Unavailable skills remain inspectable with current costs and reasons.
-  The party leader profile remains visible during browsing and assignment.
-- Read two lines of the original skill description, with longer text available
-  on the profile pages. Compact windows use category arrows and full labels.
-
-Your profile in Skills
-- Open Skills with R on PC to see your party leader's original portrait,
-  HP/MP/TP, stamina and all eight current stats alongside skill selection.
-- Page through every active status effect and buff with original game icons,
-  useful modifiers and healing warnings. Selected skill costs, cooldowns and
-  reasons it cannot be used remain visible while browsing or assigning skills.
-- Use Previous/Next, Page Up/Page Down or the mouse wheel over the profile.
-  VR uses the page buttons; smaller PC windows stack and page the profile.
-
-Old King shadow phase
-- Fix successful Breaks not counting when the stagger ends before the boss's
-  original turn-end check, including when a follow-up attack ends the stagger.
-- Keep the original Break chance, stagger duration and six-shadow requirement.
-  Each shadow counts once; ordinary damage and stun do not replace Break.
-
-Chaos Dungeon skull saves
-- Includes the fix allowing skull checkpoints to open their save screen while
-  ordinary menu saving is disabled, with slot selection and overwrite checks.
-
-Install the update, then close and reopen the game window to load the changes.
-Your existing saves are retained. The original game is required and is not included.
+Download the setup EXE for Windows, or the portable ZIP. Install over your
+existing mod installation to keep its saves and settings. Keep the launcher
+open while playing. Headset startup depends on Quest Link/SteamVR being ready.

@@ -14,7 +14,7 @@ export function meshHintOptions(mapId) {
     cabinets: H.cabinetHints(mapId), parallaxWalls: H.parallaxWalls(mapId), caps: H.capHints(mapId), tops: H.topHints(mapId),
     solids: H.solidHints(mapId), wallFloors: H.wallFloorHints(mapId), mounds: H.moundHints(mapId), overlaps: H.overlapHints(mapId),
     massBackdrop: H.massBackdrop(mapId), openSky: H.openSky(mapId), wallCap: H.wallCap(mapId), doorTops: H.doorTops(mapId),
-    highGround: H.highGround(mapId), passageLevels: H.passageLevelHints(mapId),
+    highGround: H.highGround(mapId), passageLevels: H.passageLevelHints(mapId), onWall: H.onWallHints(mapId), stairs: H.stairHints(mapId),
   };
 }
 
@@ -99,7 +99,7 @@ export async function buildMapView({ map, grid, mapId, events, pageOf, seeds = [
   const doorH = new Map();
   await Promise.all([...ana.doorPics].map(async ([i, d]) => doorH.set(i, await doorPictureHeight(d.name, d.index).catch(() => 0))));
   const mesh = await buildMapMesh(meshGrid, {
-    pits: ana.pits, gaps: ana.gaps, isDoorCell: (x, y) => ana.doors.has(x + y * grid.w), falls: ana.falls, reach: walk?.reach,
+    pits: ana.pits, gaps: ana.gaps, isDoorCell: (x, y) => ana.doors.has(x + y * grid.w), falls: ana.falls, lifts: ana.lifts, reach: walk?.reach,
     doorHeight: (x, y) => doorH.get(x + y * grid.w) || 0, ...meshHintOptions(mapId), ...extra,
   });
   return { mesh, ana, walk };

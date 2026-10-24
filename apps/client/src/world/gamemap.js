@@ -5,7 +5,7 @@ import { $data, loadMap } from '../data/data.js';
 import { MapGrid, T } from './mapmesh.js';
 import { GameEvent, GameCharacter, commonEventList } from '../entities/character.js';
 import { Interpreter } from '../game/interpreter.js';
-import { isFallRoute, SWITCH_PASS, PLAYER_BLOCK_REGIONS, EVENT_PASS_REGIONS } from './mapanalysis.js';
+import { isFallRoute, liftRoute, throughRock, SWITCH_PASS, PLAYER_BLOCK_REGIONS, EVENT_PASS_REGIONS } from './mapanalysis.js';
 
 // The first-person player seen through the RPG Maker character interface
 export class PlayerChar extends GameCharacter {
@@ -51,6 +51,15 @@ export class PlayerChar extends GameCharacter {
   checkEventTriggerTouchFront() {}
   forceMoveRoute(route, sceneMoveSpeed = null) {
     if (isFallRoute(route, this.through)) G.player?.startScriptedFall();
+    const run = liftRoute(route, this.through);
+    if (run && throughRock(G.map?.grid, this.x, this.y, run)) {
+      const platform = G.map.eventList.find(event => {
+        if (!event.moveRouteForcing || Math.abs(event.x - this.x) > 1 || Math.abs(event.y - this.y) > 2) return false;
+        const moving = liftRoute(event.moveRoute, true);
+        return moving?.dir === run.dir && moving.n === run.n;
+      }) || null;
+      G.lift?.ride(this, platform, run);
+    }
     this.sceneMoveSpeed = sceneMoveSpeed;
     super.forceMoveRoute(route);
   }

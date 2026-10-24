@@ -1,3 +1,4 @@
+import { combatMotion } from './helpers/combat-motion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -39,7 +40,7 @@ function environment(t) {
   const enemy = { alive: true, hidden: false, b: new Battler(), state: 'chase', h: 1.6, knock: { x: 0, y: 0 },
     worldPos: out => out.set(1, 0, 1), drawBar() { this.draws = (this.draws || 0) + 1; } };
   const owner = enemy.battle = { done: false, enemies: [enemy] };
-  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
+  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), { ...combatMotion(),
     battles: [owner], sideInterps: [], symbols: new Map(), skillCD: {},
     heldBoss: () => false, outOfFight: () => false, scheduleDelayed() {},
     allies: { substitute: () => null, healActor() {} }, isBlocking: () => false, reportStruck() {},

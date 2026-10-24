@@ -4,8 +4,23 @@ import { G } from './globals.js';
 
 const DEAD = 0.18;
 const dz = v => (Math.abs(v) < DEAD ? 0 : (v - Math.sign(v) * DEAD) / (1 - DEAD));
-const grabState = source => ({ source, events: false, held: !!source?.gamepad?.buttons[1]?.pressed, pending: false, pressed: false });
 const hasGrabSource = (session, source) => !!source && Array.from(session?.inputSources || []).includes(source);
+// the trigger and the grip count as pressed this far in (and up to RELEASE once pressed - no chatter): each runtime
+// sets its own 'pressed' at its own depth, some only at the very end of the pull
+const PRESS = 0.6, RELEASE = 0.35;
+const buttonDown = (button, held = false) => !!button?.pressed || Number(button?.value) >= (held ? RELEASE : PRESS);
+const grabState = source => ({ source, events: false, held: buttonDown(source?.gamepad?.buttons[1]), pending: false, pressed: false });
+const SKIP_HOLD = 0.4;           // s the advance button is held before the messages skip (skipHeld)
+// a controller's stick (the xr-standard layout: axes 2-3, its touchpad 0-1): a controller with a touchpad and no stick
+// (Vive wands) steers with the touchpad; one not in the standard layout, with whichever pair is pushed further
+function stickOf(gp) {
+  const a = gp.axes, pad = [a[0] || 0, a[1] || 0], stick = [a[2] || 0, a[3] || 0];
+  if (a.length < 4) return pad;
+  if (gp.mapping === 'xr-standard') return stick;
+  return Math.hypot(stick[0], stick[1]) >= Math.hypot(pad[0], pad[1]) ? stick : pad;
+}
+// of two sticks, the one pushed further (a little drift on one does not take the other's place)
+const further = (a, b) => (Math.abs(a) >= Math.abs(b) ? a : b);
 
 export class Input {
   constructor(renderer, dom) {
@@ -137,7 +152,7 @@ export class Input {
     });
   }
 
-  pointerBusy() { return !!(G.ui?.pointerBusy?.() ?? (G.ui?.sceneBusy?.() || G.ui?.messageBusy?.())); }
+  pointerBusy() { return !!G.chat?.typing || !!(G.ui?.pointerBusy?.() ?? (G.ui?.sceneBusy?.() || G.ui?.messageBusy?.())); }
   textInputFocused() { const active = document.activeElement; return !!active?.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(active?.tagName || ''); }
   onCanvas(e) {
     const rect = this.dom?.getBoundingClientRect?.();
@@ -371,7 +386,7 @@ export class Input {
       let grab = this.grabs[hand];
       if (grab.source !== source) grab = this.grabs[hand] = grabState(source);
       if (!grab.events) {
-        const held = !!source.gamepad?.buttons[1]?.pressed;
+        const held = buttonDown(source.gamepad?.buttons[1], grab.held);
         if (held && !grab.held) grab.pending = true;
         grab.held = held;
       }
@@ -394,19 +409,19 @@ export class Input {
     const session = this.renderer.xr.getSession?.();
     if (session) {
       for (const src of session.inputSources) {
-        if (!src.gamepad || !src.handedness || src.handedness === 'none') continue;
+        if (!src.gamepad || (src.handedness !== 'left' && src.handedness !== 'right')) continue;
         const hand = src.handedness;
         if (hand !== 'left' && hand !== 'right') continue;
         const gp = src.gamepad;
-        const ax = gp.axes.length >= 4 ? [gp.axes[2], gp.axes[3]] : [gp.axes[0] || 0, gp.axes[1] || 0];
+        const ax = stickOf(gp);
         if (this.viewInputGuard && this.viewXrSources[hand] !== src) {
           this.viewXrSources[hand] = src;
-          this.viewButtonBlocks[hand] = gp.buttons.map(b => !!b.pressed);
+          this.viewButtonBlocks[hand] = gp.buttons.map(b => buttonDown(b));
           this.viewAxisBlocks[hand] = ax.some(v => Math.abs(v) > DEAD);
         }
         const blocked = this.viewInputGuard ? this.viewButtonBlocks[hand] : [];
-        for (let i = 0; i < gp.buttons.length; i++) if (!gp.buttons[i].pressed) blocked[i] = false;
-        this.btn[hand] = gp.buttons.map((b, i) => !!b.pressed && !blocked[i]);
+        for (let i = 0; i < gp.buttons.length; i++) if (!gp.buttons[i].pressed && Number(gp.buttons[i].value) < RELEASE) blocked[i] = false;
+        this.btn[hand] = gp.buttons.map((b, i) => (i < 2 ? buttonDown(b, this.btnPrev[hand][i]) : !!b.pressed) && !blocked[i]);
         this.btn[hand].values = gp.buttons.map((b, i) => blocked[i] ? 0 : b.value);
         this.btn[hand].touched = gp.buttons.map(b => !!b.touched);
         if (ax.every(v => Math.abs(v) <= DEAD)) this.viewAxisBlocks[hand] = false;
@@ -439,8 +454,8 @@ export class Input {
     this.clearGrabEdges();
   }
 
-  key(code) { return this.keys.has(code); }
-  keyPressed(code) { return this.keys.has(code) && !this.keysPrev.has(code); }
+  key(code) { return !G.chat?.typing && this.keys.has(code); }
+  keyPressed(code) { return !G.chat?.typing && this.keys.has(code) && !this.keysPrev.has(code); }
   mouseHeld(b) { return (this.mouse.buttons & (1 << b)) !== 0; }
   mousePressed(b) { return !!(this.mousePresses & (1 << b)) || this.mouseHeld(b) && !(this.mouse.prevButtons & (1 << b)); }
   xrHeld(hand, i) { return !!this.btn[hand][i]; }
@@ -480,7 +495,7 @@ export class Input {
   // menu navigation (up/down) for UI lists: -1, 0, 1 edge-triggered
   navY() {
     if (G.vr) {
-      const y = this.axes.right[1] || this.axes.left[1];
+      const y = further(this.axes.right[1], this.axes.left[1]);
       if (Math.abs(y) > 0.6) { if (this.navReady) { this.navReady = false; return Math.sign(y); } }
       else this.navReady = true;
       return 0;
@@ -491,7 +506,7 @@ export class Input {
   }
   navX() {
     if (G.vr) {
-      const x = this.axes.right[0] || this.axes.left[0];
+      const x = further(this.axes.right[0], this.axes.left[0]);
       if (Math.abs(x) > 0.6) { if (this.navReadyX) { this.navReadyX = false; return Math.sign(x); } }
       else this.navReadyX = true;
       return 0;
@@ -512,6 +527,15 @@ export class Input {
   }
   // advance a message window: confirm buttons or the same flick used to start talking
   advance() { return this.confirm() || (G.vr && this.rFlick === 1); }
+  // メッセージスキップ (the original's Ctrl held: the messages one after another, none waited on): PC Ctrl; VR the
+  // advance button held a moment - A, or the trigger with the laser on the window (a tap still moves on by one)
+  skipHeld() {
+    if (!G.vr) return this.key('ControlLeft') || this.key('ControlRight');
+    const held = this.xrHeld('right', 4) || (this.xrHeld('right', 0) && !!G.ui?.pointerTarget);
+    if (!held) { this.skipSince = null; return false; }
+    this.skipSince ??= G.time;
+    return G.time - this.skipSince >= SKIP_HOLD;
+  }
   // jump: VR = right stick up, PC = C
   jumpPressed() {
     if (G.vr) return this.rFlick === -1;

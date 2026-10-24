@@ -30,12 +30,13 @@ function environment(t, options = {}) {
   });
   const platform = Object.assign(new EventTarget(), {
     isSessionSupported: () => options.support ? options.support() : Promise.resolve(true),
-    requestSession() {
+    requestSession(type, init) {
+      options.onRequest?.(type, init);
       const value = options.request ? options.request(requests.length) : new Session();
       requests.push(value); return Promise.resolve(value);
     },
   });
-  const button = Object.assign(new EventTarget(), { disabled: false, classList: { toggle() {} },
+  const button = Object.assign(new EventTarget(), { disabled: false, dataset: {}, classList: { toggle() {} },
     click() { if (!this.disabled) this.dispatchEvent(new Event('click')); } });
   for (const [key, value] of Object.entries({ navigator: { xr: platform }, window: { isSecureContext: true },
     document: { createElement: () => button } })) {
@@ -153,10 +154,10 @@ test('an uncancellable attachment timeout owns the attempt until it settles and 
   assert.equal(e.restores, 1); assert.equal(e.button.textContent, 'ENTER VR');
 });
 
-test('a grant racing the ninety-second hard stall is observed and closed without attachment', async t => {
+test('a grant racing the three-minute hard stall is observed and closed without attachment', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const grant = deferred(), session = new Session(), e = environment(t, { request: () => grant.promise });
-  await e.start(); t.mock.timers.tick(90000); grant.resolve(session); await flush();
+  await e.start(); t.mock.timers.tick(180000); grant.resolve(session); await flush();
   assert.equal(session.endCalls, 1); assert.equal(e.attached.length, 0);
   assert.equal(e.button.textContent, 'ENTER VR'); assert.equal(e.restores, 1);
 });
@@ -431,12 +432,12 @@ test('a hung recovery support query respects the total fifteen-second deadline a
   e.button.click(); await flush(); assert.equal(e.resets, 1, 'healthy exit must not reset after recovery query timed out');
 });
 
-test('ninety-second permission stall keeps native ownership and offers only explicit recovery', async t => {
+test('three-minute permission stall keeps native ownership and offers only explicit recovery', async t => {
   t.mock.timers.enable({ apis: ['setTimeout'] });
   const grant = deferred(), e = environment(t, { request: () => grant.promise, reset: async () => false });
   await e.start(); t.mock.timers.tick(20000); await flush();
   assert.equal(e.statuses.at(-1).stage, 'permission-slow'); assert.equal(e.statuses.at(-1).canRecover, false);
-  t.mock.timers.tick(70000); await flush();
+  t.mock.timers.tick(160000); await flush();
   assert.equal(e.statuses.at(-1).stage, 'permission-stalled'); assert.equal(e.statuses.at(-1).canRecover, true);
   assert.equal(e.button.textContent.includes('ENTER VR'), false); assert.equal(e.resets, 0);
   e.button.click(); e.platform.dispatchEvent(new Event('devicechange')); await flush(); assert.equal(e.requests.length, 1);
@@ -555,4 +556,45 @@ test('a synchronous native permission rejection clears pending ownership and per
   assert.equal(e.button.recoverConnection(), false); assert.equal(e.resets, 0); assert.equal(e.restores, 1);
   const session = await e.start(); assert.equal(calls, 2); assert.equal(e.xr.getSession(), session);
   e.button.click(); await flush();
+});
+
+
+test('Chrome 156 advertised layers use the pinned manager legacy framebuffer and retain clean desktop restoration', async t => {
+  const n = nativeManager(t), session = new n.NativeSession();
+  session.renderState.layers = [];
+  const e = environment(t, { renderer: n.renderer, request: () => session, onRequest(type, init) {
+    assert.equal(type, 'immersive-vr');
+    assert.equal(init.optionalFeatures.includes('layers'), false);
+  } });
+  await e.start();
+  assert.equal(n.manager.isPresenting, true);
+  assert.equal(n.manager.getBaseLayer() instanceof XRWebGLLayer, true);
+  assert.equal(e.button.textContent, 'EXIT VR');
+  e.button.click(); await flush();
+  assert.deepEqual(n.dimensions(), [1280, 720, 2]);
+  assert.equal(n.manager.isPresenting, false);
+});
+
+test('a two-minute Meta runtime grant stays owned and attaches without a competing startup', async t => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const grant = deferred(), session = new Session();
+  const e = environment(t, { request: () => grant.promise });
+  await e.start(); t.mock.timers.tick(120000); await flush();
+  assert.equal(e.statuses.at(-1).stage, 'permission-slow');
+  assert.equal(e.requests.length, 1);
+  grant.resolve(session); await flush();
+  assert.equal(e.xr.isPresenting, true);
+  assert.equal(e.button.textContent, 'EXIT VR');
+  e.button.click(); await flush();
+});
+
+test('a sealed unnegotiated projection-layer property closes the native grant and reports its error to the launcher', async t => {
+  const session = new Session(); session.renderState = {};
+  Object.defineProperty(session.renderState, 'layers', { value: [], configurable: false });
+  const e = environment(t, { request: () => session });
+  await e.start();
+  assert.equal(e.attached.length, 0);
+  assert.equal(session.endCalls, 1);
+  assert.match(e.button.dataset.xrError, /TypeError/);
+  assert.equal(e.button.textContent, 'ENTER VR');
 });

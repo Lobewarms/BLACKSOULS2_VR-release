@@ -81,6 +81,7 @@ namespace BlacksoulsCommunity
                             string message = language == "ja" ? (ready ? "Steam実績に接続しました。" : "Steam実績は利用できません。Steamでログインし、ゲームの所有権を確認してください。") :
                                 language == "ko" ? (ready ? "Steam 도전 과제에 연결되었습니다." : "Steam 도전 과제를 사용할 수 없습니다. Steam 로그인 및 게임 소유 여부를 확인하세요.") :
                                 language == "zh" ? (ready ? "已连接Steam成就。" : "Steam成就暂不可用。请登录Steam并确认拥有游戏。") :
+                                language == "ru" ? LauncherRussian.Text(ready ? "Steam achievements connected." : "Steam achievements unavailable. Sign in to Steam and make sure you own the game.") :
                                 (ready ? "Steam achievements connected." : "Steam achievements unavailable. Sign in to Steam and make sure you own the game.");
                             log.AppendText(Environment.NewLine + message + Environment.NewLine);
                         });

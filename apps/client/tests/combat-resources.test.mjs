@@ -1,3 +1,4 @@
+import { combatMotion } from './helpers/combat-motion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -23,7 +24,7 @@ function environment(t) {
   }
   $data.system = { sounds: [] }; $data.skills = [null, attack()];
   const actor = new Battler(), removed = [], falls = [], popups = [];
-  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
+  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), { ...combatMotion(),
     symbols: new Map(), heldBoss: () => false, outOfFight: () => false, scheduleDelayed() {},
     allies: { substitute: () => null, healActor() {} }, isBlocking: () => false, skillLook: () => '', reportStruck() {},
     popup(_position, text) { popups.push(text); }, popupAtPlayer(text) { popups.push(text); }, spawnGlow() {}, groggyHit() {},

@@ -195,6 +195,14 @@ internal static class UpdateTests
         Check(launch.Text == "VR로 실행" && !String.IsNullOrWhiteSpace(pc.AccessibleName), "Korean mode controls and accessible names are translated");
         languages.SelectedIndex = 3;
         Check(launch.Text == "启动VR模式" && languages.AccessibleName == "语言", "Chinese mode controls and language selector are translated");
+        languages.SelectedIndex = 4;
+        Check(launch.Text == "Запустить VR" && languages.AccessibleName == "Язык" && pc.Text.Contains("Клавиатура"), "Russian mode cards and launch action follow the native engine language selection");
+        Check(Named<Button>(form, "forkUpdateButton").Text == "Проверить обновления" && Named<Button>(form, "closeWindow").AccessibleName == "Закрыть программу", "Russian update and window controls use fork translations");
+        Click(pc);
+        Check(launch.Text == "Запустить на ПК" && pc.AccessibleDescription == "Выбрано", "Russian PC mode selection retains native engine settings");
+        Click(vr);
+        foreach (ReleaseCheckFailure reason in Enum.GetValues(typeof(ReleaseCheckFailure)))
+            Check(System.Text.RegularExpressions.Regex.IsMatch(new ReleaseCheckException(reason, null, 503).PlayerMessage("ru"), "[А-Яа-я]"), "Russian update failure: " + reason);
         languages.SelectedIndex = 1;
         var content = Named<TableLayoutPanel>(form, "launcherContent");
         var details = Named<Panel>(form, "launcherDetails");

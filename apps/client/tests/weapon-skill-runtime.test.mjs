@@ -1,3 +1,4 @@
+import { combatMotion } from './helpers/combat-motion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -63,7 +64,7 @@ function environment(t, extra = {}) {
     audio: { playSystemSe() {}, playSe() {} }, screen: { playAnimationOn: (...args) => animations.push(args), hurtFlash() {} },
     floorAt: () => 0, solidTopAt: () => 0, arena: null, theater: null,
     ui: { menuOpen: true, toast: text => toasts.push(text), closeMenu() { this.menuOpen = false; } } });
-  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
+  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), { ...combatMotion(),
     root, gen: 1, battles: [], symbols: new Map(), puppets: new Map(), skillCD: {}, enemies: [], projectiles: [], sideInterps: [],
     stamina: 1, allies: { list: [], unitOf: () => null, showHeal() {} },
     showArms() {}, popup() {}, popupAtPlayer() {}, spawnGlow() {},

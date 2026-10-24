@@ -19,6 +19,7 @@ const tmpTurn = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
 // 20 frames walking and 16 running (a step on animation patterns 1 and 3); tag 0 is silent. Played a little
 // quieter than the script's volume (STEP_VOLUME)
 const STEP_VOLUME = 0.8;
+const DODGE_BUFFER = 0.3;               // s a dodge pressed a moment early is kept (combat.js INPUT_BUFFER for a click)
 const STEP_SE = {
   1: [['asioto', 75, 100], ['asioto', 75, 100], ['asioto', 75, 120], ['asioto', 75, 120]],
   2: [['足音・草歩', 75, 100], ['足音・草歩', 75, 100], ['足音・草歩', 75, 120], ['足音・草歩', 75, 120]],
@@ -69,6 +70,7 @@ export class Player {
   // place the player (head) at the center of tile (tx, ty)
   teleportTo(tx, ty, dir) {
     if (!Number.isFinite(tx) || !Number.isFinite(ty)) return;
+    this.dodgeAskedAt = -99; this.wantDodge = false;
     this.dialogueCamera.cancel();
     const head = this.headWorld(new THREE.Vector3());
     if (!Number.isFinite(head.x) || !Number.isFinite(head.z)) {
@@ -162,6 +164,7 @@ export class Player {
     if (!m || m.transferring) return false;
     if (this.air) return false;                          // (blown up into the sky: no ground to walk on - liftUp)
     if (G.ui.messageBusy() || G.ui.menuOpen || G.ui.prompt?.shown) return false;     // (prompt: join the co-op boss fight?)
+    if (G.chat?.typing) return false;                    // (PC: a chat line being typed)
     if (m.playerChar.moveRouteForcing) return false;
     if (G.combat?.playerDead) return false;
     if (m.interpreter.running() && m.interpreter.waitMode !== 'battle') return false;
@@ -189,6 +192,10 @@ export class Player {
     this.dodge.cooldown = Math.max(0, this.dodge.cooldown - dt);
     this.invuln = Math.max(0, this.invuln - dt);
     this.dodging = false;             // (moving in a dodge this frame - its last step too: enemies let it through)
+    this.runningNow = false;          // (running this frame, moving: what costs stamina in a fight - combat.js)
+    const dodgeAllowed = this.canMove() && !G.ui.consumedConfirm && !G.combat?.manualConfusionBlocked?.()
+      && !G.state?.party?.leader()?.skillSealed?.(12);
+    if (!dodgeAllowed) { this.dodgeAskedAt = -99; this.wantDodge = false; }
 
     // ---- view rotation ----
     this.dialogueCamera.update(dt);
@@ -228,8 +235,8 @@ export class Player {
       this.placeHeadAtTiles(pc.fx, pc.fy);
       const floorY = G.floorAt ? G.floorAt(pc.fx, pc.fy) : 0;
       const hop = pc.jumping() ? pc.jumpHeight() / 32 * T : 0;
-      if (!hop && this.floorY !== undefined && floorY < this.floorY - 0.3) {
-        // carried over an edge (a fall's first step): drop, do not teleport down
+      if (!hop && !G.lift?.riding && this.floorY !== undefined && floorY < this.floorY - 0.3) {
+        // carried over an edge (a fall's first step): drop, do not teleport down (a lift going down its slope: on it - lift.js)
         this.fallV = (this.fallV || 0) + 9.8 * dt;
         this.floorY = Math.max(floorY, this.floorY - this.fallV * dt);
       } else {
@@ -237,7 +244,9 @@ export class Player {
         this.floorY = floorY;
       }
       this.rig.position.y = this.floorY + hop;
-      this.updateFootsteps(dt, pc.realMoveSpeed?.() > 4 || input.running(), !!hop);
+      // (no steps while a lift carries the player - lift.js -, nor on a move with its walking turned off - 린다메아's blow
+      // sliding the player back: the original's steps come on the walking's frames)
+      if (!G.lift?.riding && pc.walkAnime) this.updateFootsteps(dt, pc.realMoveSpeed?.() > 4 || input.running(), !!hop);
       this.afterMove();
       return;
     }
@@ -252,16 +261,21 @@ export class Player {
       const f = this.forward2D();
       // stick y negative = forward
       const fwd = -mv.y, side = mv.x;
-      let speed = s.moveSpeed * movementSpeedRate(pc, G.combat?.inCombat ? G.combat.battles : null) * (input.running() ? s.runMultiplier : 1);
-      if (G.vr) speed *= s.vrSpeed ?? 2;                // setting VR 이동 속도
+      // (running - in a fight it costs stamina, and with none left one walks till some is back: combat.js canRun)
+      const run = input.running() && G.combat?.canRun?.() !== false;
+      this.runningNow = run && (fwd !== 0 || side !== 0);
+      let speed = s.moveSpeed * movementSpeedRate(pc, G.combat?.inCombat ? G.combat.battles : null) * (run ? s.runMultiplier : 1);
+      if (G.vr) speed *= s.vrSpeed ?? 2;
       if (G.combat?.inCombat && G.combat.guardUp) speed *= 0.55;
       mvx = (f.x * fwd - f.z * side) * speed * dt / T;
       mvy = (f.z * fwd + f.x * side) * speed * dt / T;
-      // (not the press that just closed a message - A is both)
-      if ((input.dodge() && !G.ui.consumedConfirm || this.wantDodge) && this.dodge.cooldown <= 0
-        && !G.combat?.manualConfusionBlocked?.()
-        && !G.state?.party?.leader()?.skillSealed?.(12)) {
-        this.wantDodge = false;
+      // (not the press that just closed a message - A is both; a dodge takes stamina - none without it: combat.js
+      // takeDodge; none while staggered - PvP. A press a moment early - the last dodge's cooldown or a stagger still
+      // running - is kept DODGE_BUFFER s and taken as soon as it can be)
+      if (input.dodge() && dodgeAllowed) this.dodgeAskedAt = G.time;
+      const asked = this.wantDodge || G.time - (this.dodgeAskedAt ?? -99) <= DODGE_BUFFER;
+      if (asked && dodgeAllowed && this.dodge.cooldown <= 0 && !G.combat?.staggered?.() && (G.combat?.takeDodge?.() ?? true)) {
+        this.wantDodge = false; this.dodgeAskedAt = -99;
         let dx = f.x * fwd - f.z * side, dy = f.z * fwd + f.x * side;
         const l = Math.hypot(dx, dy);
         if (l < 0.2) { dx = -f.x; dy = -f.z; } else { dx /= l; dy /= l; }   // default: backstep
@@ -316,7 +330,7 @@ export class Player {
     // (an event's "move forward" must go there, not where the head happens to turn)
     if (!G.map.interpreter.running()) pc.direction = this.facingDir();
     this.updateHeight(dt);
-    this.updateFootsteps(dt, input.running(), this.jumpY > 0.05 || this.dodge.t > 0);
+    this.updateFootsteps(dt, this.runningNow, this.jumpY > 0.05 || this.dodge.t > 0);
     this.afterMove();
   }
 
@@ -332,8 +346,9 @@ export class Player {
     const speed = d / Math.max(dt, 1e-3);
     if (speed < 0.4) { this.stepPhase = Math.min(this.stepPhase ?? 0.7, 0.7); return; }  // stopped: the next step comes soon
     const s = G.settings;
-    const walk = s.moveSpeed * (G.vr ? (s.vrSpeed ?? 2) : 1);
-    const rate = (running ? 60 / 16 : 60 / 20) * THREE.MathUtils.clamp(speed / (walk * (running ? s.runMultiplier : 1)), 0.45, 1);
+    const full = s.moveSpeed * movementSpeedRate(G.map.playerChar, G.combat?.inCombat ? G.combat.battles : null)
+      * (G.vr ? s.vrSpeed ?? 2 : 1) * (running ? s.runMultiplier : 1);
+    const rate = (running ? 60 / 16 : 60 / 20) * THREE.MathUtils.clamp(speed / full, 0.45, 1);
     this.stepPhase = (this.stepPhase ?? 0.7) + dt * rate;
     if (this.stepPhase < 1) return;
     this.stepPhase -= Math.floor(this.stepPhase);

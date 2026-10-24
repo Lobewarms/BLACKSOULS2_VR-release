@@ -16,7 +16,8 @@ export const EVENT_PASS_REGIONS = [50];
 // RPG Maker "falling" animation on the player: through ON (in this or an earlier route), then a
 // fast slide of 5+ steps in one direction with the walk animation off / high speed
 function fallRoute(route, throughBefore = false) {
-  const list = route.list;
+  const list = route?.list;
+  if (!Array.isArray(list)) return null;
   const codes = list.map(c => c.code);
   const through = throughBefore || codes.includes(37);
   const fast = codes.includes(32) || list.some(c => c.code === 29 && c.parameters[0] >= 5);
@@ -30,6 +31,32 @@ function fallRoute(route, throughBefore = false) {
 }
 function fallRouteDir(route, throughBefore = false) { return fallRoute(route, throughBefore)?.dir || 0; }
 export function isFallRoute(route, throughBefore = false) { return fallRouteDir(route, throughBefore) !== 0; }
+// Slow, through-enabled vertical rides are distinct from the original fast
+// falling animation. Non-movement settings and short waits may split the run.
+export function liftRoute(route, throughBefore = false) {
+  if (!Array.isArray(route?.list) || fallRoute(route, throughBefore)) return null;
+  let through = throughBefore, run = 0, best = 0, current = 0, dir = 0;
+  for (const command of route.list) {
+    const code = command.code;
+    if (code === 37) through = true;
+    if (code === 38) through = false;
+    if (through && (code === 1 || code === 4)) {
+      run = code === current ? run + 1 : 1; current = code;
+      if (run > best) { best = run; dir = code; }
+    } else if (code && ![15, 29, 30, 31, 32, 33, 34, 35, 36, 37].includes(code)) { current = 0; run = 0; }
+  }
+  return best >= 8 ? { dir, n: best } : null;
+}
+export function throughRock(grid, x, y, run) {
+  if (!grid || !run || ![1, 4].includes(run.dir) || !Number.isInteger(run.n) || run.n < 8 || run.n > grid.h) return false;
+  const dy = run.dir === 4 ? -1 : 1;
+  let rock = 0;
+  for (let k = 1; k <= run.n; k++) {
+    if (!grid.valid(x, y + dy * k)) return false;
+    if (!grid.anyPassable(x, y + dy * k)) rock++;
+  }
+  return rock >= run.n * 0.75;
+}
 // the slide of the first fall in a list: {dir, n} (how far the player is carried), or null
 export function fallOfList(list, depth = 0) {
   let through = false;
@@ -120,6 +147,7 @@ export function analyzeMap(map, grid, pageOf = ev => ev.pages[0]) {
   const doorPics = new Map();   // cell -> { name, index }: events drawn with a door / gate picture
   const exits = [];   // {x, y, mapId, label, kind:'event'|'region'}
   const jumps = [];   // {x, y, dx, dy}: stepping here makes the player jump (dx, dy)
+  const lifts = [];   // structural vertical shafts, independent of their current event page
   const gaps = new Set();   // the cells a jump passes over (also pits)
   const idx = (x, y) => x + y * w;
   for (const [, ev] of map.events) {
@@ -139,6 +167,21 @@ export function analyzeMap(map, grid, pageOf = ev => ev.pages[0]) {
       exits.push({ x: ev.x, y: ev.y, mapId: t.mapId, label: t.mapId && t.mapId !== map.__id ? destinationName(t.mapId) : '', kind: 'event', eventId: ev.id, trigger: page.trigger });
       doors.add(idx(ev.x, ev.y));
     } else if (/^!/.test(g.character_name) && /door|扉|ドア/i.test(g.character_name)) doors.add(idx(ev.x, ev.y));
+  }
+  for (const [, event] of map.events) for (const page of event.pages || []) {
+    if (page.trigger > 2) continue;
+    let through = false;
+    for (const command of page.list || []) {
+      if (command.code !== 205 || command.parameters?.[0] !== -1) continue;
+      const route = command.parameters[1], run = liftRoute(route, through);
+      for (const move of route?.list || []) { if (move.code === 37) through = true; else if (move.code === 38) through = false; }
+      if (!run || !throughRock(grid, event.x, event.y, run)) continue;
+      const end = event.y + (run.dir === 4 ? -run.n : run.n);
+      const yTop = Math.min(event.y, end), yBottom = Math.max(event.y, end);
+      const same = lifts.find(lift => lift.x === event.x && yTop <= lift.yBottom && yBottom >= lift.yTop);
+      if (same) { same.yTop = Math.min(same.yTop, yTop); same.yBottom = Math.max(same.yBottom, yBottom); }
+      else lifts.push({ x: event.x, yTop, yBottom });
+    }
   }
   for (const rule of regionRules(map)) {
     const ce = $data.commonEvents[rule.ce];
@@ -167,7 +210,7 @@ export function analyzeMap(map, grid, pageOf = ev => ev.pages[0]) {
       for (const [x, y] of cells) exits.push({ x, y, mapId: t.mapId, label: t.mapId && t.mapId !== map.__id ? destinationName(t.mapId) : '', kind: 'region' });
     }
   }
-  return { pits, falls, doors, doorPics, exits, jumps, gaps };
+  return { pits, falls, doors, doorPics, exits, jumps, gaps, lifts };
 }
 
 // Where the player can get to on this map from where they arrive (and the map's own warps): RPG
@@ -234,6 +277,10 @@ export function reachableCells(map, grid, ana, seeds) {
     carryTo(idx(f.x, f.y), f.x + dx * f.n, f.y + dy * f.n);
   }
   for (const j of ana.jumps || []) carryTo(idx(j.x, j.y), j.x + j.dx, j.y + j.dy);
+  for (const lift of ana.lifts || []) if (grid.anyPassable(lift.x, lift.yTop)) {
+    carryTo(idx(lift.x, lift.yBottom), lift.x, lift.yTop);
+    carryTo(idx(lift.x, lift.yTop), lift.x, lift.yBottom);
+  }
   const can = (x, y, d) => {
     const x2 = x + STEP[d][0], y2 = y + STEP[d][1];
     if (!grid.valid(x2, y2)) return false;

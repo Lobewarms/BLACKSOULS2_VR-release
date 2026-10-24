@@ -121,3 +121,19 @@ test('classic menu background layers retain scene visibility while actor and eco
     }
   }
 });
+
+test('four native party members fit above the location/tools footer with their own face cells and resources', () => {
+  const o = options();
+  o.members = Array.from({ length: 4 }, (_, i) => ({ ...o.leader, name: `Party ${i}`, faceIndex: i, hp: 70 + i }));
+  const faces = o.faceCanvas; o.faceCanvas = new Map([['ActorFace', faces]]);
+  const result = paintClassicMenu(o); assert.equal(result.membersDrawn, 4);
+  for (let i = 0; i < 4; i++) {
+    const name = o.overview.record.texts.find(row => row.text === `Party ${i}`);
+    assert.equal(name.y, 180 * i + 36);
+    const resource = o.overview.record.texts.find(row => row.text === `${70 + i} / 100`);
+    assert.ok(resource && resource.y < 720);
+  }
+  assert.equal(o.overview.record.images.length, 4);
+  assert.ok(o.overview.record.images.every(image => image[6] + image[8] < 736));
+  assert.equal(result.toolBounds.y, 860);
+});

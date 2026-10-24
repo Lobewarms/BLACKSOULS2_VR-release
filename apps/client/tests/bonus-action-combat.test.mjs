@@ -1,3 +1,4 @@
+import { combatMotion } from './helpers/combat-motion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -45,7 +46,7 @@ function environment(t) {
   const battle = { done: false, enemies: [enemy] }; enemy.battle = battle;
   targets = [enemy];
   const hits = [], shots = [], scheduled = [], launches = [], followups = [];
-  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
+  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), { ...combatMotion(),
     root, weapon: new THREE.Group(), stamina: 1, staminaDelay: 0, skillCD: {}, rangedCooldown: 0,
     battles: [battle], sideInterps: [], prevBase: new THREE.Vector3(), prevTip: new THREE.Vector3(), prevRel: new THREE.Vector3(),
     allTargets: () => targets, pickTargets: () => [...targets],
@@ -86,15 +87,18 @@ test('PC melee awards once after its active window and the final follow-up retai
   const firstStamina = e.combat.stamina;
   e.press(true); e.combat.updatePlayerAttack(0); e.press(false);
   assert.equal(e.combat.swing.action.ticket.bonus, true); assert.equal(e.combat.bonusStatus(), null);
-  assert.ok(Math.abs(firstStamina - e.combat.stamina - 0.12) < 1e-9); assert.equal(e.combat.swing.duration, 0.32);
+  assert.ok(Math.abs(firstStamina - e.combat.stamina - 0.1) < 1e-9); assert.equal(e.combat.swing.duration, 0.32);
   e.advance(0.23, { attack: true }); assert.equal(e.combat.swing, null); assert.equal(e.rolls, 1);
   const bonusStamina = e.combat.stamina;
   e.press(true); e.combat.updatePlayerAttack(0);
   assert.equal(e.combat.swing, null, 'finishing the follow-up active animation does not finish its trailing recovery');
   assert.equal(e.combat.stamina, bonusStamina);
-  e.press(false); e.advance(0.1, { attack: true }); assert.equal(e.combat.swing, null);
-  e.press(true); e.combat.updatePlayerAttack(0);
-  assert.ok(e.combat.swing); assert.equal(e.combat.swing.action.ticket.bonus, false);
+  e.press(false); e.advance(0.05, { attack: true }); assert.equal(e.combat.swing, null);
+  assert.equal(e.combat.stamina, bonusStamina, 'the buffered press cannot pay or bypass the remaining recovery');
+  e.advance(0.05, { attack: true });
+  assert.ok(e.combat.swing, 'the upstream input buffer releases that same press after recovery without another edge');
+  assert.equal(e.combat.swing.action.ticket.bonus, false);
+  assert.ok(Math.abs(bonusStamina - e.combat.stamina - 0.1) < 1e-9);
 });
 
 test('a held melee pose, missing target and failed stamina cannot consume a banked charge', t => {

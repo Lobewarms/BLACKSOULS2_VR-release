@@ -1,3 +1,5 @@
+import { combatMotion } from './helpers/combat-motion.mjs';
+import { DESK_REST } from '../src/combat/deskswing.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -65,7 +67,7 @@ test('the Hunter pistol uses archived icon pixels in its held model and inventor
   const pistol = { id: 65, etype_id: 1, icon_index: 706, features: [{ code: 43 }] };
   G.state = { party: { leader: () => ({ weapons: () => [], armors: () => [pistol] }) } };
   const { CombatSystem } = await import('../src/combat/combat.js');
-  const combat = Object.create(CombatSystem.prototype);
+  const combat = Object.assign(Object.create(CombatSystem.prototype), combatMotion());
   combat.refreshEquipment();
   const fallback = combat.offGun, key = combat.equipKey;
   await initAssets(); await loadUiAssets();
@@ -89,10 +91,10 @@ test('the Hunter pistol uses archived icon pixels in its held model and inventor
 });
 
 async function equipmentScene(t) {
-  const previous = Object.fromEntries(['state', 'input', 'three', 'vr', 'ui', 'map'].map(key => [key, G[key]]));
+  const previous = Object.fromEntries(['state', 'input', 'three', 'vr', 'ui', 'map', 'player'].map(key => [key, G[key]]));
   t.after(() => Object.assign(G, previous));
   const camera = new THREE.PerspectiveCamera(75, 16 / 9, 0.08, 300);
-  G.vr = false; G.ui = {}; G.map = { transferring: false };
+  G.vr = false; G.ui = {}; G.map = { transferring: false }; G.player = { pitch: 0 };
   G.input = { controllers: {
     right: { grip: new THREE.Group(), ray: new THREE.Group() },
     left: { grip: new THREE.Group(), ray: new THREE.Group() },
@@ -101,7 +103,7 @@ async function equipmentScene(t) {
   let weapon = null, armor = null;
   G.state = { party: { leader: () => ({ weapons: () => weapon ? [weapon] : [], armors: () => armor ? [armor] : [] }) } };
   const { CombatSystem } = await import('../src/combat/combat.js');
-  const combat = Object.create(CombatSystem.prototype);
+  const combat = Object.assign(Object.create(CombatSystem.prototype), combatMotion());
   const dispose = object => object?.traverse(child => { child.geometry?.dispose(); for (const material of [child.material].flat()) material?.dispose(); });
   t.after(() => { dispose(combat.weapon); dispose(combat.shield); });
   return { camera, combat, equip(wtype, offhand = null) {
@@ -117,13 +119,30 @@ async function equipmentScene(t) {
 function projectedBounds(object, camera) {
   camera.updateMatrixWorld(true);
   const box = new THREE.Box2();
+  const clip = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+  const planes = [p => p.w + p.x, p => p.w - p.x, p => p.w + p.y, p => p.w - p.y, p => p.w + p.z, p => p.w - p.z];
   object.traverse(child => {
     if (!child.isMesh) return;
-    child.geometry.computeBoundingBox();
-    const bounds = child.geometry.boundingBox;
-    for (const x of [bounds.min.x, bounds.max.x]) for (const y of [bounds.min.y, bounds.max.y]) for (const z of [bounds.min.z, bounds.max.z]) {
-      const point = child.localToWorld(new THREE.Vector3(x, y, z)).project(camera);
-      box.expandByPoint(new THREE.Vector2(point.x, point.y));
+    child.updateWorldMatrix(true, false);
+    const positions = child.geometry.attributes.position, index = child.geometry.index;
+    const matrix = clip.clone().multiply(child.matrixWorld), count = index?.count || positions.count;
+    for (let i = 0; i < count; i += 3) {
+      let polygon = [0, 1, 2].map(j => {
+        const at = index ? index.getX(i + j) : i + j;
+        return new THREE.Vector4(positions.getX(at), positions.getY(at), positions.getZ(at), 1).applyMatrix4(matrix);
+      });
+      // A hip-carried blade can straddle the camera plane; projecting its
+      // unclipped AABB invents huge visible regions behind the viewer.
+      for (const distance of planes) {
+        const next = [];
+        for (let j = 0; j < polygon.length; j++) {
+          const a = polygon[j], b = polygon[(j + 1) % polygon.length], da = distance(a), db = distance(b);
+          if (da >= 0) next.push(a);
+          if ((da >= 0) !== (db >= 0)) next.push(a.clone().lerp(b, da / (da - db)));
+        }
+        polygon = next;
+      }
+      for (const p of polygon) box.expandByPoint(new THREE.Vector2(p.x / p.w, p.y / p.w));
     }
   });
   return box;
@@ -140,7 +159,15 @@ test('PC weapon and guard models leave the central view clear across weapon type
       const bounds = projectedBounds(combat.weapon, camera);
       assert.ok(!bounds.intersectsBox(focus), `type ${type}, FOV ${fov}, aspect ${aspect}: ${JSON.stringify(bounds)}`);
       const visible = bounds.clone().intersect(screen).getSize(new THREE.Vector2());
-      assert.ok(visible.x > 0 && visible.y > 0, `weapon ${type} should remain partly visible`);
+      if (combat.weapon.userData.ranged || combat.weapon.userData.fist) assert.ok(visible.x > 0 && visible.y > 0, `held weapon ${type} should remain partly visible`);
+      else {
+        assert.ok(combat.weapon.position.distanceTo(DESK_REST.p) < 1e-9, 'blades rest at the body hip rather than following camera FOV');
+        camera.rotation.x = -Math.PI / 3; G.player.pitch = camera.rotation.x;
+        combat.deskSwing.update(combat.weapon, 1, 10, null, 0, null, combat.deskBody());
+        const down = projectedBounds(combat.weapon, camera);
+        assert.ok(down.intersectsBox(screen), `blade ${type} remains inspectable when looking down`);
+        camera.rotation.x = 0; G.player.pitch = 0; combat.deskSwing.reset(combat.weapon, true);
+      }
       assert.ok(visible.x * visible.y < 0.6, `weapon ${type} should occupy less than 15% of the screen`);
       assert.equal(combat.weaponLength(), combat.weapon.userData.length, 'visual size never shortens combat reach');
     }
@@ -148,7 +175,7 @@ test('PC weapon and guard models leave the central view clear across weapon type
       equip(4, shield); combat.guardUp = true; combat.updateDeskShield(0.2);
       const bounds = projectedBounds(combat.shield, camera);
       assert.ok(!bounds.intersectsBox(focus), `${shield} shield, FOV ${fov}, aspect ${aspect}: ${JSON.stringify(bounds)}`);
-      assert.ok(bounds.intersectsBox(screen), 'guarding must still show the shield');
+      assert.ok(bounds.intersectsBox(screen), `${shield} shield at FOV ${fov}, aspect ${aspect}: guarding must still show the shield (${JSON.stringify(bounds)})`);
     }
   }
 });

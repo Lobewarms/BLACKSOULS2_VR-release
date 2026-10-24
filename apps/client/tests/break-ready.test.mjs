@@ -1,3 +1,4 @@
+import { combatMotion } from './helpers/combat-motion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -32,7 +33,7 @@ function environment(t, vr = false) {
     player: { rig, headWorld: out => camera.getWorldPosition(out), forwardVec: () => new THREE.Vector3(0, 0, -1) },
     three: { camera }, audio: { playSe() {}, playSystemSe() {} } });
   const glow = new THREE.Texture();
-  const combat = Object.assign(Object.create(CombatSystem.prototype), { root, weapon, battles: [], fadingMarkers: [],
+  const combat = Object.assign(Object.create(CombatSystem.prototype), { ...combatMotion(), root, weapon, battles: [], fadingMarkers: [],
     stamina: 1, staminaDelay: 0, rangedCooldown: 0, skillCD: {}, prevBase: new THREE.Vector3(), prevTip: new THREE.Vector3(), prevRel: new THREE.Vector3(),
     allies: { update() {} }, allTargets: () => [], glowTexture: () => glow, swingAtNpcs() {}, swingAtPlayers() {}, clashWithPlayers() {} });
   // Keep the real common update, equipment visibility, input, readiness and attack paths.

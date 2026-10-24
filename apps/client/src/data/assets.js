@@ -56,7 +56,7 @@ export function hasFile(path) {
 export function listFiles(prefix) {
   const p = prefix.toLowerCase();
   const out = [];
-  for (const [k, v] of manifest) if (k.startsWith(p)) out.push(v);
+  for (const [k, v] of manifest || []) if (k.startsWith(p)) out.push(v);
   return out;
 }
 

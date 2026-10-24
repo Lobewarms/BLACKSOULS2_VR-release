@@ -15,7 +15,10 @@
 // a failed granted start asks the local server (opts.resetXr) to end that process, then waits for the new
 // process to find the headset. Healthy exits keep the runtime ready for immediate, user-clicked reentry;
 // a brief session or hidden dashboard alone is not evidence of a broken runtime.
-const SESSION_INIT = { optionalFeatures: ['local-floor', 'bounded-floor', 'layers', 'hand-tracking'] };
+// Chrome 156 advertises renderState.layers even without negotiating layers.
+// Three r170 selects that projection path by property presence and the headset
+// receives no frames. Use its XRWebGLLayer path unless explicitly requested.
+const SESSION_INIT = { optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking'] };
 
 const log = (...a) => console.info('[xr]', ...a);
 const warn = (...a) => console.warn('[xr]', ...a);
@@ -292,6 +295,7 @@ export function createVRButton(renderer, opts = {}) {
     const prepare = (promise, ms, label) => timeout(Promise.race([promise, attempt.cancelledPromise]), ms, label);
     current = attempt;
     state = 'starting';
+    if (button.dataset) delete button.dataset.xrError;
     show('CANCEL VR START', true);
     status('permission', 'Waiting for the headset permission. Confirm VR in the headset, or cancel here.');
     log('ENTER VR');
@@ -309,7 +313,7 @@ export function createVRButton(renderer, opts = {}) {
         attempt.permissionStalled = true; attempt.failed = true;
         state = 'permission-blocked'; show('WAITING FOR VR...', false);
         status('permission-stalled', 'The browser has not finished opening VR. Recover the connection, or close this game window and reopen it.');
-      }, 90000);
+      }, 180000);
       const s = await request;
       attempt.permissionPending = false; clearPermissionTimers(attempt);
       if (current !== attempt) return;
@@ -334,6 +338,9 @@ export function createVRButton(renderer, opts = {}) {
       s.addEventListener('end', attempt.onEnd);
       s.addEventListener('visibilitychange', attempt.onVisibility);
       if (attempt.cancelled || attempt.permissionStalled || attempt.resetAttempted) { void endAttempt(attempt); return; }
+      if (!sessionInit.optionalFeatures?.includes('layers') && !sessionInit.requiredFeatures?.includes('layers') && s.renderState?.layers !== undefined) {
+        Object.defineProperty(s.renderState, 'layers', { value: undefined, writable: true, configurable: true });
+      }
       status('graphics', 'Preparing graphics for the headset. You can cancel VR startup here.');
       const compatible = await prepare(makeCompatible(renderer, 'ENTER VR'), 20000, 'preparing VR graphics');
       if (current !== attempt || attempt.ended || attempt.cancelled) return;
@@ -389,6 +396,7 @@ export function createVRButton(renderer, opts = {}) {
       if (attempt.attachSettled) attempt.restorePrepared?.();
       if (!attempt.cancelled) attempt.failed = true;
       if (!attempt.cancelled) warn('could not enter VR:', errText(e));
+      if (!attempt.cancelled && button.dataset) button.dataset.xrError = errText(e);
       if (attempt.session) {
         state = 'ending'; show('EXITING...', false);
         // Three's pending setSession cannot be cancelled. Wait for it to

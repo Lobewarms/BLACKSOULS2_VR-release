@@ -33,6 +33,41 @@ def sha256(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def engine_source_digest(files):
+    return sha256(''.join(f'{name}:{digest}\n' for name, digest in sorted(files.items())).encode('utf-8'))
+
+
+def validate_engine_provenance(pin, build, binary):
+    sources = pin.get('source_sha256', {})
+    if (pin.get('schema') != 1 or pin.get('normalization') != 'utf8-lf'
+            or not re.fullmatch(r'[0-9a-f]{40}', pin.get('commit', ''))
+            or set(sources) != {'BlacksoulsVR.cs', 'BuildInfo.cs'}
+            or any(not isinstance(digest, str) or not re.fullmatch(r'[0-9a-f]{64}', digest)
+                   for digest in sources.values())):
+        raise ValueError('Invalid reviewed engine source provenance')
+    if (build.get('schema') != 1 or build.get('upstream_commit') != pin['commit']
+            or build.get('source_sha256') != sources
+            or build.get('source_tree_sha256') != engine_source_digest(sources)
+            or build.get('engine_sha256') != sha256(binary)):
+        raise ValueError('Source-built engine provenance mismatch')
+
+
+def engine_inputs(root):
+    pin = json.loads((root / 'apps/engine/upstream.json').read_text(encoding='utf-8'))
+    output = root / 'apps/launcher/dist'
+    if not (output / 'engine-build.json').is_file() or not (output / 'BlacksoulsVR.Engine.exe').is_file():
+        raise ValueError('Missing source-built engine. Run tooling/release/build_launcher.ps1 first.')
+    build = json.loads((output / 'engine-build.json').read_text(encoding='utf-8'))
+    binary = (output / 'BlacksoulsVR.Engine.exe').read_bytes()
+    validate_engine_provenance(pin, build, binary)
+    for name, digest in pin['source_sha256'].items():
+        source = root / 'apps/engine' / name
+        if (not source.is_file() or source.is_symlink()
+                or sha256(source.read_bytes().replace(b'\r\n', b'\n')) != digest):
+            raise ValueError(f'Engine source differs from its reviewed provenance: {name}')
+    return pin, build, binary
+
+
 def safe_relative(name):
     path = PurePosixPath(name)
     return (not path.is_absolute() and '..' not in path.parts and '\\' not in name
@@ -40,7 +75,7 @@ def safe_relative(name):
 
 
 def collect(root=ROOT):
-    upstream = json.loads((root / 'vendor/launcher/upstream.json').read_text(encoding='utf-8'))
+    engine_inputs(root)
     distribution = json.loads((root / 'packaging/distribution.json').read_text(encoding='utf-8'))
     names = dict(distribution['files'])
     for source_dir, target_dir in distribution['trees'].items():
@@ -70,9 +105,11 @@ def collect(root=ROOT):
                                    'steam_appid.txt', 'steam_api.dll', 'steam_api64.dll'}:
             raise ValueError(f'Game or local configuration file in distribution: {name}')
         payload[name] = source.read_bytes()
-    launcher = PREFIX + 'BlacksoulsVR.Engine.exe'
-    if sha256(payload[launcher]) != upstream['launcher_sha256']:
-        raise ValueError('Launcher differs from the documented upstream binary')
+    # Verify the actual mapped files too, so changing the distribution mapping
+    # cannot substitute the old vendor binary for the compiled engine.
+    validate_engine_provenance(json.loads(payload[PREFIX + 'engine-upstream.json']),
+                               json.loads(payload[PREFIX + 'engine-build.json']),
+                               payload[PREFIX + 'BlacksoulsVR.Engine.exe'])
     for filename, target in [('LICENSE', 'LICENSE'), ('RELEASE_NOTES.txt', 'RELEASE_NOTES.txt'),
                              ('vendor/launcher/upstream.json', 'upstream.json'),
                              ('AGENTS.md', 'AGENTS.md')]:
@@ -142,7 +179,13 @@ def verify(path):
         engine = PREFIX + 'BlacksoulsVR.Engine.exe'
         if engine not in names:
             engine = PREFIX + 'BlacksoulsVR.exe'
-        if sha256(archive.read(engine)) != upstream['launcher_sha256']:
+        if PREFIX + 'engine-build.json' in names:
+            if PREFIX + 'engine-upstream.json' not in names:
+                raise ValueError('Missing engine source provenance')
+            validate_engine_provenance(json.loads(archive.read(PREFIX + 'engine-upstream.json')),
+                                       json.loads(archive.read(PREFIX + 'engine-build.json')),
+                                       archive.read(engine))
+        elif sha256(archive.read(engine)) != upstream['launcher_sha256']:
             raise ValueError('Launcher provenance mismatch')
     return manifest
 

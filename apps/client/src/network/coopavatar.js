@@ -3,7 +3,7 @@
 // moves, and its hands apart from it where its own hands are: a bare hand bending its fingers as the other's do, or
 // what that hand holds (the weapon, shield or gun built from the item's icon, held as the other holds it; or what it
 // holds ready or in hand instead: a spell's light, a thing to throw, a bottle, a syringe, a resin) - and its name over its
-// head.
+// head, its voice chat marks beside it.
 import * as THREE from 'three';
 import { G } from '../core/globals.js';
 import { T } from '../world/mapmesh.js';
@@ -14,9 +14,12 @@ import { makeHand } from '../vr/hands.js';
 import { $data } from '../data/data.js';
 import { BALLOON_TIME } from '../ui/balloons.js';
 import { FONT } from '../ui/ui.js';
+import { ChatBubble, tagScale } from './coopchat.js';
+import { voiceMarksReady, voiceMarksSize, drawVoiceMarks } from './voicemarks.js';
 
 const SNAP = 3;            // m: farther than this from where it was shown, it is put there at once
 const NAME_FAR = 20;       // m: farther off than this its name is not shown
+const MARK_PIC = 76;       // px on its name's canvas (its letters 54): each voice mark's picture
 const tmpQ = new THREE.Quaternion(), tmpV = new THREE.Vector3();
 
 // what CharacterSprite reads of a character
@@ -98,6 +101,7 @@ export class CoopAvatar {
 
   setLook(look) {
     this.setName(look.nm || '');
+    this.vc = look.vc ?? -1;                 // (its voice setting - shown beside its name: drawTag)
     this.setPvp(!!look.pv);
     this.body.characterName = look.chr[0];
     this.body.characterIndex = look.chr[1];
@@ -123,10 +127,25 @@ export class CoopAvatar {
     }
   }
   setPose(p) { this.pose = p; }
-  // its name (it chose it - coop.js), drawn once for each name; shown over its head unless the co-op menu hides names
+  // a line it said in the chat (coopchat.js): over its head for a while
+  say(text) { (this.bubble ||= new ChatBubble(this.scene, FONT)).say(text); }
+  // its name (it chose it - coop.js), and beside it its voice chat marks (voicemarks.js: its voice setting, the microphone
+  // solid while it speaks - an older version telling none: no marks), drawn again only when one of them changes; shown
+  // over its head unless the co-op menu hides names
   setName(name) {
     if (name === this.nameText) return;
     this.nameText = name;
+    this.drawTag();
+  }
+  setVoice(code, speaking) {
+    const key = code >= 0 && voiceMarksReady() ? `${code}/${speaking ? 1 : 0}` : '';
+    if (key === (this.voiceKey || '')) return;
+    this.voiceKey = key;
+    this.voiceMarks = [code, !!speaking];
+    this.drawTag();
+  }
+  drawTag() {
+    const name = this.nameText || '';
     if (!this.nameTag) {
       const cv = document.createElement('canvas');
       cv.width = 512; cv.height = 96;
@@ -140,15 +159,20 @@ export class CoopAvatar {
     }
     const tex = this.nameTag.material.map, cv = tex.image, ctx = cv.getContext('2d');
     ctx.clearRect(0, 0, cv.width, cv.height);
+    // (the name and the marks after it, centred together: a long name gives way)
+    const [mw, mh] = this.voiceKey ? voiceMarksSize(MARK_PIC) : [0, 0], gap = mw ? 14 : 0;
     let size = 54;
     ctx.font = `bold ${size}px ${FONT}`;
-    const w = ctx.measureText(name).width;
-    if (w > cv.width - 24) { size = Math.floor(size * (cv.width - 24) / w); ctx.font = `bold ${size}px ${FONT}`; }
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    let w = ctx.measureText(name).width;
+    const room = cv.width - 24 - mw - gap;
+    if (w > room) { size = Math.floor(size * room / w); ctx.font = `bold ${size}px ${FONT}`; w = ctx.measureText(name).width; }
+    const x = (cv.width - w - gap - mw) / 2;
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
     ctx.lineWidth = 8; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.85)';
-    ctx.strokeText(name, cv.width / 2, cv.height / 2);
+    ctx.strokeText(name, x, cv.height / 2);
     ctx.fillStyle = '#e6ecf6';
-    ctx.fillText(name, cv.width / 2, cv.height / 2);
+    ctx.fillText(name, x, cv.height / 2);
+    if (mw) drawVoiceMarks(ctx, x + w + gap, (cv.height - mh) / 2, MARK_PIC, this.voiceMarks[0], this.voiceMarks[1]);
     tex.needsUpdate = true;
   }
 
@@ -181,6 +205,7 @@ export class CoopAvatar {
     if (this.sprite) this.sprite.group.visible = false;
     if (this.nameTag) this.nameTag.visible = false;
     if (this.pvpTag) this.pvpTag.visible = false;
+    if (this.bubble) this.bubble.sprite.visible = false;
     this.cur = null;
   }
 
@@ -239,27 +264,41 @@ export class CoopAvatar {
       if (b.balloonTime <= 0) b.balloonTime = 1;
     }
     this.sprite.update(viewer, 1);
+    // over it: its name, its PVP, what it said - drawn bigger the farther off it is (as big to the eye, up to a limit -
+    // coopchat.js tagScale), stacked as big
+    const far = Math.hypot(c.x - viewer.x, c.z - viewer.z), ks = tagScale(far);
+    // (its voice chat marks by its name: its voice setting - its look -, and whether it speaks now - its poses)
+    this.setVoice(this.vc ?? -1, !!p.v);
     // its name over the top of its picture (walls hide it as they hide it; a shade's is dim)
     if (this.nameTag) {
       const sm = this.sprite.mesh, g = this.sprite.group;
-      const show = G.settings.coopNames !== false && !!this.nameText && !!sm && g.visible && Math.hypot(c.x - viewer.x, c.z - viewer.z) < NAME_FAR;
+      const show = G.settings.coopNames !== false && !!this.nameText && !!sm && g.visible && far < NAME_FAR;
       this.nameTag.visible = show;
       if (show) {
         const top = sm.position.y + (sm.geometry.parameters?.height || T) * sm.scale.y - (this.sprite.headDrop || 0);
-        this.nameTag.position.set(c.x, g.position.y + top + 0.22, c.z);
+        this.nameTag.scale.set(0.8 * ks, 0.15 * ks, 1);
+        this.nameTag.position.set(c.x, g.position.y + top + 0.22 * ks, c.z);
         this.nameTag.material.opacity = p.sp ? 0.35 : 1;
       }
     }
     // its PvP on: the red PVP just over its name (where the name would be, the names hidden)
     if (this.pvpTag) {
       const sm = this.sprite.mesh, g = this.sprite.group;
-      const show = !!this.pvpOn && !!sm && g.visible && Math.hypot(c.x - viewer.x, c.z - viewer.z) < NAME_FAR;
+      const show = !!this.pvpOn && !!sm && g.visible && far < NAME_FAR;
       this.pvpTag.visible = show;
       if (show) {
         const top = sm.position.y + (sm.geometry.parameters?.height || T) * sm.scale.y - (this.sprite.headDrop || 0);
-        this.pvpTag.position.set(c.x, g.position.y + top + (this.nameTag?.visible ? 0.37 : 0.22), c.z);
+        this.pvpTag.scale.set(0.4 * ks, 0.15 * ks, 1);
+        this.pvpTag.position.set(c.x, g.position.y + top + (this.nameTag?.visible ? 0.37 : 0.22) * ks, c.z);
         this.pvpTag.material.opacity = p.sp ? 0.35 : 1;
       }
+    }
+    // what it said (coopchat.js): a balloon over its name and its PVP, while it stays up
+    if (this.bubble) {
+      const sm = this.sprite.mesh, g = this.sprite.group;
+      const top = sm ? sm.position.y + (sm.geometry.parameters?.height || T) * sm.scale.y - (this.sprite.headDrop || 0) : 1.6;
+      const over = ((this.pvpTag?.visible ? 0.52 : this.nameTag?.visible ? 0.37 : 0.22) - 0.05) * ks;
+      this.bubble.place(c.x, g.position.y + top + over, c.z, !!sm && g.visible, far);
     }
     this.hurtT = Math.max(0, this.hurtT - dt);
     const mat = this.sprite.mesh?.material;
@@ -268,6 +307,7 @@ export class CoopAvatar {
     // the hands, and what they hold
     for (const side of ['left', 'right']) {
       const h = this.hands[side], d = p[side === 'right' ? 'R' : 'L'] || {};
+      h.lowered = !!d.lo;
       if (d.h && !h.model && !h.loading) {
         h.loading = true;
         makeHand(side).then(model => { if (this.gone) { model.dispose(); return; } h.model = model; h.hand.add(model.root); });
@@ -293,6 +333,7 @@ export class CoopAvatar {
       if (!h.kind || !h.item.visible || !h.item.children.length) continue;
       h.item.updateWorldMatrix(true, false);
       if (h.kind === 'shield') {
+        if (h.lowered) continue;                 // (a PC player's shield held down at its side: no guard)
         h.box ||= localBox(h.item);
         if (!h.box.isEmpty()) out.push({ side, kind: 'shield', box: h.box, m: h.item.matrixWorld });
       } else {
@@ -326,6 +367,7 @@ export class CoopAvatar {
     this.scene.remove(this.root);
     if (this.nameTag) { this.scene.remove(this.nameTag); this.nameTag.material.map.dispose(); this.nameTag.material.dispose(); this.nameTag = null; }
     if (this.pvpTag) { this.scene.remove(this.pvpTag); this.pvpTag.material.map.dispose(); this.pvpTag.material.dispose(); this.pvpTag = null; }
+    this.bubble?.dispose(); this.bubble = null;
     for (const h of Object.values(this.hands)) {
       for (const c of [...h.item.children]) disposeTree(c);
       h.model?.dispose();

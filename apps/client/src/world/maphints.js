@@ -67,7 +67,8 @@ export const MAP_HINTS = {
   1: { sideView: true },     // 추락의 방: ledges and stairs up a brick tower, falls down its shaft
   // 병든 시계탑 (the hall): the crates, barrels and pots under the staircase drawn on the back wall, and the
   // staircase's foot - they stood as a block with the plank floor round them on its faces
-  24: { props: [[13, 13, 21, 14]], hideArt: [[13, 13, 16, 14, [132, 133, 140, 141, 148, 149]]] },
+  24: { props: [[13, 13, 21, 14], [4, 11, 4, 13], [8, 11, 8, 13], [5, 11, 7, 12]], hideArt: [[13, 13, 16, 14, [132, 133, 140, 141, 148, 149]]],
+    whole: [[4, 11, 8, 13, 'all']], lips: [[5, 13, 7, 14, 0.15]], onWall: [[5, 12, 7, 12, 1.125, 1]] },
   // 퀸・랜드 (the way in): a bridge (x13-15) over the dark to the castle's gate, balloons floating round it - the dark (drawn with
   // wall-top tiles) stood as walls along it, the balloons on their tops: open now, as far down as the castle's foot. The castle's
   // front kept whole (its columns at x9-10 / x18-19 are drawn with a water tile, the garlands down it at x6 / x22 on walkable
@@ -158,7 +159,7 @@ export const MAP_HINTS = {
   // gallery establish its height. The two three-wide evilcastle_A5 flights
   // are stairs, not flat rooms that should all rise with that gallery. The
   // upper seven-row flight climbs its twelve-row book wall to the next door.
-  155: { fallStairs: [[30, 14, 32, 21, 7], [30, 5, 32, 11, 7]],
+  155: { stairs: [32, 33, 34, 40, 41, 42], fallStairs: [[30, 14, 32, 21, 7], [30, 5, 32, 11, 7]],
     floors: [[54, 9, 54, 11, 3, 0], [54, 8, 54, 8, 3, 3]],
     caps: [[26, 14, 56, 21, 7.5]], tops: [[26, 0, 56, 11, 19]], wallCap: 14 },
   // Crimean Nursing Graveyard: the metal stair under the transfer doorway has
@@ -226,6 +227,8 @@ export async function loadUserHints() {
 export function floorHints(mapId) { return MAP_HINTS[mapId]?.floors || null; }
 export function passageLevelHints(mapId) { return MAP_HINTS[mapId]?.passageLevels === true; }
 export function fallStairHints(mapId) { return MAP_HINTS[mapId]?.fallStairs || null; }
+export function stairHints(mapId) { return MAP_HINTS[mapId]?.stairs || null; }
+export function onWallHints(mapId) { return MAP_HINTS[mapId]?.onWall || null; }
 export function lipHints(mapId) { return MAP_HINTS[mapId]?.lips || null; }
 export function abyssHints(mapId) { return MAP_HINTS[mapId]?.abyss || null; }
 export function openFights(mapId) { return !!MAP_HINTS[mapId]?.openFights; }

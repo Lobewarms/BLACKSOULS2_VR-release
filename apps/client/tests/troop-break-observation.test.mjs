@@ -1,4 +1,5 @@
 import test from 'node:test';
+import { combatMotion } from './helpers/combat-motion.mjs';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
 import { G } from '../src/core/globals.js';
@@ -54,7 +55,7 @@ function environment(t) {
       sw: id => !!switches[id], setSw: (id, value) => { switches[id] = value; },
       actor: () => actor, system: { winCount: 0 },
       party: { leader: () => actor, members: () => [], partyAbility: () => false } } });
-  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
+  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), { ...combatMotion(),
     root, battles: [], enemies: [], symbols: new Map(), puppets: new Map(), sideInterps: [],
     projectiles: [], popups: [], fx: [], fadingMarkers: [], waves: [], hazards: [], detached: [],
     defeated: new Map(), quick: { close() {} }, allies: { reset() {} },

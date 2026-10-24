@@ -5,7 +5,7 @@ import { tr, fmtDate } from '../ui/i18n.js';
 import { createVRButton, prepareXR } from '../vr/vrbutton.js';
 import { renderWithXrStatus } from '../vr/frame-status.js';
 import { createXrStatus } from '../ui/xr-status.js';
-import { initAssets, loadFont, loadImage, fetchBinary, listFiles, hasFile } from '../data/assets.js';
+import { initAssets, loadImage, fetchBinary, listFiles, hasFile } from '../data/assets.js';
 import { $data, loadDatabase, loadMapNames, destinationName } from '../data/data.js';
 import { MarshalReader } from '../data/marshal.js';
 import { billboardUniforms, T } from '../world/mapmesh.js';
@@ -36,6 +36,7 @@ import { EnvironmentEffects } from '../world/environment-effects.js';
 import { WorldTone } from '../world/world-tone.js';
 import { BalloonIcon } from '../ui/balloons.js';
 import { loadScriptData } from '../data/scriptdata.js';
+import { loadGameFonts } from '../ui/fonts.js';
 import { buildMapView } from '../world/mapbuild.js';
 import { clearEdgeCache } from '../world/collision.js';
 import { TransferMarkers } from '../world/markers.js';
@@ -44,10 +45,13 @@ import { Spectator } from '../vr/spectator.js';
 import { ViewMode } from '../vr/viewmode.js';
 import { PictureLayer } from '../ui/pictures.js';
 import { Hands } from '../vr/hands.js';
-import { loadUserHints } from '../world/maphints.js';
+import { loadUserHints, MAP_HINTS } from '../world/maphints.js';
 import { adjustStore, replaceAdjustStore, onAdjustChange } from '../combat/weapons.js';
 import { Coop } from '../network/coop.js';
 import { SteamAchievements } from '../game/steam-achievements.js';
+import { CoopChat } from '../network/coopchat.js';
+import { VoiceChat } from '../network/coopvoice.js';
+import { LiftRide } from '../world/lift.js';
 
 const statusEl = document.getElementById('status');
 const setStatus = t => { if (statusEl) statusEl.textContent = t; };
@@ -140,6 +144,9 @@ G.combat = new CombatSystem(scene);
 G.arena = new BossArena(scene);
 G.theater = new Theater(scene);
 G.coop = new Coop(scene);                // (co-op: another player in this world, or this one in theirs - coop.js)
+G.lift = new LiftRide();                 // (a lift's ride: the platform under the player - lift.js)
+G.chat = new CoopChat(scene);      // (co-op chat: lines over heads, the log - coopchat.js)
+G.voice = new VoiceChat();               // (co-op voice: listen only at first - coopvoice.js)
 G.emotes = new Emotes();                 // (co-op: a balloon put up over this player's head - emotes.js)
 const markers = new TransferMarkers(scene);
 const worldPickup = new WorldPickup();
@@ -208,6 +215,7 @@ vrContainer.prepend(vrButton);
 const view = { mesh: null, sprites: [], mapId: 0 };
 G.view = view;   // (debug) current map mesh and sprites
 function clearMapView() {
+  G.lift?.end();
   markers.clear();
   G.floorAt = () => 0;
   if (view.mesh) { scene.remove(view.mesh.group); view.mesh.dispose(); view.mesh = null; }
@@ -303,6 +311,15 @@ function refreshExitMarkers(force = false) {
 
 // the view again with the dark round a boss fight opened up (or closed again: null) - arena.js
 G.rebuildMapView = open => presentMap(view.seeds || [], true, open).catch(e => console.error('map rebuild failed', e));
+// the map editor saved its rules (mapedit.html, open in this browser): the map the player is on is built again with them at
+// once - not only when it is next entered
+try {
+  new BroadcastChannel('bsvr-maphints').onmessage = async () => {
+    const id = G.map?.mapId, before = JSON.stringify(MAP_HINTS[id] ?? null);
+    await loadUserHints();
+    if (id && JSON.stringify(MAP_HINTS[id] ?? null) !== before && view.mesh && view.mapId === id && !transferBusy && !G.map.transferring) G.rebuildMapView(G.arena?.open || null);
+  };
+} catch { /* no BroadcastChannel */ }
 // an event laid a tile that opens the way (or took it away again) - gamemap.js onEventPageChanged: the view again, once for all
 // that changed together (a lever's bridge is a few events)
 let tilesChanging = false;
@@ -357,8 +374,9 @@ async function performTransfer() {
     G.player.teleportTo(t.x, t.y, t.dir);
     m.afterTransfer();
     if (changed) G.combat.onMapLoaded();
-    m.transfer = null;
-    m.transferring = false;
+    // (one reserved while this one loaded - the way into a co-op world taken in the middle of an opening's transfer - is
+    // not dropped with it: it goes next)
+    if (m.transfer === t) { m.transfer = null; m.transferring = false; }
     m.requestRefresh();
     G.coop.onTransfer(m.mapId, t.x, t.y, t.dir);
     setStatus(destinationName(m.mapId));
@@ -368,7 +386,7 @@ async function performTransfer() {
   } catch (e) {
     console.error('transfer failed', e);
     setStatus(tr('맵 로딩 실패: {err}', { err: e.message }));
-    m.transferring = false; m.transfer = null;
+    if (m.transfer === t) { m.transferring = false; m.transfer = null; }
     G.screen.setBrightness(255);
   }
   transferBusy = false;
@@ -379,14 +397,14 @@ function waitFrames(n) { return new Promise(r => frameWaiters.push({ n, r })); }
 // ------------------------------------------------------------------ saves
 // debug launches (?save= / ?map= / ?timer / ?vrsave=) never write save slots
 const DEV_RUN = ['save', 'map', 'timer', 'vrsave'].some(k => new URLSearchParams(location.search).has(k));
-// (the developer's world - coop.js: this player's character goes to its developer-server autosave instead; the opening
+// (the developer's world - coop.js: this player's character goes to its community-server autosave instead; the opening
 // alone, nothing)
 async function autosave() {
   if (DEV_RUN || !G.state || G.state.system.saveDisabled) return false;
   if (G.coop.role === 'world') return G.coop.world ? saveVr(0, true, 'world') : false;
   return saveVr(0, true);
 }
-// kind 'world': a developer-server save (its own slots, saves/world/ - kept apart from the game's own)
+// kind 'world': a community-server save (its own slots, saves/world/ - kept apart from the game's own)
 async function saveVr(slot = 1, silent = false, kind = 'vr') {
   if (!G.state || !G.map?.grid) return false;
   if (G.coop.phantom) return false;       // (in another player's world: nothing there is this game's - coop.js)
@@ -463,7 +481,7 @@ async function loadVrSave(slot, kind = 'vr') {
     return null;
   }
 }
-// (the developer's world - ui.js showWorldStart: a save of this game's own, or one of its developer-server saves)
+// (the developer's world - ui.js showWorldStart: a save of this game's own, or one of its community-server saves)
 G.listSaves = kind => listVrSaves(kind);
 G.loadSave = (slot, kind) => loadVrSave(slot, kind);
 G.saveMeta = m => ({ map: saveLocation(m), date: metaDate(m), desc: slotDesc(m) });
@@ -503,6 +521,7 @@ function enterWorld(state, overridePos) {
   G.combat.reset({ keepState: true });
   clearMapView();
   mode = 'game';
+  G.ui.plainLists = false;
   G.ui.list.close();
   const pos = overridePos || { mapId: state.mapId, ...state.start };
   G.map.playerChar.moveSpeed = normalizeMoveSpeed(pos.moveSpeed ?? state.start?.moveSpeed);
@@ -609,7 +628,7 @@ async function showTitle() {
   items.push({ text: tr('모드 세이브 불러오기'), id: 'vr', enabled: vrSlots.some(s => s.slot > 0) });
   // (a developer-server save played on here, in the game itself - saved as its own saves from then on)
   const worldSlots = await listVrSaves('world');
-  if (worldSlots.length) items.push({ text: tr('개발자 서버 세이브 불러오기'), id: 'world', desc: tr('개발자 서버의 진행을 본편으로 가져옵니다') });
+  if (worldSlots.length) items.push({ text: tr('커뮤니티 서버 세이브 불러오기'), id: 'world', desc: tr('커뮤니티 서버의 진행을 본편으로 가져옵니다') });
   items.push({ text: tr('새 게임'), id: 'new', desc: tr('오프닝부터 시작') });
   G.ui.placeRoot(true);
   G.ui.list.open('BLACK SOULS Ⅱ  VR', items, {
@@ -785,6 +804,7 @@ function frameBody(xrFrame) {
       }
       G.hands.update(dt);
       const head = G.player.headWorld(headTmp);
+      G.lift.update();                       // (a lift's ride over on its landing - lift.js)
       updateLoopView(head);
       billboardUniforms.uViewer.value.copy(head);
       const alpha = acc / STEP;
@@ -801,6 +821,7 @@ function frameBody(xrFrame) {
       view.mesh.update(G.time);
       atmosphere.update(head);
       G.environment.update(dt, head);
+      G.chat.update(head);
       G.coop.update(dt, head);               // (last: a visit that ends here sends the player elsewhere at once)
     } else {
       G.combat.syncBonusClock(true);
@@ -811,6 +832,7 @@ function frameBody(xrFrame) {
     G.screen.apply();
     G.ui.update(dt);
   }
+  G.voice.update();
   G.audio.updateListener(camera);
   moviePresentation.apply(G);
   G.input.endFrame();
@@ -836,14 +858,16 @@ if (new URLSearchParams(location.search).has('timer')) {
     await prepareXR(renderer);
     setStatus(tr('게임 파일 확인 중...'));
     await loadServerSettings();
-    // (the developer's server this game came with - devserver.json beside it: its co-op menu's 개발자 서버)
+    // (the developer's server this game came with - devserver.json beside it: its co-op menu's 커뮤니티 서버)
     try { const r = await fetch('/devserver.json'); if (r.ok) G.coop.setDevServers(await r.json()); } catch { /* none */ }
     await loadUserHints();              // (the map rules changed in the map editor - mapedit.html, src/maphints.user.json)
     await initAssets();
     if (!hasFile('Data/System.rvdata2')) throw new Error(tr('Data/System.rvdata2를 찾을 수 없습니다. 게임 폴더 설정을 확인하세요'));
     setStatus(tr('데이터베이스 로딩 중...'));
     await loadDatabase((p, name) => setStatus(tr('데이터베이스 로딩 중... {p}% ({name})', { p: Math.round(p * 100), name })));
-    await Promise.all([loadScriptData(), loadUiAssets(), loadFont('GameFont', 'NanumGothic')]);
+    // (the fonts the game's scripts name, once they are read - fonts.js)
+    await Promise.all([loadScriptData().then(loadGameFonts), loadUiAssets()]);
+    G.ui.refreshFonts();
     G.ui.attachHud(null);
     window.G = G; window.$data = $data;
     G.startGame = startGame; G.GameState = GameState;

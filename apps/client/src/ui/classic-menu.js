@@ -32,29 +32,30 @@ export function paintClassicMenu({ overview, commandPanel, leader, members, gold
     gradient.addColorStop(0, textColor(colors[0])); gradient.addColorStop(1, textColor(colors[1]));
     c.fillStyle = gradient; c.fillRect(x, y + 22, (right - x) * ratio, 12);
   };
+  const rowScale = party.length === 4 ? 0.75 : 1;
   party.forEach((actor, index) => {
-    const top = index * 240;
+    const top = index * 240 * rowScale, y = offset => top + offset * rowScale;
     const sheet = faceCanvas instanceof Map ? faceCanvas.get(actor.faceName) : actor === leader ? faceCanvas
       : actor.faceName && actor.faceName === leader?.faceName ? faceCanvas : null;
     const faceIndex = Math.max(0, Math.trunc(actor.faceIndex || 0)), sx = faceIndex % 4 * 96, sy = Math.floor(faceIndex / 4) * 96;
     if (sheet?.width >= sx + 96 && sheet?.height >= sy + 96) {
-      c.imageSmoothingEnabled = false; c.drawImage(sheet, sx, sy, 96, 96, 32, top + 32, 176, 176);
+      c.imageSmoothingEnabled = false; c.drawImage(sheet, sx, sy, 96, 96, 32, y(32), 176 * rowScale, 176 * rowScale);
     }
-    write(c, stripEscapes(actor.name || tr('플레이어')), 240, top + 48, W - 610, 36);
+    write(c, stripEscapes(actor.name || tr('플레이어')), 240, y(48), W - 610, 36);
     const className = helpers.className?.(actor) || helpers.classes?.[actor.classId]?.name || actor.className || '';
-    if (className) write(c, stripEscapes(className), W - 32, top + 48, 328, 30, 'right', textColor(16));
-    if (actor.level != null) write(c, `${helpers.levelLabel || 'Lv'} ${number(actor.level)}`, 240, top + 94, 328, 30);
-    gauge('HP', actor.hp, actor.mhp, top + 102, [18, 10]);
-    gauge('MP', actor.mp, actor.mmp, top + 154, [9, 1]);
+    if (className) write(c, stripEscapes(className), W - 32, y(48), 328, 30, 'right', textColor(16));
+    if (actor.level != null) write(c, `${helpers.levelLabel || 'Lv'} ${number(actor.level)}`, 240, y(94), 328, 30);
+    gauge('HP', actor.hp, actor.mhp, y(102), [18, 10]);
+    gauge('MP', actor.mp, actor.mmp, y(154), [9, 1]);
     const states = actor === leader ? effects : helpers.battlerEffects?.(actor) || [];
     states.slice(0, 4).forEach((effect, i) => {
-      const x = 240 + (i % 2) * 174, y = top + 124 + Math.floor(i / 2) * 40;
-      drawIcon(c, effect.icon, x, y, 28);
-      write(c, stripEscapes(effect.name), x + 34, y + 14, 130, 24);
+      const x = 240 + (i % 2) * 174, ey = y(124 + Math.floor(i / 2) * 40);
+      drawIcon(c, effect.icon, x, ey, 28);
+      write(c, stripEscapes(effect.name), x + 34, ey + 14, 130, 24);
     });
-    if (states.length > 4) write(c, `+${states.length - 4} · ${tr('상태 보기')}`, 240, top + 214, 340, 22, 'left', textColor(8));
+    if (states.length > 4) write(c, `+${states.length - 4} · ${tr('상태 보기')}`, 240, y(214), 340, 22, 'left', textColor(8));
     if (index < party.length - 1) {
-      c.globalAlpha = 0.3; c.fillStyle = textColor(21); c.fillRect(32, top + 238, W - 64, 1); c.globalAlpha = 1;
+      c.globalAlpha = 0.3; c.fillStyle = textColor(21); c.fillRect(32, y(238), W - 64, 1); c.globalAlpha = 1;
     }
   });
   // Optional original equipment data can fill the otherwise unused area for a

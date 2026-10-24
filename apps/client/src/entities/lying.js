@@ -23,6 +23,8 @@ export const LYING_TILES = {
   'Inside_B': [80, 81, 82, 83, 84, 85, 86, 88, 89, 90, 91, 92, 93, 94,                  // beds, including the single and damaged variants
     96, 97, 98, 99, 100, 107, 108, 120],                                               // tables and bench (not the adjacent pianos or stools)
   '子供部屋2': [8, 16],                                                                   // bed (16: its foot, walkable)
+  'tileb_interior': [84, 85, 87, 92, 93, 95, 103, 128, 136, 144, 145, 146, 147, 152, 153, 154, 155, 160, 161, 162, 182, 183, 190, 191,
+    198, 199, 206, 207, 208, 209, 210, 211, 212, 213, 214, 215, 216, 217, 218, 219, 220, 221, 224, 225, 226, 227, 228, 229, 232, 233], // university desks/tables and their walkable feet/chairs
 };
 
 export function isLyingTile(id, names) {

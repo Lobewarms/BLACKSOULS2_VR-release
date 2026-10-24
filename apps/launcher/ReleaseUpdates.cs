@@ -84,7 +84,7 @@ namespace BlacksoulsCommunity
 
         private static string Choose(string language, string en, string ja, string ko, string zh)
         {
-            return language == "ja" ? ja : language == "ko" ? ko : language == "zh" ? zh : en;
+            return language == "ja" ? ja : language == "ko" ? ko : language == "zh" ? zh : language == "ru" ? LauncherRussian.Text(en) : en;
         }
     }
 

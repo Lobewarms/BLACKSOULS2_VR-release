@@ -278,7 +278,8 @@ export class Interpreter {
     if (G.ui.messageBusy()) return false;
     const lines = [], at = this.index;
     while (this.nextCode() === 405) { this.index++; lines.push(this.list[this.index].parameters[0]); }
-    const msg = { face: '', lines, position: 1, scroll: true, at };
+    // (its speed 1-8 and whether holding a button may hurry it: ui.js startScroll)
+    const msg = { face: '', lines, position: 1, scroll: true, speed: this.params[0], noFast: !!this.params[1], at };
     G.ui.showMessage(msg, this);
     G.coop?.onSay?.(this, msg);
     this.index++;
@@ -405,6 +406,7 @@ export class Interpreter {
       this.child.root = this.root || this;
       this.child.setup(list, this.eventId);
       this.child.mapId = this.mapId;
+      this.child.commonEventId = id;              // (which common event it runs - coop.js eventLoot)
     }
     return true;
   }
@@ -560,7 +562,13 @@ export class Interpreter {
   c135() { G.state.system.menuDisabled = this.params[0] === 0; return true; }
   c136() { G.state.system.encounterDisabled = this.params[0] === 0; return true; }
   c137() { G.state.system.formationDisabled = this.params[0] === 0; return true; }
-  c138() { return true; } // window color
+  // Change Window Color: the windows' tone from now on (rmwindow.js), kept with the game as $game_system keeps it
+  c138() {
+    const t = this.params[0];
+    if (t) G.state.system.windowTone = { red: t.red | 0, green: t.green | 0, blue: t.blue | 0, gray: t.gray | 0 };
+    G.ui?.setWindowTone?.(G.state.system.windowTone);
+    return true;
+  }
 
   // ---------------------------------------------------------------- movement
   c201() {

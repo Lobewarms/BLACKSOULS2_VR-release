@@ -32,7 +32,7 @@ export const T = 1.5; // meters per tile
 // ones, but the 3D view took them for a building: kinds per A2 sheet. 끝나지 않는 다과회's long tea table
 // (VXTileA2 #23; the other table kinds of that sheet, 7 / 15 / 31, carry the flag). Only the 3D view reads this
 // (isTableTop): talking across a counter keeps to the flag, as in the original
-const UNFLAGGED_TABLES = { VXTileA2: [23] };
+const UNFLAGGED_TABLES = { VXTileA2: [23], TileA2_interior: [15] };
 
 export class MapGrid {
   constructor(map, tileset) {
@@ -478,6 +478,19 @@ export async function buildMapMesh(grid, opts = {}) {
   // the way down their middle): built as floor - their heights from the floors hint - not walls
   const wallFloor = new Uint8Array(w * h);
   for (const [x0, y0, x1, y1] of opts.wallFloors || []) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (valid(x, y)) wallFloor[idx(x, y)] = 1;
+  // Original lifts carry the player through a blocked rock shaft. Open only
+  // its presentation; MapGrid's native passage remains unchanged.
+  const liftCell = new Uint8Array(w * h);
+  const lifts = (opts.lifts || []).filter(lift => Number.isInteger(lift.x) && Number.isInteger(lift.yTop) && Number.isInteger(lift.yBottom)
+    && lift.yTop < lift.yBottom && valid(lift.x, lift.yTop) && valid(lift.x, lift.yBottom));
+  for (const lift of lifts) {
+    const topOpen = grid.anyPassable(lift.x, lift.yTop);
+    for (let y = lift.yTop; y <= lift.yBottom; y++) for (let x = lift.x - 2; x <= lift.x + 2; x++) {
+      if (!valid(x, y)) continue;
+      const end = y === lift.yBottom || y === lift.yTop && topOpen, open = grid.anyPassable(x, y);
+      if (end ? open : !open) { liftCell[idx(x, y)] = end ? 2 : 1; wallFloor[idx(x, y)] = 1; }
+    }
+  }
   const raisedTop = new Uint8Array(w * h);
   // the top half of a door drawn two rows tall (maphints.js doorTops): a cell of the wall beside it, drawn as itself
   const doorTop = new Set((opts.doorTops || []).filter(([x, y]) => valid(x, y)).map(([x, y]) => idx(x, y)));
@@ -1345,7 +1358,8 @@ export async function buildMapMesh(grid, opts = {}) {
   let shaft = null;                   // other maps: cells opened into the drop off a ledge
   let shaftTop = null, shaftRowH = null, shaftDepth = null;
   const fallStats = { edges: 0, drops: 0, shaft: 0, raised: 0, pillars: 0 };
-  if (opts.falls?.some(f => f.dir === 1)) {
+  for (let i = 0; i < w * h; i++) if (liftCell[i]) { solid[i] = empty[i] = pit[i] = isSide[i] = raisedTop[i] = 0; wallKind[i] = -1; }
+  if (opts.falls?.some(f => f.dir === 1) || lifts.length) {
     const tower = !!opts.sideView;
     const walk = i => !solid[i] && !empty[i] && !pit[i] && grid.anyPassable(i % w, (i / w) | 0);
     // A verified wide stair must separate the rooms at its ends. Width alone
@@ -1357,6 +1371,8 @@ export async function buildMapMesh(grid, opts = {}) {
       for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (valid(x, y)) stairRise[idx(x, y)] = rise;
     }
     const profiledStair = i => !Number.isNaN(stairRise[i]);
+    const fallStairTiles = new Set((opts.stairs || []).map(number => TILE.A5 + number));
+    const stairAt = i => profiledStair(i) || fallStairTiles.has(grid.tile(i % w, (i / w) | 0, 0)) || fallStairTiles.has(grid.tile(i % w, (i / w) | 0, 1));
     // the player can step between the two cells (each passable toward the other, as in the original)
     const OPP_DIR = { 2: 8, 4: 6, 6: 4, 8: 2 };
     const link = (x, y, dx, dy, d) => {
@@ -1375,7 +1391,7 @@ export async function buildMapMesh(grid, opts = {}) {
         x = x1;
       }
     }
-    const flat = i => walk(i) && runLen[i] >= 3 && !profiledStair(i);
+    const flat = i => walk(i) && runLen[i] >= 3 && !stairAt(i);
     const node = new Int32Array(w * h).fill(-1);
     const nodeSize = [], nodeRows = [];
     for (let s0 = 0; s0 < w * h; s0++) {
@@ -1400,7 +1416,7 @@ export async function buildMapMesh(grid, opts = {}) {
     const ends = [];                                                // cells the falls leave from / land on
     const air = new Set();
     const drops = [];                                               // falls off a ledge's edge
-    for (const f of opts.falls) {
+    for (const f of opts.falls || []) {
       if (f.dir !== 1) continue;                                   // a slide down the screen
       let from = -1, climbed = false;                              // (stepped on from any side)
       for (const [dx, dy] of [[0, -1], [-1, 0], [1, 0], [0, 1]]) {
@@ -1438,6 +1454,26 @@ export async function buildMapMesh(grid, opts = {}) {
         if (!walk(j)) { air.add(j); cells.push([j, k]); }
       }
       drops.push({ f, from: above, land: landWalk ? land : -1, cells });
+    }
+    const nodeNear = (x, y) => {
+      if (!valid(x, y) || !walk(idx(x, y))) return -1;
+      const seen = new Set([idx(x, y)]), queue = [idx(x, y)];
+      for (let head = 0; head < queue.length && head < 400; head++) {
+        const cell = queue[head];
+        if (node[cell] >= 0) return cell;
+        for (const [dx, dy, direction] of STEPS) {
+          if (!link(cell % w, (cell / w) | 0, dx, dy, direction)) continue;
+          const next = idx(cell % w + dx, ((cell / w) | 0) + dy);
+          if (!seen.has(next)) { seen.add(next); queue.push(next); }
+        }
+      }
+      return -1;
+    };
+    for (const lift of lifts) {
+      const up = nodeNear(lift.x, lift.yTop), down = nodeNear(lift.x, lift.yBottom);
+      if (up >= 0 && down >= 0 && node[up] !== node[down]) {
+        edges.push([node[up], node[down], lift.yBottom - lift.yTop, false]); ends.push(up, down);
+      }
     }
     fallStats.edges = edges.length; fallStats.drops = drops.length;
     if (tower && edges.length) {
@@ -1486,6 +1522,17 @@ export async function buildMapMesh(grid, opts = {}) {
         let open = 0;
         for (const [dx, dy] of N4) if (valid(x + dx, y + dy) && air.has(idx(x + dx, y + dy))) open++;
         if (open >= 2) air.add(i);
+      }
+      // Preserve the tower's outer wall, but remove the invented inner brick
+      // strip hugging a stair when more solid tower artwork is behind it.
+      for (let i = 0; i < w * h; i++) {
+        if (!slope[i]) continue;
+        const x = i % w, y = (i / w) | 0;
+        for (const dx of [-1, 1]) {
+          const beside = valid(x + dx, y) ? idx(x + dx, y) : -1;
+          const beyond = valid(x + 2 * dx, y) ? idx(x + 2 * dx, y) : -1;
+          if (beside >= 0 && solid[beside] && beyond >= 0 && solid[beyond] && solid[beyond] !== SOLID_VOID && !empty[beyond]) air.add(beside);
+        }
       }
       const heights = [...hN.values()];
       const hiAll = Math.max(...heights), loAll = Math.min(...heights);
@@ -1539,18 +1586,18 @@ export async function buildMapMesh(grid, opts = {}) {
       for (let x = 0; x < w; x++) {
         let y = 0;
         while (y < h) {
-          if (!walk(idx(x, y)) || runLen[idx(x, y)] >= 3 && !profiledStair(idx(x, y))) { y++; continue; }
+          if (!walk(idx(x, y)) || runLen[idx(x, y)] >= 3 && !stairAt(idx(x, y))) { y++; continue; }
           const y0 = y;
           y++;
-          while (y < h && walk(idx(x, y)) && (runLen[idx(x, y)] < 3 || profiledStair(idx(x, y))) && link(x, y - 1, 0, 1, 2)) y++;
+          while (y < h && walk(idx(x, y)) && (runLen[idx(x, y)] < 3 || stairAt(idx(x, y))) && link(x, y - 1, 0, 1, 2)) y++;
           const y1 = y - 1;
           const top = link(x, y0 - 1, 0, 1, 2) ? node[idx(x, y0 - 1)] : -1;
           const bot = link(x, y1, 0, 1, 2) ? node[idx(x, y1 + 1)] : -1;
-          let ladder = false;
-          for (let yy = y0; yy <= y1 && !ladder; yy++) ladder = grid.isLadder(x, yy);
+          let ladder = false, stairs = false;
+          for (let yy = y0; yy <= y1; yy++) { ladder ||= grid.isLadder(x, yy); stairs ||= stairAt(idx(x, yy)); }
           let rise = null;
           for (let yy = y0; yy <= y1; yy++) if (profiledStair(idx(x, yy))) rise = Math.max(rise ?? 0, stairRise[idx(x, yy)]);
-          runs.push({ x, y0, y1, top, bot, ladder, rise });
+          runs.push({ x, y0, y1, top, bot, ladder, stairs, rise });
         }
       }
       // the falls first: each group of falls tied together keeps its biggest landing area where it is
@@ -1576,7 +1623,7 @@ export async function buildMapMesh(grid, opts = {}) {
         for (const r of runs) {
           if (r.top < 0 || r.bot < 0 || r.y1 - r.y0 + 1 > maxLen) continue;
           const tc = idx(r.x, r.y0 - 1), bc = idx(r.x, r.y1 + 1);
-          const rise = r.rise ?? (r.ladder && floorE0[tc] - floorE0[bc] < 0.9 ? r.y1 - r.y0 + 1 : 0);
+          const rise = r.rise ?? ((r.ladder || r.stairs) && floorE0[tc] - floorE0[bc] < 0.9 ? r.y1 - r.y0 + 1 : 0);
           const tb = rise ? floorE0[bc] + rise - floorE0[tc] : 0;     // delta(top) - delta(bottom)
           if (delta.has(r.top) && !delta.has(r.bot)) { delta.set(r.bot, delta.get(r.top) - tb); changed = true; }
           else if (delta.has(r.bot) && !delta.has(r.top)) { delta.set(r.top, delta.get(r.bot) + tb); changed = true; }
@@ -1588,6 +1635,7 @@ export async function buildMapMesh(grid, opts = {}) {
         if (d) { floorE[i] += d; surfNArr[i] += d; surfSArr[i] += d; }
       }
       for (const r of runs) {
+        if (r.stairs && r.rise === null) continue; // source-marked wide flights are joined across their columns below
         const dt = r.top >= 0 ? delta.get(r.top) : undefined, db = r.bot >= 0 ? delta.get(r.bot) : undefined;
         if (dt === undefined && db === undefined) continue;
         const L = r.y1 - r.y0 + 1;
@@ -1640,16 +1688,54 @@ export async function buildMapMesh(grid, opts = {}) {
           if (Math.abs(surfNArr[j] - surfSArr[j]) > 0.01) slope[j] = 1;
         }
       }
+      // Upstream source-marked flights share one gradient across their width.
+      // The fork's measured fallStairs profiles remain authoritative.
+      const seenStairs = new Uint8Array(w * h);
+      for (let start = 0; start < w * h; start++) {
+        if (seenStairs[start] || !walk(start) || !stairAt(start) || profiledStair(start)) continue;
+        const cells = [start]; seenStairs[start] = 1;
+        for (let head = 0; head < cells.length; head++) {
+          const cell = cells[head], x = cell % w, y = (cell / w) | 0;
+          for (const [dx, dy, direction] of STEPS) {
+            if (!link(x, y, dx, dy, direction)) continue;
+            const next = idx(x + dx, y + dy);
+            if (!seenStairs[next] && stairAt(next) && !profiledStair(next)) { seenStairs[next] = 1; cells.push(next); }
+          }
+        }
+        let y0 = h, y1 = -1;
+        for (const cell of cells) { const y = (cell / w) | 0; y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+        const landingHeight = (row, dy) => {
+          const heights = [];
+          for (const cell of cells) {
+            const x = cell % w, y = (cell / w) | 0;
+            if (y !== row || !link(x, y, 0, dy, dy > 0 ? 2 : 8)) continue;
+            const neighbor = idx(x, y + dy);
+            if (!stairAt(neighbor) || profiledStair(neighbor)) heights.push(dy > 0 ? surfNArr[neighbor] : surfSArr[neighbor]);
+          }
+          return heights.length ? heights.reduce((sum, value) => sum + value, 0) / heights.length : undefined;
+        };
+        let top = landingHeight(y0, -1), bottom = landingHeight(y1, 1);
+        if (top === undefined && bottom === undefined) continue;
+        const length = y1 - y0 + 1;
+        if (top === undefined) top = bottom + length;
+        if (bottom === undefined) bottom = top - length;
+        for (const cell of cells) {
+          const row = ((cell / w) | 0) - y0;
+          surfNArr[cell] = top + (bottom - top) * row / length;
+          surfSArr[cell] = top + (bottom - top) * (row + 1) / length;
+          floorE[cell] = (surfNArr[cell] + surfSArr[cell]) / 2; slope[cell] = Math.abs(top - bottom) > 0.01 ? 1 : 0;
+        }
+      }
       const authoredFloors = new Set(hinted.map(hint => hint[0]));
       gradePassageChains({ w, h, node, runs, anchored: new Set(edges.flatMap(edge => edge.slice(0, 2))), walk, link,
-        protectedCell: i => profiledStair(i) || authoredFloors.has(i),
+        protectedCell: i => stairAt(i) || authoredFloors.has(i),
         floor: floorE, north: surfNArr, south: surfSArr, slope });
       const resolved = Uint8Array.from(slope, (value, i) => value || node[i] >= 0 && delta.has(node[i]) || authoredFloors.has(i) ? 1 : 0);
       for (const run of runs) if (delta.has(run.top) || delta.has(run.bot)) {
         for (let y = run.y0; y <= run.y1; y++) resolved[idx(run.x, y)] = 1;
       }
       completePassagePockets({ w, h, node, resolved, walk, link,
-        protectedCell: i => profiledStair(i) || authoredFloors.has(i), floor: floorE, north: surfNArr, south: surfSArr, slope });
+        protectedCell: i => stairAt(i) || authoredFloors.has(i), floor: floorE, north: surfNArr, south: surfSArr, slope });
       // floor that cannot be walked on (under furniture, behind counters) moves with what is beside it
       {
         const moved = new Uint8Array(w * h), q = [];
@@ -1737,6 +1823,22 @@ export async function buildMapMesh(grid, opts = {}) {
       fallStats.raised = [...delta.values()].filter(d => d).length;
     }
   }
+  const liftEnds = [];
+  for (const lift of lifts) {
+    const bottom = idx(lift.x, lift.yBottom), top = idx(lift.x, lift.yTop);
+    const hb = liftCell[bottom] === 2 || isFloorIdx(bottom) ? floorE[bottom] : 0;
+    const landing = liftCell[top] === 2, ht = landing ? floorE[top] : hb + lift.yBottom - lift.yTop;
+    const y0 = landing ? lift.yTop + 1 : lift.yTop, length = lift.yBottom - y0;
+    for (let y = y0; y < lift.yBottom; y++) for (let x = lift.x - 2; x <= lift.x + 2; x++) {
+      if (!valid(x, y) || liftCell[idx(x, y)] !== 1) continue;
+      const cell = idx(x, y), row = y - y0;
+      surfNArr[cell] = ht + (hb - ht) * row / length;
+      surfSArr[cell] = ht + (hb - ht) * (row + 1) / length;
+      floorE[cell] = (surfNArr[cell] + surfSArr[cell]) / 2; slope[cell] = 1;
+    }
+    liftEnds.push({ lift, hb, ht });
+  }
+  for (let i = 0; i < w * h; i++) if (liftCell[i]) solid[i] = empty[i] = pit[i] = 0;
   // a dais: a small walkable wall top with its top and rim drawn over it (a podium, a stage: a solid
   // picture, not a ladder's rungs) and a row of steps in front stands a little above the ground, the
   // steps rising to it
@@ -1836,6 +1938,26 @@ export async function buildMapMesh(grid, opts = {}) {
 
   for (let i = 0; i < w * h; i++) if (!Number.isNaN(cliffTop[i])) { solidBase[i] = cliffBase[i]; solidTop[i] = cliffTop[i]; }
   for (const [i, top] of sideTop) { solidTop[i] = Math.max(solidTop[i], top); solidBase[i] = Math.min(solidBase[i], sideAirDepth ?? solidBase[i]); }
+  const liftRockTop = new Float32Array(w * h).fill(NaN), liftRockBase = new Float32Array(w * h).fill(Infinity);
+  for (const { lift, hb, ht } of liftEnds) {
+    const kindOf = cell => { const tile = grid.tile(cell % w, (cell / w) | 0, 0); return tile >= 2048 ? 2048 + Math.floor((tile - 2048) / 48) * 48 : tile; };
+    const rock = new Set(), shaftCells = [];
+    for (let y = lift.yTop; y <= lift.yBottom; y++) for (let x = lift.x - 2; x <= lift.x + 2; x++) {
+      if (valid(x, y) && liftCell[idx(x, y)] === 1) { const cell = idx(x, y); rock.add(kindOf(cell)); shaftCells.push(cell); }
+    }
+    const seen = new Uint8Array(w * h), queue = [];
+    const visit = cell => { if (!seen[cell] && solid[cell] && !pit[cell] && rock.has(kindOf(cell))) { seen[cell] = 1; queue.push(cell); } };
+    for (const cell of shaftCells) for (const [dx, dy] of N4) if (valid(cell % w + dx, ((cell / w) | 0) + dy)) visit(idx(cell % w + dx, ((cell / w) | 0) + dy));
+    for (let head = 0; head < queue.length; head++) {
+      const cell = queue[head];
+      liftRockTop[cell] = Math.max(Number.isNaN(liftRockTop[cell]) ? -Infinity : liftRockTop[cell], ht);
+      liftRockBase[cell] = Math.min(liftRockBase[cell], hb);
+      for (const [dx, dy] of N4) if (valid(cell % w + dx, ((cell / w) | 0) + dy)) visit(idx(cell % w + dx, ((cell / w) | 0) + dy));
+    }
+  }
+  for (let cell = 0; cell < w * h; cell++) if (!Number.isNaN(liftRockTop[cell])) {
+    solidTop[cell] = liftRockTop[cell]; solidBase[cell] = Math.min(solidBase[cell], liftRockBase[cell]);
+  }
   // walls that are the front of a raised floor (maphints caps [x0, y0, x1, y1, top]): their top no higher than that floor
   // (a gallery's front of bookshelves rose two tiles over the gallery, standing on it as on a terrace)
   for (const [x0, y0, x1, y1, top] of opts.caps || []) {
@@ -2142,16 +2264,22 @@ export async function buildMapMesh(grid, opts = {}) {
   // of its columns stand on its lowest row, one thing - each column stood on its own foot row, so it came apart in slices
   // (a long one is then a fixed box with the picture on its four sides, as any long thing). What of its drawing lies on
   // walkable cells inside it (a tent's open door) goes with it - not what lies on the ground under its foot (its shadow)
-  for (const [x0, y0, x1, y1] of opts.whole || []) {
-    const mine = stacks.filter(st => !st.elev && !st.onTable && st.x >= x0 && st.x <= x1 && st.cellY >= y0 && st.cellY <= y1);
+  for (const [x0, y0, x1, y1, scope] of opts.whole || []) {
+    const mine = stacks.filter(st => {
+      const sourceBottom = st.elev ? st.topY + st.tiles.length - 1 : st.cellY;
+      return (!st.elev || scope === 'all' && st.elev === 1) && !st.onTable && st.x >= x0 && st.x <= x1 && sourceBottom >= y0 && sourceBottom <= y1;
+    });
     if (!mine.length) continue;
-    const bottom = Math.max(...mine.map(st => st.cellY));
+    const bottom = Math.max(...mine.map(st => st.elev ? st.topY + st.tiles.length - 1 : st.cellY));
     const cols = new Map();                       // x -> (y -> tile)
     const put = (x, y, t) => { if (!cols.has(x)) cols.set(x, new Map()); cols.get(x).set(y, t); };
-    for (const st of mine) st.tiles.forEach((t, r) => { if (t) put(st.x, st.cellY - r, t); });
+    for (const st of mine) {
+      const base = st.elev ? st.topY + st.tiles.length - 1 : st.cellY;
+      st.tiles.forEach((t, r) => { if (t) put(st.x, base - r, t); });
+    }
     for (let y = y0; y <= bottom; y++) for (let x = x0; x <= x1; x++) {
       const i = idx(x, y), t = grid.tile(x, y, 2);
-      if (!isVisible(t) || taken(i) || solid[i] || pit[i]) continue;
+      if (!isVisible(t) || taken(i) || pit[i] || solid[i] && !(scope === 'all' && y < bottom)) continue;
       put(x, y, t); stackConsumed[i] = 1;
     }
     let top = h;
@@ -3345,6 +3473,12 @@ export async function buildMapMesh(grid, opts = {}) {
         }
       }
       if (!isSolid(x, y)) return uprightSpot(x, y, lying, above);
+      const onWall = !lying && (opts.onWall || []).find(([x0, y0, x1, y1]) => x >= x0 && x <= x1 && y >= y0 && y <= y1);
+      if (onWall) {
+        const below = valid(x, y + 1) ? idx(x, y + 1) : -1;
+        const foot = below < 0 ? 0 : isSolid(x, y + 1) ? solidBase[below] : surfN(below);
+        return { x: x + 0.5, y: foot + (onWall[4] || 0), z: y + 1 + (onWall[5] || 0), side: 'S', ground: false };
+      }
       // drawn over the upper part of a thing that stands in front of the wall, that part taken off the wall into
       // the thing's picture (a ladder leant on it - 도마뱀 빌 climbing it in 리펀 대성당 -, a tall shelf): in front of
       // that part, at its height (on its lowest part - a fire in a hearth - it goes on as before)

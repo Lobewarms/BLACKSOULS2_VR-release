@@ -1,3 +1,4 @@
+import { combatMotion } from './helpers/combat-motion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -33,7 +34,7 @@ function environment(t) {
     xrPressed: (hand, button) => press && hand === 'right' && button === 0, xrHeld: () => false, haptic() {} };
   const enemy = { hitCooldown: 0, hr: 0.2, alive: true, worldPos: target => target.set(0, 0, -1) };
   const hits = [], shots = [], scheduled = [], costs = [];
-  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
+  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), { ...combatMotion(),
     weapon: new THREE.Group(), stamina: 1, staminaDelay: 0, rangedCooldown: 0, skillCD: {},
     prevBase: new THREE.Vector3(), prevTip: new THREE.Vector3(), prevRel: new THREE.Vector3(),
     allTargets: () => [enemy], playerHitEnemy: (...args) => hits.push(args), breakArmed: () => null,
@@ -79,19 +80,19 @@ test('a desktop swing crosses its hit window at low frame rates, pays once and k
   let npcActions = 0; e.combat.swingAtNpcs = () => npcActions++;
   e.combat.updatePlayerAttack(0); e.press(false);
   assert.equal(e.combat.swing.duration, 0.32);
-  assert.equal(e.combat.stamina, 0.88); assert.equal(e.combat.handsBusy(), true);
+  assert.equal(e.combat.stamina, 0.9); assert.equal(e.combat.handsBusy(), true);
   G.time += 0.2; e.combat.updatePlayerAttack(0.2);
   assert.equal(e.hits.length, 1); assert.equal(npcActions, 1, 'the short active window cannot vanish between frames');
   G.time += 0.2; e.combat.updatePlayerAttack(0.2);
   assert.equal(e.combat.swing, null); assert.equal(e.combat.handsBusy(), false);
-  assert.equal(e.hits.length, 1); assert.equal(npcActions, 1); assert.equal(e.combat.stamina, 0.88);
+  assert.equal(e.hits.length, 1); assert.equal(npcActions, 1); assert.equal(e.combat.stamina, 0.9);
 });
 
 test('the deliberate charge and active swing time remain unchanged by extra-action traits', t => {
   const e = environment(t); e.actor.addState(2); e.held(true);
   e.combat.updatePlayerAttack(0.01); assert.equal(e.combat.swing, undefined);
   G.time += 0.65; e.press(false); e.held(false); e.combat.updatePlayerAttack(0);
-  assert.ok(Math.abs(e.combat.swing.charge - 0.5) < 1e-12); assert.equal(e.combat.stamina, 0.75);
+  assert.ok(Math.abs(e.combat.swing.charge - 0.5) < 1e-12); assert.equal(e.combat.stamina, 0.8);
   assert.equal(e.combat.swing.duration, 0.32);
   e.actor.removeState(2); G.time += 0.32; e.combat.updatePlayerAttack(0.32); assert.equal(e.combat.swing, null);
   e.press(true); e.combat.updatePlayerAttack(0);

@@ -76,10 +76,11 @@ test('unchanged sizes and geometry-only width changes retain texture storage, ca
   const ui = environment(t), p = ui.list.panel, tex = p.tex, source = tex.source, geometry = p.mesh.geometry;
   p.mesh.visible = true; p.ctx.fillText('Live menu pixels', 20, 30);
   const writes = p.canvas.record.dimensionWrites, version = tex.version, input = G.input;
+  const width = p.canvas.width, height = p.canvas.height;
   let disposed = 0; tex.addEventListener('dispose', () => disposed++);
-  p.resize(980, 678, 0.98);
+  p.resize(width, height, 0.98);
   assert.equal(p.mesh.geometry, geometry); assert.equal(p.tex, tex); assert.equal(tex.version, version);
-  p.resize(980, 678, 0.7);
+  p.resize(width, height, 0.7);
   assert.notEqual(p.mesh.geometry, geometry); assert.equal(p.tex, tex); assert.equal(p.tex.source, source); assert.equal(tex.version, version);
   assert.equal(p.canvas.record.dimensionWrites, writes, 'changing world width must not reset the canvas bitmap');
   assert.deepEqual(p.canvas.record.texts, ['Live menu pixels']); assert.equal(disposed, 0); assert.equal(G.input, input);
@@ -100,12 +101,12 @@ test('real Main → Status → Back → Equip → Back transitions refresh stora
   ui.openMenu(); ui.update(0.01); verify(true, 320, 960);
   assert.equal(ui.menuOverview.mesh.visible, true);
   let old = ui.list.panel.tex, disposed = 0; old.addEventListener('dispose', () => disposed++);
-  ui.onMenu('status'); ui.update(0.01); verify(false, 980, 678);
+  ui.onMenu('status'); ui.update(0.01); verify(false, 980, 714);
   assert.equal(disposed, 1); assert.equal(ui.menuOverview.mesh.visible, false); assert.ok(ui.list.items.some(item => item.text === 'ATK'));
   G.input.keys.add('Escape'); ui.update(0.01); verify(true, 320, 960);
   assert.equal(ui.menuOverview.mesh.visible, true); assert.equal(ui.list.items[ui.list.index].id, 'status');
   G.input.keys.clear(); G.input.endFrame();
-  ui.onMenu('equip'); ui.update(0.01); verify(false, 980, 678);
+  ui.onMenu('equip'); ui.update(0.01); verify(false, 980, 714);
   assert.equal(ui.menuOverview.mesh.visible, false);
   ui.list.onCancel(); ui.update(0.01); verify(true, 320, 960);
   assert.equal(ui.list.items[ui.list.index].id, 'equip');

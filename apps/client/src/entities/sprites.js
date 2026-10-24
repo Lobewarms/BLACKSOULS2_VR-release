@@ -494,7 +494,9 @@ export class CharacterSprite {
     // standing on a cell that is solid in 3D (set into a wall, sitting on a rock or a throne): the 2D
     // view draws it over the wall, so it goes onto the block's face (or on top) instead of inside it
     const cx = Math.round(rx), cy = Math.round(ry);
-    if (cx !== this.spotX || cy !== this.spotY || this.spotMode !== this.mode) {
+    const carried = !!G.lift?.carries(c);
+    if (carried) { this.spotX = null; this.spot = null; }
+    else if (cx !== this.spotX || cy !== this.spotY || this.spotMode !== this.mode) {
       this.spotX = cx; this.spotY = cy; this.spotMode = this.mode;
       const lying = this.mode === 'lie' || this.mode === 'prop' || (this.mode === 'furniture' && ['flat', 'book', 'remains'].includes(this.furnitureProfile()?.kind));
       this.spot = c.isEvent ? this.mapInfo.spotOnSolid?.(cx, cy, lying, c.priorityType === 2) || null : null;
@@ -515,7 +517,7 @@ export class CharacterSprite {
       c.viewPos = { x: wx, y: wy, z: wz };
     } else {
       wx = (rx + 0.5) * T; wz = (ry + 0.5) * T;
-      wy = G.floorAt ? G.floorAt(rx, ry) : 0;
+      wy = carried ? G.player?.floorY ?? 0 : G.floorAt ? G.floorAt(rx, ry) : 0;
       c.viewPos = null;
       if (spot) {
         // over a picture that turns about spot.about: on it, where its own column is across the picture (that

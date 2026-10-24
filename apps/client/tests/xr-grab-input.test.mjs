@@ -61,6 +61,26 @@ test('a squeeze before the first rendered frame survives session initialization'
   assert.equal(e.input.grabPressed('right'), true);
 });
 
+test('analog-only squeeze uses the same hysteresis as controller UI without repeating a world pickup', t => {
+  const e = environment(t), source = e.connect(0); e.frame();
+  const analog = value => { Object.assign(source.gamepad.buttons[1], { pressed: false, value }); e.frame(); };
+  analog(0.61); assert.equal(e.input.grabPressed('right'), true); assert.equal(e.input.xrPressed('right', 1), true);
+  analog(0.5); assert.equal(e.input.grabPressed('right'), false); assert.equal(e.input.xrHeld('right', 1), true);
+  analog(0.36); assert.equal(e.input.grabPressed('right'), false);
+  analog(0.34); assert.equal(e.input.xrReleased('right', 1), true);
+  analog(0.61); assert.equal(e.input.grabPressed('right'), true);
+});
+
+test('an analog grip held during connect or a menu needs release before it can pick up', t => {
+  const e = environment(t), source = e.connect(0);
+  Object.assign(source.gamepad.buttons[1], { pressed: false, value: 0.8 });
+  e.busy(true); e.frame(); e.busy(false); e.frame();
+  assert.equal(e.input.grabPressed('right'), false);
+  Object.assign(source.gamepad.buttons[1], { value: 0.2 }); e.frame();
+  Object.assign(source.gamepad.buttons[1], { value: 0.8 }); e.frame();
+  assert.equal(e.input.grabPressed('right'), true);
+});
+
 test('poll-only controllers retain normal squeeze edges without duplicating a later start event', t => {
   const e = environment(t), source = e.connect(0); e.frame();
   e.poll(source, true); e.frame();

@@ -1,3 +1,4 @@
+import { combatMotion } from './helpers/combat-motion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -51,7 +52,7 @@ function environment(t) {
   const enemy = { alive: true, hidden: false, state: 'idle', hr: 0.2, h: 1.6,
     hitCooldown: 0, data: { note: '', gold: 0, exp: 0, drop_items: [] },
     worldPos: out => out.set(0, 0, -1) };
-  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
+  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), { ...combatMotion(),
     root, weapon: new THREE.Group(), stamina: 1, staminaDelay: 0, skillCD: {},
     rangedCooldown: 0, battles: [], puppets: new Map(), symbols: new Map(),
     bonusPending: [], sideInterps: [], fadingMarkers: [], defeated: new Map(),

@@ -1,5 +1,16 @@
-﻿BLACK SOULS II VR - Controls  (version 0.2.52)
+﻿BLACK SOULS II VR - Controls  (version 0.2.53)
 ================================================
+
+New in 0.2.53
+- PC sword clicks chain different cuts; a charged blow thrusts. In VR, adjust
+  Weapon weight in combat settings to change blade follow-through.
+- Running in a fight, dodging and attacks spend stamina. When exhausted, walk
+  until enough stamina returns. Lindamea's immortality duel has unlimited stamina.
+- In multiplayer, / opens text chat on PC; Enter sends and Esc closes it.
+  In VR, use the chat slot in the emote ring or Co-op > Chat and voice.
+  Enable your microphone there to talk. You can choose a device or mute players.
+- Lift platforms, original fonts/window colors and scrolling text are supported.
+
 
 Confusion ending correctly
 - Curing or ending Rampage stops queued automatic hits, follow-up skills and

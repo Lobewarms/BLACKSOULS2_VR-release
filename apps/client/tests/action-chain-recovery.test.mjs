@@ -1,3 +1,4 @@
+import { combatMotion } from './helpers/combat-motion.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import * as THREE from 'three';
@@ -49,7 +50,7 @@ function environment(t, { chances = [0.5], inCombat = true } = {}) {
   const battle = { done: false, enemies: [enemy] }; enemy.battle = battle;
   let targets = [enemy], rolls = 0;
   const hits = [], shots = [], launches = [], scheduled = [];
-  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), {
+  const combat = G.combat = Object.assign(Object.create(CombatSystem.prototype), { ...combatMotion(),
     root, weapon: new THREE.Group(), stamina: 1, staminaDelay: 0, rangedCooldown: 0, skillCD: {},
     battles: inCombat ? [battle] : [], sideInterps: [], allies: { list: [], unitOf: () => null },
     allTargets: () => targets, pickTargets: () => [...targets],

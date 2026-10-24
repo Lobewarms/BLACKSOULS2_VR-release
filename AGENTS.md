@@ -14,10 +14,11 @@ the pull request, rather than repeated community-edition banners.
 
 ## Project background
 
-Modified community fork by dimasma0305, based on Lobewarms release 2026.10.18-1.
-The upstream Windows launcher source is unavailable; preserve its verified binary
-as BlacksoulsVR.Engine.exe. Our source-built BlacksoulsVR.exe detects games first, hosts the original launcher
-form and supplies the fork updater described below. The legacy upstream checker is
+Modified community fork by dimasma0305, integrating Lobewarms release 2026.10.24-5
+at 938b527835b6abbc9d2a55ce91ea5df85b0acbe6. The published upstream launcher
+source is pinned under apps/engine and compiled as BlacksoulsVR.Engine.exe.
+Our source-built BlacksoulsVR.exe detects games first, hosts the engine's launcher
+form and supplies the fork updater described below. The upstream checker is
 disabled before the original form is constructed. Do not claim headset playtesting from CI results.
 
 ## Structure
@@ -35,11 +36,12 @@ apps/client/                    npm workspace: Vite browser app
     network/ vr/               co-op, headset and controller support
   public/                      runtime configuration and legacy map-editor data
   tests/                       JavaScript regression tests
+apps/engine/                   pinned upstream C# engine source and provenance
 packages/coop-server/           installable Python package
   src/blacksouls_vr_coop/       runtime and CLI
   tests/                       co-op protocol tests
 packaging/                     distribution mappings and portable adapters
-vendor/launcher/               upstream executable and provenance only
+vendor/launcher/               historical executable fixture and provenance
 tooling/release/               release builder and verifier
 tests/packaging/               package and portable-entry integration tests
 docs/                          original multilingual guides
@@ -181,12 +183,14 @@ path next to `coop_server.py`, preserving the old release behavior.
 
 ## Packaging
 
-`vendor/launcher/` contains the upstream-only executable and provenance record.
-The launcher source was not provided; it is verified, not recompiled.
+`apps/engine/` contains the pinned upstream launcher sources. The Windows build
+validates their LF-normalized hashes, compiles the engine and emits binary/source
+provenance. Packaging verifies those bindings. `vendor/launcher/` remains only
+for verifying historical releases; new packages never fall back to its binary.
 
 `packaging/distribution.json` maps repository inputs to the launcher's runtime tree.
 Only declared files, Vite's build output and the server package sources enter the
-portable ZIP. Tooling validates paths, source boundaries, launcher digest and
+portable ZIP. Tooling validates paths, source boundaries, engine provenance and
 licenses. Generated outputs stay ignored under `dist/` and `apps/client/dist/`.
 
 ```text
@@ -217,7 +221,7 @@ compiles the installer and writes its SHA-256. Windows CI silently installs it,
 compares every installed file with the distribution manifest, checks upgrade and
 uninstall, and confirms player-created saves survive both. The release job promotes
 that tested EXE unchanged alongside the portable ZIP. It contains all mod files,
-not the original game or a bundled browser. The upstream launcher remains unchanged.
+not the original game or a bundled browser. The engine is built from pinned source.
 
 ## Unused metadata cleanup
 
@@ -250,13 +254,13 @@ The original launcher receives --game through its Options parser and
 retains game validation, localization, VR options, server, saves and browser launch.
 The source launcher hosts that form in the same process. Config remains at the original
 launcher location; the original launcher persists the selection when Launch is used.
-All original CLI diagnostics pass through. The upstream binary is unchanged and
-retains its recorded digest, under a different filename beside the bootstrap.
+All original CLI diagnostics pass through. The engine is compiled from pinned
+upstream sources under a different filename beside the bootstrap.
 
 CI builds and tests the Windows bootstrap once, then downloads the identical
 artifact into both packaging jobs. It does not commit generated executables.
-The existing package verifier validates the stock engine digest and the manifest
-checksums for the bootstrap. Original pre-bootstrap releases remain verifiable.
+The package verifier validates the engine's source/build provenance and manifest
+checksums for both executables. Original pre-bootstrap releases remain verifiable.
 Tests cover real Windows process argument round trips, Unicode, wrong game titles,
 extracted/packed candidates, multiple copies, nested roots, Steam libraries, limits,
 cancellation and preserving settings. No original game is used or executed by tests.
@@ -3087,3 +3091,65 @@ modified-original summary +5174/-1069.
 The public literal diff retains import moves; historical screenshots keep their
 exact previous source pins. Local1,390tests, ESLint, build, Ruff,8packaging and
 7protocol cases passed. Windows distribution gates also run in CI.
+
+## Upstream integration (0.2.53)
+
+Integrates all eleven upstream commits after d39c2afd830c7be7fbbe2a86380f9c490e377bf7
+through 938b527835b6abbc9d2a55ce91ea5df85b0acbe6 (2026.10.24-5). The merge records
+upstream ancestry and combines each changed module with the fork implementation;
+do not replace the fork with the flat upstream app or bundled executable.
+
+Preserve R Skills/profile/favorites/borrowed arts/queued Bonus Actions, native
+action eligibility, independent repeats and Confusion lifetime, gameplay-owned
+delays, save import/manual-save validation, desktop/VR transitions, translucent
+HUD/navigation, terrain classifications and original asset precedence.
+
+Adapted upstream systems include weapon-weight VR lag, PC chained cuts/thrusts,
+buffered attack/dodge input, stamina and PvP poise/bounce, Lindamea attack/audio
+changes, lift routes and university terrain, multiplayer chat/Opus voice/shared
+loot/world-server administration, Russian, native fonts/window tone/scroll text,
+distance-scaled labels and two-line item descriptions. Existing equivalents
+replace upstream minimap.js (navigation-map.js), mouselook.js (Input's validated
+pointer/dialogue input) and rmwindow.js (window-skin.js). No duplicate UI/menu or
+mouse-filter system is installed. Never ship upstream __pycache__ or game data.
+
+Quest entry removes the optional layers request and masks misleading
+XRSession.renderState.layers only when neither required nor optional features
+explicitly requested layers. Retain the exact native XRSession identity and the
+synchronous click request. A sealed incompatible property fails cleanly before
+renderer attachment. Connection deadline is 180 seconds. Existing cancellation,
+late grants, reference-space fallbacks, GPU recovery and desktop restoration
+remain authoritative. No parallel requestSession workaround is permitted.
+
+Analog triggers/grips use 0.6/0.35 press/release hysteresis. World squeeze events
+retain their between-frame buffering; poll-only analog grips share thresholds
+without replaying held grips through menus, source replacement or XR transitions.
+Rejected Dodge presses cannot be buffered through native seals or Confusion.
+PC shield presentation fits narrow camera views but retains the previous actual
+guard interception point; VR continues using the physical shield position.
+
+Chat typing blocks gameplay keys/movement/attacks. Voice uses explicit microphone
+enablement, bounded packet/decode queues and stale-session/device guards. Ending
+or muting stops playback. A real Chrome155 synthetic-oscillator smoke exercised
+MediaStreamTrackProcessor, Opus AudioEncoder, wire transport, AudioDecoder and
+playback without opening a hardware microphone. Private loopback tests use three
+actual TCP clients for map-local voice, global chat and world administration.
+
+apps/engine pins exact upstream C# source, repository path, raw Git byte hashes
+and LF-normalized source hashes. Windows validates and compiles it, producing
+engine-build.json binding that binary to its source tree and upstream commit.
+New packaging requires the generated engine and matching provenance; the legacy
+vendor EXE is only a historical verification fixture. Do not claim the compiled
+binary equals the publisher's EXE hash. Existing discovery/themed bootstrap,
+repository-derived updater, original-game read-only behavior and Steam bridge
+remain in the wrapper. CI shares the same compiled engine artifact across both
+package jobs. Source-engine tests serve only synthetic temporary archives/files.
+
+Local gates: 1,449 JavaScript tests, ESLint, production Vite build (all four voice
+icons bundled), Ruff, 14 Python protocol cases, 13 packaging cases, wheel build
+and 265 Windows native checks passed. Native checks include 13 source-engine
+loopback/API/archive/Unicode/isolation cases and 102 update/actual EngineHost
+checks. Local Inno compiler is unavailable; CI must complete installer build,
+manifest/upgrade/uninstall/save-retention checks before publishing. No physical
+Quest/headset, WAN or microphone-hardware playtest is claimed. No original game
+files, player saves or Steam achievements were changed for validation.

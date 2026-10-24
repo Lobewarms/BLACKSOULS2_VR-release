@@ -18,8 +18,8 @@ export const G = {
     spectatorLevel: false, // keep the spectator horizon level (ignore head roll)
     spectatorSmooth: 0,    // 0 off, 1 light, 2 medium, 3 strong
     spectatorFov: 80,
-    vrSpeed: 2,              // VR stick locomotion: multiplier on the move speed
     swingLevel: 2,           // how hard a VR swing must be to hit: 0 light, 1 normal, 2 strong, 3 very strong
+    weaponWeight: 2,         // VR blade follow-through: 0 off, 1 light, 2 normal, 3 heavy
     fxBrightness: 0.5,       // flashes, glows and animation sprites (0.25 .. 1)
     skillAnims: 'all',       // RPG Maker animation sprites: 'all' | 'skills' (not plain attacks) | 'off'
     enemyThroughWalls: true, // chasing enemies pass through walls and props instead of getting stuck

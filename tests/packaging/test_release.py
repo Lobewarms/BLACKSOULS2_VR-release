@@ -35,9 +35,10 @@ class PackagingTests(unittest.TestCase):
             self.assertEqual(first.read_bytes(), second.read_bytes())
             manifest = package.verify(first)
             for name in ['BlacksoulsVR.exe', 'BlacksoulsVR.Engine.exe', 'SteamAchievements.exe', 'coop_server.py', 'app/index.html', 'LICENSE',
-                         'RELEASE_NOTES.txt', 'AGENTS.md', 'START_HERE.txt', 'release.json', 'app/licenses/three.LICENSE',
+                         'RELEASE_NOTES.txt', 'AGENTS.md', 'START_HERE.txt', 'release.json', 'engine-build.json', 'engine-upstream.json', 'app/licenses/three.LICENSE',
                          'app/licenses/webxr-input-profiles-assets.LICENSE.md',
-                         'server/blacksouls_vr_coop/server.py', 'app/models/hands/left.glb']:
+                         'server/blacksouls_vr_coop/server.py', 'server/blacksouls_vr_coop/world_server.py',
+                         'world_server.py', 'world_server.cmd', 'app/models/hands/left.glb']:
                 self.assertIn(package.PREFIX + name, manifest['files'])
             self.assertFalse(any('/saves/' in name or '/node_modules/' in name for name in manifest['files']))
             self.assertTrue(first.with_name('a.zip.sha256').is_file())
@@ -77,6 +78,12 @@ class PackagingTests(unittest.TestCase):
                                     capture_output=True, text=True, check=True, timeout=15)
             self.assertIn('--host-pin', result.stdout)
             self.assertFalse(launcher.with_name('coop_server.json').exists())
+            world_launcher = launcher.with_name('world_server.py')
+            result = subprocess.run([sys.executable, '-I', str(world_launcher), '--help'],
+                                    capture_output=True, text=True, check=True, timeout=15)
+            self.assertIn('--admin-pin', result.stdout)
+            self.assertIn('--restore', result.stdout)
+            self.assertFalse(world_launcher.with_name('world_server.json').exists())
 
     def test_built_html_points_to_packaged_bundle_and_preserves_runtime_urls(self):
         payload = package.collect()
@@ -100,6 +107,68 @@ class PackagingTests(unittest.TestCase):
         for name in ['/absolute', '../escape', 'BLACKSOULS_VR/../../escape',
                      'BLACKSOULS_VR/C:escape', 'BLACKSOULS_VR/..\\escape']:
             self.assertFalse(package.safe_relative(name), name)
+
+    def test_source_built_engine_is_bound_to_reviewed_source_and_not_vendor_binary(self):
+        pin, build, binary = package.engine_inputs(ROOT)
+        payload = package.collect()
+        self.assertEqual(payload[package.PREFIX + 'BlacksoulsVR.Engine.exe'], binary)
+        self.assertEqual(build['source_tree_sha256'], package.engine_source_digest(pin['source_sha256']))
+        self.assertEqual(json.loads(payload[package.PREFIX + 'engine-upstream.json']), pin)
+        self.assertNotEqual(binary, (ROOT / 'vendor/launcher/BlacksoulsVR.exe').read_bytes())
+        self.assertTrue(binary.startswith(b'MZ'))
+        for name, digest in pin['source_sha256'].items():
+            canonical = (ROOT / 'apps/engine' / name).read_bytes().replace(b'\\r\\n', b'\\n')
+            self.assertEqual(package.sha256(canonical), digest)
+
+    def test_engine_build_rejects_binary_or_source_manifest_substitution(self):
+        pin, build, binary = package.engine_inputs(ROOT)
+        for key, value in [('upstream_commit', '0' * 40), ('source_tree_sha256', '0' * 64),
+                           ('engine_sha256', '0' * 64), ('source_sha256', {})]:
+            with self.subTest(key=key), self.assertRaisesRegex(ValueError, 'engine provenance mismatch'):
+                package.validate_engine_provenance(pin, {**build, key: value}, binary)
+        with self.assertRaisesRegex(ValueError, 'engine provenance mismatch'):
+            package.validate_engine_provenance(pin, build, (ROOT / 'vendor/launcher/BlacksoulsVR.exe').read_bytes())
+
+    def test_package_requires_compiled_engine_even_when_legacy_vendor_exists(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'apps/engine').mkdir(parents=True)
+            (root / 'vendor/launcher').mkdir(parents=True)
+            (root / 'apps/engine/upstream.json').write_bytes((ROOT / 'apps/engine/upstream.json').read_bytes())
+            (root / 'vendor/launcher/BlacksoulsVR.exe').write_bytes(b'MZlegacy')
+            with self.assertRaisesRegex(ValueError, 'Missing source-built engine'):
+                package.engine_inputs(root)
+
+    def test_source_mutation_is_rejected_without_touching_checkout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'apps/engine').mkdir(parents=True)
+            (root / 'apps/launcher/dist').mkdir(parents=True)
+            for file in (ROOT / 'apps/engine').glob('*'):
+                (root / 'apps/engine' / file.name).write_bytes(file.read_bytes())
+            for name in ['BlacksoulsVR.Engine.exe', 'engine-build.json']:
+                (root / 'apps/launcher/dist' / name).write_bytes((ROOT / 'apps/launcher/dist' / name).read_bytes())
+            source = root / 'apps/engine/BlacksoulsVR.cs'
+            source.write_bytes(source.read_bytes() + b'\\n// unexpected edit\\n')
+            with self.assertRaisesRegex(ValueError, 'Engine source differs'):
+                package.engine_inputs(root)
+
+    def test_forged_package_manifest_cannot_certify_an_unrelated_engine(self):
+        with tempfile.TemporaryDirectory() as directory:
+            original = package.build(VERSION, Path(directory) / 'original.zip')
+            changed = Path(directory) / 'changed.zip'
+            with zipfile.ZipFile(original) as archive:
+                contents = {name: archive.read(name) for name in archive.namelist()}
+            name = package.PREFIX + 'BlacksoulsVR.Engine.exe'
+            contents[name] = (ROOT / 'vendor/launcher/BlacksoulsVR.exe').read_bytes()
+            manifest = json.loads(contents[package.MANIFEST])
+            manifest['files'][name] = package.sha256(contents[name])
+            contents[package.MANIFEST] = json.dumps(manifest).encode()
+            with zipfile.ZipFile(changed, 'w') as archive:
+                for name, body in contents.items():
+                    archive.writestr(name, body)
+            with self.assertRaisesRegex(ValueError, 'engine provenance mismatch'):
+                package.verify(changed)
 
 
 if __name__ == '__main__':

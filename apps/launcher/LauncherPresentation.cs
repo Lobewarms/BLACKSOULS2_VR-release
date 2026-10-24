@@ -302,7 +302,7 @@ namespace BlacksoulsCommunity
         private string Text(string en, string ja, string ko, string zh)
         {
             string language = Convert.ToString(form.GetType().Assembly.GetType("BlacksoulsVR.Lang", true).GetField("Current").GetValue(null));
-            return language == "ja" ? ja : language == "ko" ? ko : language == "zh" ? zh : en;
+            return language == "ja" ? ja : language == "ko" ? ko : language == "zh" ? zh : language == "ru" ? LauncherRussian.Text(en) : en;
         }
 
         private void ApplyTexts()

@@ -6,15 +6,24 @@ from . import server
 
 
 def main():
+    run(server, 'co-op')
+
+
+def world_main():
+    from . import world_server
+    run(world_server, 'community')
+
+
+def run(module, label):
     if sys.platform == 'win32':
         try:
             sys.stdout.reconfigure(encoding='utf-8')
         except (AttributeError, ValueError):
             pass
     try:
-        asyncio.run(server.main())
+        asyncio.run(module.main())
     except KeyboardInterrupt:
         pass
     except OSError as error:
-        server.say(f'Could not open co-op server: {error}', 'is the port in use?')
+        module.say(f'Could not open {label} server: {error}', 'is the port in use?')
         raise SystemExit(1) from error

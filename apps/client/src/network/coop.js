@@ -30,12 +30,13 @@ import { worldSwitch, worldVariable, writeSyncs, changesWorld, worldPart, mergeW
 import { convertEscapes, textColor } from '../ui/ui.js';
 import { FloorMarker, MARK } from '../combat/telegraph.js';
 import { NEW_MOVES } from '../combat/bossmoves.js';
-import { exitOf } from '../game/interpreter.js';
+import { exitOf, runningInterpreter } from '../game/interpreter.js';
 import { tr } from '../ui/i18n.js';
 import { packEnemyBuffs, readEnemyBuffs } from './enemy-status.js';
 import { packEnemyMp, readEnemyMp } from './enemy-resources.js';
 import { packEnemyArt, readEnemyArt } from './enemy-art.js';
 import { NO_H_SWITCH, refOf, indexMap, isRef, sayAt, pictureAt, soundAt, animationAt, musicOk, guard } from './coopguard.js';
+import { voiceCode } from './voicemarks.js';
 
 const PROTO = 11;
 export const MAX_PLAYERS = 4;         // the host and up to three in its world (unless the server's rules say more)
@@ -48,16 +49,18 @@ export const MAX_PLAYERS = 4;         // the host and up to three in its world (
 const DEFAULT_RULES = { maxPlayers: MAX_PLAYERS, guestStartsBoss: false, pvp: false, guestRespawn: true, bossSpectate: true, statSync: true, guestsFollow: true, bossScale: true };
 const BOSS_PER_PLAYER = 0.6;   // (the rule bossScale) a boss's HP, MP and groggy gauge: this much more for each player past one
 // The developer's world (world_server.py): one world everyone on it walks, with no host - its rules: these, as the server
-// says them (maxPlayers, bossSpectate, bossScale - world_server.json, or changed in the co-op menu by one who proved the
-// admin PIN); the rest stay: a boss fight begun by anyone (the one running its map runs it), one who falls comes back at
-// its own bonfire, no stats brought to anyone's, no following. PvP is each player's own there (myPvp): two who both
-// turned it on may strike each other
-const WORLD_RULES = { maxPlayers: 16, guestStartsBoss: true, pvp: false, guestRespawn: true, bossSpectate: true, statSync: false, guestsFollow: false, bossScale: true };
+// says them (maxPlayers, bossSpectate, bossScale, shareLoot - world_server.json, or changed in the co-op menu by one who
+// proved the admin PIN); the rest stay: a boss fight begun by anyone (the one running its map runs it), one who falls
+// comes back at its own bonfire, no stats brought to anyone's, no following. PvP is each player's own there (myPvp): two
+// who both turned it on may strike each other. shareLoot (off unless set on): what anyone gets from the world - a map
+// event's gift, a fight's drops and souls (lootOf) - everyone on the server gets as well
+const WORLD_RULES = { maxPlayers: 16, guestStartsBoss: true, pvp: false, guestRespawn: true, bossSpectate: true, statSync: false, guestsFollow: false, bossScale: true, shareLoot: false };
+const LOOT_PER_MINUTE = 120;   // (shareLoot) things taken from one player in a minute, at most (more are let go)
 const CYCLE_CE = 201;          // 周回プレイ準備 - the next cycle's preparation: in the developer's world, a vote first
 const WORLD_SAVE_EVERY = 120;  // s between the developer-server autosaves (this player's own, on its own PC)
 const LOCK_WAIT = 5;           // s an ask for an event's lock is good for
 const LOCK_RETRY = 4;          // s before asking again for one another player holds
-const SCOPED = new Set(['p', 'look', 'sh', 'ow']);   // (the developer's world) what only those on this player's map see
+const SCOPED = new Set(['p', 'look', 'sh', 'ow', 'vo']);   // (the community server) what only those on this player's map see / hear
 const WORLD_SPAWN = { mapId: 101, x: 21, y: 21, dir: 8 };   // (the developer's world) everyone comes in at 도서관의 꿈 - its bonfire's
                                                              // arrival (the travel list's 【도서관의 꿈】)
 const LEAD_TIE = 3;            // s: guests come onto a map this close together came at once (the lowest id leads it)
@@ -110,6 +113,23 @@ function bonfireOf(list) {
   if (!fireIds) fireIds = new Set(($data.commonEvents || []).filter(c => c && /篝火/.test(c.name || '')).map(c => c.id));
   const call = (list || []).find(c => c.indent === 0 && c.code === 117 && fireIds.has(c.parameters[0]));
   return call ? $data.commonEvents[call.parameters[0]] : null;
+}
+// (the developer's world, its rule shareLoot) the event command giving something now is the world's to give - the loot
+// everyone gets: a map event's run, the map's own (what a player began: a chest - its contents' common events -, a gift;
+// a cutscene) or a roaming monster's fight, giving a number of it. Not a common event run of itself or reserved (an
+// item's or a skill's use: a soul item's souls), a parallel process, a fight's troop pages, a bonfire's or a death's
+// common event (flasks filled again, what a death takes and gives), an amount from a variable (souls given back, things
+// coming back, flasks filled), nor a hallucination's fight (its seer's own)
+let ownCes = null;
+function eventLoot() {
+  const it = runningInterpreter(), root = it && (it.root || it);
+  if (!root || !(root.eventId > 0) || (root.kind !== 'main' && root.kind !== 'symbol')) return false;
+  const cmd = it.list?.[it.index];
+  if (!cmd || cmd.code < 125 || cmd.code > 128 || cmd.parameters[cmd.code === 125 ? 1 : 2] !== 0) return false;
+  if (!ownCes) ownCes = new Set(($data.commonEvents || []).filter(c => c && /篝火|全滅処理/.test(c.name || '')).map(c => c.id));
+  for (let x = root; x; x = x.child) if (ownCes.has(x.commonEventId)) return false;
+  const ev = root.event();
+  return !(root.kind === 'symbol' && ev && G.combat?.privateSymbol?.(ev));
 }
 
 // (host) a guest as this world's enemies see it: a body they go for, where the guest stands (its pose) - one of the
@@ -218,7 +238,9 @@ function checkLook(m) {
   if (R === undefined || L === undefined || U === undefined) return null;
   // (the developer's world: the hallucinations it sees on its map - combat.js privateSymbol)
   const hv = Array.isArray(m.hv) && m.hv.length <= 64 && m.hv.every(k => typeof k === 'string' && HALL_KEY.test(k)) && isInt(m.hm, 1, 9999) ? m.hv : null;
-  return { chr: [name, c[1]], R, L, U, nm: cleanName(m.nm), pv: m.pv === 1, hv, hm: hv ? m.hm : 0 };
+  // (its voice setting - 0 off, 1 listen only, 2 talk too -, for the marks by its name; -1: an older version telling none)
+  const vc = [0, 1, 2].includes(m.vc) ? m.vc : -1;
+  return { chr: [name, c[1]], R, L, U, nm: cleanName(m.nm), pv: m.pv === 1, hv, hm: hv ? m.hm : 0, vc };
 }
 // a place and turn in the world: x, y, z, then a quaternion
 const checkXf = a => (a === undefined || a === 0 ? null : nums(a, 7, 1e5) ? a : undefined);
@@ -229,7 +251,9 @@ function checkHand(d) {
   if (h === undefined || i === undefined) return null;
   const c = d.c === undefined ? null : nums(d.c, 3, 1) ? d.c : undefined;
   if (c === undefined) return null;
-  return { h, i, c };
+  // (lo: the shield held down at the side - a PC player's, out of its own view: shown, but no blade meets it)
+  if (d.lo !== undefined && d.lo !== 0 && d.lo !== 1) return null;
+  return { h, i, c, lo: d.lo || 0 };
 }
 function checkPose(m) {
   if (!isInt(m.s, 0, Number.MAX_SAFE_INTEGER) || !isInt(m.m, 0, 9999) || !nums(m.h, 4, 1e5) || (m.j !== undefined && !isNum(m.j, 10))) return null;
@@ -241,7 +265,9 @@ function checkPose(m) {
   if (m.hd !== undefined && m.hd !== 0 && m.hd !== 1) return null;
   // (something ready, being aimed - an area spell, a throwable: where it would land, how wide)
   if (m.rk !== undefined && (!nums(m.rk, 4, 1e5) || !(m.rk[3] > 0 && m.rk[3] <= 10))) return null;
-  return { s: m.s, m: m.m, h: m.h, j: m.j || 0, R, L, u, b: m.b || 0, sp: m.sp || 0, ag: m.ag || 0, hd: m.hd || 0, rk: m.rk || null };
+  // (speaking now - its microphone hears a voice: the microphone by its name solid)
+  if (m.v !== undefined && m.v !== 0 && m.v !== 1) return null;
+  return { s: m.s, m: m.m, h: m.h, j: m.j || 0, R, L, u, b: m.b || 0, sp: m.sp || 0, ag: m.ag || 0, hd: m.hd || 0, rk: m.rk || null, v: m.v || 0 };
 }
 
 const isStr = (s, max) => typeof s === 'string' && s.length <= max;
@@ -321,7 +347,7 @@ export class Coop {
     this.peers = new Map();     // the others: id -> { id, host, heard, seq, avatar, pose }
     this.hostId = null;         // (guest) the host's id
     this.summoned = false;      // (guest) standing in the host's world
-    this.home = null;           // (guest) its own world while it is away: { state, mapId, x, y, dir, moveSpeed }
+    this.home = null;           // (guest) its own world while it is away: { state, mapId, x, y, dir }
     this.flags = new Map();     // (host) the world's changes not sent yet
     this.follow = null;         // (guest) where the host went last
     this.lastError = '';        // why the last visit could not begin (the co-op menu says it)
@@ -349,6 +375,9 @@ export class Coop {
     // (tripNow), and the ask it is answering (callOpen)
     this.arrMap = 0; this.arrT = now(); this.leadsNow = false; this.authNow = undefined; this.scrOf = new Map();
     this.recording = 0; this.outFlags = new Map(); this.outGains = []; this.wfT = 0;
+    // (the developer's world, its rule shareLoot) a fight's rewards being given (lootDepth: combat.js onBattleEnd), what
+    // another player got being put in this bag (lootIn), what this player got on its way to the others (outLoot)
+    this.lootDepth = 0; this.lootIn = false; this.outLoot = []; this.lootAt = new Map();
     this.bossCall = null; this.bossGo = null; this.hostTrip = null; this.tripNow = null; this.callOpen = null;
     this.leadNow = new Map(); this.leadKey = ''; this.leadT = 0;      // (who leads which map, as the host says - leaderOf)
     this.ledBy = new Map();     // (host) map -> the guest leading it last, and when (onWorldFlags)
@@ -504,6 +533,23 @@ export class Coop {
   }
   // another player's name (as it says it) and tag (the server's word; over the dev links its own)
   nameOf(id) { return this.peers.get(id)?.name || this.link?.info?.get(id)?.name || '?'; }
+  // a chat line's or a voice's sender, as this player knows it (the community server: its list of who is on it too); one
+  // this player muted (co-op menu → members: kept by its tag)
+  chatName(id) { return this.roster.find(r => r[0] === id)?.[1] || this.nameOf(id); }
+  chatTag(id) { return this.roster.find(r => r[0] === id)?.[2] || this.tagOf(id); }
+  muted(id) { const tag = this.chatTag(id); return !!tag && Array.isArray(G.settings.chatMuted) && G.settings.chatMuted.includes(tag); }
+  // who is in this session with this player now (id -> name): one coming and one going is said (coopchat.js notePeer) -
+  // those already there as it came in (the first moments) are not said to come
+  noteMembers() {
+    if (!G.chat?.on) { this.knownMembers = null; return; }
+    const t = now(), list = new Map(this.members().filter(x => !x.me && x.name && x.name !== '?').map(x => [x.id, x.name]));
+    if (!this.knownMembers) { this.knownMembers = list; this.membersSince = t; G.chat.clear(); return; }
+    if (t - this.membersSince > 3) {
+      for (const [id, name] of list) if (!this.knownMembers.has(id)) G.chat.notePeer(name, true);
+      for (const [id, name] of this.knownMembers) if (!list.has(id)) G.chat.notePeer(name, false);
+    }
+    this.knownMembers = list;
+  }
   tagOf(id) { return this.link?.info?.get(id)?.tag || this.peers.get(id)?.tag || ''; }
   // (host) this host's list of the banned, kept in its settings: [{ tag, name, at }]
   bans() { return Array.isArray(G.settings.coopBans) ? G.settings.coopBans.filter(b => b && isTag(b.tag)) : []; }
@@ -620,8 +666,11 @@ export class Coop {
     // it goes: left, another save loaded, the title)
     if (this.world) { this.flushWorld(); this.saveWorldChar(0); }
     this.wphase = ''; this.wworld = undefined; this.roster = []; this.locks.clear(); this.lockWait.clear(); this.lockNo.clear();
+    this.knownMembers = null;
+    G.chat?.clear(); G.voice?.stopMic(); G.voice?.dropAll();
     this.outWorld.clear(); this.cycling = false; this.myVote = null; this.voting = null; this.atSent = undefined; this.pendingJoin = null;
     this.worldRules = { ...WORLD_RULES }; this.isAdmin = false; this.adminTry = null; this.myPvp = false; this.hallFollow?.clear(); this.hallMap = 0;
+    this.outLoot.length = 0; this.lootAt.clear();
     const back = this.summoned && !stay;
     for (const p of this.peers.values()) { p.avatar?.dispose(); p.aimMk?.dispose(); }
     this.peers.clear();
@@ -650,17 +699,26 @@ export class Coop {
     this.lastError = why === 'server closed' || why === 'denied kicked' || why === 'denied banned' ? why : '';
     this.end(`link ${why}`);
     G.audio?.playSystemSe(3);
+    this.tellWhy();
   }
   fail(why) {
     this.lastError = String(why || 'connect');
     this.end(`could not: ${this.lastError}`);
-    G.audio?.playSystemSe(3);            // (the buzzer: it did not work - the co-op menu says why)
+    G.audio?.playSystemSe(3);            // (the buzzer: it did not work - and why, at once: the co-op menu says it too)
+    this.tellWhy();
+  }
+  // why it could not, or why it ended, as a notice (the co-op menu's note: before, only there - the menu is closed by
+  // then, and all one heard was the buzzer)
+  tellWhy() {
+    const note = this.lastError && G.ui?.coopNote?.(this.lastError, this.lastServer);
+    if (note) G.ui.toast(note);
   }
   peerGone(id, why) {
     const p = this.peers.get(id);
     if (!p) return;
     p.avatar?.dispose();
     p.aimMk?.dispose();
+    G.voice?.drop(id);
     this.peers.delete(id);
     // (one gone from the boss fight is out of it: if it was the last one in it standing, everyone in it is down)
     const b = this.bossBattle;
@@ -732,6 +790,7 @@ export class Coop {
       case 'ow': this.onStruckMsg(m, from); break;
       case 'pv': this.onPvp(m, from); break;
       case 'cl': this.onClash(m, from); break;
+      case 'bn': this.onBounced(from); break;
       case 'sh': this.onShotMsg(m, from); break;
       case 'boss': if (this.role === 'host') this.onBossAsk(m, from); break;
       case 'ba': if (this.isAuthority()) this.onJoinAnswer(m, from); break;
@@ -743,6 +802,9 @@ export class Coop {
       case 'bq': if (this.shared && (from === this.hostId || this.peers.has(from))) this.onJoinAsk(m, from); break;
       case 'pst': if (this.shared && (from === this.hostId || this.fromAuthority(from))) this.onEventState(m); break;
       case 'kill': if (this.canSee(from)) this.onKill(m); break;
+      // (a chat line, a voice: from one this player sees - coopchat.js, coopvoice.js; a muted one's let go)
+      case 'ch': if (this.canSee(from)) G.chat?.onChat(from, m, this.chatName(from), this.peers.get(from)?.avatar, this.muted(from)); break;
+      case 'vo': if (this.canSee(from)) G.voice?.onVoice(from, m, this.muted(from)); break;
       case 'tp': if (this.shared && (from === this.hostId || this.joiningTo(from))) this.onBrought(m); break;
       // (the rules, from the host itself - only over the dev links: a server tells them itself)
       case 'rules': if (this.role === 'guest' && fromHost && !this.link?.rules) { this.localRules = takeRules(m.r); this.onRules(this.localRules); } break;
@@ -755,6 +817,7 @@ export class Coop {
       case 'give': if (this.world) this.onGive(m, from); break;
       case 'givok': case 'givno': if (this.world) this.onGiveAnswer(m, from); break;
       case 'gave': if (this.world) this.onGave(m, from); break;
+      case 'loot': if (this.world) this.onLoot(m, from); break;          // (what another got from the world - shareLoot)
       case 'look': this.onLook(m, from); break;
       case 'p': this.onPose(m, from); break;
       case 'bye': this.peerGone(from, 'said goodbye'); break;
@@ -763,13 +826,24 @@ export class Coop {
   }
 
   // ---- host ------------------------------------------------------------------------------------------------------
+  // a guest turned away (its VR mod's version or its game's edition not this one's, or banned): it is told, and this
+  // host sees who and why - once (it asks a few times before it hears)
+  refuseGuest(from, why) {
+    this.send({ t: 'refuse', why }, from);
+    const key = `${from}:${why}`;
+    if ((this.refusedOnce ||= new Set()).has(key)) return;
+    this.refusedOnce.add(key);
+    const name = this.link?.info?.get(from)?.name || '?';
+    G.ui?.toast?.(tr('{name} 님이 들어오지 못했습니다: {why}', { name, why: G.ui.coopNote(why) }));
+    console.info('[coop] turned away:', name, why);
+  }
   onHello(m, from) {
     if (!this.ready()) return;                                    // (still loading: it asks again)
-    if (m.v !== PROTO) { this.send({ t: 'refuse', why: 'version' }, from); return; }
-    if (m.fp !== fingerprint()) { this.send({ t: 'refuse', why: 'game' }, from); return; }
+    if (m.v !== PROTO) { this.refuseGuest(from, 'version'); return; }
+    if (m.fp !== fingerprint()) { this.refuseGuest(from, 'game'); return; }
     // (banned by this host: the server keeps it out by its tag - over the dev links the tag is the guest's own word)
     const tag = this.link?.info ? this.tagOf(from) : isTag(m.tag) ? m.tag : '';
-    if (tag && this.banTags().includes(tag)) { this.send({ t: 'refuse', why: 'banned' }, from); return; }
+    if (tag && this.banTags().includes(tag)) { this.refuseGuest(from, 'banned'); return; }
     // (again to the same guest: its first welcome came while it could not take it - the changes since go on being
     // sent as well; taken twice they do no harm)
     const p = this.peerFor(from, true);
@@ -825,6 +899,28 @@ export class Coop {
   // boss's reward): the host's to have as well (onWorldFlags)
   noteGain(kind, id, n) {
     if (this.phantom && this.leadsNow && this.recording > 0 && n > 0 && this.outGains.length < 64) this.outGains.push([kind, id, n]);
+    // (the developer's world, shareLoot) what the world gave this player - a fight's rewards, an event's gift: to
+    // everyone else too (sent with the next frame - update); never what another player's share put in this bag
+    if (n > 0 && this.world && this.worldRules.shareLoot && !this.lootIn && (this.lootDepth > 0 || eventLoot()) && this.outLoot.length < 64) this.outLoot.push([kind, id, n]);
+  }
+  // (the developer's world, shareLoot) what another player got from the world: put in this bag as well, said with whose
+  // it was - checked as a gift's would be (a thing of the game's, a sane amount), so many a minute from one player at most
+  onLoot(m, from) {
+    if (!this.worldRules.shareLoot || !isList(m.g, 16) || !G.state?.party) return;
+    const KINDS = { item: 'items', weapon: 'weapons', armor: 'armors' };
+    const t = now(), at = (this.lootAt.get(from) || []).filter(x => t - x < 60), name = this.rosterName(from);
+    this.lootIn = true;
+    try {
+      for (const e of m.g) {
+        if (!Array.isArray(e) || e.length !== 3 || at.length >= LOOT_PER_MINUTE) continue;
+        const [k, i, n] = e;
+        if (k === 'gold' ? !(i === 0 && isInt(n, 1, 9999999)) : !(KINDS[k] && isInt(i, 1, 99999) && $data[KINDS[k]]?.[i] && isInt(n, 1, 99))) continue;
+        at.push(t);
+        if (k === 'gold') G.state.party.gainGold(n); else G.state.party.gainItem(k, i, n);
+        G.ui.toast?.(convertEscapes(tr('{name} 님이 얻은 {item}[을;를] 함께 받았습니다', { name, item: this.giftText(k, i, n) })), 0, '#e8d8a8');
+      }
+    } finally { this.lootIn = false; }
+    this.lootAt.set(from, at);
   }
   // (guest) going to another map: what its fights and events changed on this one goes to the host now (main.js)
   beforeTransfer() {
@@ -1404,12 +1500,15 @@ export class Coop {
     if (this.peers.size) this.send(m);
     this.onKill(m);
   }
-  // '<who> 님이 <boss>을(를) 처치하셨습니다' - to everyone on the server, a while in its notices (ui.js toast)
+  // '<who> 님이 <boss>을(를) 처치하셨습니다' - to everyone on the server, a while in its notices (ui.js toast), and kept in
+  // the chat's log (coopchat.js)
   onKill(m) {
     if (!isList(m.w, 8) || !m.w.every(n => typeof n === 'string' && n.length <= 32) || !isList(m.in, 8) || !m.in.every(id => typeof id === 'string' && id.length <= 64)) return;
     const boss = this.bossNames(m.b), who = m.w.map(n => cleanName(n) || '?').join(', ');
     if (!boss || !who) return;
-    G.ui.toast?.(convertEscapes(tr('{who} 님이 {boss}[을;를] 처치하셨습니다', { who, boss })), 0, '#ffd870', 6);
+    const line = convertEscapes(tr('{who} 님이 {boss}[을;를] 처치하셨습니다', { who, boss }));
+    G.ui.toast?.(line, 0, '#ffd870', 6);
+    G.chat?.add('kill', who, line, false);
     console.info('[coop] boss beaten:', who, '-', boss);
   }
   // a fight's bosses as enemy ids (at most three): its big ones (combat.js refreshBosses), else its strongest standing
@@ -1918,13 +2017,22 @@ export class Coop {
     if (G.combat.clashed(m.side, m.k) && m.k <= 2) this.send({ t: 'ow', id: 0, k: 1 });
   }
   // a blow of this player's reached another one (combat.js strikePlayer): the attack skill, how hard, and this
-  // player's numbers - the one struck works out the rest
-  sendPvp(to, s, mult, crit, actor, item = false) {
+  // player's numbers - the one struck works out the rest; sa: how much a swung blow wears its super armor down
+  sendPvp(to, s, mult, crit, actor, item = false, sa = 0) {
     const nums = ['atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'hp', 'mhp', 'mp', 'mmp', 'level'];
     const a = {};
     for (const k of nums) a[k] = Math.round(+actor[k] || 0);
     const el = (actor.atkElements?.() || []).filter(x => isInt(x, 1, 99)).slice(0, 8);
-    this.send({ t: 'pv', s, u: item ? 1 : 0, m: r3(mult), c: crit ? 1 : 0, a, el }, to);
+    this.send({ t: 'pv', s, u: item ? 1 : 0, m: r3(mult), c: crit ? 1 : 0, a, el, ...(sa > 0 ? { sa: r3(sa) } : {}) }, to);
+    if (sa > 0) (this.swungAt ||= new Map()).set(to, now());             // (a swung blow: it may be told it bounced - onBounced)
+  }
+  // a swung blow of this player's was taken on that one's shield (its onPvp): a light weapon bounces off it (combat.js
+  // bounce) - only just after this player swung at that one, once a blow
+  onBounced(from) {
+    const p = this.peers.get(from), at = this.swungAt?.get(from);
+    if (!p || !this.pvpWith(p) || !this.canSee(from) || p.pose?.m !== G.map?.mapId || !this.ready() || at === undefined || now() - at > 1.5) return;
+    this.swungAt.delete(from);
+    G.combat.bounce();
   }
   // another player's blow reached this one (PvP): judged here (combat.js pvpStruck) - and told to everyone ('ow')
   onPvp(m, from) {
@@ -1940,11 +2048,15 @@ export class Coop {
     const a = m.a && typeof m.a === 'object' ? m.a : null;
     const nums = ['atk', 'def', 'mat', 'mdf', 'agi', 'luk', 'hp', 'mhp', 'mp', 'mmp', 'level'];
     if (!s || !isNum(m.m, 20) || m.m < 0 || !a || !nums.every(k => isNum(a[k], 1e9)) || !isList(m.el, 8) || !m.el.every(x => isInt(x, 1, 99))) return;
+    // (sa: how much it wears this one's super armor down - a swung blow, by its weapon; an older version sends none)
+    if (m.sa !== undefined && (!isNum(m.sa, 5) || m.sa < 0)) return;
     // (a stand-in for the striker: its numbers as sent, its attack's elements)
     const by = { ...Object.fromEntries(nums.map(k => [k, a[k]])), tp: 0, atkElements: () => m.el.slice(), elementRate: () => 1, isStateAffected: () => false };
     const c = p.avatar?.cur, from3 = c ? new THREE.Vector3(c.x, c.y - 0.6, c.z) : null;
-    const how = G.combat.pvpStruck(by, s, m.m, from3);
+    const how = G.combat.pvpStruck(by, s, m.m, from3, m.sa || 0);
     if (how && how !== 'dodge') this.send({ t: 'ow', id: 0, k: how === 'hit' ? 0 : how === 'guard' ? 1 : 2 });
+    // (a swung blow taken on this one's shield: the striker is told - a light weapon bounces off)
+    if ((how === 'guard' || how === 'perfect') && m.sa > 0 && G.combat.hasShield && G.combat.shieldOut) this.send({ t: 'bn' }, from);
   }
   // where the host stands, as this guest sees it (a mark that follows the host)
   hostChest(out) {
@@ -2120,14 +2232,18 @@ export class Coop {
     this.devServers = list.slice(0, 4).map(one);         // (one set wrongly keeps its number: null)
     return this.devServers.filter(Boolean).length;
   }
+  // a community server: one this game came with (its number in devserver.json) or one this player added ({ ip, port, pin })
   joinWorld(i = 0) {
-    const s = this.devServers[i];
+    const s = typeof i === 'object' ? i : this.devServers[i];
     if (!s || this.active) return false;
-    this.devIndex = i;
+    this.devIndex = typeof i === 'object' ? -1 : i;
+    this.devName = typeof i === 'object' ? `${s.ip}:${s.port}` : String(i + 1);
     this.start('world', () => new WorldLink(serverUrl(s), { pin: s.pin, key: this.myKey(), name: this.myName(), fp: fingerprint() }), s);
     this.wphase = 'connecting';
     return true;
   }
+  // which community server this is, as the menus name it: its number, or its address
+  worldName() { return this.devName ?? String((this.devIndex ?? 0) + 1); }
   onWorldMsg(m) {
     switch (m.t) {
       case 'ready': {
@@ -2163,7 +2279,7 @@ export class Coop {
   takeWorldRules(r) {
     if (!r || typeof r !== 'object') return;
     this.worldRules = { ...WORLD_RULES, maxPlayers: isInt(r.maxPlayers, 2, 16) ? r.maxPlayers : WORLD_RULES.maxPlayers,
-      bossSpectate: r.bossSpectate !== false, bossScale: r.bossScale !== false };          // (PvP: each player's own - myPvp)
+      bossSpectate: r.bossSpectate !== false, bossScale: r.bossScale !== false, shareLoot: r.shareLoot === true };   // (PvP: each player's own - myPvp)
     G.ui?.refreshCoopMenu?.();
   }
   // (the admin key is kept for its server and the salt it was made with: never the PIN itself)
@@ -2200,7 +2316,7 @@ export class Coop {
   // (the admin) a rule changed - only that one is sent (one changed right after another keeps the other): the server
   // takes it and tells everyone (here too)
   setWorldRule(key, value) {
-    if (this.role !== 'world' || !this.isAdmin || !['maxPlayers', 'bossSpectate', 'bossScale'].includes(key)) return false;
+    if (this.role !== 'world' || !this.isAdmin || !['maxPlayers', 'bossSpectate', 'bossScale', 'shareLoot'].includes(key)) return false;
     this.link?.tell?.({ t: 'rules', r: { [key]: value } });
     return true;
   }
@@ -2276,7 +2392,8 @@ export class Coop {
     this.wphase = 'joining';
     this.joinShared(st, place);
   }
-  // (the opening alone) its first bonfire: into the world from here (main.js onBonfire)
+  // (the opening alone) over: its first bonfire rested at (main.js onBonfire), or the player come to where everyone comes into
+  // the world - 도서관의 꿈, where the opening's first death wakes it (updateWorld) - free to move there: into the world from here
   prologueDone() {
     if (this.role !== 'world' || this.wphase !== 'prologue' || this.pendingJoin) return;
     this.wphase = 'joining';
@@ -2367,7 +2484,15 @@ export class Coop {
   updateWorld(dt) {
     if (G.state && !G.state.switches[NO_H_SWITCH]) G.state.switches[NO_H_SWITCH] = true;
     if (this.wphase === 'connecting' && this.server && !this.link?.open && now() - this.startT > CONNECT_WAIT) { this.fail('no server'); return false; }
-    if (!this.world) { if (this.wphase === 'prologue') this.tellAt(0); return false; }
+    if (!this.world) {
+      if (this.wphase === 'prologue') {
+        this.tellAt(0);
+        // (there it would stand alone among the others until it rested at the bonfire - lighting it is not resting)
+        const pc = G.map?.playerChar;
+        if (this.ready() && G.map.mapId === this.worldSpawn().mapId && !G.map.interpreter.running() && !pc?.moveRouteForcing && !G.ui?.msg && !G.ui?.sceneOpen) this.prologueDone();
+      }
+      return false;
+    }
     if (this.ready()) this.tellAt(G.map.mapId);
     this.worldMapNow();
     if ((this.wfT -= dt) <= 0) { this.wfT = FLAGS_EVERY; this.flushWorld(); }
@@ -2787,7 +2912,8 @@ export class Coop {
       : h ? { k: h.how === 'stab' ? 'n' : h.how === 'rub' ? 'r' : 'm', i: h.obj.icon_index | 0, c: 0, h: h.hand === 'left' ? 'left' : 'right' } : null;
     // (while one of the scenes plays: as it looked before it - a scene's own looks stay this player's)
     if (!this.sceneOn()) this.lookChr = [leader?.characterName || '', leader?.characterIndex || 0];
-    const look = { t: 'look', chr: this.lookChr || ['', 0], R: item(specs.weapon), L: item(specs.offhand), U, nm: this.myName() };
+    // (vc: its voice setting - the marks by its name: voicemarks.js)
+    const look = { t: 'look', chr: this.lookChr || ['', 0], R: item(specs.weapon), L: item(specs.offhand), U, nm: this.myName(), vc: voiceCode(G.voice?.mode) };
     if (this.role === 'world' && this.myPvp) look.pv = 1;            // (its own PvP on: a red PVP over its name)
     if (this.role === 'world') { const hv = G.combat?.hallKeysSeen?.() || []; if (hv.length) { look.hv = hv; look.hm = G.map.mapId; } }
     return look;
@@ -2805,6 +2931,7 @@ export class Coop {
     const bal = G.map.playerChar?.balloonId | 0;
     if (bal > 0 && bal <= 32) msg.b = bal;
     if (this.spectating) msg.sp = 1;
+    if (G.voice?.micLive && G.voice.speaking) msg.v = 1;     // (speaking now: the microphone by its name solid)
     const rk = G.combat.readyMark?.();                       // (something ready, being aimed: where it would land)
     if (rk) msg.rk = rk.map(r3);
     if (this.isAuthority() && G.map.interpreter.running() && G.map.interpreter.waitMode !== 'battle') msg.hd = 1;
@@ -2814,6 +2941,8 @@ export class Coop {
       if (G.vr && hand?.root?.parent && shown(hand.root)) { d.h = worldXf(hand.root); d.c = (hand.last || [0, 0, 0]).map(r3); }
       const obj = side === 'right' ? G.combat?.weapon : G.combat?.shield;
       if (obj?.parent && !obj.userData.unarmed && obj.children.length && shown(obj)) d.i = worldXf(obj);
+      // (a PC shield down at the side - its guard not up: shown, but it stops no one's blade - combat.js deskShieldUp)
+      if (d.i && side === 'left' && !G.vr && G.combat.hasShield && !G.combat.deskShieldUp()) d.lo = 1;
       msg[side === 'right' ? 'R' : 'L'] = d;
     }
     // (what it holds ready or in hand instead - lookMsg U)
@@ -2826,6 +2955,7 @@ export class Coop {
   update(dt, head) {
     if (!this.role) return;
     const t = now();
+    if (t - (this.membersAt || 0) > 0.5) { this.membersAt = t; this.noteMembers(); }
     // (this page stood still a while itself - building a map: what the others said meanwhile is still on its way in)
     if (t - this.tick > 2) for (const p of this.peers.values()) p.heard = Math.max(p.heard, t - 2);
     this.tick = t;
@@ -2901,6 +3031,8 @@ export class Coop {
       }
       if ((this.poseT -= dt) <= 0) { this.poseT = POSE_EVERY; this.send(this.poseMsg()); }
     }
+    // (the developer's world, shareLoot) what the world gave this player, to everyone on the server - wherever they are
+    if (this.outLoot.length) { const g = this.outLoot.splice(0, 16); if (this.world) this.send({ t: 'loot', g }); }
     const see = head && this.ready();
     for (const p of this.peers.values()) if (p.avatar) { if (see) p.avatar.update(dt, head); else p.avatar.hide(); }
   }

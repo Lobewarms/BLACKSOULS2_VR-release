@@ -3,7 +3,8 @@ import { bonfireShown, bonfirePickable } from '../data/scriptdata.js';
 // notifications, pause menu, shop, bonfire warp.
 import * as THREE from 'three';
 import { G } from '../core/globals.js';
-import { tr } from './i18n.js';
+import { tr, lang as uiLang } from './i18n.js';
+import { Hangul, KO_KEYS, KO_SHIFT } from './hangul.js';
 import { $data, destinationName, loadMapNames } from '../data/data.js';
 import { loadCanvas } from '../data/assets.js';
 import { archivedIconCanvas, sheetForIcon } from '../data/iconfallback.js';
@@ -14,7 +15,7 @@ import { cleanName, NAME_LEN } from '../network/coopnet.js';
 import { battlerEffects, effectsKey, fitLabel } from './battler-status.js';
 import { NavigationMap } from './navigation-map.js';
 import { DungeonStatus } from './dungeon-status.js';
-import { setWindowSkin, drawGameWindow, drawGameCursor } from './window-skin.js';
+import { setWindowSkin, drawGameWindow, drawGameCursor, drawGamePause, windowToneKey } from './window-skin.js';
 import { desktopViewport, placeDesktopRoot, anchorDesktopPanel } from './desktop-layout.js';
 import { paintDesktopHud, bonusHudStatus } from './desktop-hud.js';
 import { RewardFeed } from './reward-feed.js';
@@ -22,8 +23,14 @@ import { paintClassicMenu } from './classic-menu.js';
 import { BonfireTravel } from './bonfire-travel.js';
 import { SkillProfile } from './skill-profile.js';
 import { SkillBrowser } from './skill-browser.js';
+import { ScrollText } from './scroll-text.js';
+import { cleanChat, clipChatText } from '../network/coopchat.js';
+import { voiceCode, voiceMarksReady, voiceMarksSize, drawVoiceMarks } from '../network/voicemarks.js';
 
-export const FONT = '"GameFont", "Malgun Gothic", "Apple SD Gothic Neo", sans-serif';
+import { FONT, NAME_FONT, fontLook, gameFont } from './fonts.js';
+export { FONT } from './fonts.js';
+const VOICE_LABEL = () => ({ off: tr('끔'), listen: tr('듣기만'), talk: tr('말하기와 듣기') });
+const clipText = (value, max) => { const text = [...String(value ?? '')]; return text.length > max ? text.slice(0, max - 1).join('') + '…' : text.join(''); };
 const BOSS_ASK = 20;          // s a co-op player has to answer whether it joins a boss fight (askBossJoin)
 const DEFAULT_COLORS = ['#ffffff', '#20a0d6', '#ff784c', '#66cc40', '#99ccff', '#ccc0ff', '#ffffa0', '#808080',
   '#c0c0c0', '#2080cc', '#ff3810', '#00a010', '#3e9ade', '#a098ff', '#ffcc20', '#000000',
@@ -190,7 +197,7 @@ function layoutText(lines, x0, y0, s, ctx, base = 24, maxX = Infinity) {
         else if (code === '^') ops.push({ k: 'noinput' });
         continue;
       }
-      ctx.font = `${size * s}px ${FONT}`;
+      ctx.font = gameFont(size * s);
       const w = ctx.measureText(c).width;
       ops.push({ k: 'ch', ch: c, x, y, size, color, s });
       x += w;
@@ -203,6 +210,7 @@ function layoutText(lines, x0, y0, s, ctx, base = 24, maxX = Infinity) {
     }
     y += Math.max(24, lineMax) * s;
   }
+  ops.height = y - y0;
   return ops;
 }
 function drawOps(ctx, ops, count) {
@@ -212,10 +220,10 @@ function drawOps(ctx, ops, count) {
     if (op.k === 'ch') {
       if (n >= count) break;
       n++;
-      ctx.font = `${op.size * op.s * (op.fit || 1)}px ${FONT}`;
+      ctx.font = gameFont(op.size * op.s * (op.fit || 1));
       const by = op.y + (op.lineH || op.size) * op.s + 2 * op.s;
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillText(op.ch, op.x + 1.5 * op.s, by + 1.5 * op.s);
+      if (fontLook.shadow) { ctx.fillStyle = '#000'; ctx.fillText(op.ch, op.x + op.s, by + op.s); }
+      if (fontLook.outline) { ctx.lineJoin = 'round'; ctx.lineWidth = 2 * op.s; ctx.strokeStyle = fontLook.outColor; ctx.strokeText(op.ch, op.x, by); }
       ctx.fillStyle = textColor(op.color);
       ctx.fillText(op.ch, op.x, by);
     } else if (op.k === 'icon') {
@@ -295,7 +303,7 @@ class ListPanel {
     this.rows = rows;
     this.rowH = 64;
     this.base = { widthPx, rows, widthM }; this.adaptive = adaptive; this.rowTop = 100;
-    this.panel = new Panel(widthPx, 110 + rows * this.rowH + 56, widthM);
+    this.panel = new Panel(widthPx, 110 + rows * this.rowH + 92, widthM);
     this.items = []; this.index = 0; this.top = 0; this.title = '';
     this.scrollbar = new MenuScrollbar(this.panel);
   }
@@ -305,7 +313,7 @@ class ListPanel {
     this.classic = !!layout?.classic;
     if (!this.adaptive) {
       this.rows = layout?.rows || this.base.rows; this.rowTop = this.classic ? 24 : 100;
-      this.panel.resize(layout?.width || this.base.widthPx, layout?.height || 110 + this.rows * this.rowH + 56, layout?.widthM || this.base.widthM);
+      this.panel.resize(layout?.width || this.base.widthPx, layout?.height || 110 + this.rows * this.rowH + 92, layout?.widthM || this.base.widthM);
     }
     // Explicit index -1 leaves a list unselected; normal dialogue starts at its first row.
     this.index = index < 0 ? -1 : Math.min(index, Math.max(0, items.length - 1)); this.top = 0; this.footer = footer;
@@ -473,7 +481,8 @@ class ListPanel {
     } else if (desc) {
       ctx.font = `28px ${FONT}`;
       ctx.fillStyle = 'rgba(230,220,200,0.85)';
-      ctx.fillText(stripEscapes(desc).slice(0, 60), 36, canvas.height - 30);
+      const lines = wrapLines(ctx, stripEscapes(desc), canvas.width - 80, 2);
+      lines.forEach((line, index) => ctx.fillText(line, 36, canvas.height - 66 + index * 36));
     }
     ctx.font = `21px ${FONT}`; ctx.fillStyle = 'rgba(230,225,210,0.85)';
     if (this.classic) {
@@ -539,12 +548,20 @@ class ListPanel {
 // ------------------------------------------------------------------ grid panel (3 per row, tabs)
 function wrapLines(ctx, text, maxW, maxLines) {
   const out = [];
-  let line = '';
-  for (const ch of String(text || '').replace(/\r?\n/g, ' ')) {
-    if (ctx.measureText(line + ch).width > maxW) { out.push(line); line = ch; if (out.length >= maxLines) break; }
-    else line += ch;
+  for (const paragraph of String(text || '').split(/\r?\n/)) {
+    let line = '';
+    for (const token of paragraph.match(/\S+\s*/g) || ['']) {
+      if (line && ctx.measureText(line + token.trimEnd()).width > maxW) { out.push(line.trimEnd()); line = ''; }
+      if (out.length >= maxLines) return out;
+      for (const ch of token) {
+        if (line && ctx.measureText(line + ch).width > maxW) { out.push(line.trimEnd()); line = ''; }
+        if (out.length >= maxLines) return out;
+        if (line || !/\s/.test(ch)) line += ch;
+      }
+    }
+    if (out.length < maxLines) out.push(line.trimEnd());
+    if (out.length >= maxLines) break;
   }
-  if (out.length < maxLines && line) out.push(line);
   return out;
 }
 class GridPanel {
@@ -720,12 +737,15 @@ const KEY_ROWS = [
   ['cancel', 'space', 'done'],
 ];
 const KEY_UNITS = { back: 1.6, shift: 1.6, space: 5, done: 2.6, cancel: 2.2 };
+const CHAT_ROWS = [...KEY_ROWS.slice(0, 4), ['.', ',', '?', '!', "'", ':', ';', '(', ')', '/', '@'], ['lang', ...KEY_ROWS[4]]];
 const NAME_KEY = /^[A-Za-z0-9 _-]$/;
 const clipName = (s, max) => [...String(s || '')].filter(c => NAME_KEY.test(c)).join('').replace(/ {2,}/g, ' ').replace(/^ /, '').slice(0, max);
 class KeyboardPanel {
-  constructor() {
+  constructor(rows = KEY_ROWS, clip = clipName, clean = cleanName) {
+    this.rows = rows; this.clip = clip; this.clean = clean;
+    this.lang = 'en'; this.ko = new Hangul();
     this.unit = 86; this.keyH = 62; this.rowH = 74; this.top = 196;
-    this.panel = new Panel(1100, this.top + KEY_ROWS.length * this.rowH + 24, 1.05);
+    this.panel = new Panel(1100, this.top + rows.length * this.rowH + 24, 1.05);
     this.text = ''; this.max = NAME_LEN; this.shift = false; this.row = 1; this.col = 0; this.rects = [];
     this.input = null;
   }
@@ -733,7 +753,11 @@ class KeyboardPanel {
   // onCancel: none - it must be given a name (the prologue's name input)
   open(title, text, max, { onDone, onCancel = null }) {
     this.title = title; this.max = max; this.onDone = onDone; this.onCancel = onCancel;
-    this.text = clipName(text, max); this.shift = !this.text; this.row = 1; this.col = 0; this.hover = undefined;
+    this.text = this.clip(text, max); this.shift = !this.text; this.row = 1; this.col = 0; this.hover = undefined;
+    // (한/영: as last picked - at first Korean when the game's own words are)
+    this.ko.clear();
+    this.lang = !this.rows.some(r => r.includes('lang')) ? 'en' : G.settings?.chatKeys === 'ko' || G.settings?.chatKeys === 'en' ? G.settings.chatKeys : uiLang() === 'ko' ? 'ko' : 'en';
+    if (this.lang === 'ko') this.shift = false;
     this.panel.mesh.visible = true;
     this.draw();
     if (!G.vr) this.field(true);
@@ -741,26 +765,35 @@ class KeyboardPanel {
   close() { this.panel.mesh.visible = false; this.field(false); }
   // (PC) the hidden text field the keyboard types into
   field(on) {
-    if (!on) { if (this.input) { this.input.oninput = this.input.onkeydown = null; this.input.blur(); } return; }
+    if (!on) { if (this.input) { this.input.oninput = this.input.onkeydown = this.input.oncompositionend = null; this.input.blur(); } return; }
     const el = this.input ||= Object.assign(document.createElement('input'), { type: 'text', autocomplete: 'off', spellcheck: false });
     el.style.cssText = 'position:fixed;left:-2000px;top:0;width:300px;opacity:0;pointer-events:none';
     if (!el.parentNode) document.body.appendChild(el);
-    el.value = this.text;
-    el.oninput = () => {
-      const v = clipName(el.value, this.max);
-      if (v !== el.value) el.value = v;
+    el.value = this.shown;
+    // (the field left as it is while the system's input is still putting a letter together - a Korean syllable: touching it
+    // then breaks it; what it may hold once the letter is done)
+    el.oninput = e => {
+      this.ko.clear();
+      const v = this.clip(el.value, this.max);
+      if (v !== el.value && !e.isComposing) el.value = v;
       if (v !== this.text) { this.text = v; this.shift = false; this.draw(); }
     };
+    el.oncompositionend = () => el.oninput?.({ isComposing: false });
     el.onkeydown = e => {
+      e.stopPropagation?.();
       if (e.key === 'Enter' && !e.isComposing) { e.preventDefault(); this.press('done'); }
       else if (e.key === 'Escape' && this.onCancel) { e.preventDefault(); this.press('cancel'); }
     };
     el.focus();
   }
-  keysOf(r) { return KEY_ROWS[r].filter(k => k !== 'cancel' || this.onCancel); }
+  keysOf(r) { return this.rows[r].filter(k => k !== 'cancel' || this.onCancel); }
+  // what is typed so far (the Korean syllable being put together at its end)
+  get shown() { return this.text + this.ko.text; }
   label(k) {
     if (k === 'back') return '\u2190';
-    if (k === 'shift') return 'Aa';
+    if (k === 'shift') return this.lang === 'ko' ? 'ㄲ' : 'Aa';
+    if (k === 'lang') return tr('한/영');
+    if (this.lang === 'ko' && KO_KEYS[k]) return (this.shift && KO_SHIFT[k]) || KO_KEYS[k];
     if (k === 'space') return tr('띄어쓰기');
     if (k === 'done') return tr('완료');
     if (k === 'cancel') return tr('취소');
@@ -769,23 +802,39 @@ class KeyboardPanel {
   press(k) {
     if (!k) return;
     if (k === 'done') {
-      const v = cleanName(this.text);
+      this.text += this.ko.flush();
+      const v = this.clean(this.text);
       if (!v) { G.audio?.playSystemSe(3); return; }
       G.audio?.playSystemSe(1);
+      G.input?.consumeActionEdges?.();
       this.onDone?.(v);
       return;
     }
-    if (k === 'cancel') { G.audio?.playSystemSe(2); this.onCancel?.(); return; }
-    if (k === 'back') this.text = this.text.slice(0, -1);
+    if (k === 'cancel') { G.audio?.playSystemSe(2); G.input?.consumeActionEdges?.(); this.onCancel?.(); return; }
+    if (k === 'back') { if (!(this.lang === 'ko' && this.ko.back())) this.text = [...this.text].slice(0, -1).join(''); }
     else if (k === 'shift') this.shift = !this.shift;
-    else {
+    else if (k === 'lang') {
+      this.text += this.ko.flush();
+      this.lang = this.lang === 'ko' ? 'en' : 'ko'; this.shift = false;
+      if (G.settings) { G.settings.chatKeys = this.lang; G.saveSettings?.(); }
+    } else if (this.lang === 'ko' && KO_KEYS[k]) {
+      if ([...this.shown].length >= this.max && this.ko.empty) { G.audio?.playSystemSe(3); return; }
+      const before = { cho: this.ko.cho, jung: this.ko.jung, jong: this.ko.jong };
+      const committed = this.ko.put((this.shift && KO_SHIFT[k]) || KO_KEYS[k]);
+      if ([...this.text + committed + this.ko.text].length > this.max) {
+        Object.assign(this.ko, before); G.audio?.playSystemSe(3); return;
+      }
+      this.text += committed;
+      this.shift = false;
+    } else {
+      this.text += this.ko.flush();
       const c = k === 'space' ? ' ' : this.shift ? k.toUpperCase() : k;
-      if (this.text.length >= this.max || (c === ' ' && (!this.text || this.text.endsWith(' ')))) { G.audio?.playSystemSe(3); return; }
+      if ([...this.text].length >= this.max || (c === ' ' && (!this.text || this.text.endsWith(' ')))) { G.audio?.playSystemSe(3); return; }
       this.text += c;
       if (c !== ' ') this.shift = false;
     }
     G.audio?.playSystemSe(0);
-    if (this.input) this.input.value = this.text;
+    if (this.input) this.input.value = this.shown;
     this.draw();
   }
   // the key in row r nearest across to the one picked now
@@ -809,13 +858,13 @@ class KeyboardPanel {
     ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fill();
     ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(200,170,110,0.6)'; ctx.stroke();
     ctx.font = `44px ${FONT}`; ctx.fillStyle = '#f4f0e6';
-    ctx.fillText(this.text + '_', 56, 132);
+    ctx.fillText(this.shown + '_', 56, 132);
     ctx.textAlign = 'right'; ctx.font = `26px ${FONT}`; ctx.fillStyle = 'rgba(255,255,255,0.45)';
-    ctx.fillText(`${this.text.length}/${this.max}`, canvas.width - 56, 132);
+    ctx.fillText(`${[...this.shown].length}/${this.max}`, canvas.width - 56, 132);
     ctx.textAlign = 'left';
     // the keys
     this.rects = [];
-    KEY_ROWS.forEach((_, r) => {
+    this.rows.forEach((_, r) => {
       const keys = this.keysOf(r), w = keys.reduce((s, k) => s + (KEY_UNITS[k] || 1), 0) * this.unit;
       let x = (canvas.width - w) / 2;
       const y = this.top + r * this.rowH;
@@ -837,7 +886,7 @@ class KeyboardPanel {
     if (!G.vr && this.input && document.activeElement !== this.input) this.input.focus();
     let changed = false;
     const dy = input.navY(), dx = input.navX();
-    if (dy) { const r = Math.max(0, Math.min(KEY_ROWS.length - 1, this.row + dy)); if (r !== this.row) { this.col = this.nearestCol(r); this.row = r; changed = true; } }
+    if (dy) { const r = Math.max(0, Math.min(this.rows.length - 1, this.row + dy)); if (r !== this.row) { this.col = this.nearestCol(r); this.row = r; changed = true; } }
     if (dx) { const n = this.keysOf(this.row).length; this.col = (this.col + dx + n) % n; changed = true; }
     if (raycaster) {
       const uv = this.panel.hit(raycaster);
@@ -889,6 +938,9 @@ export class UI {
       fitLabel, clean: stripEscapes, assetRevision: iconAssetRevision });
     this.keyboard = new KeyboardPanel();
     this.root.add(this.keyboard.panel.mesh);
+    this.chatKeyboard = new KeyboardPanel(CHAT_ROWS, clipChatText, cleanChat);
+    this.root.add(this.chatKeyboard.panel.mesh);
+    this.scrollText = new ScrollText({ Panel, root: this.root, layoutText, drawOps });
     this.bannerPanel = new Panel(1600, 260, 2.2);
     this.root.add(this.bannerPanel.mesh);
     this.toastPanel = new Panel(900, 300, 0.75);
@@ -898,6 +950,11 @@ export class UI {
     this.hud.mesh.renderOrder = 900;
     this.statusPanel = new Panel(512, 128, 0.24);
     this.hud.mesh.add(this.statusPanel.mesh);
+    this.voiceBadge = new Panel(64, 112, 0.24 * 64 / 512);
+    this.voiceBadge.mesh.renderOrder = this.hud.mesh.renderOrder;
+    this.voiceBadge.mesh.position.set((this.hud.widthM + this.voiceBadge.widthM) / 2 + 0.004,
+      (this.hud.heightM - this.voiceBadge.heightM) / 2 - 0.004, 0);
+    this.hud.mesh.add(this.voiceBadge.mesh);
     this.statusPanel.mesh.position.set(0, this.hud.heightM / 2 + this.statusPanel.heightM / 2 + 0.006, 0.001);
     this.rewards = new RewardFeed({ Panel, camera, hud: this.hud.mesh, font: FONT, drawWindow: drawGameWindow,
       drawIcon, fitLabel, assetRevision: iconAssetRevision, cleanName: stripEscapes,
@@ -978,6 +1035,7 @@ export class UI {
     if (this.list.visible) { this.list.hover = -2; this.list.draw(); }
     if (this.grid.visible) { this.grid.hover = undefined; this.grid.draw(); }
     if (this.keyboard.visible) { this.keyboard.draw(); this.keyboard.field(!vr); }
+    if (this.chatKeyboard.visible) { this.chatKeyboard.draw(); this.chatKeyboard.field(!vr); }
     this.updateBonfireTravel();
     this.updateSkillProfile();
     const message = this.msg || this.heldMessage?.message || (this.remote?.shown ? this.remote : null);
@@ -1030,7 +1088,7 @@ export class UI {
     this.hud.mesh.visible = true;
     this.statusPanel.mesh.visible = !target && this.desktopStatusVisible;
     if (this.choice.visible) this.choice.draw();
-    if (this.msg) this.drawMessage();
+    if (this.msg && !this.msg.scroll) this.drawMessage();
   }
 
   // ---------------------------------------------------------------- messages
@@ -1061,6 +1119,7 @@ export class UI {
     this.dialogue = null;
     G.player?.dialogueCamera?.cancel();
     this.hideHeldMessage();
+    if (!this.msg?.scroll && !(this.remote?.shown && this.remote.scroll)) this.scrollText?.close();
     if (!this.msg && !this.sceneBusy() && !this.remote?.shown && !this.prompt?.shown) this.backdrop.visible = false;
   }
   updateDialoguePresentation() {
@@ -1083,10 +1142,11 @@ export class UI {
   }
   sceneBusy() { return !!this.sceneOpen || this.menuOpen; }
   pointerBusy() {
-    return this.sceneBusy() || this.messageBusy() || this.dialogueActive() || this.list.visible || this.grid.visible || this.keyboard.visible || this.choice.visible;
+    return this.sceneBusy() || this.messageBusy() || this.dialogueActive() || this.list.visible || this.grid.visible || this.keyboard.visible || this.chatKeyboard?.visible || this.choice.visible;
   }
 
   showMessage(msg, source = null) {
+    this.scrollText?.close();
     // An acknowledged page may still occupy the shared panel. A banner does
     // not redraw that panel, so hide its previous owner before replacing it.
     this.hideHeldMessage();
@@ -1097,6 +1157,10 @@ export class UI {
     const banner = bannerOf(msg);
     if (banner) { this.showBanner(banner.text, banner.color, true); return; }
     this.msg = msg;
+    if (msg.scroll) {
+      msg.state = 'scroll'; this.msgPanel.mesh.visible = this.namePanel.mesh.visible = false;
+      this.choice.close(); this.scrollText.open(msg); this.placeRoot(true); return;
+    }
     if (!continuing) G.player?.dialogueCamera?.begin(source);
     msg.name = this.speakerName(msg);
     msg.reveal = 0; msg.wait = 0; msg.fast = false; msg.state = 'typing';
@@ -1138,7 +1202,7 @@ export class UI {
     if (msg.face) loadCanvas('Graphics/Faces', msg.face).then(c => { msg.faceCanvas = c; if (this.msg === msg || (this.remote === msg && msg.shown)) this.drawMessage(msg); });
   }
   drawMessage(msg = this.msg) {
-    if (!msg) return;
+    if (!msg || msg.scroll) return;
     const p = this.msgPanel;
     const { ctx, canvas } = p;
     p.clear();
@@ -1159,7 +1223,7 @@ export class UI {
       ctx.fillText(fitLabel(ctx, tr('오른쪽 버튼을 누른 채 드래그: 둘러보기'), canvas.width - 120), 36, canvas.height - 24);
       ctx.restore();
     }
-    if (msg.state === 'waitInput' || msg.state === 'pause') {
+    if ((msg.state === 'waitInput' || msg.state === 'pause') && !drawGamePause(ctx, canvas.width / 2 - 16, canvas.height - 36, G.frame || 0, 2)) {
       ctx.fillStyle = 'rgba(230,210,160,' + (0.5 + 0.5 * Math.sin(G.time * 6)) + ')';
       ctx.beginPath(); ctx.moveTo(canvas.width - 50, canvas.height - 40); ctx.lineTo(canvas.width - 30, canvas.height - 40);
       ctx.lineTo(canvas.width - 40, canvas.height - 26); ctx.fill();
@@ -1167,13 +1231,13 @@ export class UI {
     p.commit();
     // name tab
     const np = this.namePanel;
-    np.ctx.font = `36px ${FONT}`;
+    np.ctx.font = gameFont(36, NAME_FONT);
     const nameWidth = G.vr ? 512 : Math.min(512, Math.max(160, Math.ceil(np.ctx.measureText(msg.name || '').width + 56)));
     np.resize(nameWidth, 72, 0.59 * nameWidth / 512);
     np.clear();
     if (msg.name) {
       windowBg(np.ctx, 4, 4, np.canvas.width - 8, np.canvas.height - 8, G.vr ? 0.9 : 0.28, G.vr ? 1 : 0.65);
-      np.ctx.font = `36px ${FONT}`; np.ctx.fillStyle = '#e8d8a8'; np.ctx.textBaseline = 'middle';
+      np.ctx.font = gameFont(36, NAME_FONT); np.ctx.fillStyle = '#e8d8a8'; np.ctx.textBaseline = 'middle';
       np.ctx.fillText(fitLabel(np.ctx, msg.name, np.canvas.width - 56), 28, 38);
       np.commit();
       np.mesh.visible = this.msgPanel.mesh.visible;
@@ -1198,6 +1262,7 @@ export class UI {
     if (!this.msgPanel.mesh.visible) this.choice.panel.mesh.position.set(0, -0.05, 0);
   }
   closeMessage() {
+    if (this.msg?.scroll) this.scrollText?.close();
     const message = this.msg, d = this.dialogue;
     this.msg = null;
     if (message && this.dialogueContinuing()) {
@@ -1257,15 +1322,17 @@ export class UI {
   closeRemoteMessage() {
     const r = this.remote;
     this.remote = null;
+    if (this.scrollText?.scroll?.message === r) this.scrollText.close();
     if (!r?.shown) return;
     if (!this.msg) { this.msgPanel.mesh.visible = false; this.namePanel.mesh.visible = false; }
     if (r.choiceUp && this.msg?.state !== 'choice') this.choice.close();
   }
-  updateRemote() {
+  updateRemote(dt = 1 / 60) {
     const r = this.remote;
     if (!r) return;
     if (this.dialogueActive() || this.menuOpen || this.sceneOpen || this.prompt?.shown) {
       if (r.shown) {
+        if (this.scrollText?.scroll?.message === r) this.scrollText.close();
         if (!this.msg) { this.msgPanel.mesh.visible = false; this.namePanel.mesh.visible = false; }
         if (r.choiceUp && this.msg?.state !== 'choice' && !this.prompt?.shown) this.choice.close();
       }
@@ -1275,10 +1342,14 @@ export class UI {
     if (!r.shown) {
       r.shown = true;
       this.placeRoot(true);
+      if (r.scroll) { this.scrollText.open(r); this.msgPanel.mesh.visible = this.namePanel.mesh.visible = false; }
+      else {
       if (!r.ops) this.layoutMessage(r);
       this.msgPanel.mesh.visible = r.lines.length > 0 || !r.choices;
       this.drawMessage(r);
+      }
     }
+    if (r.scroll) { if (this.scrollText.update(dt, false)) this.scrollText.panel.mesh.visible = false; return; }
     if (r.reveal < r.total) { r.reveal = Math.min(r.total, r.reveal + 2); this.drawMessage(r); }
     else if (r.choices && !r.choiceUp) {
       r.choiceUp = true;
@@ -1287,9 +1358,14 @@ export class UI {
       this.layoutPanels(r);
     }
   }
-  updateMessage() {
+  updateMessage(dt = 1 / 60) {
     const msg = this.msg;
     const input = G.input;
+    if (msg.scroll) {
+      this.consumedConfirm = true;
+      if (this.scrollText.update(dt)) this.closeMessage();
+      return;
+    }
     if (msg.state !== 'choice' && msg.state !== 'number' && this.msgPanel.mesh.visible) {
       const pointer = this.pointerRay();
       this.pointerTarget = !!pointer && !!this.msgPanel.hit(pointer);
@@ -1441,6 +1517,7 @@ export class UI {
   // open this world (on this PC's co-op server, or one elsewhere), go into a friend's world (a server from the list, or
   // a new one: its IP, port and PIN), or end it
   showCoopMenu(index = 0) {
+    this.chatMenuRequest = null;
     const c = G.coop, items = [];
     const note = this.coopNote(c.lastError, c.lastServer);
     c.lastError = '';
@@ -1499,6 +1576,7 @@ export class UI {
         else if (it.id === 'players') this.showCoopPlayers();
         else if (it.id === 'bans') this.showCoopBans();
         else if (it.id === 'name') this.changeCoopName(i);
+        else if (it.id === 'chat') this.showChatMenu();
         else if (it.id === 'names') { G.settings.coopNames = G.settings.coopNames === false; G.saveSettings?.(); this.showCoopMenu(i); }
         else if (it.id === 'end') { c.end('menu'); this.closeMenu(); }
         else if (it.id === 'join-boss') { c.joinBossFight(); this.closeMenu(); }
@@ -1521,6 +1599,7 @@ export class UI {
         else if (it.id === 'my-pvp') { if (!c.setMyPvp(!c.myPvp)) G.audio?.playSystemSe(3); this.showCoopMenu(i); }
         else if (it.id === 'wrule-spectate') { if (!c.setWorldRule('bossSpectate', !c.rules.bossSpectate)) G.audio?.playSystemSe(3); }
         else if (it.id === 'wrule-scale') { if (!c.setWorldRule('bossScale', !c.rules.bossScale)) G.audio?.playSystemSe(3); }
+        else if (it.id === 'wrule-loot') { if (!c.setWorldRule('shareLoot', !c.rules.shareLoot)) G.audio?.playSystemSe(3); }
         else if (it.id === 'admin') this.enterAdminPin(i);
         else this.showCoopMenu(i);             // (the status row: looks again)
       },
@@ -1570,6 +1649,7 @@ export class UI {
       { text: tr('최대 인원: {n}명', { n: r.maxPlayers }), id: 'wrule-max', desc, enabled: admin },
       { text: r.bossSpectate ? tr('보스전에서 쓰러지면 관전') : tr('보스전에서 쓰러져도 관전 없음'), id: 'wrule-spectate', desc, enabled: admin },
       { text: r.bossScale ? tr('보스 강화: 참가 인원만큼 HP·MP·그로기 증가') : tr('보스 강화 없음'), id: 'wrule-scale', desc, enabled: admin },
+      { text: r.shareLoot ? tr('아이템 공유: 누가 얻든 모두가 같이 받음') : tr('아이템 공유 없음 (얻은 사람만)'), id: 'wrule-loot', desc, enabled: admin },
     ];
     if (!admin) rows.push({ text: tr('관리자 PIN 입력'), id: 'admin', desc: tr('규칙을 바꾸려면 서버의 관리자 PIN을 넣으세요') });
     return rows;
@@ -1585,11 +1665,11 @@ export class UI {
     const c = G.coop;
     const where = m => (m.map > 0 ? destinationName(m.map) : c.role === 'world' ? tr('오프닝·이동 중') : tr('이동 중'));
     const members = c.members();
-    const items = members.map(m => ({ text: m.me ? tr('{name} (나)', { name: m.name }) : m.name, right: where(m), desc: m.host ? tr('호스트') : c.world && !m.me ? tr('고르면 아이템이나 소울을 줄 수 있습니다') : '', id: m.id, me: m.me }));
+    const items = members.map(m => ({ text: m.me ? tr('{name} (나)', { name: m.name }) : c.muted?.(m.id) ? tr('{name} (음소거)', { name: m.name }) : m.name, right: where(m), desc: m.host ? tr('호스트') : !m.me ? tr('고르면 음소거하거나 아이템·소울을 줄 수 있습니다') : '', id: m.id, me: m.me, name: m.name }));
     this.list.open(tr('멤버'), items, {
       index: Math.min(index, items.length - 1),
       // (the developer's world: another one - give it something; else looks again: where they are now)
-      onSelect: (i, it) => { if (c.world && !it.me) this.showGiveItems(it.id, it.text, i); else this.showCoopMembers(i); },
+      onSelect: (i, it) => { if (!it.me) this.showMemberActions(it.id, it.name, i); else this.showCoopMembers(i); },
       onCancel: () => this.showCoopMenu(0),
     });
     loadMapNames(members.map(member => member.map)).then(() => {
@@ -1600,6 +1680,19 @@ export class UI {
   }
   // (the developer's world) what of this bag may be given to that one: its things (not the key items), weapons and
   // armor not worn - one picked, how many, and it is asked
+  showMemberActions(id, name, back = 0) {
+    const c = G.coop, tag = c.chatTag(id), muted = c.muted(id);
+    const rows = [{ text: muted ? tr('음소거 풀기') : tr('음소거'), id: 'mute', enabled: !!tag, desc: tr('이 사람의 채팅과 목소리') }];
+    if (c.world) rows.push({ text: tr('아이템·소울 주기'), id: 'give' });
+    this.list.open(name, rows, {
+      onSelect: (_i, item) => {
+        if (item.id === 'give') { this.showGiveItems(id, name, back); return; }
+        const list = (Array.isArray(G.settings.chatMuted) ? G.settings.chatMuted : []).filter(t => t !== tag);
+        G.settings.chatMuted = muted ? list : [...list, tag].slice(-100);
+        G.saveSettings?.(); if (!muted) G.voice?.drop(id); this.showCoopMembers(back);
+      }, onCancel: () => this.showCoopMembers(back),
+    });
+  }
   showGiveItems(to, name, back = 0) {
     const c = G.coop, P = G.state.party, rows = [];
     if (P.gold > 0) rows.push({ text: tr('소울'), right: P.gold.toLocaleString(), kind: 'gold', id: 0, n: P.gold });
@@ -1678,6 +1771,7 @@ export class UI {
     return [
       { text: c.hasName() ? tr('내 이름: {name}', { name: c.myName() }) : tr('내 이름: (정해 주세요)'), id: 'name', desc: tr('다른 플레이어에게 보이는 이름 (영어) - 고르면 바꿉니다') },
       { text: G.settings.coopNames === false ? tr('다른 플레이어 이름: 숨김') : tr('다른 플레이어 이름: 머리 위에 표시'), id: 'names', desc: tr('고르면 바뀝니다') },
+      { text: tr('채팅·음성'), id: 'chat', right: VOICE_LABEL()[G.voice?.mode || 'off'], desc: tr('채팅 보내기·기록, 음성 채팅과 마이크') },
     ];
   }
   coopBanRow() {
@@ -1769,6 +1863,82 @@ export class UI {
     if (why === 'denied version' || why === 'not world' || why === 'world') return tr('개발자 서버와 이 게임의 버전이 다릅니다');
     return tr('연결하지 못했습니다');
   }
+  async showChatMenu(index = 0) {
+    const s = G.settings, voice = G.voice, state = G.state, map = G.map, coop = G.coop;
+    const request = this.chatMenuRequest = {}, previousItems = this.list.items;
+    const mics = await voice?.devices?.().catch(() => []) || [];
+    if (!this.menuOpen || this.chatMenuRequest !== request || this.list.items !== previousItems || G.state !== state || G.map !== map || G.coop !== coop) return;
+    // (the one picked by its name - kept with the setting too: the browser may not be naming them yet)
+    const micLabel = s.voiceDevice ? mics.find(d => d.id === s.voiceDevice && d.named)?.label || s.voiceDeviceLabel || tr('기본 장치') : tr('기본 장치');
+    const vol = Math.max(0, Math.min(2, s.voiceVolume ?? 1));
+    const MODES = ['off', 'listen', 'talk'];
+    const step = (id, dx) => {
+      if (id === 'voice') { s.voice = MODES[(MODES.indexOf(G.voice.mode) + dx + 3) % 3]; G.voice.retry(); }
+      else if (id === 'vol') s.voiceVolume = Math.round(Math.max(0, Math.min(2, vol + dx * 0.1)) * 10) / 10;
+      else if (id === 'toasts') s.chatToasts = s.chatToasts === false;
+      G.saveSettings?.();
+    };
+    const items = [
+      { text: tr('채팅 보내기'), id: 'send', enabled: G.chat.on, desc: tr('한 줄을 모두에게 보냅니다 (PC: / 키)') },
+      { text: tr('채팅 기록 ({n})', { n: G.chat.log.length }), id: 'log', enabled: G.chat.log.length > 0, desc: tr('채팅, 들어오고 나간 사람, 보스 처치') },
+      { text: tr('채팅 알림'), id: 'toasts', right: s.chatToasts === false ? tr('끔') : tr('켬'), desc: tr('받은 채팅을 말풍선과 함께 알림으로도 띄웁니다') },
+      { text: tr('음성 채팅'), id: 'voice', right: VOICE_LABEL()[G.voice.mode], desc: tr('말하기를 고른 동안, 함께하는 중에만 마이크가 열립니다') },
+      { text: tr('마이크'), id: 'mic', right: clipText(micLabel, 22), desc: tr('눌러서 장치 목록에서 고릅니다') },
+      { text: tr('음성 크기'), id: 'vol', right: `${Math.round(vol * 100)}%`, desc: tr('다른 사람 목소리 크기 (좌우로 조절)') },
+    ];
+    this.list.open(tr('채팅·음성'), items, {
+      index,
+      onSelect: (i, it) => {
+        if (it.id === 'send') G.chat.openKeyboard(() => { if (this.menuOpen) this.showChatMenu(0); });
+        else if (it.id === 'log') this.showChatLog();
+        else if (it.id === 'mic') this.showMicList();
+        else { step(it.id, 1); this.showChatMenu(i); }
+      },
+      onAdjust: dx => {
+        const i = this.list.index, it = items[i];
+        if (!it || it.id === 'send' || it.id === 'log' || it.id === 'mic') return false;
+        step(it.id, dx);
+        this.showChatMenu(i);
+        return true;
+      },
+      onCancel: () => this.showCoopMenu(),
+    });
+  }
+  // 채팅·음성 → 마이크: the devices by name, the one in use marked - shown at once; with none named yet (the browser names them
+  // only once the page may use a microphone) it is asked, and the list comes again named when it answers (coopvoice.js)
+  async showMicList() {
+    const title = tr('마이크');
+    const state = G.state, map = G.map, coop = G.coop, voice = G.voice;
+    const request = this.chatMenuRequest = {}; let expectedItems = this.list.items;
+    const valid = () => this.menuOpen && this.chatMenuRequest === request && this.list.items === expectedItems && G.state === state && G.map === map && G.coop === coop;
+    const show = mics => {
+      const s = G.settings, cur = s.voiceDevice || '', inUse = id => (id === cur ? tr('사용 중') : '');
+      const rows = [{ text: tr('기본 장치'), id: '', right: inUse(''), desc: tr('시스템에서 기본으로 정한 마이크') },
+        ...mics.map(d => ({ text: clipText(d.label, 30), id: d.id, label: d.label, right: inUse(d.id), desc: tr('이 마이크로 말합니다') }))];
+      const index = Math.max(0, rows.findIndex(r => r.id === cur));
+      this.list.open(title, rows, {
+        index: this.list.visible && this.list.title === title ? this.list.index : index,
+        onSelect: (i, it) => {
+          s.voiceDevice = it.id;
+          if (it.id) s.voiceDeviceLabel = it.label; else delete s.voiceDeviceLabel;
+          G.voice.retry(); G.saveSettings?.();
+          this.showChatMenu(4);
+        },
+        onCancel: () => this.showChatMenu(4),
+      });
+      expectedItems = rows;
+    };
+    const mics = await voice?.devices?.().catch(() => []) || [];
+    if (!valid()) return;
+    show(mics);
+    if (mics.some(d => d.named)) return;
+    const named = await voice?.devices?.(true).catch(() => []) || [];
+    if (valid() && this.list.visible && this.list.title === title) show(named);
+  }
+  showChatLog() {
+    const rows = G.chat.log.map(e => ({ text: G.chat.lineOf(e), desc: new Date(e.t).toLocaleTimeString() }));
+    this.list.open(tr('채팅 기록'), rows, { index: rows.length - 1, onSelect: () => {}, onCancel: () => this.showChatMenu(1) });
+  }
   // the servers met before (settings), and a new one
   showCoopServers(mode) {
     const list = Array.isArray(G.settings.coopServers) ? G.settings.coopServers : [];
@@ -1825,6 +1995,18 @@ export class UI {
         onDone: v => { this.keyboard.close(); resolve(v); },
         onCancel: () => { this.keyboard.close(); resolve(null); },
       });
+    });
+  }
+  askChat(title, max) {
+    this.list.close(); this.placeRoot(true);
+    const own = !this.menuOpen && !this.sceneOpen;
+    if (own) this.sceneOpen = 'chat';
+    return new Promise(resolve => {
+      const done = value => {
+        this.chatKeyboard.close(); if (own && this.sceneOpen === 'chat') this.sceneOpen = null;
+        this.consumedConfirm = true; resolve(value);
+      };
+      this.chatKeyboard.open(title, '', max, { onDone: done, onCancel: () => done(null) });
     });
   }
   // Name Input (303) for the hero: typed in the keyboard (English) - the hero's name, and this player's in co-op (the
@@ -1946,6 +2128,7 @@ export class UI {
 
   // ---------------------------------------------------------------- HUD
   drawHud() {
+    this.drawVoiceBadge();
     const leader = G.state?.party.leader();
     this.hudPresent = !!leader;
     this.hud.mesh.visible = !!leader && (G.vr || !this.sceneBusy() && !this.messageBusy() && !this.dialogueActive() && !this.remote?.shown && !this.prompt?.shown && !G.combat?.playerDead);
@@ -2070,6 +2253,17 @@ export class UI {
       else if (G.input.pointerLocked) document.exitPointerLock?.();
     }
   }
+  drawVoiceBadge() {
+    const panel = this.voiceBadge;
+    if (!panel) return;
+    const voice = G.voice, code = G.chat?.on && voice && voiceMarksReady() ? voiceCode(voice.mode) : -1;
+    const speaking = !!(code === 2 && voice.micLive && voice.speaking), key = `${code}/${speaking}`;
+    if (this.voiceBadgeKey === key) return;
+    this.voiceBadgeKey = key; panel.mesh.visible = code >= 0;
+    if (code < 0) return;
+    panel.clear(); const [width] = voiceMarksSize(72, true);
+    drawVoiceMarks(panel.ctx, (panel.canvas.width - width) / 2, 4, 72, code, speaking, true); panel.commit();
+  }
   pointerRay() {
     if (!G.vr) {
       const input = G.input, p = input.pointer, rect = input.dom?.getBoundingClientRect?.();
@@ -2120,6 +2314,7 @@ export class UI {
     this.showMainMenu();
   }
   closeMenu() {
+    this.chatMenuRequest = null;
     G.combat?.clearMenuSkillChain?.({ draftOnly: true });
     this.skillsBrowser?.close();
     this.skillProfile?.close();
@@ -2137,14 +2332,15 @@ export class UI {
     this.skillsBrowser?.close();
     this.skillProfile?.close();
     this.menuSection = 'main';
+    const commands = $data.system.terms?.commands || [];
     const items = [
-      { text: tr('아이템'), id: 'items' },
-      { text: tr('스킬'), id: 'skills' },
-      { text: tr('장비'), id: 'equip' },
-      { text: tr('상태 보기'), id: 'status' },
-      { text: tr('서약'), id: 'oath', enabled: !!G.state.party.spirits?.length },
-      { text: tr('저장'), id: 'save', enabled: !G.state.system.saveDisabled && !G.map?.interpreter?.running() && !G.coop?.phantom },
-      { text: tr('게임 종료'), id: 'title' },
+      { text: commands[4] || tr('아이템'), id: 'items' },
+      { text: commands[5] || tr('스킬'), id: 'skills' },
+      { text: commands[6] || tr('장비'), id: 'equip' },
+      { text: commands[7] || tr('상태 보기'), id: 'status' },
+      { text: G.scripts?.partnerCommand || tr('서약'), id: 'oath', enabled: !!G.state.party.spirits?.length },
+      { text: commands[9] || tr('저장'), id: 'save', enabled: !G.state.system.saveDisabled && !G.map?.interpreter?.running() && !G.coop?.phantom },
+      { text: commands[10] || tr('게임 종료'), id: 'title' },
     ];
     this.grid.close();
     // the SEN at its foot, as the original's menu shows it (its own script: the variable and its title)
@@ -2163,27 +2359,40 @@ export class UI {
   paintMainOverview() {
     const leader = G.state?.party.leader();
     if (!leader) return;
+    const members = (G.state.party.members?.() || [leader]).filter(Boolean).slice(0, 4);
     const mv = G.scripts?.menuVar;
     const sen = mv && (!mv.switchId || G.state.sw(mv.switchId)) ? G.state.v(mv.variable) : null;
-    const faceKey = leader.faceName || '';
-    if (faceKey && this.menuFaceKey !== faceKey) {
-      this.menuFaceKey = faceKey; this.menuFace = null;
-      loadCanvas('Graphics/Faces', faceKey).then(image => {
-        if (this.menuFaceKey !== faceKey) return;
-        this.menuFace = image;
-        if (this.menuOverview.mesh.visible) this.paintMainOverview();
-      });
+    this.menuFaces ||= new Map();
+    for (const member of members) {
+      const name = member.faceName;
+      if (!name || this.menuFaces.has(name)) continue;
+      this.menuFaces.set(name, null); const state = G.state, map = G.map;
+      loadCanvas('Graphics/Faces', name).then(image => {
+        this.menuFaces.set(name, image);
+        if (G.state === state && G.map === map && this.menuOverview.mesh.visible && this.menuSection === 'main') this.paintMainOverview();
+      }, () => {});
     }
-    const key = JSON.stringify([leader.name, leader.level, leader.hp, leader.mhp, leader.mp, leader.mmp, leader.classId,
-      leader.equips, effectsKey(battlerEffects(leader)), G.state.party.gold, sen, mv, faceKey, leader.faceIndex, !!this.menuFace,
-      this.list.index, this.list.top, iconAssetRevision(), G.vr]);
+    const key = JSON.stringify([members.map(member => [member.name, member.level, member.hp, member.mhp, member.mp, member.mmp,
+      member.classId, member.equips, effectsKey(battlerEffects(member)), member.faceName, member.faceIndex, !!this.menuFaces.get(member.faceName)]), G.state.party.gold, sen, mv,
+      this.list.index, this.list.top, iconAssetRevision(), G.vr, G.scripts?.placeWindow, G.map?.mapId, windowToneKey()]);
     if (key === this.lastMainOverview) return;
     this.lastMainOverview = key;
-    paintClassicMenu({ overview: this.menuOverview, commandPanel: this.list.panel, leader,
+    paintClassicMenu({ overview: this.menuOverview, commandPanel: this.list.panel, leader, members,
       gold: G.state.party.gold, sen, menuVar: mv, currencyUnit: $data.system.currency_unit,
-      effects: battlerEffects(leader), faceCanvas: faceKey ? this.menuFace : null,
+      effects: battlerEffects(leader), faceCanvas: this.menuFaces,
       helpers: { windowBg, drawIcon, drawGameCursor, textColor, fitLabel, stripEscapes, tr, FONT, vr: G.vr,
-        className: actor => $data.classes?.[actor.classId]?.name || '', levelLabel: $data.system.terms?.basic?.[1] || 'Lv' } });
+        className: actor => $data.classes?.[actor.classId]?.name || '', battlerEffects,
+        levelLabel: $data.system.terms?.basic?.[1] || 'Lv' } });
+    if (G.scripts?.placeWindow) {
+      const context = this.menuOverview.ctx, place = G.scripts.placeWindow;
+      // Leave the fork's separate tools control accessible beneath the native location.
+      context.save(); windowBg(context, 24, 736, 896, 104, 0.25, 0.65);
+      context.font = gameFont(26); context.textBaseline = 'middle'; context.fillStyle = textColor(16);
+      context.fillText(fitLabel(context, place.label, 856), 44, 764);
+      context.font = gameFont(30); context.fillStyle = textColor(0);
+      context.fillText(fitLabel(context, destinationName(G.map?.mapId), 856), 44, 808);
+      context.restore(); this.menuOverview.commit();
+    }
   }
   updateClassicTools() {
     const ray = this.pointerRay(), hit = ray && this.menuOverview.hit(ray);
@@ -2568,6 +2777,7 @@ export class UI {
   showOptionsMenu(index = 0) {
     const s = G.settings;
     const SWING = [tr('약하게'), tr('보통'), tr('강하게'), tr('아주 강하게')];
+    const WEIGHT = [tr('끔'), tr('약하게'), tr('보통'), tr('강하게')];
     const ANIMS = { all: tr('모두'), skills: tr('스킬만 (일반 공격 제외)'), off: tr('끔') };
     const RESPAWN = { map: tr('맵을 나갔다 오면'), slow: tr('1분 뒤 (멀리 있을 때)'), original: tr('원작대로 10초 뒤') };
     const cycle = (list, cur) => list[(list.indexOf(cur) + 1) % list.length];
@@ -2575,6 +2785,8 @@ export class UI {
       { text: tr('VR 이동 속도'), id: 'vrSpeed', right: `×${s.vrSpeed ?? 2}`, desc: tr('스틱으로 걷는 속도 배율 (VR에서만)') },
       { text: tr('미니맵'), id: 'minimap', right: s.minimap === false ? tr('끔') : tr('켬') },
       { text: tr('휘두르기 판정'), id: 'swing', right: SWING[s.swingLevel ?? 2], desc: tr('이 정도 세기로 휘둘러야 공격이 들어갑니다 (VR)') },
+      ...(G.vr ? [{ text: tr('무기 무게감'), id: 'weight', right: WEIGHT[s.weaponWeight ?? 2],
+        desc: tr('무거운 무기일수록 세게 휘두르면 늦게 따라오고 멈춰도 더 나가며, 수평으로 들면 처집니다 · 가벼운 무기는 손에 딱 붙어 있습니다 (VR)') }] : []),
       { text: tr('이펙트 밝기'), id: 'fx', right: `${Math.round((s.fxBrightness ?? 0.5) * 100)}%`, desc: tr('번쩍임·빛·스킬 애니메이션의 밝기') },
       { text: tr('스킬 애니메이션'), id: 'anims', right: ANIMS[s.skillAnims || 'all'], desc: tr('원작 스킬·공격 애니메이션을 대상 위치에 재생합니다') },
       { text: tr('적이 벽 통과'), id: 'walls', right: s.enemyThroughWalls === false ? tr('끔') : tr('켬'), desc: tr('쫓아오는 적이 벽이나 소품에 끼지 않고 통과합니다') },
@@ -2593,6 +2805,7 @@ export class UI {
         if (it.id === 'vrSpeed') s.vrSpeed = cycle([1, 1.5, 2, 2.5, 3], s.vrSpeed ?? 2);
         if (it.id === 'minimap') s.minimap = s.minimap === false;
         if (it.id === 'swing') s.swingLevel = ((s.swingLevel ?? 2) + 1) % 4;
+        if (it.id === 'weight') { s.weaponWeight = ((s.weaponWeight ?? 2) + 1) % 4; G.combat?.weaponLag?.setSway(G.combat.weaponSway()); }
         if (it.id === 'fx') s.fxBrightness = cycle([0.25, 0.5, 0.75, 1], s.fxBrightness ?? 0.5);
         if (it.id === 'anims') s.skillAnims = cycle(['all', 'skills', 'off'], s.skillAnims || 'all');
         if (it.id === 'walls') s.enemyThroughWalls = s.enemyThroughWalls === false;
@@ -3141,7 +3354,31 @@ export class UI {
       use.enabled = !!status.ok; use.desc = desc; this.list.draw();
     }
   }
+  setWindowTone(tone) {
+    if (tone && G.state?.system) G.state.system.windowTone = { red: tone.red, green: tone.green, blue: tone.blue, gray: tone.gray };
+    this.appearanceKey = null; this.updateAppearance();
+  }
+  refreshFonts() {
+    for (const view of [this.skillsBrowser, this.skillProfile, this.bonfireTravel, this.navigation, this.dungeonStatus, this.rewards]) if (view) view.font = FONT;
+    if (this.skillsBrowser?.searchInput?.style) this.skillsBrowser.searchInput.style.fontFamily = FONT;
+    this.appearanceKey = null; this.updateAppearance();
+  }
+  updateAppearance() {
+    const key = windowToneKey();
+    if (this.appearanceKey === key) return;
+    this.appearanceKey = key; this.lastHud = this.lastMainOverview = ''; this.hudDirty = true;
+    if (this.navigation) this.navigation.dirty = true;
+    if (this.dungeonStatus) this.dungeonStatus.key = null;
+    if (this.rewards) this.rewards.dirty = true;
+    if (this.skillProfile) this.skillProfile.paintKey = null;
+    if (this.skillsBrowser) this.skillsBrowser.drawKey = null;
+    if (this.bonfireTravel) this.bonfireTravel.drawKey = null;
+    for (const view of [this.list, this.grid, this.choice, this.keyboard, this.chatKeyboard]) if (view?.visible) view.draw?.();
+    if (this.msg) { if (this.msg.scroll) this.scrollText?.draw(); else this.drawMessage(); }
+    else if (this.remote?.shown && !this.remote.scroll) this.drawMessage(this.remote);
+  }
   update(dt) {
+    this.updateAppearance();
     this.consumedConfirm = false;
     this.pointerTarget = false;
     if (G.movies?.busy()) {
@@ -3166,10 +3403,11 @@ export class UI {
       this.drawBanner();
     }
     if (G.input.skillMenuPressed?.() && this.toggleSkillsMenu()) this.consumedConfirm = true;
-    else if (this.msg) this.updateMessage();
+    else if (this.msg) this.updateMessage(dt);
     else if (this.menuOpen || this.sceneOpen) {
       if (this.navigation.open) this.updateMap();
       else if (this.keyboard.visible) this.keyboard.update(this.pointerRay());
+      else if (this.chatKeyboard.visible) this.chatKeyboard.update(this.pointerRay());
       else if (this.skillsBrowser?.searchFocused()) this.skillsBrowser.handleInput(this.pointerRay());
       else if (this.skillProfile?.handleInput(this.pointerRay())) this.consumedConfirm = true;
       else if (this.grid.visible) this.grid.update(this.pointerRay());
@@ -3182,7 +3420,7 @@ export class UI {
       if (G.input.mapPressed?.()) this.showMap(); else this.openMenu();
     }
     this.updateBossPrompt(dt);
-    this.updateRemote();
+    this.updateRemote(dt);
     if (this.toasts.length) {
       for (const t of this.toasts) t.t += dt;
       const before = this.toasts.length;
