@@ -22,6 +22,9 @@ const WORLD_PORT = 28472;     // a community server's port unless its owner chan
 const VOICE_LABEL = () => ({ off: tr('끔'), listen: tr('듣기만'), talk: tr('말하기와 듣기') });
 // (co-op) the voice chat marks beside the status window: their canvas (px, at the window's scale), each picture's size
 const VOICE_BADGE = [64, 112], VOICE_PIC = 72;
+// the status panel: its window's width (original pixels), the states' icons on its row; how big it is - in metres (VR,
+// over the left hand) and, on PC (in the bottom left corner), as a share of the screen's height - for each of those pixels
+const HUD_W = 320, HUD_ICONS = 12, HUD_M = 0.17 / 256, DESK_HUD = 0.35 / 256;
 // (the compose shop - scriptdata.js composeShop) what a good takes besides its price, from its note's <合成設定:kind,id,n>
 // lines, as the script reads them (a count left out: 1; a kind other than 0-2 or a thing that is not there: left out)
 function composeMats(d, word) {
@@ -1051,7 +1054,7 @@ export class UI {
     this.root.add(this.toastPanel.mesh);
     // the status panel: over all the world (PC and VR) - a raised shield, a wall, the marks over heads, skill animations -,
     // under the screen's tone, flash and fade as before (screen.js: 2990-3000) and the windows
-    this.hud = new Panel(512, 232, 0.17);
+    this.hud = new Panel(HUD_W * MS, (PAD * 2 + LINE * 4.5) * MS, HUD_M * HUD_W);       // (as tall as it gets: with the icons' row)
     this.hud.mesh.renderOrder = 2989;
     // (co-op) the voice chat marks just right of it, at its top (voicemarks.js - drawVoiceBadge): with it wherever it goes
     this.voiceBadge = new Panel(VOICE_BADGE[0], VOICE_BADGE[1], 0.17 * VOICE_BADGE[0] / 512);
@@ -1104,12 +1107,20 @@ export class UI {
       this.scene.add(this.hud.mesh);
       this.hud.mesh.scale.setScalar(1);
     } else {
+      // PC: in the screen's bottom left corner (placeDeskHud: kept there as the window's shape changes)
       this.camera.add(this.hud.mesh);
-      this.hud.mesh.position.set(-0.36, -0.27, -0.6);
       this.hud.mesh.rotation.set(0, 0, 0);
-      this.hud.mesh.scale.setScalar(1.25);
+      this.placeDeskHud();
     }
     this.hud.mesh.visible = true;
+  }
+  // PC: the status panel in the bottom left corner of the screen, the window it draws a little in from both edges
+  placeDeskHud() {
+    const cam = this.camera, d = 0.6, p = this.hud;
+    const h = 2 * Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * d, w = h * cam.aspect, gap = 0.025 * h;
+    const k = DESK_HUD * HUD_W * h / p.widthM, drawn = p.heightM * (this.hudDrawn || p.canvas.height) / p.canvas.height;
+    p.mesh.scale.setScalar(k);
+    p.mesh.position.set(-w / 2 + gap + p.widthM * k / 2, -h / 2 + gap + (drawn - p.heightM / 2) * k, -d);
   }
 
   // ---------------------------------------------------------------- messages
@@ -2195,6 +2206,11 @@ export class UI {
   }
 
   // ---------------------------------------------------------------- HUD
+  // the status panel as the original's windows are drawn (rmwindow.js): the window skin in its tone, the game's font on
+  // 24-pixel lines; HP and MP as Window_Base#draw_actor_hp / mp draw them (the label in the system colour over the gauge's
+  // two skin colours, the numbers at the right - in the crisis / knocked-out colour when low), the stamina a gauge of its
+  // own under them (TP's colours, half a line), the SEN (Window_Var: its title in the system colour) and the souls
+  // (Window_Gold#draw_currency_value) on one line, and the states' icons under it while there are any
   drawHud() {
     const leader = G.state?.party.leader();
     this.hud.mesh.visible = !!leader;
@@ -2206,54 +2222,55 @@ export class UI {
     // the original's ステート残りターン puts a state's turns left on its icon in a fight - here they run all the time)
     const timers = G.state.system.stateTimers || {}, buffT = leader.buffTimes();
     const marks = [...leader.states.map(id => [$data.states[id]?.icon_index || 0, timers[id]]), ...leader.buffIcons().map((ic, k) => [ic, buffT[k]])]
-      .filter(([ic]) => ic > 0).slice(0, 12);
+      .filter(([ic]) => ic > 0).slice(0, HUD_ICONS);
     const icons = marks.map(m => m[0]), lefts = marks.map(m => (m[1] > 0 ? Math.ceil(m[1]) : null));
+    const s = MS, W = HUD_W, H = PAD * 2 + LINE * 3 + LINE / 2 + (icons.length ? LINE : 0);
+    this.hudDrawn = H * s;                                     // (how much of its canvas the window takes: placeDeskHud)
     this.drawVoiceBadge();
-    const key = `${leader.hp}/${leader.mhp}/${leader.mp}/${leader.mmp}/${G.state.party.gold}/${G.combat?.stamina?.toFixed?.(2)}/${sen}/${icons.join(',')}/${lefts.join(',')}`;
+    const stamina = G.combat?.stamina;
+    const key = `${leader.hp}/${leader.mhp}/${leader.mp}/${leader.mmp}/${G.state.party.gold}/${stamina?.toFixed?.(2)}/${sen}/${icons.join(',')}/${lefts.join(',')}`;
     if (key === this.lastHud) return;
     this.lastHud = key;
-    const p = this.hud;
-    const { ctx, canvas } = p;
+    const p = this.hud, { ctx } = p;
     p.clear();
-    windowBg(ctx, 2, 2, canvas.width - 4, (icons.length ? 232 : 188) - 4, 0.72);
-    icons.forEach((ic, i) => drawIcon(ctx, ic, 24 + i * 38, 188, 34));
-    // (the time left: over the icon's right side, bold, in the crisis colour - as the original draws a state's turns)
-    ctx.font = `bold 27px ${FONT}`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
-    ctx.lineWidth = 5; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.fillStyle = textColor(17);
-    lefts.forEach((n, i) => { if (n === null) return; const x = 24 + i * 38 + 34, y = 188 + 17; ctx.strokeText(String(n), x, y); ctx.fillText(String(n), x, y); });
-    ctx.textAlign = 'left';
-    const r = Math.max(0, leader.hp / Math.max(1, leader.mhp));
-    ctx.fillStyle = 'rgba(60,10,10,0.9)'; ctx.fillRect(22, 20, canvas.width - 44, 28);
-    ctx.fillStyle = r > 0.3 ? '#b8222a' : '#ff3030'; ctx.fillRect(22, 20, (canvas.width - 44) * r, 28);
-    const mr = leader.mmp > 0 ? THREE.MathUtils.clamp(leader.mp / leader.mmp, 0, 1) : 0;
-    ctx.fillStyle = 'rgba(10,20,60,0.9)'; ctx.fillRect(22, 54, canvas.width - 44, 18);
-    ctx.fillStyle = '#2f6bd8'; ctx.fillRect(22, 54, (canvas.width - 44) * mr, 18);
-    if (G.combat?.stamina !== undefined) {
-      ctx.fillStyle = 'rgba(10,40,10,0.9)'; ctx.fillRect(22, 78, canvas.width - 44, 10);
-      ctx.fillStyle = '#4caf50'; ctx.fillRect(22, 78, (canvas.width - 44) * G.combat.stamina, 10);
-    }
-    ctx.font = `30px ${FONT}`; ctx.fillStyle = '#eee'; ctx.textBaseline = 'middle';
-    // (seven-figure HP - an original save past the old limits - and a long purse share the line: the HP gives way)
-    const goldText = `${G.state.party.gold.toLocaleString()} ${$data.system.currency_unit}`, hpText = `HP ${leader.hp} / ${leader.mhp}`;
-    const room = canvas.width - 50 - ctx.measureText(goldText).width - 16;
-    const hpW = ctx.measureText(hpText).width;
-    if (hpW > room) ctx.font = `${Math.max(16, Math.floor(30 * room / hpW))}px ${FONT}`;
-    ctx.fillText(hpText, 26, 120);
-    ctx.font = `30px ${FONT}`;
-    ctx.textAlign = 'right';
-    ctx.fillStyle = '#e8d8a8';
-    ctx.fillText(goldText, canvas.width - 24, 120);
-    ctx.textAlign = 'left';
-    ctx.fillStyle = '#9cc8ff';
-    ctx.fillText(`MP ${leader.mp} / ${leader.mmp}`, 26, 160);
-    // the SEN, as the original's menu shows it (its title in the system colour)
+    drawWindow(ctx, s, 0, 0, W, H);
+    const B = $data.system.terms?.basic || [], normal = textColor(0), system = textColor(16), x = PAD, w = W - PAD * 2;
+    const gauge = (label, cur, max, c1, c2, color, y) => {
+      drawGauge(ctx, s, x, y, w, max ? cur / max : 0, textColor(c1), textColor(c2), textColor(19));
+      drawText(ctx, s, label, x, y, 30, LINE, 0, system);
+      // (Window_Base#draw_current_and_max_values, its number fields as wide as seven figures)
+      drawText(ctx, s, cur, x + w - 152, y, 70, LINE, 2, color);
+      drawText(ctx, s, '/', x + w - 82, y, 12, LINE, 2, normal);
+      drawText(ctx, s, max, x + w - 70, y, 70, LINE, 2, normal);
+    };
+    let y = PAD;
+    gauge(B[3] || 'HP', leader.hp, leader.mhp, 20, 21, leader.hp <= 0 ? textColor(18) : leader.hp < leader.mhp / 4 ? textColor(17) : normal, y);
+    y += LINE;
+    gauge(B[5] || 'MP', leader.mp, leader.mmp, 22, 23, leader.mp < leader.mmp / 4 ? textColor(17) : normal, y);
+    y += LINE;
+    // (the stamina: its gauge alone, at the foot of half a line)
+    if (stamina !== undefined) drawGauge(ctx, s, x, y - LINE / 2, w, stamina, textColor(28), textColor(29), textColor(19));
+    y += LINE / 2;
+    // (the SEN's and the souls' line all a little smaller than HP's and MP's)
+    const small = Math.round(fontSize() * 0.84);
+    ctx.font = gameFont(small * s);
+    const width = t => ctx.measureText(String(t)).width / s;
     if (sen !== null) {
-      ctx.textAlign = 'right';
-      ctx.fillStyle = '#f0f0f0';
-      const value = `${sen}${mv.suffix}`;
-      ctx.fillText(value, canvas.width - 24, 160);
-      ctx.fillStyle = textColor(16);
-      ctx.fillText(`${mv.label} `, canvas.width - 24 - ctx.measureText(value).width, 160);
+      const lw = width(`${mv.label} `), vw = width(sen);
+      drawText(ctx, s, mv.label, x, y, lw, LINE, 0, system, { size: small });
+      drawText(ctx, s, sen, x + lw, y, vw + 1, LINE, 0, normal, { size: small });
+      if (mv.suffix) drawText(ctx, s, mv.suffix, x + lw + vw, y, width(mv.suffix) + 1, LINE, 0, system, { size: small });
+    }
+    const unit = $data.system.currency_unit || '';
+    drawText(ctx, s, G.state.party.gold, x, y, w - width(unit) - 2, LINE, 2, normal, { size: small });
+    drawText(ctx, s, unit, x, y, w, LINE, 2, system, { size: small });
+    if (icons.length) {
+      y += LINE;
+      icons.forEach((ic, i) => drawIcon(ctx, ic, (x + i * 24) * s, y * s, 24 * s));
+      // (the time left: over the icon's right side, bold, in the crisis colour - as the original draws a state's turns)
+      ctx.font = `bold ${Math.round(fontSize() * s)}px ${FONT}`; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.lineWidth = 2.5 * s; ctx.lineJoin = 'round'; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.fillStyle = textColor(17);
+      lefts.forEach((n, i) => { if (n === null) return; const tx = (x + i * 24 + 24) * s, ty = (y + LINE / 2) * s; ctx.strokeText(String(n), tx, ty); ctx.fillText(String(n), tx, ty); });
       ctx.textAlign = 'left';
     }
     p.commit();
@@ -3261,7 +3278,7 @@ export class UI {
     this.updatePointerLine();
   }
   updateHudFollow() {
-    if (!this.hudFollow) return;
+    if (!this.hudFollow) { if (this.hud.mesh.parent === this.camera) this.placeDeskHud(); return; }
     const p = new THREE.Vector3();
     this.hudFollow.getWorldPosition(p);
     p.y += 0.11;

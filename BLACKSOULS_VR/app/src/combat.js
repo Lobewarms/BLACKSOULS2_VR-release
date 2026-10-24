@@ -2681,11 +2681,11 @@ export class CombatSystem {
     this.areaMark(at, r, G.time + 0.6, null, true);
     G.coop?.shareBurst?.(at, r, p.color, 0);
   }
-  // what a burst looks like: its colour's glow over the spot and its animation (the others are shown it too - peerShotEnds,
-  // coop.js shareBurst)
+  // what a burst looks like: its colour's glow over the spot and its animation over all of it (the others are shown it
+  // too - peerShotEnds, coop.js shareBurst)
   burstFx(color, anim, at, radius) {
     this.spawnGlow(at.clone().add(new THREE.Vector3(0, 0.4, 0)), { color, size: radius * 1.6, life: 0.35, grow: 1.2 });
-    if (anim > 0) G.screen.playAnimationOn(at.clone().add(new THREE.Vector3(0, 0.6, 0)), anim, { rate: 3 });
+    this.playAreaAnim(anim, { x: at.x, z: at.z, w: 2 * radius }, { rate: 3 });
   }
   // (co-op) another player's shot over, as shown here: an area one bursts where it ended, a pot that met no one breaks
   // where it fell (its animation there)
@@ -5087,7 +5087,7 @@ export class CombatSystem {
         e.bodyT = { kind: 'stomp', t0: G.time };
         const spots = [1, 2, 3].map(k => { const p = along(plan.len * k / 3.5, 0); p.y = G.floorAt(p.x / T - 0.5, p.z / T - 0.5) + 0.6; return p; });
         for (const p of spots) this.spawnGlow(p, { color: 0xff6a3a, size: 2.2, life: 0.35, grow: 1.3 });
-        if (anim) G.screen.playAnimationOn(spots[0], anim, { world: true, size: 2.2, copies: spots.slice(1).map(pos => ({ pos, size: 2.2 })) });
+        this.playAreaAnim(anim, this.areaSpan(plan, ep));
         G.audio?.playSe(G.seAt('Earth4', 100, 80), ep);
         if (this.playerInPlan(e, plan)) this.strikeHits(e, s, plan.hits, false, false, this.parryable(plan));
         this.strikeAlliesInPlan(e, s, plan, plan.hits);
@@ -5097,7 +5097,7 @@ export class CombatSystem {
       case 'quake': case 'roar': {
         this.dropMarker(e);
         e.bodyT = { kind: fam === 'roar' ? 'roar' : 'stomp', t0: G.time };
-        if (anim) G.screen.playAnimationOn(new THREE.Vector3(ep.x, ep.y + e.h * 0.5, ep.z), anim, { world: true, size: this.enemySize(e) * 1.5 });
+        this.playAreaAnim(anim, this.areaSpan(plan, ep));
         if (fam === 'quake') {
           G.audio?.playSe(G.seAt('Earth4', 100, 70), ep);
           const head = G.player.headWorld(new THREE.Vector3());
@@ -5114,7 +5114,7 @@ export class CombatSystem {
         e.bodyT = { kind: fam === 'execute' ? 'stomp' : 'lunge', t0: G.time };
         const y = ep.y + Math.min(1.2, e.h * 0.5);
         const mid = fam === 'thrust' ? along(plan.len * 0.5, y) : along(Math.min(plan.r * 0.45, 3), y);
-        if (anim) G.screen.playAnimationOn(mid, anim, { world: true, size: fam === 'thrust' ? 2 : THREE.MathUtils.clamp(plan.r * 0.9, 2.2, 4.5) });
+        this.playAreaAnim(anim, this.areaSpan(plan, ep));
         G.audio?.playSe(G.seAt(fam === 'thrust' ? 'Wind7' : 'Slash11', 100, fam === 'thrust' ? 135 : 70), ep);
         if (fam === 'execute') {
           this.spawnGlow(mid, { color: 0xff3020, size: 3.2, life: 0.3, grow: 1.4 });
@@ -5129,14 +5129,8 @@ export class CombatSystem {
       case 'nova': {
         this.dropMarker(e);
         e.bodyT = { kind: 'roar', t0: G.time };
-        // its animation all over where it lands
-        const ring = plan.shape === 'ring', mid = ring ? (plan.r0 + plan.r) / 2 : plan.r * 0.6;
-        const n = THREE.MathUtils.clamp(Math.round(2 * Math.PI * mid / 3.4), 4, 9), copies = [];
-        for (let i = 0; i < n; i++) {
-          const a = i / n * Math.PI * 2, x = plan.ox + Math.cos(a) * mid, z = plan.oz + Math.sin(a) * mid;
-          copies.push({ pos: new THREE.Vector3(x, G.floorAt(x / T - 0.5, z / T - 0.5) + 1, z), size: 3.2 });
-        }
-        if (anim) G.screen.playAnimationOn(ring ? copies[0].pos : new THREE.Vector3(plan.ox, plan.oy + 1, plan.oz), anim, { world: true, size: ring ? 3.2 : Math.min(2 * plan.r, 6), copies: ring ? copies.slice(1) : copies });
+        // its animation over all of where it lands
+        this.playAreaAnim(anim, this.areaSpan(plan, ep));
         this.spawnRing(new THREE.Vector3(plan.ox, plan.oy, plan.oz), plan.r, this.skillColor(s));
         G.audio?.playSe(G.seAt('Explosion3', 90, 80), ep);
         if (this.playerInPlan(e, plan)) this.strikeHits(e, s, plan.hits, false, false, this.parryable(plan));
@@ -5150,7 +5144,7 @@ export class CombatSystem {
         if (p0) {
           const c = new THREE.Vector3(p0.x, p0.y + 1, p0.z);
           const arm = (p, k, y) => new THREE.Vector3(p.x + Math.cos(p.aim) * p.len * k, y, p.z + Math.sin(p.aim) * p.len * k);
-          if (anim) G.screen.playAnimationOn(c, anim, { world: true, size: 2.6, copies: plan.parts.map(p => ({ pos: arm(p, 0.6, p0.y + 1), size: 2.4 })) });
+          this.playAreaAnim(anim, this.areaSpan(plan, ep));
           for (const p of plan.parts) this.spawnGlow(arm(p, 0.5, p0.y + 0.3), { color: this.skillColor(s), size: 2.2, life: 0.3, grow: 1.3 });
           G.audio?.playSe(G.seAt('Saint5', 90, 90), c);
         }
@@ -5163,7 +5157,7 @@ export class CombatSystem {
         this.dropMarker(e);
         e.bodyT = { kind: 'stomp', t0: G.time };
         this.spawnBand(e, plan);
-        if (anim) G.screen.playAnimationOn(along(2, ep.y + 1), anim, { world: true, size: 3 });
+        this.playAreaAnim(anim, this.areaSpan(plan, ep));
         G.audio?.playSe(G.seAt('Water1', 100, 70), ep);
         this.endMove(e, 0.8);
         return;
@@ -5182,10 +5176,7 @@ export class CombatSystem {
         const head = G.player.headWorld(new THREE.Vector3());
         const near = plan.parts.map(p => ({ p, d: Math.hypot(p.x + p.len / 2 - head.x, p.z - head.z) })).sort((a, b) => a.d - b.d);
         for (const { p } of near) this.spawnGlow(new THREE.Vector3(p.x + p.len / 2, p.y + 0.4, p.z), { color: 0xb050ff, size: p.len * 1.15, life: 0.45, grow: 1.15 });
-        if (anim && near.length) {
-          const at = q => new THREE.Vector3(q.p.x + q.p.len / 2, q.p.y + 1.2, q.p.z);
-          G.screen.playAnimationOn(at(near[0]), anim, { world: true, size: 3, copies: near.slice(1, 6).map(q => ({ pos: at(q), size: 3 })) });
-        }
+        this.playAreaAnim(anim, this.areaSpan(plan, ep));
         G.audio?.playSe(G.seAt('Darkness5', 100, 70), ep);
         G.audio?.playSe(G.seAt('Earth4', 90, 60), ep);
         G.screen.hitShake(new THREE.Vector3(head.x - ep.x, 0, head.z - ep.z), 0.4);
@@ -5202,14 +5193,11 @@ export class CombatSystem {
         e.state = 'act'; e.act = { kind: 'sweep', t: 0, dur: 0.42, a0: plan.aim - plan.half * plan.way, allyHit: new Set() };
         return;
       case 'breath':
-        if (anim) {
-          const y = plan.oy + Math.min(1.2, e.h * 0.5);
-          const size = k => THREE.MathUtils.clamp(2.2 * plan.r * k * Math.sin(plan.half), 1.6, 4);
-          G.screen.playAnimationOn(along(plan.r * 0.3, y), anim, { world: true, size: size(0.3), copies: [{ pos: along(plan.r * 0.62, y), size: size(0.62) }] });
-        }
+        this.playAreaAnim(anim, this.areaSpan(plan, ep));
         break;
       case 'spin':
-        if (anim) G.screen.playAnimationOn(new THREE.Vector3(ep.x, ep.y + e.h * 0.5, ep.z), anim, { world: true, size: this.enemySize(e) * 1.3 });
+        // (a whirl round it, wherever it goes)
+        this.playAreaAnim(anim, { x: ep.x, z: ep.z, w: 2 * plan.r });
         break;
     }
     // a breath, a whirl, a rain of blows, a fan of shots: they go on a moment
@@ -5332,7 +5320,7 @@ export class CombatSystem {
         }
         if (a.t >= a.dur) {
           this.hideBlade(e);
-          if (s.animation_id > 0) G.screen.playAnimationOn(new THREE.Vector3(plan.ox + Math.cos(ang) * plan.r * 0.5, plan.oy + 1, plan.oz + Math.sin(ang) * plan.r * 0.5), s.animation_id, { world: true, size: 2.6 });
+          this.playAreaAnim(s.animation_id, this.areaSpan(plan, e.worldPos(new THREE.Vector3())));
           this.endMove(e, 0.7);
         }
         break;
@@ -5446,7 +5434,7 @@ export class CombatSystem {
     const plan = e.plan, s = e.skill;
     if (plan.move === 'rain' || plan.move === 'dice') {
       const at = new THREE.Vector3(p.x, p.y, p.z);
-      if (s.animation_id > 0) G.screen.playAnimationOn(at.clone().setY(p.y + 0.8), s.animation_id, { world: true, size: Math.min(4, p.r * 2) });
+      if (s.animation_id > 0) this.playAreaAnim(s.animation_id, { x: p.x, z: p.z, w: 2 * p.r });
       else G.audio?.playSe(G.seAt('Explosion1', 55, 120), at);
       this.spawnGlow(at.clone().setY(p.y + 0.2), { color: this.skillColor(s), size: p.r * 2.2, life: 0.3, grow: 1.2 });
       const head = G.player.headWorld(new THREE.Vector3());
@@ -5501,7 +5489,7 @@ export class CombatSystem {
     const at = new THREE.Vector3(plan.cx, G.floorAt(tx, ty), plan.cz);
     G.audio?.playSe(G.seAt('Earth4', 100, 75), at);
     G.audio?.playSe(G.seAt('Explosion1', 60, 70), at);
-    if (s.animation_id > 0) G.screen.playAnimationOn(at.clone().setY(at.y + 0.8), s.animation_id, { world: true, size: Math.min(5, plan.r * 2) });
+    this.playAreaAnim(s.animation_id, { x: plan.cx, z: plan.cz, w: 2 * plan.r });
     this.spawnGlow(at.clone().setY(at.y + 0.15), { color: 0xff6a3a, size: plan.r * 2.3, life: 0.4, grow: 1.25 });
     this.spawnSparks(at.clone().setY(at.y + 0.1), new THREE.Vector3(1, 0, 0), 14, 0xc8b090);
     const head = G.player.headWorld(new THREE.Vector3());
@@ -5698,7 +5686,7 @@ export class CombatSystem {
         if (h.t < PURSUIT.fuse) return true;
         // it bursts
         const at = new THREE.Vector3(h.x, h.y + 0.8, h.z);
-        if (h.s.animation_id > 0) G.screen.playAnimationOn(at, h.s.animation_id, { world: true, size: PURSUIT.r * 2 });
+        if (h.s.animation_id > 0) this.playAreaAnim(h.s.animation_id, { x: h.x, z: h.z, w: PURSUIT.r * 2 });
         else G.audio?.playSe(G.seAt('Explosion1', 60, 120), at);
         this.spawnGlow(at.clone().setY(h.y + 0.25), { color: this.skillColor(h.s), size: PURSUIT.r * 2.2, life: 0.3, grow: 1.2 });
         if (h.cap.left > 0 && !this.playerDead && Math.hypot(head.x - h.x, head.z - h.z) <= PURSUIT.r + 0.38) { h.cap.left--; this.enemyStrikePlayer(h.e, h.s, { blockable: false, parry: true }); }
@@ -6076,7 +6064,7 @@ export class CombatSystem {
     const head = this.targetHead(e);
     const hits = plan?.hits || 1;
     const certain = !!plan?.certain;
-    if (skill.animation_id > 0) this.playEnemyActionAnim(e, skill, plan, ep, head);
+    if (skill.animation_id > 0) this.playEnemyActionAnim(e, skill, plan, ep);
     switch (e.style) {
       case 'melee': case 'area': case 'projectile': case 'debuff': {
         if (plan && !plan.shot) {
@@ -6127,34 +6115,50 @@ export class CombatSystem {
     }
   }
 
-  // An enemy action's animation plays where it lands, as big as its area (the marker on the floor): a swing
-  // over the cone in front of the enemy, a blast all over its circle (copies around a wide one; not in the
-  // middle when the player stands there), a spell cast on itself on the enemy. A shot's plays where the shot
-  // ends (updateProjectiles)
-  playEnemyActionAnim(e, skill, plan, ep, head) {
+  // An enemy action's animation plays where it lands, once, as big as its area (the marker on the floor - playAreaAnim):
+  // over the cone in front of the enemy, over its circle; a spell cast on itself on the enemy. A shot's plays where
+  // the shot ends (updateProjectiles)
+  playEnemyActionAnim(e, skill, plan, ep) {
     const id = skill.animation_id;
     if (plan?.shot) return;
     if (!plan || !['melee', 'area', 'projectile', 'debuff'].includes(e.style)) {
       G.screen.playAnimationOn(new THREE.Vector3(ep.x, ep.y + e.h * 0.5, ep.z), id, { world: true, size: this.enemySize(e) * 1.2 });
       return;
     }
-    const floorY = (x, z) => G.floorAt(x / T - 0.5, z / T - 0.5);
-    if (plan.shape === 'sector') {
-      const d = plan.r * 0.5, a = plan.aim ?? e.aim;
-      const c = new THREE.Vector3(ep.x + Math.cos(a) * d, ep.y + e.h * 0.5, ep.z + Math.sin(a) * d);
-      G.screen.playAnimationOn(c, id, { world: true, size: THREE.MathUtils.clamp(2.4 * d * Math.sin(Math.min(plan.half, 1.2)), 1.6, 4) });
-      return;
+    this.playAreaAnim(id, this.areaSpan(plan, ep, plan.aim ?? e.aim));
+  }
+  // An attack's animation over its area: one drawing, as wide as the area, played on a body standing in its middle and
+  // grown from there - one standing in it is in it (screen.js area)
+  playAreaAnim(id, span, opts = {}) {
+    if (!(id > 0) || !span) return;
+    const ground = G.floorAt(span.x / T - 0.5, span.z / T - 0.5);
+    G.screen.playAnimationOn(new THREE.Vector3(span.x, ground + 1, span.z), id, { world: true, area: true, size: Math.max(1.2, span.w), ground, ...opts });
+  }
+  // an attack area's middle (x, z) and how wide it is (w): a circle's or a ring's width, a line's length (or its width,
+  // the wider), a cone's bounds along it and across it, the bounds of its parts
+  areaSpan(plan, ep, aim = plan.aim ?? 0) {
+    const ox = plan.ox ?? ep.x, oz = plan.oz ?? ep.z;
+    switch (plan.shape) {
+      case 'circle': case 'ring': return plan.ground ? { x: plan.cx, z: plan.cz, w: 2 * plan.r } : { x: ox, z: oz, w: 2 * plan.r };
+      case 'line': return { x: ox + Math.cos(aim) * plan.len / 2, z: oz + Math.sin(aim) * plan.len / 2, w: Math.max(plan.len, plan.width || 0) };
+      case 'sector': {
+        const back = Math.min(0, plan.r * Math.cos(plan.half)), side = plan.r * Math.sin(Math.min(plan.half, Math.PI / 2)), mid = (back + plan.r) / 2;
+        return { x: ox + Math.cos(aim) * mid, z: oz + Math.sin(aim) * mid, w: Math.max(plan.r - back, 2 * side) };
+      }
+      case 'multi': return this.partsSpan(plan.parts || []);
     }
-    const cx = plan.ground ? plan.cx : ep.x, cz = plan.ground ? plan.cz : ep.z, r = plan.r;
-    const n = THREE.MathUtils.clamp(Math.round(2 * Math.PI * r * 0.7 / 3.2), 3, 7);
-    const copies = [];
-    for (let i = 0; i < n; i++) {
-      const a = (i / n) * Math.PI * 2 + (e.aim || 0);
-      const x = cx + Math.cos(a) * r * 0.7, z = cz + Math.sin(a) * r * 0.7;
-      copies.push({ pos: new THREE.Vector3(x, floorY(x, z) + 1.0, z), size: Math.min(3.2, r * 0.85) });
+    return null;
+  }
+  partsSpan(parts) {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    const add = (x, z, m) => { x0 = Math.min(x0, x - m); x1 = Math.max(x1, x + m); z0 = Math.min(z0, z - m); z1 = Math.max(z1, z + m); };
+    for (const p of parts) {
+      if (p.shape === 'circle') { add(p.x, p.z, p.r); continue; }
+      // (a band: its four corners)
+      const ca = Math.cos(p.aim), sa = Math.sin(p.aim), m = (p.width || 0) / 2;
+      for (const k of [0, p.len]) for (const sd of [-m, m]) add(p.x + ca * k - sa * sd, p.z + sa * k + ca * sd, 0);
     }
-    const inMiddle = Math.hypot(head.x - cx, head.z - cz) < 1.4;
-    G.screen.playAnimationOn(new THREE.Vector3(cx, floorY(cx, cz) + 1.0, cz), id, { world: true, size: Math.min(2 * r, 6), copies, centerVisual: !inMiddle });
+    return x1 > x0 ? { x: (x0 + x1) / 2, z: (z0 + z1) / 2, w: Math.max(x1 - x0, z1 - z0) } : null;
   }
 
   updateProjectiles(dt, paused) {

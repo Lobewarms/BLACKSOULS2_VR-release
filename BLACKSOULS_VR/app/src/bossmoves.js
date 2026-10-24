@@ -318,7 +318,7 @@ export const bossMoves = {
     const at = a.to;
     this.root.remove(a.orb);
     a.orb.traverse(o => { o.geometry?.dispose(); o.material?.dispose(); });
-    if (s.animation_id > 0) G.screen.playAnimationOn(at.clone().setY(at.y + 1), s.animation_id, { world: true, size: Math.min(7, plan.r * 1.6) });
+    this.playAreaAnim(s.animation_id, { x: at.x, z: at.z, w: 2 * plan.r });
     this.spawnGlow(at.clone().setY(at.y + 0.6), { color: this.skillColor(s), size: plan.r * 2.4, life: 0.45, grow: 1.25 });
     this.spawnRing(at, plan.r, this.skillColor(s));
     G.audio?.playSe(G.seAt('Explosion3', 100, 70), at);
@@ -434,9 +434,7 @@ export const bossMoves = {
     const lance = plan.shape === 'line';
     const far = lance ? new THREE.Vector3(plan.ox + Math.cos(plan.aim) * plan.len, y, plan.oz + Math.sin(plan.aim) * plan.len) : null;
     if (lance) this.spawnTracer(new THREE.Vector3(plan.ox, y, plan.oz), far, this.lindaKind(s) ? 0xff2040 : 0xfff0c0);
-    const mid = lance ? new THREE.Vector3(plan.ox + Math.cos(plan.aim) * plan.len * 0.5, y, plan.oz + Math.sin(plan.aim) * plan.len * 0.5)
-      : new THREE.Vector3(ep.x + Math.cos(plan.aim) * 2, y, ep.z + Math.sin(plan.aim) * 2);
-    if (s.animation_id > 0) G.screen.playAnimationOn(mid, s.animation_id, { world: true, size: lance ? 2 : 3.2 });
+    this.playAreaAnim(s.animation_id, this.areaSpan(plan, ep));
     G.audio?.playSe(G.seAt(lance ? 'Wind7' : 'Slash11', 100, lance ? 140 : 80), ep);
     e.bodyT = { kind: 'lunge', t0: G.time };
     if (this.playerInPlan(e, plan)) {
@@ -466,11 +464,11 @@ export const bossMoves = {
       const f = (k + 0.5) / n, x = p.x + Math.cos(p.aim) * p.len * f, z = p.z + Math.sin(p.aim) * p.len * f;
       this.spawnGlow(new THREE.Vector3(x, p.y + 0.35, z), { color, size: Math.max(1.4, p.width * 1.2), life: 0.3, grow: 1.2 });
     }
-    // (an animation where it lands - on the first of the parts that land together)
+    // (an animation where it lands, once over all the parts that land together)
     if (s.animation_id > 0 && !plan.animAt?.[p.at ?? 0]) {
       (plan.animAt ||= {})[p.at ?? 0] = true;
       const x = p.x + Math.cos(p.aim) * p.len * 0.5, z = p.z + Math.sin(p.aim) * p.len * 0.5;
-      G.screen.playAnimationOn(new THREE.Vector3(x, p.y + 0.8, z), s.animation_id, { world: true, size: 3 });
+      this.playAreaAnim(s.animation_id, this.partsSpan(plan.parts.filter(q => (q.at ?? 0) === (p.at ?? 0))));
       G.audio?.playSe(G.seAt(plan.move === 'lattice' ? 'Thunder1' : 'Slash12', 80, 100), new THREE.Vector3(x, p.y + 1, z));
     }
     const head = G.player.headWorld(new THREE.Vector3());

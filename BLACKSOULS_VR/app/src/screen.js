@@ -53,6 +53,9 @@ function animRadius(anim) {
   anim._radius = (r || CELL * 0.33) * ANIM_PX;
   return anim._radius;
 }
+// m: a body standing in an attack's area, that its animation plays on (its head, middle or feet - the animation's own
+// setting), as tall as the map's characters
+const AREA_BODY = 1.6;
 
 class AnimVisual {
   constructor(anim, pos, { scale = 1, dim = 1 } = {}) {
@@ -308,14 +311,16 @@ export class ScreenFx {
   // opts.attack: a plain weapon attack (setting 스킬 애니메이션 = 스킬만 skips its sprites);
   // opts.sePos: where the sounds come from, if not the target (a gun's muzzle);
   // opts.world: a place in the world (an attack's area), not a battler's picture to stand in front of;
-  // opts.size: how wide the drawing should be, in metres (an attack's reach); opts.copies: more places
-  // ([{ pos, size }]) the drawing plays at too, silently (an area attack all over its circle);
-  // opts.visual === false: only its sounds and flashes; opts.centerVisual === false: drawn at the copies only
+  // opts.size: how wide the drawing should be, in metres (an attack's reach);
+  // opts.area: an attack's whole area, drawn once as wide as it (opts.size) where it is, from a body standing in its
+  // middle (opts.ground: the floor there; AREA_BODY) - one standing in it is in it, the view full of it; never smaller;
+  // opts.visual === false: only its sounds and flashes
   playAnimationOn(target, animId, opts = {}) {
     const anim = $data.animations?.[animId];
     if (!anim || !target) return;
+    const fit = opts.size ? THREE.MathUtils.clamp(opts.size / (2 * animRadius(anim)), 0.25, 40) : 1;
     const { pos, onPlayer, near } = this.animAnchor(target, anim, opts);
-    const sePos = opts.sePos || pos;
+    const sePos = opts.sePos || (opts.area && target.isVector3 ? target : pos);      // (an area's sounds from its middle)
     let frame = 0;
     const timings = anim.timings || [];
     const rate = opts.rate || 4;
@@ -323,19 +328,9 @@ export class ScreenFx {
     const total = Math.max(1, Math.round(frames * rate));
     const mode = G.settings.skillAnims || 'all';
     const show = G.three && opts.visual !== false && (mode === 'all' || (mode === 'skills' && !opts.attack));
-    const sizeScale = size => THREE.MathUtils.clamp(size / (2 * animRadius(anim)), 0.25, 5);
     const vis = [];
-    if (show) {
-      // close to the face a drawing is made smaller and dimmer, so it never fills the view
-      const scale = onPlayer ? 0.45 : (opts.size ? sizeScale(opts.size) : 1) * near;
-      if (opts.centerVisual !== false) vis.push(new AnimVisual(anim, pos, { scale, dim: onPlayer ? 0.6 : 1 }));
-      const head = G.player?.headWorld(new THREE.Vector3());
-      for (const c of opts.copies || []) {
-        const at = c.pos.clone();
-        const k = head ? this.keepAway(at, head) : 1;
-        vis.push(new AnimVisual(anim, at, { scale: sizeScale(c.size || opts.size || 2) * k }));
-      }
-    }
+    // close to the face a drawing is made smaller and dimmer, so it never fills the view
+    if (show) vis.push(new AnimVisual(anim, pos, { scale: onPlayer ? 0.45 : fit * near, dim: onPlayer ? 0.6 : 1 }));
     const fx = this;
     const a = {
       done: false, vis: vis[0] || null, visList: vis,
@@ -390,6 +385,12 @@ export class ScreenFx {
       const f = G.player?.forwardVec?.() || new THREE.Vector3(0, 0, -1);
       pos.copy(head).addScaledVector(f, 1.3);
       pos.y -= 0.25;
+    } else if (opts.area) {
+      // an attack's area: it grows from the body's head, middle or feet - from there, as low as the original puts it,
+      // not lifted with its size; at its full size where it is (only off the eyes themselves: a flat picture right at
+      // them is not seen at all)
+      if (opts.ground !== undefined) pos.y = opts.ground + (anim.position === 0 ? AREA_BODY : anim.position === 2 ? 0 : AREA_BODY / 2);
+      this.keepAway(pos, head);
     } else {
       // a little toward the viewer, in front of the target's own picture
       const to = head.clone().sub(pos), len = to.length();
