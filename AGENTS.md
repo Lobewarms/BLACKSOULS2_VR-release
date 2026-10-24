@@ -3125,6 +3125,8 @@ Analog triggers/grips use 0.6/0.35 press/release hysteresis. World squeeze event
 retain their between-frame buffering; poll-only analog grips share thresholds
 without replaying held grips through menus, source replacement or XR transitions.
 Rejected Dodge presses cannot be buffered through native seals or Confusion.
+PvP stagger/protection/fight deadlines and worn-poise age pause with R/headset
+inspection just like skill recovery; resumed gameplay advances them normally.
 PC shield presentation fits narrow camera views but retains the previous actual
 guard interception point; VR continues using the physical shield position.
 
@@ -3145,7 +3147,7 @@ repository-derived updater, original-game read-only behavior and Steam bridge
 remain in the wrapper. CI shares the same compiled engine artifact across both
 package jobs. Source-engine tests serve only synthetic temporary archives/files.
 
-Local gates: 1,449 JavaScript tests, ESLint, production Vite build (all four voice
+Local gates: 1,450 JavaScript tests, ESLint, production Vite build (all four voice
 icons bundled), Ruff, 14 Python protocol cases, 13 packaging cases, wheel build
 and 265 Windows native checks passed. Native checks include 13 source-engine
 loopback/API/archive/Unicode/isolation cases and 102 update/actual EngineHost

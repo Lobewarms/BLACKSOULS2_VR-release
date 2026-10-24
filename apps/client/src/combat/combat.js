@@ -808,6 +808,10 @@ export class CombatSystem {
     for (const id of Object.keys(this.skillCD || {})) if (this.skillCD[id] > previous) this.skillCD[id] += elapsed;
     if (this.breakCooldown > previous) this.breakCooldown += elapsed;
     if (this.breakArm?.until > previous) this.breakArm.until += elapsed;
+    for (const key of ['staggerUntil', 'staggerGuardUntil', 'pvpFightUntil', 'swingingUntil']) {
+      if (this[key] > previous) this[key] += elapsed;
+    }
+    if (this.poiseWear > 0 && Number.isFinite(this.poiseAt)) this.poiseAt += elapsed;
     this.allies?.pauseSkillClocks?.(previous, elapsed);
     const enemies = new Set([...(this.enemies || []), ...[...(this.symbols?.values() || [])].map(symbol => symbol.enemy).filter(Boolean)]);
     for (const enemy of enemies) {

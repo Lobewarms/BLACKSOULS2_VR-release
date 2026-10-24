@@ -48,6 +48,29 @@ test('actual equipped weapon weight changes PC swing duration and stamina once w
   }
 });
 
+test('R and headset pauses preserve PvP stagger, protection and poise recovery until gameplay resumes', t => {
+  const { combat } = environment(t);
+  combat.stagger(null); combat.pvpFightUntil = G.time + 8;
+  combat.poiseWear = 0.1; combat.poiseAt = G.time;
+  combat.syncBonusClock(false);
+  for (const mode of ['menu', 'headset']) {
+    const before = { stagger: combat.staggerUntil - G.time, protection: combat.staggerGuardUntil - G.time,
+      fighting: combat.pvpFightUntil - G.time, poiseAge: G.time - combat.poiseAt };
+    G.ui.menuOpen = mode === 'menu'; G.xrAway = mode === 'headset';
+    G.time += 10; combat.syncBonusClock(combat.bonusPaused());
+    assert.ok(combat.staggered()); assert.ok(combat.fighting());
+    assert.ok(Math.abs(combat.staggerUntil - G.time - before.stagger) < 1e-9);
+    assert.ok(Math.abs(combat.staggerGuardUntil - G.time - before.protection) < 1e-9);
+    assert.ok(Math.abs(combat.pvpFightUntil - G.time - before.fighting) < 1e-9);
+    assert.ok(Math.abs(G.time - combat.poiseAt - before.poiseAge) < 1e-9);
+  }
+  G.ui.menuOpen = false; G.xrAway = false;
+  G.time += 0.61; combat.syncBonusClock(false); assert.equal(combat.staggered(), false);
+  combat.staggerGuardUntil = -99; combat.poiseHit(0.01, null);
+  assert.ok(Math.abs(combat.poiseWear - 0.11) < 1e-9, 'paused time cannot regenerate worn poise');
+  G.time += 8; combat.syncBonusClock(false); assert.equal(combat.fighting(), false);
+});
+
 test('desktop cuts chain from their prior pose, reset after idle and distinguish the charged thrust', () => {
   const motion = new DeskSwing(), weapon = new THREE.Group(), body = new THREE.Quaternion();
   motion.reset(weapon, true); assert.ok(weapon.position.equals(DESK_REST.p));
