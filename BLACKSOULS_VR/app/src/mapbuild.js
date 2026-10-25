@@ -36,6 +36,37 @@ export function openingTiles(grid, events, pageOf = null) {
   }
   return out;
 }
+// A thing the map draws only in part, the rest of it an event's tile picture right under a piece of the map's upper layer - the
+// event standing there as characters do and never moving: 동화 창고's bookshelves (their tops map tiles, their bottoms events that
+// change as the books are put back), 퀸・랜드 １'s notice board on its legs. The 3D view builds that tile as the map's own piece there
+// when their drawings meet (mapmesh.js eventPieces: the thing stands whole) and leaves the event's own picture out (sprites.js);
+// built again as the event's page changes (gamemap.js pieceTile). The tile such an event gives, or 0
+export function pieceTile(grid, x, y, page, moved = false) {
+  const t = page?.graphic?.tile_id;
+  if (!(t > 0) || t >= 1024 || page.priority_type !== 1 || page.through || page.move_type !== 0 || moved) return 0;
+  return grid.valid(x, y - 1) && !grid.tile(x, y, 2) && grid.tile(x, y - 1, 2) > 0 ? t : 0;
+}
+// the events a scene moves about (another event's Set Move Route with steps or jumps for them - gamemap.js sceneActors)
+export function movedEvents(events) {
+  const out = new Set();
+  for (const ev of events || []) for (const p of ev.pages || []) for (const c of p.list || []) {
+    if (c.code !== 205) continue;
+    const id = c.parameters[0] === 0 ? ev.id : c.parameters[0];
+    if (id > 0 && (c.parameters[1]?.list || []).some(m => m.code >= 1 && m.code <= 14)) out.add(id);
+  }
+  return out;
+}
+// cell -> { id, tile } for every such event (pageOf: the page each one is on; without it, as openingTiles)
+export function eventPieces(grid, events, pageOf = null) {
+  const out = new Map(), moved = movedEvents(events);
+  const bare = p => { const c = p.condition || {}; return !c.switch1_valid && !c.switch2_valid && !c.variable_valid && !c.self_switch_valid && !c.item_valid && !c.actor_valid; };
+  for (const ev of events || []) {
+    const p = pageOf ? pageOf(ev) : [...(ev.pages || [])].reverse().find(bare);
+    const t = grid.valid(ev.x, ev.y) ? pieceTile(grid, ev.x, ev.y, p, moved.has(ev.id)) : 0;
+    if (t) out.set(ev.x + ev.y * grid.w, { id: ev.id, tile: t });
+  }
+  return out;
+}
 export function withEventTiles(grid, events, pageOf = null) {
   const lay = openingTiles(grid, events, pageOf);
   if (!lay.size) return grid;
@@ -97,6 +128,7 @@ export async function buildMapView({ map, grid, mapId, events, pageOf, seeds = [
   await Promise.all([...ana.doorPics].map(async ([i, d]) => doorH.set(i, await doorPictureHeight(d.name, d.index).catch(() => 0))));
   const mesh = await buildMapMesh(meshGrid, {
     pits: ana.pits, gaps: ana.gaps, isDoorCell: (x, y) => ana.doors.has(x + y * grid.w), falls: ana.falls, lifts: ana.lifts, reach: walk?.reach,
+    eventPieces: eventPieces(grid, events, pageOf),
     doorHeight: (x, y) => doorH.get(x + y * grid.w) || 0, ...meshHintOptions(mapId), ...extra,
   });
   return { mesh, ana, walk };

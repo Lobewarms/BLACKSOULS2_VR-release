@@ -181,7 +181,7 @@ export class ScreenFx {
   }
 
   // ---- RPG Maker screen commands ----
-  fadeOut(frames) { this.fadeTarget = 0; this.fadeDur = frames; }
+  fadeOut(frames) { this.fadeTarget = 0; this.fadeDur = frames; this.fadeOuts = (this.fadeOuts || 0) + 1; }   // (fadeOuts: player.js scriptedFall)
   fadeIn(frames) { this.fadeTarget = 255; this.fadeDur = frames; }
   setBrightness(v) { this.brightness = v; this.fadeTarget = v; this.fadeDur = 0; }
   startTone(tone, frames) {

@@ -27,10 +27,15 @@ function fallRoute(route, throughBefore = false) {
     if (c >= 1 && c <= 4) { if (c === cur) run++; else { cur = c; run = 1; } if (run > best) { best = run; dir = c; } }
     else if (![29, 30, 31, 32, 33, 34, 35, 36, 37].includes(c)) { cur = 0; run = 0; }
   }
-  return best >= 5 ? { dir, n: best } : null;   // dir: route codes 1 down, 2 left, 3 right, 4 up
+  // dir: route codes 1 down, 2 left, 3 right, 4 up. slide: at the player's own pace (no speed set to 5 or more) - carried
+  // down a slope in sight (피눈물 웅덩이's blood stream down its cliff), not a plunge
+  return best >= 5 ? { dir, n: best, slide: !list.some(c => c.code === 29 && c.parameters[0] >= 5) } : null;
 }
 function fallRouteDir(route, throughBefore = false) { return fallRoute(route, throughBefore)?.dir || 0; }
 export function isFallRoute(route, throughBefore = false) { return fallRouteDir(route, throughBefore) !== 0; }
+// the run a route carries the player - { dir, n, slide } - or null (gamemap.js PlayerChar.forceMoveRoute: only one down the
+// screen is a fall; one up it or to a side carries the player along - player.js startCarry)
+export function fallRouteOf(route, throughBefore = false) { return fallRoute(route, throughBefore); }
 // a lift's ride (BLACKSOULS II's リフト - 옥스・워드 대학교 5 and its kind): through on (in this or an earlier route) and 8 or
 // more steps straight up or down the screen, not fast enough in itself to be a fall - {dir: 1 down / 4 up, n}, or null
 // (lift.js; the platform carried along is the event given the same steps - gamemap.js PlayerChar.forceMoveRoute)
@@ -153,9 +158,14 @@ export function analyzeMap(map, grid, pageOf = ev => ev.pages[0]) {
     if (/door|ドア|扉|門|gate/i.test(g.character_name || '')) doorPics.set(idx(ev.x, ev.y), { name: g.character_name, index: g.character_index });
     const invisible = !g.character_name && !g.tile_id;
     if (invisible && (page.trigger === 1 || page.trigger === 2) && isFallList(page.list)) {
-      pits.add(idx(ev.x, ev.y));
       const f = fallOfList(page.list);
-      if (f) falls.push({ x: ev.x, y: ev.y, dir: f.dir, n: f.n });
+      // (a slide down the screen, entered from the floor above it, is no hole: the 3D builder lays its way down as a chute -
+      // mapmesh.js. One with a wall above - 토끼 굴 2-1's five - stays as it was)
+      const slide = !!f?.slide && f.dir === 1 && grid.anyPassable(ev.x, ev.y - 1);
+      // (and only a fall down the screen drops into a hole: carried up it - 하노버 폐역 2's night demons flying off with the
+      // player, 혼돈 던전 1's wind blowing the player back up the corridor - is no fall, its cell a floor as drawn)
+      if (!slide && (!f || f.dir === 1)) pits.add(idx(ev.x, ev.y));
+      if (f) falls.push({ x: ev.x, y: ev.y, dir: f.dir, n: f.n, slide });
     }
     if (page.trigger > 2) continue;
     const t = transferOf(page.list);

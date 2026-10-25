@@ -46,7 +46,9 @@
 //  abyss:    a drop the map draws black beside a walkway [x0, y0, x1, y1, depth in tiles]: left open instead of
 //            walled in like the black ceiling - the floor's edge goes down into the dark with a small curb along
 //            it, and a wall face drawn there right under a floor hangs below that floor's edge (mapmesh.js). With 'all' after
-//            the depth: everything there nobody can reach is that drop (the black drawn with wall-top tiles, its decorations)
+//            the depth: everything there nobody can reach is that drop (the black drawn with wall-top tiles, its decorations).
+//            With 'hang': a chasm drawn from the side - every cell there nobody walks on is the drop, and what is drawn under a
+//            walkable top (a pillar's body, an island's rock) hangs below it as deep as it is drawn, on all its sides, no curb
 //  solids:   cells kept in the block round them [x0, y0, x1, y1] - walkable in the map, or drawn with a water tile, but part of a
 //            facade (its columns, a garland down it): otherwise slits in it
 //  wallFloors: cells drawn with wall tiles that are a floor [x0, y0, x1, y1] (a staircase drawn with building tiles): built as
@@ -66,6 +68,9 @@
 //            nobody walks through is a cliff's face, standing from the ground at its foot up to it (mapmesh.js)
 const LIBRARY_GALLERY = [[11, 11, 32, 14, 2, 2], [13, 15, 15, 17, 2, 0], [28, 15, 30, 17, 2, 0]];
 const LIBRARY_FRONT = [[11, 15, 32, 17, 2]];      // (the gallery's front: no higher than the gallery)
+// (its back wall over the gallery, rows 6-11: one block as tall as its front - its back rows stood two tiles lower, so what is
+// drawn on their part of the wall, the ten candles over the white door, sat on that lower top behind the front, hidden)
+const LIBRARY_BACK = [[11, 6, 32, 10, 7]];
 export const MAP_HINTS = {
   1: { sideView: true },     // 추락의 방: ledges and stairs up a brick tower, falls down its shaft
   // 옥스・워드 대학교 １: the gallery along the library (rows 12-13), the walk round the skylit roof and the chapel off it a floor
@@ -162,12 +167,17 @@ export const MAP_HINTS = {
   // 홍성 프릿셀 7 (개방형 홀), behind the croquet door: the bridge the axes swing across, over the dark the hall's
   // foundation drops into - its sides small curbs, not walls, so the axes are seen coming
   142: { abyss: [[3, 8, 10, 50, 6], [14, 8, 21, 50, 6]] },
+  // H루트 탈출２: a chasm drawn from the side - pillars under its walkway (row 8), jumped from top to top, islands of rock over
+  // and under it, all in the background picture (精神世界２: the sky round the map). The clear tiles round them and the gaps
+  // between the tops are the drop (they stood as walls nine metres tall, the gaps too); each pillar's body, drawn under its
+  // top, hangs below it as deep as it is drawn (11 rows: 16.5 m), each island's rock likewise (a row)
+  389: { openSky: true, abyss: [[0, 0, 59, 19, 12, 'hang']] },
   // 도서관의 꿈 and the libraries built on it (옥스・워드 대학교 ２ BOSS, 하얀 성시 ７－１１ BOSS and its １): the back of the
   // hall is a gallery two tiles up (its front the bookshelves of rows 15-16, its railing row 14), reached by the
   // stairs at x13-15 and x28-30 - all of it lay flat, the stairs drawn on the floor, the white door up there
-  101: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, massBackdrop: true },
-  154: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, massBackdrop: true },
-  372: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, massBackdrop: true },
+  101: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, tops: LIBRARY_BACK, massBackdrop: true },
+  154: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, tops: LIBRARY_BACK, massBackdrop: true },
+  372: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, tops: LIBRARY_BACK, massBackdrop: true },
   373: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT },
   // 하얀 성시 ７－１１ BOSS ２ (그랑・기뇰's theatre): the stage (rows 6-10) stands 0.9 m above the house; its front
   // row, kept off in the original by an invisible tile and drawn as more stage, is the stage's lip - not a wall

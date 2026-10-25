@@ -414,7 +414,10 @@ export class CharacterSprite {
     }
     // (a co-op phantom's copy of the host's world: shown as the host's is - coop.js)
     const net = c.net && G.coop?.phantom && !G.coop.leadsNow ? c.net : null;
-    const hidden = !this.mesh || (net ? net.hidden : c.transparent || (c.isEvent && (!c.page || c.erased)) || G.combat?.hidesEvent?.(c));
+    // (a tile the map's 3D view builds as the rest of a thing it draws - mapbuild.js eventPieces: 동화 창고's bookshelves - is
+    // drawn there, not again here)
+    const hidden = !this.mesh || (net ? net.hidden : c.transparent || (c.isEvent && (!c.page || c.erased)) || G.combat?.hidesEvent?.(c)) ||
+      (c.isEvent && c.tileId > 0 && G.view?.mesh?.eventPieces?.get(c.id) === c.tileId);
     this.hiddenNow = hidden;
     this.group.visible = !hidden;
     if (hidden) return;
@@ -430,7 +433,10 @@ export class CharacterSprite {
     const cx = Math.round(rx), cy = Math.round(ry);
     // (a lift's platform while the player rides it: under the player as they go up its slope together - lift.js)
     const carried = !!G.lift?.carries(c);
-    if (carried) { this.spotX = null; this.spot = null; }
+    // (carrying the player off up over walls - player.js startCarry: 하노버 폐역 2's night demons - up in the air with it, on
+    // no block it passes)
+    const carrying = !carried && !!G.player?.carry?.carriers?.has(c);
+    if (carried || carrying) { this.spotX = null; this.spot = null; }
     else if (cx !== this.spotX || cy !== this.spotY || this.spotMode !== this.mode) {
       this.spotX = cx; this.spotY = cy; this.spotMode = this.mode;
       this.spot = c.isEvent ? this.mapInfo.spotOnSolid?.(cx, cy, this.mode === 'lie', c.priorityType === 2) || null : null;
@@ -449,6 +455,7 @@ export class CharacterSprite {
     } else {
       wx = (rx + 0.5) * T; wz = (ry + 0.5) * T;
       wy = carried ? G.player?.floorY ?? 0 : G.floorAt ? G.floorAt(rx, ry) : 0;
+      if (carrying) wy += G.player.carry.y;
       c.viewPos = null;
       if (spot) {
         // over a picture that turns about spot.about: on it, where its own column is across the picture (that

@@ -4,7 +4,8 @@ import { $data, loadMap } from './data.js';
 import { MapGrid, T } from './mapmesh.js';
 import { GameEvent, GameCharacter, commonEventList } from './character.js';
 import { Interpreter } from './interpreter.js';
-import { isFallRoute, liftRoute, throughRock, SWITCH_PASS, PLAYER_BLOCK_REGIONS, EVENT_PASS_REGIONS } from './mapanalysis.js';
+import { fallRouteOf, liftRoute, throughRock, SWITCH_PASS, PLAYER_BLOCK_REGIONS, EVENT_PASS_REGIONS } from './mapanalysis.js';
+import { pieceTile } from './mapbuild.js';
 
 // The first-person player seen through the RPG Maker character interface
 export class PlayerChar extends GameCharacter {
@@ -47,7 +48,13 @@ export class PlayerChar extends GameCharacter {
   increaseSteps() { G.state.party.steps++; }
   checkEventTriggerTouchFront() {}
   forceMoveRoute(route) {
-    if (isFallRoute(route, this.through)) G.player?.startScriptedFall();
+    // a fall down the screen: down into the dark (player.js scriptedFall) - but a slide the map is built with a chute for
+    // (mapanalysis.js falls: slide - 피눈물 웅덩이's blood stream) is ridden in sight, down the chute, as the original shows
+    // it. Carried up the screen or to a side (하노버 폐역 2's night demons, 혼돈 던전 1's wind): no fall - in sight along the
+    // way, up over the walls it crosses (player.js startCarry)
+    const fall = fallRouteOf(route, this.through);
+    if (fall?.dir === 1 && !this.chuteHere()) G.player?.startScriptedFall();
+    else if (fall && fall.dir !== 1) G.player?.startCarry?.(this, fall);
     // a lift's ride: carried most of the way through the rock no one walks through (not a scene walking the player down an open
     // corridor); the platform - the event near the player just given the same straight steps - under the player when there is
     // one (one with no page yet - 토끼 굴 4's before its switch - is still a ride, and so is the way down from the top) - lift.js
@@ -58,6 +65,10 @@ export class PlayerChar extends GameCharacter {
       G.lift?.ride(this, platform, lift);
     }
     super.forceMoveRoute(route);
+  }
+  // a slide down a chute starting at this cell, or at the one below it (bumped into from above) - mapmesh.js chutes
+  chuteHere() {
+    return !!G.view?.analysis?.falls?.some(f => f.slide && f.dir === 1 && f.x === this.x && (f.y === this.y || f.y === this.y + 1));
   }
   setDirection(d) {
     // forced turns would rotate the user's view: only track the logical direction - not while it is fixed (a move route's
@@ -106,7 +117,12 @@ export class GameMap {
     // with it, or without it - mapbuild.js openingTiles)
     const t = this.openingTile(ev);
     if (t !== (ev.opensWith || 0)) { ev.opensWith = t; G.onMapTilesChanged?.(); }
+    // (the rest of a thing the map draws above it - 동화 창고's bookshelves, their bottoms changing as the books are put back: the
+    // 3D view is built again with its new tile - mapbuild.js eventPieces)
+    const p = this.pieceTile(ev);
+    if (p !== (ev.piece || 0)) { ev.piece = p; G.onMapTilesChanged?.(); }
   }
+  pieceTile(ev) { return ev.page && !ev.erased && this.grid ? pieceTile(this.grid, ev.x, ev.y, ev.page, this.sceneActors?.has(ev.id)) : 0; }
   // the tile an event lays on its page that lets one by its cell where the map's own tiles do not (Game_Map#all_tiles), or 0
   openingTile(ev) {
     const g = this.grid;
@@ -152,7 +168,7 @@ export class GameMap {
     }
     this.oldRegion = -1;
     this.needRefresh = false;
-    for (const ev of this.eventList) ev.opensWith = this.openingTile(ev);
+    for (const ev of this.eventList) { ev.opensWith = this.openingTile(ev); ev.piece = this.pieceTile(ev); }
     this.loading = false;
     return map;
   }

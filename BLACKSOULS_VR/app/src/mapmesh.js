@@ -231,6 +231,44 @@ export async function buildMapMesh(grid, opts = {}) {
   const parWallImg = opts.parallaxWalls && grid.map.parallax_name ? await loadImage('Graphics/Parallaxes', grid.map.parallax_name) : null;
   const drawer = new TileDrawer(images, grid.flags);
   const { w, h } = grid;
+  // whether the drawing of one tile goes on into the one under it (their touching edges both drawn)
+  const scratch = document.createElement('canvas');
+  scratch.width = TS; scratch.height = TS * 2;
+  const sctx = scratch.getContext('2d', { willReadFrequently: true });
+  const connCache = new Map();
+  function connected(upperId, lowerId) {
+    const key = upperId + ':' + lowerId;
+    if (connCache.has(key)) return connCache.get(key);
+    sctx.clearRect(0, 0, TS, TS * 2);
+    drawer.draw(sctx, upperId, 0, 0);
+    drawer.draw(sctx, lowerId, 0, TS);
+    const a = sctx.getImageData(0, TS - 1, TS, 2).data;
+    let both = 0, any = 0;
+    for (let i = 0; i < TS; i++) {
+      const au = a[i * 4 + 3] > 100, al = a[(TS + i) * 4 + 3] > 100;
+      if (au && al) both++;
+      if (au || al) any++;
+    }
+    const res = both >= 6 && both >= any * 0.45;
+    connCache.set(key, res);
+    return res;
+  }
+  // an event's tile picture that is the rest of a thing the map draws above it (opts.eventPieces - mapbuild.js: 동화 창고's
+  // bookshelves, their tops map tiles, their bottoms events; 퀸・랜드 １'s notice board on its legs): built as the map's own
+  // upper-layer piece there - blocking, as the event stands there as characters do - so the thing stands whole, its drawing
+  // joined as the 2D draws it (the event's own picture is left out: sprites.js)
+  const pieceAt = new Map();
+  for (const [i, p] of opts.eventPieces || []) {
+    const x = i % w, y = (i / w) | 0;
+    if (grid.valid(x, y - 1) && grid.tile(x, y - 1, 2) > 0 && connected(grid.tile(x, y - 1, 2), p.tile)) pieceAt.set(i, p);
+  }
+  if (pieceAt.size) {
+    const under = grid;
+    grid = Object.assign(Object.create(under), {
+      tile: (x, y, z) => (z === 2 && under.valid(x, y) && pieceAt.has(x + y * w) ? pieceAt.get(x + y * w).tile : under.tile(x, y, z)),
+      passage: (x, y, bit, extra) => !(under.valid(x, y) && pieceAt.has(x + y * w)) && under.passage(x, y, bit, extra),
+    });
+  }
   const flatTiles = opts.flatPictures ? new Set(opts.flatPictures) : null;   // maphints: pictures kept facing south
   // maphints terraces: a terraced town's stairs drawn as floor tiles (their edge pieces too)
   const sideStairTiles = new Set((opts.terraces?.sideStairs || []).map(n => TILE.A5 + n));
@@ -465,6 +503,20 @@ export async function buildMapMesh(grid, opts = {}) {
       if (end ? open : !open) { liftCell[idx(x, y)] = end ? 2 : 1; wallFloor[idx(x, y)] = 1; }
     }
   }
+  // a slide down the screen at the player's own pace (mapanalysis.js falls: slide - 피눈물 웅덩이's blood stream down its
+  // cliff): the cells it is carried through, from its own down to the floor it comes onto, are a chute - floor sloping from
+  // the floor it is left from (the cell above) down to that one (its heights once the floors' heights are known: below),
+  // never a hole to drop into; the cliff on either side of it stays
+  const chuteCell = new Uint8Array(w * h);
+  const chutes = [];
+  for (const f of opts.falls || []) {
+    if (!f.slide || f.dir !== 1 || !valid(f.x, f.y - 1)) continue;
+    const cells = [];
+    for (let k = 0; k < f.n && valid(f.x, f.y + k) && !(k > 0 && grid.anyPassable(f.x, f.y + k)); k++) cells.push(idx(f.x, f.y + k));
+    if (!cells.length || !valid(f.x, f.y + cells.length)) continue;
+    for (const j of cells) { chuteCell[j] = 1; wallFloor[j] = 1; }
+    chutes.push({ top: idx(f.x, f.y - 1), cells, bottom: idx(f.x, f.y + cells.length) });
+  }
   const raisedTop = new Uint8Array(w * h);
   // the top half of a door drawn two rows tall (maphints.js doorTops): a cell of the wall beside it, drawn as itself
   const doorTop = new Set((opts.doorTops || []).filter(([x, y]) => valid(x, y)).map(([x, y]) => idx(x, y)));
@@ -538,17 +590,47 @@ export async function buildMapMesh(grid, opts = {}) {
   // floor plan and hang below the floor's edge (hangArt: the cell whose drawing they show)
   const abyss = new Uint8Array(w * h), abyssLo = new Float32Array(w * h), hangArt = new Uint8Array(w * h);
   let anyAbyss = false;
+  // ('hang' after the depth: a chasm drawn from the side - H루트 탈출２'s pillars, jumped from top to top: every cell nobody walks on
+  // is the drop - the clear tiles that show only the background, and what is drawn in the gaps - but what the drawing shows under
+  // a walkable top, its foundation seen from the front (a pillar under each top, an island's rock under its top), hangs below
+  // that top as deep as it is drawn, on every side of it: hangTop, the top it hangs from)
+  const hangMode = new Uint8Array(w * h), hangTop = new Int32Array(w * h).fill(-1), gapTop = new Int32Array(w * h).fill(-1);
+  const drawnAt = (x, y) => [0, 1, 2].some(z => { const t = grid.tile(x, y, z); return isVisible(t) && tileAvg(t).cover > 0; });
+  const topOver = (x, y) => {
+    for (let yy = y - 1; yy >= 0; yy--) {
+      if (grid.anyPassable(x, yy)) return yy;
+      if (!drawnAt(x, yy)) return -1;
+    }
+    return -1;
+  };
   // ('all' after the depth: whatever else is there that nobody can reach too - 퀸・랜드's approach: the black round the bridge to
   // the castle, drawn with wall-top tiles, stood as walls along it with the balloons on their tops)
   for (const [x0, y0, x1, y1, depth = 6, all] of opts.abyss || []) {
     for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
       if (!valid(x, y)) continue;
       const i = idx(x, y);
-      if (all === 'all' && offLimits(i) && !pit[i]) { /* taken below */ }
+      if (all === 'hang') {
+        if (grid.anyPassable(x, y)) continue;
+        const top = drawnAt(x, y) ? topOver(x, y) : -1;
+        if (top >= 0) { hangArt[i] = 1; hangTop[i] = idx(x, top); }
+        hangMode[i] = 1;
+        objType[i] = 0;                                  // (what is drawn there hangs with the foundation, never stands up)
+      } else if (all === 'all' && offLimits(i) && !pit[i]) { /* taken below */ }
       else if (solid[i] === SOLID_WALL && isSide[i] && !grid.anyPassable(x, y)) { hangArt[i] = 1; }
       else if (!empty[i]) continue;
       solid[i] = 0; empty[i] = 1; isSide[i] = 0; wallKind[i] = -1; raisedTop[i] = 0;
       abyss[i] = 1; abyssLo[i] = -depth; anyAbyss = true;
+    }
+  }
+  // (what is drawn in a gap between two foundations at the same depth - a rock drawn across a gap, in front of the pillars either
+  // side of it - hangs there with them, on their front)
+  for (let i = 0; i < w * h; i++) {
+    if (!hangMode[i] || hangArt[i]) continue;
+    const x = i % w, y = (i / w) | 0;
+    if (!drawnAt(x, y)) continue;
+    for (const dx of [-1, 1]) {
+      const j = valid(x + dx, y) ? idx(x + dx, y) : -1;
+      if (j >= 0 && hangArt[j] && hangTop[j] >= 0) { gapTop[i] = hangTop[j]; break; }
     }
   }
   // water (lava, swamp) is what shows: ground drawn over a water base (a fence, a hedge, rocks) is not
@@ -1294,7 +1376,7 @@ export async function buildMapMesh(grid, opts = {}) {
   let shaft = null;                   // other maps: cells opened into the drop off a ledge
   let shaftTop = null, shaftRowH = null, shaftDepth = null;
   const fallStats = { edges: 0, drops: 0, shaft: 0, raised: 0, pillars: 0 };
-  for (let i = 0; i < w * h; i++) if (liftCell[i]) { solid[i] = 0; empty[i] = 0; pit[i] = 0; isSide[i] = 0; wallKind[i] = -1; raisedTop[i] = 0; }
+  for (let i = 0; i < w * h; i++) if (liftCell[i] || chuteCell[i]) { solid[i] = 0; empty[i] = 0; pit[i] = 0; isSide[i] = 0; wallKind[i] = -1; raisedTop[i] = 0; }
   if (opts.falls?.some(f => f.dir === 1) || opts.lifts?.length) {
     const tower = !!opts.sideView;
     const walk = i => !solid[i] && !empty[i] && !pit[i] && grid.anyPassable(i % w, (i / w) | 0);
@@ -1363,6 +1445,7 @@ export async function buildMapMesh(grid, opts = {}) {
       const landNode = land >= 0 ? node[land] : -1;
       // (the tower keeps its first-come heights from the ledges' own falls)
       if (from >= 0 && landNode >= 0 && node[from] !== landNode && !(tower && climbed)) { edges.push([node[from], landNode, f.n, climbed]); ends.push(from, land); }
+      if (f.slide) continue;                       // (a slide: its chute, no drop - above)
       // only stepping south off a ledge's edge opens what the fall passes through
       const above = valid(f.x, f.y - 1) ? idx(f.x, f.y - 1) : -1;
       if (above < 0 || !walk(above)) continue;
@@ -1746,7 +1829,16 @@ export async function buildMapMesh(grid, opts = {}) {
     }
     liftEnds.push({ L, hb, ht });
   }
-  for (let i = 0; i < w * h; i++) if (liftCell[i]) { solid[i] = 0; empty[i] = 0; pit[i] = 0; }
+  // the chutes (above): from the north edge of the first cell, level with the floor it is left from, down to the south edge
+  // of the last, level with the floor it comes onto - as steep as the slide is short
+  for (const C of chutes) {
+    const ht = floorE[C.top], hb = floorE[C.bottom], n = C.cells.length;
+    C.cells.forEach((j, k) => {
+      surfNArr[j] = ht + (hb - ht) * k / n; surfSArr[j] = ht + (hb - ht) * (k + 1) / n;
+      floorE[j] = (surfNArr[j] + surfSArr[j]) / 2; slope[j] = Math.abs(ht - hb) > 0.01 ? 1 : 0;
+    });
+  }
+  for (let i = 0; i < w * h; i++) if (liftCell[i] || chuteCell[i]) { solid[i] = 0; empty[i] = 0; pit[i] = 0; }
   // a dais: a small walkable wall top with its top and rim drawn over it (a podium, a stage: a solid
   // picture, not a ladder's rungs) and a row of steps in front stands a little above the ground, the
   // steps rising to it
@@ -1915,27 +2007,6 @@ export async function buildMapMesh(grid, opts = {}) {
   }
 
   // ---- standees (upright B-E objects that are not part of a mass) ---------------------
-  const scratch = document.createElement('canvas');
-  scratch.width = TS; scratch.height = TS * 2;
-  const sctx = scratch.getContext('2d', { willReadFrequently: true });
-  const connCache = new Map();
-  function connected(upperId, lowerId) {
-    const key = upperId + ':' + lowerId;
-    if (connCache.has(key)) return connCache.get(key);
-    sctx.clearRect(0, 0, TS, TS * 2);
-    drawer.draw(sctx, upperId, 0, 0);
-    drawer.draw(sctx, lowerId, 0, TS);
-    const a = sctx.getImageData(0, TS - 1, TS, 2).data;
-    let both = 0, any = 0;
-    for (let i = 0; i < TS; i++) {
-      const au = a[i * 4 + 3] > 100, al = a[(TS + i) * 4 + 3] > 100;
-      if (au && al) both++;
-      if (au || al) any++;
-    }
-    const res = both >= 6 && both >= any * 0.45;
-    connCache.set(key, res);
-    return res;
-  }
   const hscratch = document.createElement('canvas');
   hscratch.width = TS * 2; hscratch.height = TS;
   const hctx = hscratch.getContext('2d', { willReadFrequently: true });
@@ -2474,7 +2545,7 @@ export async function buildMapMesh(grid, opts = {}) {
   // (developer checks: what the cells became, without building any geometry)
   if (opts.analysisOnly) {
     return {
-      isSolid, floorAt,
+      isSolid, floorAt, eventPieces: new Map([...pieceAt.values()].map(p => [p.id, p.tile])),
       isPit: (x, y) => valid(x, y) && pit[idx(x, y)] === 1,
       isStackCell: (x, y) => valid(x, y) && !!stackConsumed[idx(x, y)],
       isRaisedTop: (x, y) => valid(x, y) && !!raisedTop[idx(x, y)],
@@ -2880,6 +2951,38 @@ export async function buildMapMesh(grid, opts = {}) {
   // edge on the floor's side, where the original draws its raised rim (홍성 프릿셀 7's bridge under the swinging axes)
   if (anyAbyss) {
     const CURB_H = 0.15, CURB_T = 0.1;                  // tiles
+    // (a chasm drawn from the side - abyss 'hang': a top's foundation, a row of its drawing a tile, down every side of the top as
+    // deep as it is drawn - the side the 2D shows (south) all of it, the others the rock alone, not what is drawn in front of
+    // it - and open under that; under a top with nothing drawn below it, only a thin edge. No curb: the original draws none)
+    const hangFaces = (a, x, y, dname, hiE) => {
+      let ys = y;
+      while (valid(x, ys + 1) && isFloorIdx(idx(x, ys + 1))) ys++;
+      const top = idx(x, ys);
+      let n = 0;
+      while (valid(x, ys + 1 + n) && hangArt[idx(x, ys + 1 + n)] && hangTop[idx(x, ys + 1 + n)] === top) n++;
+      const front = dname === 'S' && ys === y, lo = hiE - Math.max(n, 0.35);
+      if (!n) {
+        const st = sideShade(hiE, 0.6, lo - 2);
+        addQuad(stepTexture(a, a), faceCorners(dname, x, y, lo * T, hiE * T), [st, st, st, st], NORMAL[dname]);
+        return;
+      }
+      for (let k = 0; k < n; k++) {
+        const ry = ys + 1 + k, t = hiE - k, b = t - 1;
+        const art = front ? ownArt(x, ry) : [grid.tile(x, ry, 0), grid.tile(x, ry, 1)];
+        const req = requestComposite(art, 0, true) || darkStone();
+        const st = sideShade(t, 0.95, lo), sb = sideShade(b, 0.95, lo);
+        addQuad(req, faceCorners(dname, x, y, b * T, t * T), [st, sb, sb, st], NORMAL[dname]);
+      }
+    };
+    for (let i = 0; i < w * h; i++) {
+      if (gapTop[i] < 0) continue;
+      // (drawn across a gap in front of the foundations either side: on their front, at its row's depth below their top)
+      const x = i % w, y = (i / w) | 0, ty = (gapTop[i] / w) | 0, t = surfS(gapTop[i]) - (y - ty - 1), b = t - 1;
+      const req = requestComposite(ownArt(x, y));
+      if (!req) continue;
+      const st = sideShade(t, 0.95, t - 8), sb = sideShade(b, 0.95, t - 8);
+      addQuad(req, faceCorners('S', x, ty, b * T, t * T), [st, sb, sb, st], NORMAL.S);
+    }
     for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
       const a = idx(x, y);
       if (!surfaceCell(a) || pit[a]) continue;
@@ -2888,6 +2991,7 @@ export async function buildMapMesh(grid, opts = {}) {
         if (!valid(x + dx, y + dy) || !abyss[idx(x + dx, y + dy)]) continue;
         const n = idx(x + dx, y + dy), lo = abyssLo[n];
         const hiE = dname === 'N' ? surfN(a) : dname === 'S' ? surfS(a) : Math.min(surfN(a), surfS(a));
+        if (hangMode[n]) { hangFaces(a, x, y, dname, hiE); continue; }
         for (let k = 0; hiE - k > lo + 0.02; k++) {
           const t = hiE - k, b = Math.max(lo, t - 1), ry = y + 1 + k;
           const art = dname === 'S' && valid(x, ry) && hangArt[idx(x, ry)] ? ownArt(x, ry) : null;
@@ -3233,6 +3337,7 @@ export async function buildMapMesh(grid, opts = {}) {
     },
     staticAtlas, animAtlas, drawer,
     joinsBelow: connected, joinsBeside: hConnected,     // (upper, lower) / (left, right) tile ids: do their drawings meet
+    eventPieces: new Map([...pieceAt.values()].map(p => [p.id, p.tile])),   // event id -> its tile, built here (opts.eventPieces)
     isSolid,
     isPit: (x, y) => valid(x, y) && pit[idx(x, y)] === 1,
     isSlope: (x, y) => valid(x, y) && slope[idx(x, y)] === 1,
@@ -3333,6 +3438,12 @@ export async function buildMapMesh(grid, opts = {}) {
           }
         }
       }
+      // (abyss 'hang': drawn over a top's foundation, or across a gap in front of it - 탈출２'s beasts on the rocks under the
+      // pillars: on that front, at its row's depth below the top)
+      if (valid(x, y) && (hangTop[idx(x, y)] >= 0 || gapTop[idx(x, y)] >= 0)) {
+        const top = hangTop[idx(x, y)] >= 0 ? hangTop[idx(x, y)] : gapTop[idx(x, y)], ty = (top / w) | 0;
+        return { x: x + 0.5, y: surfS(top) - (y - ty), z: ty + 1, side: 'S', ground: false };
+      }
       if (!isSolid(x, y)) return uprightSpot(x, y, lying, above);
       // (maphints onWall - 병든 시계탑's hanged: on their wall's face over the nooses drawn there, from its foot - or that many
       // tiles over it, hanging clear of the stage in front; the stage is no wall rising under them)
@@ -3359,6 +3470,10 @@ export async function buildMapMesh(grid, opts = {}) {
         if (!valid(x, yy) || pit[idx(x, yy)]) break;
         if (isSolid(x, yy)) continue;
         if (!isFloor(x, yy)) break;
+        // (over a doorway - a door in a notch of the wall's line: on the wall going on above it, flush with the front beside it, at
+        // its row's height there - 도서관의 꿈's candles over the white door. On the notch's own face behind, it was hidden)
+        const dw = doorways.find(dd => dd.x === x && dd.y === yy);
+        if (dw && dw.base + d < solidTop[i] - 0.6) return { x: x + 0.5, y: dw.base + d, z: yy + 1, side: 'S', ground: false };
         const base = surfN(idx(x, yy)), up = base + d - 1;
         if (up > solidTop[i] - 0.6) return { x: x + 0.5, y: solidTop[i], z: y + 0.5, side: 'top', ground: true };
         return { x: x + 0.5, y: up, z: yy, side: 'S', ground: d === 1 };

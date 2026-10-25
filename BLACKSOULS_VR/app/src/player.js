@@ -82,6 +82,7 @@ export class Player {
     this.floorY = G.floorAt ? G.floorAt(tx, ty) : 0;
     this.fallV = 0; this.jumpY = 0; this.jumpV = 0;
     this.knock = null;
+    this.carry = null;                // (carried off over walls - startCarry: put down where it is taken)
     this.rig.position.y = this.floorY;
     const pc = G.map.playerChar;
     pc.fx = tx; pc.fy = ty; pc.syncFromContinuous();
@@ -214,13 +215,19 @@ export class Player {
       f.t += dt;
       this.fallV += 9.8 * dt;
       this.rig.position.y -= this.fallV * dt;
-      G.screen.setBrightness(Math.max(0, 255 - f.t * 300));
+      f.dark = Math.max(0, 255 - f.t * 300);
+      G.screen.setBrightness(f.dark);
       if (!pc.moveRouteForcing && !pc.moving()) {
         this.scriptedFall = null;
         this.fallV = 0;
         this.teleportTo(pc.x, pc.y);
-        // stay dark a moment: the event usually goes on to "YOU DIED" or a landing scene
-        setTimeout(() => { if (G.screen.brightness < 1 && !G.map.transferring) G.screen.fadeIn(30); }, 800);
+        // stay dark a moment: the event may go on to "YOU DIED", a landing scene, a fade or a transfer of its own - then
+        // light again, however dark the fall had got, unless one of those has the screen now. (It waited for full black
+        // before: a slide shorter than the fade - 피눈물 웅덩이's five rows - left the screen nearly black for good)
+        const dark = f.dark, outs = G.screen.fadeOuts || 0;
+        setTimeout(() => {
+          if (G.screen.fadeTarget === dark && !G.screen.fadeDur && (G.screen.fadeOuts || 0) === outs && !G.map.transferring) G.screen.fadeIn(30);
+        }, 800);
       }
       return;
     }
@@ -237,7 +244,7 @@ export class Player {
         this.fallV = 0;
         this.floorY = floorY;
       }
-      this.rig.position.y = this.floorY + hop;
+      this.rig.position.y = this.floorY + hop + (this.carry ? this.updateCarry(dt) : 0);
       // (no steps while a lift carries the player - lift.js -, nor on a move with its walking turned off - 린다메아's blow
       // sliding the player back: the original's steps come on the walking's frames)
       if (!G.lift?.riding && pc.walkAnime) this.updateFootsteps(dt, pc.realMoveSpeed?.() > 4 || input.running(), !!hop);
@@ -374,7 +381,35 @@ export class Player {
       this.jumpY += this.jumpV * dt;
       if (this.jumpY <= 0) { this.jumpY = 0; this.jumpV = 0; G.input.haptic('left', 0.2, 40); G.input.haptic('right', 0.2, 40); }
     }
-    this.rig.position.y = this.floorY + (this.air ? this.updateAir(dt) : this.jumpY);
+    // (carried over walls - startCarry: held up there till the player can move again, then let down)
+    if (this.carry && this.carry.phase !== 'down' && this.canMove()) this.carry.phase = 'down';
+    this.rig.position.y = this.floorY + (this.air ? this.updateAir(dt) : this.jumpY) + (this.carry ? this.updateCarry(dt) : 0);
+  }
+  // Carried along by an event up the screen or to a side (gamemap.js forceMoveRoute - 하노버 폐역 2's night demons flying
+  // off with the player, 혼돈 던전 1's wind blowing the player back up the corridor): in sight along the way, as the original
+  // shows it, never a fall. Where the way crosses walls (through them in 2D) it goes up over their tops: up over a moment,
+  // held there while the event goes on (its fade, its transfer), let down once the player can move again
+  startCarry(pc, fall) {
+    const step = { 2: [-1, 0], 3: [1, 0], 4: [0, -1] }[fall.dir], mesh = G.view?.mesh;
+    if (!step || !mesh?.solidTopAt) return;
+    let top = -Infinity;
+    for (let k = 1; k <= fall.n; k++) top = Math.max(top, mesh.solidTopAt(pc.x + step[0] * k, pc.y + step[1] * k) * T);
+    const floor = G.floorAt ? G.floorAt(pc.x, pc.y) : 0;
+    if (!(top > floor + 0.3)) return;                  // (nothing to cross: along the floor)
+    // (the ones carrying it - events beside it given as many steps the same way just now: the night demons - go up with it:
+    // sprites.js)
+    const carriers = new Set((G.map?.eventList || []).filter(ev => ev.moveRouteForcing && Math.abs(ev.x - pc.x) <= 1 && Math.abs(ev.y - pc.y) <= 2 &&
+      (ev.moveRoute?.list || []).filter(m => m.code === fall.dir).length >= fall.n));
+    this.carry = { rise: top - floor + 0.4, y: this.carry?.y || 0, t: 0, phase: 'up', v: 0, carriers };
+  }
+  // how high over the floor a carry holds the player this frame (startCarry)
+  updateCarry(dt) {
+    const c = this.carry;
+    c.t += dt;
+    if (c.phase === 'up') c.y = Math.max(c.y, c.rise * (1 - (1 - Math.min(1, c.t / 0.8)) ** 3));
+    else { c.v += 9.8 * dt; c.y -= c.v * dt; }
+    if (c.phase === 'down' && c.y <= 0) { this.carry = null; return 0; }
+    return c.y;
   }
   startScriptedFall() {
     if (this.scriptedFall) return;
