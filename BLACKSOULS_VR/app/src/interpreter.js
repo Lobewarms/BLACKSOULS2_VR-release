@@ -50,7 +50,6 @@ export class Interpreter {
   running() { return !!this.list; }
   terminate() { this.list = null; this.child = null; }
   event() { return this.eventId > 0 && this.mapId === G.map.mapId ? G.map.events[this.eventId] : null; }
-  isMainTree() { return (this.root || this).main; }
 
   update() {
     const was = running;
@@ -219,9 +218,11 @@ export class Interpreter {
     const js = cond.replace(/\bs\[(\d+)\]/g, '$game_switches[$1]').replace(/\bv\[(\d+)\]/g, '$game_variables[$1]');
     return !!evalRuby(js);
   }
+  // a later block of the group just answered: its branch as that answer has it, no list of its own. The group's first
+  // block come round again (a loop, a jump back) is asked anew - its old answer stays with the pass it was given in
   resolveChoiceGroup() {
     const g = this.choiceGroup;
-    if (!g || !g.results || !g.results.has(this.index)) return false;
+    if (!g || !g.results || this.index === g.indices[0] || !g.results.has(this.index)) return false;
     this.branch[this.indent] = g.results.get(this.index);
     return true;
   }
@@ -370,8 +371,13 @@ export class Interpreter {
       if (v === 'no') return true;
     }
     if (id === 11) {
-      // 全滅処理 (death -> bonfire) must survive the map change: always run it on the main interpreter
-      if (!this.isMainTree()) { G.combat?.onPartyDead(); this.terminate(); return false; }
+      // 全滅処理 (death -> bonfire) must survive the map change. Run where the original's map interpreter would run it -
+      // the map's own run, or the run of an event (or a roaming monster) a fight took off the map, once past its fight
+      // (combat.js reset carries those to the new map) - it is a call as any other: the event goes on after it, as in
+      // VX Ace (빅토리아 eating the player sets switch 431 after it, and her next page waits for that). A parallel
+      // process or a fight's own run would not live through the map change: the main interpreter runs it instead
+      const root = this.root || this;
+      if (!root.main && !(root.foughtOut && (root.kind === 'main' || root.kind === 'symbol'))) { G.combat?.onPartyDead(); this.terminate(); return false; }
       G.combat?.onDeathCommonEvent();
     }
     if (id === 1 && !G.coop?.phantom) G.onBonfire?.();   // 篝火: resting at a bonfire -> every enemy back, VR autosave

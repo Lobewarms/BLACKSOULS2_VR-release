@@ -272,6 +272,9 @@ const PPM = 1024;                  // their canvas pixels a metre (640 original 
 const CHOICE_ROWS = 6;             // the choice window's lines at most (選択肢拡張 RowMax): more scroll
 const SCROLL_PIECE = 512;          // original pixels of a scrolling text one texture holds (UI startScroll)
 const SKIP_DWELL = 0.08;           // s a message stays up while メッセージスキップ is held (input.js skipHeld)
+// a message's letters a second, and the original's frames (its \. and \| waits) in seconds: by the time that went by, not
+// by the frames drawn - a 90 Hz headset or a 165 Hz monitor types and waits as a 60 Hz one does
+const TEXT_CPS = 60, FRAME_S = 1 / 60;           // (the original's: a letter a frame at 60 a second)
 const screenW = () => G.scripts?.screen?.[0] || 544;
 const screenH = () => G.scripts?.screen?.[1] || 416;
 // a row's description under a list (or the grid's): this many lines at most, broken between words, the last ending in '…'
@@ -1398,7 +1401,11 @@ export class UI {
       this.msgPanel.mesh.visible = r.lines.length > 0 || !r.choices;
       this.drawMessage(r);
     }
-    if (r.reveal < r.total) { r.reveal = Math.min(r.total, r.reveal + 2); this.drawMessage(r); }
+    if (r.reveal < r.total) {
+      r.typed = Math.min((r.typed || 0) + TEXT_CPS * dt, TEXT_CPS / 4);
+      const n = Math.floor(r.typed);
+      if (n > 0) { r.typed -= n; r.reveal = Math.min(r.total, r.reveal + n); this.drawMessage(r); }
+    }
     else if (r.choices && !r.choiceUp) {
       r.choiceUp = true;
       this.choice.open('', r.choices.map(c => ({ text: c.text, enabled: true })), { index: -1, look: 'choice', onSelect: () => {}, onCancel: () => {} });
@@ -1421,18 +1428,22 @@ export class UI {
     const skip = input.skipHeld();
     if (msg.state === 'typing') {
       if (input.advance() || skip) { this.consumedConfirm = true; msg.skip = true; msg.wait = 0; }
-      if (msg.wait > 0) { msg.wait--; return; }
+      if (msg.wait > 0) { msg.wait -= dt; if (msg.wait > 0) return; }
       msg.cursor ??= 0;
-      let budget = (msg.skip || msg.instant) ? Infinity : 2;
+      // (the letters the time since the last frame types - what is over carried on; a long hitch a quarter second's at most)
+      const fast = msg.skip || msg.instant;
+      if (!fast) msg.typed = Math.min((msg.typed || 0) + TEXT_CPS * dt, TEXT_CPS / 4);
+      let budget = fast ? Infinity : Math.floor(msg.typed);
       while (msg.cursor < msg.ops.length) {
         const o = msg.ops[msg.cursor];
         if (o.k === 'ch' || o.k === 'icon') {
           if (budget <= 0) break;
           msg.reveal++; budget--; msg.cursor++;
+          if (!fast) msg.typed--;
           continue;
         }
         msg.cursor++;
-        if (o.k === 'wait') { if (!msg.skip) { msg.wait = o.f; break; } }
+        if (o.k === 'wait') { if (!msg.skip) { msg.wait = o.f * FRAME_S; break; } }
         else if (o.k === 'input') { msg.state = 'pause'; break; }
         else if (o.k === 'fast') msg.instant = o.on;
         else if (o.k === 'noinput') msg.noInput = true;

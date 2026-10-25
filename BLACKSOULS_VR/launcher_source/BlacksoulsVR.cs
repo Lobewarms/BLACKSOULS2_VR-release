@@ -180,7 +180,7 @@ namespace BlacksoulsVR
             if (h != null)
             {
                 h.ReadWriteTimeout = 8000;
-                h.UserAgent = "BlacksoulsVR-launcher/" + BuildInfo.Version;
+                h.UserAgent = "BlacksoulsVR-launcher/" + PackageVersion.Value;
                 h.CachePolicy = new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.NoCacheNoStore);
             }
             string text;
@@ -424,6 +424,28 @@ namespace BlacksoulsVR
         {
             string two = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName.ToLowerInvariant();
             return Array.IndexOf(Codes, two) >= 0 ? two : "en";
+        }
+    }
+
+    // ------------------------------------------------------------------ which version this is
+    // The package's version: app\version.txt (build_share.py writes it). The exe itself carries no release's number, so it
+    // stays the very same file from one release to the next while its own code does not change - a new file every
+    // release was a stranger to every virus scanner's reputation each time, and their machine-learning guesses flagged
+    // it. BuildInfo.Version (the release its code first came in) when there is no app folder.
+    static class PackageVersion
+    {
+        static string value;
+        public static string Value
+        {
+            get
+            {
+                if (value == null)
+                {
+                    try { value = File.ReadAllText(Path.Combine(AppPaths.AppDir, "version.txt")).Trim(); } catch { }
+                    if (string.IsNullOrEmpty(value)) value = BuildInfo.Version;
+                }
+                return value;
+            }
         }
     }
 
@@ -793,7 +815,7 @@ namespace BlacksoulsVR
                 }
                 if (path == "/api/ping")
                 {
-                    SendJson(res, Util.Json.Serialize(new Dictionary<string, object> { { "app", AppName }, { "version", BuildInfo.Version }, { "game", Game.Dir } }));
+                    SendJson(res, Util.Json.Serialize(new Dictionary<string, object> { { "app", AppName }, { "version", PackageVersion.Value }, { "game", Game.Dir } }));
                 }
                 else if (path == "/api/manifest")
                 {
@@ -1782,7 +1804,7 @@ namespace BlacksoulsVR
             browserBox.Items.AddRange(new object[] { "", "Chrome", "Edge" });
             browserBox.SelectedIndex = cfg.Browser == "chrome" ? 1 : cfg.Browser == "edge" ? 2 : 0;
             ApplyTexts();
-            Log(Lang.F("버전 {0}   ·   세이브 폴더: {1}", BuildInfo.Version, AppPaths.SavesDir));
+            Log(Lang.F("버전 {0}   ·   세이브 폴더: {1}", PackageVersion.Value, AppPaths.SavesDir));
             // (not for the build's own picture of the window, unless a test gives its version.json)
             if (opt.Screenshot == null || opt.UpdateUrl != null) UpdateCheck = CheckUpdateAsync(opt.UpdateUrl ?? NewVersion.Source);
 
@@ -1809,11 +1831,11 @@ namespace BlacksoulsVR
             try { latest = await Task.Run(() => NewVersion.Latest(url)); } catch { }
             if (IsDisposed) return;
             if (latest == null) { Log(Lang.S("최신 버전인지 확인하지 못했습니다 (인터넷에 연결되지 않았거나 받는 곳에 닿지 않음).")); return; }
-            if (NewVersion.Key(latest[0]) <= NewVersion.Key(BuildInfo.Version)) { Log(Lang.S("최신 버전입니다.")); return; }
+            if (NewVersion.Key(latest[0]) <= NewVersion.Key(PackageVersion.Value)) { Log(Lang.S("최신 버전입니다.")); return; }
             newer = latest;
             ApplyTexts();
             updateBtn.Visible = true;
-            Log(Lang.F("새 버전이 나왔습니다: {0} (지금 {1}). '새 버전 받기'를 누르면 받는 곳이 열립니다.", newer[0], BuildInfo.Version));
+            Log(Lang.F("새 버전이 나왔습니다: {0} (지금 {1}). '새 버전 받기'를 누르면 받는 곳이 열립니다.", newer[0], PackageVersion.Value));
         }
 
         // every text of the window in the chosen language
@@ -1821,7 +1843,7 @@ namespace BlacksoulsVR
         {
             string fam = FontFamilyFor(Lang.Current);
             if (Font.Name != fam) { Font = new Font(fam, 9.5f); launchBtn.Font = new Font(fam, 12f, FontStyle.Bold); }
-            Text = Lang.F("BLACK SOULS II VR 런처  v{0}", BuildInfo.Version);
+            Text = Lang.F("BLACK SOULS II VR 런처  v{0}", PackageVersion.Value);
             subLabel.Text = Lang.S("원작 게임 폴더는 읽기만 합니다 (아무것도 바꾸거나 저장하지 않음). VR 세이브·설정은 이 프로그램 폴더의 saves에 저장됩니다.");
             langLabel.Text = Lang.S("언어 (Language)");
             gameLabel.Text = Lang.S("블랙소울2 게임 폴더 (Game.exe가 있는 폴더)");
