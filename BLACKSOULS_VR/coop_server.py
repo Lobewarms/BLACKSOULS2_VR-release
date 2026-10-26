@@ -9,10 +9,10 @@ on, to one player or to all. The worlds themselves run in the players' games (th
 
 Settings are kept in coop_server.json next to this file (made on the first run - a random join PIN and host PIN):
     port        TCP port to listen on (default 28471) - for friends over the internet, forward it on the router
-    pin         what every player enters to join (random at first - the host may change it in its game's co-op menu,
-                kept here)
-    hostPin     what the host enters when its game is not on this PC (a host on this PC needs none) - random, this
-                server's own
+    pin         what every player enters to join: 6 digits, as the game's PIN input has (random at first - the host may
+                change it in its game's co-op menu, kept here)
+    hostPin     what the host enters when its game is not on this PC (a host on this PC needs none): 6 digits, random,
+                this server's own
     The rules of the worlds opened here (every player is told them; the host's game keeps them; the host may change
     them in its game's co-op menu - kept here):
     maxPlayers       players at once, the host included (2-8)
@@ -131,8 +131,12 @@ def load_config(args):
     for k in RULE_FLAGS:
         if not isinstance(cfg[k], bool):
             cfg[k] = str(cfg[k]).strip().lower() in ('1', 'true', 'yes', 'on')
-    for k in ('pin', 'hostPin'):
-        if not (isinstance(cfg[k], str) and cfg[k].isdigit() and 4 <= len(cfg[k]) <= 12):
+    for k, ko, opt in (('pin', '접속 PIN', '--pin'), ('hostPin', '호스트 PIN', '--host-pin')):
+        # (6 digits: the game's PIN input has six - any other PIN could never be entered there)
+        if not (isinstance(cfg[k], str) and cfg[k].isdigit() and len(cfg[k]) == 6):
+            if cfg[k]:
+                say(f'{ko}은 6자리 숫자여야 합니다 (coop_server.json, {opt}) - 무작위로 정했습니다',
+                    f'the {k} must be 6 digits (coop_server.json, {opt}): a random one was made')
             cfg[k] = f'{secrets.randbelow(10 ** 6):06d}'           # (a random one at first)
     try:
         cfg['port'] = int(cfg['port']) if 1024 <= int(cfg['port']) <= 65535 else 28471
@@ -366,9 +370,9 @@ class Hub:
             p.send({'t': 'rules', 'rules': self.rules()})
 
     def set_pin(self, pin, player):
-        """The host changed the join PIN in its co-op menu (4-12 digits): those in stay, the next must know the new
+        """The host changed the join PIN in its co-op menu (6 digits): those in stay, the next must know the new
         one. Kept in coop_server.json; told back to the host only."""
-        if not (isinstance(pin, str) and pin.isdigit() and 4 <= len(pin) <= 12) or pin == self.cfg['pin']:
+        if not (isinstance(pin, str) and pin.isdigit() and len(pin) == 6) or pin == self.cfg['pin']:
             return
         self.cfg['pin'] = pin
         if self.save:
@@ -532,6 +536,16 @@ class Hub:
 
 
 def lan_addresses():
+    """This PC's address on its network: the one its way out goes by (a VirtualBox or Hyper-V adapter's address is
+    no use to friends on the router) - else, with no way out, every address it has."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(('8.8.8.8', 80))              # (nothing is sent: it only picks the route)
+            ip = s.getsockname()[0]
+        if not ip.startswith('127.') and ip != '0.0.0.0':
+            return [ip]
+    except OSError:
+        pass
     found = set()
     try:
         for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
@@ -580,12 +594,11 @@ async def main():
     print(f'    Rules and the join PIN: {os.path.basename(CONFIG_PATH)}, or in game the host\'s menu -> Co-op (kick / ban too).')
     for ip in lan_addresses():
         print(f'    이 PC의 주소     : {ip}   (같은 공유기 안의 친구 / friends on the same router)')
-    print('    인터넷의 친구에게는 공인 IP(공유기 관리 화면 등에서 확인)를 알려 주고, 공유기에서 이 포트를 이 PC로 열어 주세요.')
+    print('    인터넷의 친구에게는 공인 IP를 알려 주고, 공유기에서 이 포트(TCP)를 이 PC로 열어 주세요.')
+    print('    공유기가 두 대면(통신사 공유기 뒤에 내 공유기) 두 공유기 모두에서 엽니다. 자세한 방법: README의 협력 [3].')
     print('    Windows 방화벽 창이 뜨면 "공용 네트워크"도 체크하고 허용을 누르세요 (개인 네트워크만 체크하면 밖에서 못 들어올 수 있음).')
-    print('    공유기 관리 화면의 외부(WAN) IP가 공인 IP와 다르면 포트를 열어도 들어올 수 없는 회선입니다 - 외부 서버를 쓰세요.')
-    print('    Over the internet: your public IP, this port forwarded to this PC, Python allowed through the firewall on public networks too.')
-    print('    인터넷의 친구는 이 PC의 공인 IP로 접속합니다. 공유기에서 위 포트(TCP)를 이 PC로 열어 주세요.')
-    print('    Friends over the internet use this PC\'s public IP - forward the port above (TCP) to this PC.')
+    print('    Over the internet: your public IP, this port (TCP) forwarded to this PC (on both routers if there are two),')
+    print('    Python allowed through the firewall on public networks too. Step by step: the README, Co-op [3].')
     print('    끄려면 이 창을 닫으세요. / Close this window to stop.', flush=True)
     async with server:
         await server.serve_forever()

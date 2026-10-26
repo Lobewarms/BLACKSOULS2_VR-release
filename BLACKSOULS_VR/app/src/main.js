@@ -4,10 +4,11 @@ import { G } from './globals.js';
 import { tr, fmtDate } from './i18n.js';
 import { createVRButton, prepareXR } from './vrbutton.js';
 import { initAssets, loadImage, fetchBinary, listFiles, hasFile } from './assets.js';
-import { $data, loadDatabase, mapName } from './data.js';
+import { $data, loadDatabase, loadMap, mapName } from './data.js';
 import { MarshalReader } from './marshal.js';
 import { billboardUniforms, T } from './mapmesh.js';
-import { GameState } from './state.js';
+import { GameState, spiritActorId, spiritIdOf } from './state.js';
+import { exportRmSave } from './rmsave.js';
 import { GameMap } from './gamemap.js';
 import { Player } from './player.js';
 import { Input } from './input.js';
@@ -596,18 +597,21 @@ async function showTitle() {
   const vrSlots = await listVrSaves();
   const auto = vrSlots.find(s => s.slot === 0);
   const items = [];
+  // (the user's order: this game's own saves, a community server's, the original's - in, then out -, a new game)
   if (auto) items.push({ text: tr('이어하기 (VR 오토세이브)'), id: 'continue', desc: `${auto.meta.map || ''}  ${metaDate(auto.meta)}` });
-  items.push({ text: tr('원작 세이브 불러오기'), id: 'rm', desc: tr('원작의 Save01~16 진행 상황으로 VR에서 시작') });
   items.push({ text: tr('VR 세이브 불러오기'), id: 'vr', enabled: vrSlots.some(s => s.slot > 0) });
   // (a community-server save played on here, in the game itself - saved as its own saves from then on)
   const worldSlots = await listVrSaves('world');
   if (worldSlots.length) items.push({ text: tr('커뮤니티 서버 세이브 불러오기'), id: 'world', desc: tr('커뮤니티 서버의 진행을 본편으로 가져옵니다') });
+  items.push({ text: tr('원작 세이브 불러오기'), id: 'rm', desc: tr('원작의 Save01~16 진행 상황으로 VR에서 시작') });
+  items.push({ text: tr('원작 세이브로 내보내기'), id: 'export', desc: tr('VR 세이브를 원작 게임에서 이어 할 수 있는 세이브 파일로 만듭니다'), enabled: vrSlots.length > 0 });
   items.push({ text: tr('새 게임'), id: 'new', desc: tr('오프닝부터 시작') });
   G.ui.placeRoot(true);
   G.ui.list.open('BLACK SOULS Ⅱ  VR', items, {
     onSelect: async (i, it) => {
       if (it.id === 'continue') startGame(await loadVrSave(0));
       if (it.id === 'rm') showRmSaveMenu();
+      if (it.id === 'export') showRmExportMenu();
       if (it.id === 'vr') showVrLoadMenu(showTitle);
       if (it.id === 'world') showVrLoadMenu(showTitle, 'world');
       if (it.id === 'new') { const s = new GameState(); s.newGame(); startGame(s); }
@@ -630,6 +634,103 @@ async function showRmSaveMenu() {
   G.ui.list.open(tr('원작 세이브'), entries, {
     onSelect: (i, it) => { const s = new GameState(); s.importRmSave(it.contents, it.label); startGame(s); },
     onCancel: () => showTitle(),
+  });
+}
+// 원작 세이브로 내보내기: a VR save made into the original game's save (rmsave.js), written to saves\to_original\SaveNN.rvdata2 -
+// never into the game folder (the player copies it there). The original's 16 slots are listed with what is in each now, the
+// slot the VR save was made from first
+async function rmSlots() {
+  const have = new Map();
+  for (const f of listFiles('save').filter(f => /^save\d+\.rvdata2$/i.test(f))) {
+    const n = parseInt(/^save(\d+)/i.exec(f)[1], 10);
+    try {
+      const { header, contents } = await readRmSave(f);
+      have.set(n, { f, ok: true, map: mapName(contents.get('map').map_id), time: header.get('playtime_s') || '' });
+    } catch { have.set(n, { f, ok: false }); }
+  }
+  return have;
+}
+// the bytes of the original save number n made from a VR state (GameState.toJSON()); the template: the original save the VR
+// save was made from if it is there, else the one in slot n, else the first there is. Read back as the game reads a save, its
+// progress checked against the VR state's before anything is written -> { bytes, template }
+async function makeRmSave(state, n, have) {
+  have = have || await rmSlots();
+  const from = /^Save(\d+)$/i.exec(state.importedFrom || '');
+  const pick = [from && have.get(+from[1]), have.get(n), ...have.values()].find(h => h?.ok);
+  if (!pick) throw new Error(tr('원작 세이브가 하나도 없어 틀로 쓸 세이브가 없습니다'));
+  const map = await loadMap(state.mapId).catch(() => null);
+  const audio = m => (m?.name ? { name: m.name, volume: m.volume, pitch: m.pitch } : null);
+  const bytes = exportRmSave(state, await fetchBinary(pick.f), {
+    versionId: $data.system.version_id,
+    stateInfo: id => { const s = $data.states[id]; return s ? { minTurns: s.min_turns, stepsToRemove: s.steps_to_remove } : null; },
+    isSpirit: id => spiritIdOf(id) > 0, spiritActorId,
+    mapAudio: { bgm: map?.autoplay_bgm ? audio(map.bgm) : null, bgs: map?.autoplay_bgs ? audio(map.bgs) : null },
+  });
+  const r = new MarshalReader(bytes);
+  r.load();
+  const back = new GameState();
+  back.importRmSave(new MarshalReader(bytes.subarray(r.pos)).load(), 'check');
+  const a = state, b = back.toJSON();
+  const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
+  const ons = s => (s || []).flatMap((v, i) => (v ? [i] : []));
+  const bag = l => (l || []).filter(([, k]) => k > 0).sort((p, q) => p[0] - q[0]);
+  const wrong = [
+    ['map', a.mapId === b.mapId && a.start?.x === b.start.x && a.start?.y === b.start.y],
+    ['switches', same(ons(a.switches), ons(b.switches))],
+    ['self switches', same([...(a.selfSwitches || [])].sort(), [...b.selfSwitches].sort())],
+    ['party', a.party.gold === b.party.gold && same(a.party.actors, b.party.actors) && same(bag(a.party.items), bag(b.party.items))
+      && same(bag(a.party.weapons), bag(b.party.weapons)) && same(bag(a.party.armors), bag(b.party.armors))],
+    ['actors', (a.actors || []).every(x => { const y = b.actors.find(o => o.id === x.id); return y && y.level === x.level && same(y.equips, x.equips) && same(y.partners || [], x.partners || []); })],
+  ].filter(([, ok]) => !ok).map(([k]) => k);
+  if (wrong.length) throw new Error(`check: ${wrong.join(', ')}`);
+  return { bytes, template: pick.f };
+}
+G.makeRmSave = makeRmSave;          // (tests: made without writing anything)
+async function showRmExportMenu(back = showTitle) {
+  const slots = (await listVrSaves()).sort((a, b) => a.slot - b.slot);
+  G.ui.list.open(tr('내보낼 VR 세이브'), slots.map(s => ({ text: `${s.slot === 0 ? tr('오토') : tr('슬롯 {n}', { n: s.slot })}  ${s.meta.map || ''}`, right: metaDate(s.meta), desc: slotDesc(s.meta), slot: s.slot })), {
+    onSelect: async (i, it) => {
+      try {
+        const data = await (await fetch(`/api/vrsave/${it.slot}`)).json();
+        showRmExportTarget(data.state, () => showRmExportMenu(back), back);
+      } catch (e) { G.ui.toast(tr('원작 세이브를 만들지 못했습니다: {err}', { err: String(e?.message || e).slice(0, 60) }), 0, '#ff9a9a'); }
+    },
+    onCancel: back,
+  });
+}
+async function showRmExportTarget(state, back, done) {
+  const have = await rmSlots();
+  const from = /^Save(\d+)$/i.exec(state.importedFrom || '');
+  const items = [];
+  for (let n = 1; n <= 16; n++) {
+    const h = have.get(n), label = `Save${String(n).padStart(2, '0')}`;
+    items.push({
+      text: h ? (h.ok ? `${label}  ${h.map}` : tr('{f} (읽기 실패)', { f: label })) : `${label}  ${tr('(비어 있음)')}`, right: h?.time || '', n,
+      desc: from && +from[1] === n ? tr('이 VR 세이브를 가져온 원작 세이브 자리') : h ? tr('원작 게임 폴더에 넣으면 이 세이브를 덮어씁니다') : '',
+    });
+  }
+  G.ui.list.open(tr('만들 원작 세이브 번호'), items, {
+    index: from ? Math.min(15, Math.max(0, +from[1] - 1)) : 0,
+    onSelect: async (i, it) => {
+      try {
+        const { bytes } = await makeRmSave(state, it.n, have);
+        const file = `Save${String(it.n).padStart(2, '0')}.rvdata2`;
+        const res = await (await fetch(`/api/rmexport/${file}`, { method: 'POST', body: bytes })).json();
+        if (!res.ok) throw new Error(res.error || 'not written');
+        G.ui.list.open(tr('원작 세이브를 만들었습니다: {file}', { file }), [
+          { text: tr('폴더 열기'), id: 'open', desc: res.path },
+          { text: tr('확인'), id: 'ok', desc: tr('원작 게임 폴더(Game.exe가 있는 곳)에 복사하면 원작의 {n}번 슬롯에서 이어집니다. 퀵슬롯·VR 설정은 옮겨지지 않습니다', { n: it.n }) },
+        ], {
+          index: 1,
+          onSelect: (j, c) => { if (c.id === 'open') fetch('/api/rmexport-open', { method: 'POST' }).catch(() => {}); else done(); },
+          onCancel: done,
+        });
+      } catch (e) {
+        console.error('original save export', e);
+        G.ui.toast(tr('원작 세이브를 만들지 못했습니다: {err}', { err: String(e?.message || e).slice(0, 60) }), 0, '#ff9a9a');
+      }
+    },
+    onCancel: back,
   });
 }
 async function showVrLoadMenu(back, kind = 'vr') {

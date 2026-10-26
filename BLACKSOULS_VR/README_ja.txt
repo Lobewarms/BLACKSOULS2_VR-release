@@ -1,19 +1,20 @@
-﻿BLACK SOULS II VR  (バージョン 2026.10.26-1)
+﻿BLACK SOULS II VR  (バージョン 2026.10.26-9)
 ==================================
 
 ブラックソウルズ2 を一人称 VR (PCVR) で遊ぶための非公式ファンMODです。
 - ゲームデータは含まれていません。ブラックソウルズ2 のゲームフォルダが必要です。
-- 原作のゲームフォルダと原作のセーブは変更しません。原作のセーブ (Save01〜16) は VR で読み込めます。
-- 原作のセーブの難易度 (図書館で選ぶ 0〜9) もそのまま適用されます。変えるときは原作どおり図書館で変えてください。
-- VR のセーブ (オート + 16スロット) と設定は、このフォルダの saves フォルダに保存されます。
+- 原作のセーブ (Save01〜16) を VR で読み込めます。原作のセーブの難易度 (図書館で選ぶ 0〜9) もそのまま適用されるので、
+  変えるときは原作どおり図書館で変えてください。
+- VR のセーブと設定は、このフォルダの saves フォルダに保存されます。
 
 
 必要なもの
 ----------
 - Windows 10/11、最新の Chrome または Edge
 - PCVR ヘッドセット: SteamVR 対応ヘッドセット、または Meta Quest (Link / Air Link / Virtual Desktop)
-- (任意) RPG Maker VX Ace RTP: インストールされていればランチャーが自動で見つけます。ないと一部マップのタイルの
-  一部が空に見え、吹き出し (エモートも) が出ません。
+- RPG Maker VX Ace RTP (無料。インストールすればランチャーが自動で見つけます)
+  https://www.rpgmakerweb.com/run-time-package の「RPG Maker VX Ace」の Download Run Time Package でダウンロードし、
+  解凍して RTP100 フォルダの Setup.exe でインストールします。
 
 
 起動
@@ -75,88 +76,204 @@ SteamVR
 協力（開発中）
 --------------
 友達があなたの世界に入って、一緒に歩き、戦えます。
-- ホスト: coop_server.cmd を実行し（Python 3 が必要）、メニュー → 協力 → 自分の世界を開く（このPCの協力サーバー）。
-  サーバーの窓に出る接続PINと、同じルーターの友達にはこのPCのアドレス、インターネットの友達にはグローバルIPを伝えてください。
-  インターネット越しに呼ぶときは、ルーターでポート 28471（TCP）をこのPCへ開放し、Windows ファイアウォールの窓が出たら「パブリック ネットワーク」にも
-  チェックして許可してください。ルーター管理画面の外部（WAN）IPがグローバルIPと違う回線（共有IP・ルーター二重）は、ポートを開放しても外から入れません。
-  そのときは下の外部サーバーを使ってください。接続の確認は家以外の回線（スマホのモバイル通信など）から行ってください。
-- ゲスト: メニュー → 協力 → 友達の世界へ行く → サーバーを追加 → IP・ポート・PIN。
-- このPCでサーバーを開くと、友達に自分のIPが見え、ルーターのポートが開きます。この方法の協力は信頼できる人とだけにしてください。
-  知らない人とは外部サーバーを使ってください（下の「外部サーバーの作り方」）。
-- 外部サーバー: そこで coop_server.py を実行し、自分の世界を開く（別の場所の協力サーバー）でサーバーのIPとホストPINを入れます。
-- ゲームを新しいバージョンにしたら、サーバーの coop_server.py も同じものに替えて再起動してください。
-- サーバーのルールと接続PINは、ホストがメニュー → 協力で変えます。
+サーバーを開く人がホスト、入る人がゲストです。ゲストは [4] だけ読めば足ります。
+
+どの方法で開くか
+- 同じ家（同じルーター）の友達: [1] → [2]
+- 別の家の友達（信頼できる人）: [1] → [2] → [3]
+- 知らない人と遊ぶとき、または [3] がうまくいかないとき: 下の「外部サーバーの作り方」（自分のIPが知られません）
+
+[1] Python 3 のインストール（サーバーを開く人だけ、最初の1回）
+  1. https://www.python.org/downloads/ を開き、大きなボタン（Download Python install manager）ではなく、その下の
+     「Or get the standalone installer for Python 3.x.x」の「Python 3.x.x」を押してインストーラーをダウンロードし、
+     実行します。
+  2. 最初の画面のいちばん下の「Add python.exe to PATH」に必ずチェックを入れ、「Install Now」を押します。
+  3. 「Setup was successful」と出たら Close を押します。
+  - サーバーのウィンドウに「Python was not found」や「Python 3 is needed」と出たら、インストールされていないか、
+    2 のチェックが抜けています。インストーラーをもう一度実行し、最初の画面が出たら 2 から、「Modify」が出たら
+    Modify → Next →「Add Python to environment variables」にチェック → Install。そのあとサーバーのウィンドウを
+    閉じて開き直します。
+
+[2] 自分のPCでサーバーを開く
+  1. このフォルダの coop_server.cmd をダブルクリックします。黒いサーバーのウィンドウが開きます。
+     - 実行するか聞かれたら「実行」を押します（「Windows によって PC が保護されました」なら「詳細情報」→「実行」）。
+     - 「Windows セキュリティの重要な警告」が出たら「プライベート ネットワーク」と「パブリック ネットワーク」の両方に
+       チェックを入れ、「アクセスを許可する」を押します。
+       閉じてしまった・片方だけチェックした場合: スタートメニューで「ファイアウォール」を検索して
+       「Windows Defender ファイアウォール」を開き、左の「Windows Defender ファイアウォールを介したアプリまたは機能を許可」
+       →「設定の変更」→ 一覧の Python の行すべてで「プライベート」と「パブリック」にチェック →「OK」。
+     - 一緒に遊ぶ間はサーバーのウィンドウを閉じないでください。閉じるとサーバーが止まります。
+  2. サーバーのウィンドウで 2 つを確かめます。
+     - 接続PIN:「give this to your friends」と書かれた行の 6 桁の数字。友達に伝えます
+     - このPCのアドレス:「friends on the same router」と書かれた行のアドレス（例: 192.168.0.10）。同じ家の友達に伝えます
+  3. ゲームを起動し、メニュー（VR: Y、PC: Tab）→ 協力 →「自分の世界を開く（このPCの協力サーバー）」を選びます。
+  4. 友達にアドレス、ポート 28471、接続PINを伝えます。
+     - 同じ家の友達: アドレス = サーバーのウィンドウの「このPCのアドレス」
+     - 別の家の友達: アドレス = グローバルIP（[3] の 2）。[3] まで終わらないと入れません。
+  - 接続PINとルールはゲームのメニュー → 協力で変えます（キック・ブロックも）。
+  - この方法では友達に自分のIPが見えます。信頼できる人とだけ遊んでください。
+
+[3] 別の家の友達を呼ぶ（ルーターのポート開放）
+  1. ルーターの管理画面を開く: コマンド プロンプト（スタートメニューで cmd を検索）で ipconfig と入力し、
+     「デフォルト ゲートウェイ」のアドレス（例: 192.168.0.1）をブラウザーのアドレス欄に入れます。
+     ログインのユーザー名・パスワードは、たいていルーター本体のシールに書いてあります。
+  2. グローバルIPを確かめる: 管理画面に出る外部（WAN・インターネット）IPを見ます。
+     - 10. / 172.16〜172.31. / 192.168. で始まるなら: このルーターの前にもう1台ルーターがあります（回線のホーム
+       ゲートウェイやプロバイダーのルーターの後ろに自分のルーターをつないでいる場合など）。このルーターの外部（WAN）情報に
+       出るゲートウェイのアドレスをブラウザーに入れて前のルーターの管理画面を開き、そこでこの 2 をもう一度行います。
+       3 のルールは両方のルーターに作ります（前のルーターのルールの内部IPアドレスは、後ろのルーターの外部IP）。
+     - 100.64〜100.127 で始まるか、前のルーターの管理画面が開かないなら: プロバイダーがひとつのグローバルIPを何軒もで
+       共有させる回線なので、家ではサーバーを開けません。下の「外部サーバーの作り方」を使ってください。
+     - それ以外のアドレスなら: それがグローバルIPで、別の家の友達に伝えるアドレスです（例: 203.0.113.45）。
+     v6プラス・transix など IPv6（IPoE）方式の回線は、外部IPがグローバルIPでも、たいていこの方法では開けません。
+  3. ポート開放のルールを追加:「ポート開放」「ポートマッピング」「ポート変換」などのメニューでルールを追加します。
+     - 内部（LAN側）IPアドレス: サーバーのウィンドウの「このPCのアドレス」
+     - プロトコル: TCP
+     - 外部ポートと内部ポート: どちらも 28471
+     → 保存（適用）します。
+  4. 友達が [4] のとおりに入れないとき（ゲームに「サーバーに届きません」と出るとき）: 3 のルール（内部IP・TCP・28471）が
+     保存されているか、[2] の 1 のファイアウォールでパブリック ネットワークまで許可したかを確かめてください。
+     ウイルス対策ソフトにファイアウォール機能があれば、そちらでも Python を許可してください。
+  - PCを再起動すると「このPCのアドレス」が変わることがあります。3 の内部IPと違ってきたらルールを直してください。
+
+[4] 友達の世界に入る（ゲスト）
+  1. ホストからアドレス（IP）、ポート、接続PINを聞きます。
+  2. メニュー → 協力 →「友達の世界へ行く」→「サーバーを追加（IP・ポート・PIN入力）」を選びます。
+  3. IPは 12 桁の数字で、3 桁ずつ入れます。3 桁に足りない所は前に 0 を付けます。
+     例: 192.168.0.10 → 192 168 000 010
+  4. ポート（最初から 28471 が入っています）と接続PINを入れると入れます。
+     一度入れたサーバーは、次から「友達の世界へ行く」の一覧から選べます。
+  - ゲストの間はセーブされず、終わると入る前のままの自分の世界に戻ります。
+
+一緒に遊ぶとき
+- チャット・ボイス: メニュー → 協力 → チャット・ボイス。チャットは話した人の頭の上に吹き出しで出ます（PCではどの言語でも
+  入力でき、VRのキーボードは英字、韓/英キーでハングル）。
+  ボイスチャットは「話す・聞く」を選んでいる間だけマイクを使います（最初の一度ブラウザがマイクの許可を求めます）。
 - 注意：一緒にマップ移動をオフにする（ゲストが別行動する）のは、まだ非常に不安定です。
 - 注意：ゲストが先にボス戦を開始をオンにすると、意図しない形でゲームが進むことがあります。
-- ゲストの間はセーブされず、終わると入る前のままの自分の世界に戻ります。
-- チャット・ボイス: メニュー → 協力 → チャット・ボイス。チャットは話した人の頭の上に吹き出しで出ます（PCではどの言語でも入力でき、VRのキーボードは英字、韓/英キーでハングル）。
-  ボイスチャットは「話す・聞く」を選んでいる間だけマイクを使います（最初の一度ブラウザがマイクの許可を求めます）。
-- コミュニティサーバー（メニュー → 協力 → コミュニティサーバー）での進行は別に保存され、本編のセーブにはつながりません。本編に持ってくるには、タイトルの「コミュニティサーバーのセーブを読み込む」で読み込んでからセーブしてください。
-- コミュニティサーバーを開く: community_server.cmd を実行し（Python 3 が必要）、ポート 28472（TCP）を開けてください。
-  入る人はメニュー → 協力 → コミュニティサーバーを追加 に IP、ポート 28472、サーバー画面の接続 PIN を入れます。
-  外部サーバーでは world_server.py と coop_server.py を一緒にアップロードし、python3 world_server.py で起動します。
+- ゲームを新しいバージョンにしたら、サーバーのウィンドウも閉じて開き直してください（外部サーバーは下の
+  「新しいバージョンに替える」）。
+
+コミュニティサーバー（みんなで共有するひとつの世界）
+- 入る: メニュー → 協力 →「コミュニティサーバー 1」または「コミュニティサーバー 2」。
+  ほかの人が開いたコミュニティサーバーは「コミュニティサーバーを追加（IP・ポート・PIN）」に、そのサーバーのアドレス、
+  ポート（最初から 28472）、接続PINを入れます。
+- コミュニティサーバーでの進行は別に保存され、本編のセーブにはつながりません。本編に持ってくるには、タイトルの
+  「コミュニティサーバーのセーブを読み込む」で読み込んでからセーブしてください。
+- 自分で開く: community_server.cmd をダブルクリックします。Python のインストール（[1]）、ファイアウォールの許可
+  （[2] の 1）、ポート開放（[3]）は協力サーバーと同じで、ポートだけ 28472 です。ウィンドウの接続PINをみんなに伝え、
+  自分も「コミュニティサーバーを追加」にウィンドウの「このPCのアドレス」を入れて入ります。
+  管理者PINは、ゲームの協力メニューでルールを変えるときに使います。
+  外部サーバーで開くときは、下の「外部サーバーの作り方」の「コミュニティサーバーを開くとき」を見てください。
 
 
-外部サーバーの作り方（例）
---------------------------
-アップロードするのは coop_server.py だけです。サーバーは Ubuntu、ポートは 28471（TCP）です。
-ssh・scp・icacls は自分のPCの PowerShell で、ほかのコマンドはサーバーに接続したウィンドウで入力します。
+外部サーバーの作り方（無料のクラウドサーバー）
+--------------------------------------------
+自分のIPを知られず、自分のPCを切っても動き続けるサーバーを無料のクラウドに作ります。
+サーバーは Ubuntu、ポートは 28471（TCP）です。
+コマンドはここからコピーして貼り付け（右クリックまたは Ctrl+V）、Enter を押します。入力する場所は 2 つです。
+- PowerShell: エクスプローラーでこのフォルダーを開き、上のアドレス欄に powershell と入力して Enter を押すと開くウィンドウ
+- サーバーのウィンドウ: サーバーに接続したウィンドウ（Oracle は 7、Google は 3 で開きます）
+コマンドの中の サーバーIP はサーバーのグローバルIPに、"C:\キーのパス\ssh-key.key"（引用符ごと）はキーファイルの
+パスに置き換えます: キーファイルを右クリック（Windows 10 は Shift+右クリック）→「パスのコピー」をして、そこへ貼り付けます。
 
-Oracle Cloud（無料）
-1. 登録: ホームリージョン（Home Region）は後から変更できません。韓国が一覧になければ日本（大阪または東京）を選びます。
+■ Oracle Cloud（無料）
+- Oracle は、7日間ほとんど動いていない無料サーバーを止めることがあります（協力サーバーはたいていそうです）。止まったら
+  インスタンス画面で Start を押してください。自動で起動するようにしてあれば（「サーバーを起動する」の 3、コミュニティ
+  サーバーは 5）、サーバーも自動で動き出します。止められないようにするには、アカウントを Pay As You Go に
+  アップグレードします（無料の範囲内なら料金はかかりません）。
+1. 登録: ホームリージョン（Home Region）は後から変更できません。日本（東京または大阪）を選びます。
 2. 先にネットワークを作る: メニュー（≡）→ Networking → Virtual cloud networks → Start VCN Wizard
    → Create VCN with Internet Connectivity → Start VCN Wizard → 名前だけ入れて Next → Create
 3. サーバーを作る: 左上のメニュー（≡）→ Compute → Instances → Create instance
    - Name: 好きな名前
    - Image and shape → Image の Change image → Ubuntu → Canonical Ubuntu 22.04（または 24.04）→ Select image
-   - Shape の Change shape → Virtual machine → Ampere の VM.Standard.A1.Flex（OCPU 1、メモリ 6GB）
-     → Select shape。「Out of capacity」で作れないときは AMD の VM.Standard.E2.1.Micro を選びます。
+   - Shape の Change shape → Virtual machine → Ampere の VM.Standard.A1.Flex（OCPU 1、メモリ 6GB）→ Select shape
+     「Out of capacity」で作れないときは AMD の VM.Standard.E2.1.Micro を選びます。
      （どちらも「Always Free-eligible」と表示された無料のシェイプです）
    - Security: そのまま
-   - Networking: Select existing virtual cloud network → 2で作った VCN と、名前に public subnet が入ったサブネット、
+   - Networking: Select existing virtual cloud network → 2 で作った VCN と、名前に public subnet が入ったサブネットを選び、
      「Automatically assign public IPv4 address」をオンにします
-   - Add SSH keys: Generate a key pair for me → Save private key（.key ファイルがダウンロードされます - なくすと接続できないので保管）
+   - Add SSH keys: Generate a key pair for me → Save private key
+     （.key ファイルがダウンロードされます。なくすとサーバーに入れないので消さないでください）
    - Storage: そのまま（無料の範囲内）
-   - 一番下の Create → 状態が Running になったらインスタンス画面の Public IP address を控えます
-4. ポートを開く: メニュー（≡）→ Networking → Virtual cloud networks → 2で作った VCN → Security タブ
+   - 一番下の Create → 状態が Running になったら、インスタンス画面の Public IP address（サーバーIP）を控えます
+4. ポートを開く: メニュー（≡）→ Networking → Virtual cloud networks → 2 で作った VCN → Security タブ
    → Security Lists の Default Security List → Security rules タブ → Add Ingress Rules
    - Source Type: CIDR / Source CIDR: 0.0.0.0/0 / IP Protocol: TCP / Destination Port Range: 28471
    - ほかは空欄のまま Add Ingress Rules
-5. キーファイルの権限（自分のPCの PowerShell、最初の1回 - しないと ssh がキーを拒否します）。
-   キーファイルは Cドライブ（例: C:\Users\自分の名前\.ssh）に置きます - USBや exFAT のドライブでは権限を設定できません。
-   キーファイル名はダウンロードした名前のまま入れます（例: ssh-key-2026-10-14.key）:
+5. キーファイルの権限（PowerShell、最初の1回 - しないと ssh がキーを拒否します）:
    icacls "C:\キーのパス\ssh-key.key" /inheritance:r /grant:r "$($env:USERNAME):R"
-6. アップロード（PowerShell、coop_server.py のあるフォルダーで）:
+   キーファイルは Cドライブに置きます（ダウンロードフォルダーのままで大丈夫）。
+   USB や exFAT のドライブでは権限を設定できません。
+6. ファイルをアップロード（PowerShell）:
    scp -i "C:\キーのパス\ssh-key.key" coop_server.py ubuntu@サーバーIP:~/
-7. 接続（PowerShell）: ssh -i "C:\キーのパス\ssh-key.key" ubuntu@サーバーIP
-   初回は「Are you sure you want to continue connecting?」に yes。以降のコマンドはこのウィンドウに入力します。
-   - PowerShell ISE ではなく通常の PowerShell（またはターミナル）を使います - ISE では文字が入力できません。
-   - 'scp'/'ssh' が見つからないときはフルパスで実行します
-     （例: & "C:\Windows\System32\OpenSSH\ssh.exe" -i ... ubuntu@サーバーIP）。
-8. サーバー内のファイアウォールを開く（Oracle の Ubuntu は最初は閉じています）:
+   最初の接続で出る「Are you sure you want to continue connecting」には yes と入力します。
+7. サーバーに接続（PowerShell）: ssh -i "C:\キーのパス\ssh-key.key" ubuntu@サーバーIP
+   これでこのウィンドウがサーバーのウィンドウです。
+   - 6・7 で 'scp' や 'ssh' が見つからないと出たら、フルパスで実行します
+     （例: & "C:\Windows\System32\OpenSSH\ssh.exe" -i "C:\キーのパス\ssh-key.key" ubuntu@サーバーIP / scp は scp.exe）。
+8. サーバー内のファイアウォールを開く（サーバーのウィンドウ - Oracle の Ubuntu は最初は閉じています）:
    sudo iptables -I INPUT -p tcp --dport 28471 -j ACCEPT && sudo netfilter-persistent save
+9. 下の「サーバーを起動する」へ進みます。
 
-Google Cloud（米国リージョンの e2-micro は無料、ソウルは有料）
+■ Google Cloud（米国リージョンの e2-micro は無料）
+- 初めて登録すると、90日間使える300ドルのクレジットがもらえます。登録したカードに確認用の仮承認がしばらく出ることが
+  ありますが、請求ではなく、銀行によって1〜14営業日で消えます。体験中は課金されず、90日が過ぎても自分でアップグレード
+  しない限り課金されません。クレジットがある間は、本来は有料の東京リージョン（asia-northeast1）などもクレジットで使えます。
+- 90日が過ぎるかクレジットを使い切ると、サーバーは止まります。続けて使うなら、その前にお支払い（Billing）画面の
+  「アップグレード」（Upgrade、画面によっては「有効化」/Activate）で有料アカウントにしてください（止まってから30日以内なら
+  戻せますが、その後は削除されます）。アップグレード後は、無料の範囲を超えた分がカードに自動で請求されます。米国リージョンの
+  e2-micro 1台と 30GB の標準ディスクは無料のままですが、ほかのリージョンと、サーバーから出ていくデータの月1GBを超えた分は
+  料金がかかります。大人数で長く遊ぶなら、出ていくデータが月10TBまで無料の Oracle のほうが向いています。
 1. Compute Engine → VMインスタンス → インスタンスを作成
-   - リージョン: us-west1、us-central1、us-east1 のいずれか / マシンタイプ: e2-micro
+   - リージョン: us-west1、us-central1、us-east1 のいずれか（90日間だけなら東京 asia-northeast1 なども可）
+   - マシンタイプ: e2-micro
    - ブートディスク: 変更 → Ubuntu、ディスクの種類「標準永続ディスク」30GB 以下（ほかの種類は有料）
-   - 作成 → 外部IPを控えます
+   - 作成 → 外部IP（サーバーIP）を控えます
 2. ポートを開く: VPCネットワーク → ファイアウォール → ファイアウォールルールを作成
-   - ターゲット: ネットワーク上のすべてのインスタンス、ソースIPv4範囲 0.0.0.0/0、TCP 28471 → 作成
-3. VM一覧の SSH ボタン → 開いたウィンドウ上部の「ファイルをアップロード」（UPLOAD FILE）で coop_server.py を送ります。
-   以降のコマンドはこのウィンドウに入力します。
+   - ターゲット: ネットワーク上のすべてのインスタンス / ソースIPv4範囲: 0.0.0.0/0 / TCP にチェックしてポート 28471 → 作成
+3. VM一覧の SSH ボタンを押します。開いたウィンドウがサーバーのウィンドウです。
+   ウィンドウ上部の「ファイルをアップロード」（UPLOAD FILE）で、このフォルダの coop_server.py を送ります。
+4. 下の「サーバーを起動する」へ進みます。
 
-サーバーのウィンドウで（どちらも）
-- 起動: nohup python3 coop_server.py > coop.log 2>&1 &
-- 接続PIN・ホストPINを見る: cat coop.log
-- 動いているか見る: pgrep -af coop_server
+■ サーバーを起動する（Oracle・Google 共通、サーバーのウィンドウで）
+1. 起動: nohup python3 coop_server.py > coop.log 2>&1 &
+2. PINを見る: cat coop.log →「give this to your friends」の行の接続PINと、「only to host from another PC」の行の
+   ホストPINを控えます。
+3. サーバーが再起動しても自動で起動するようにする（1回だけ）:
+   (crontab -l 2>/dev/null; echo "@reboot cd $HOME && python3 coop_server.py > coop.log 2>&1") | crontab -
+4. ゲームで（アドレスはサーバーIPです。coop.log に出る「friends on the same router」のアドレスではありません）
+   - ホスト: メニュー → 協力 →「自分の世界を開く（別の場所の協力サーバー）」→「サーバーを追加（IP・ポート・PIN入力）」
+     → サーバーIP、ポート 28471、接続PIN、ホストPIN
+   - 友達: [4] と同じく、サーバーIP、ポート 28471、接続PIN
+- サーバーのウィンドウを閉じてもサーバーは動き続けます。また入るときは、Oracle は 7 の ssh、Google は SSH ボタンで入ります。
+- 動いているか見る: pgrep -af coop_server（何も出なければ止まっています - 1 で起動します）
 - 止める: pkill -f coop_server
-- サーバーが再起動しても自動で起動する（1回だけ）:
-  (crontab -l 2>/dev/null; echo "@reboot cd $HOME && python3 coop_server.py > coop.log 2>&1") | crontab -
-- ゲームでは: ホストはメニュー → 協力 → 自分の世界を開く（別の場所の協力サーバー）にサーバーIPとホストPIN、
-  友達は友達の世界へ行く → サーバーを追加 にサーバーIP、ポート 28471、接続PIN。
-新しい版: ファイルを再アップロードしてから（Google Cloud は上書きせず 'coop_server_(1).py' のように溜まります）この1行:
-pkill -f coop_server; f=$(ls -t coop_server*.py | head -1); [ "$f" = coop_server.py ] || mv -f "$f" coop_server.py; for x in coop_server*.py; do [ "$x" = coop_server.py ] || rm -f -- "$x"; done; nohup python3 coop_server.py > coop.log 2>&1 &
+- 誰も入れないとき: 動いているか確かめ、ポートを開く手順（Oracle 4・8、Google 2）をもう一度確かめてください。
+
+■ 新しいバージョンに替える
+1. 新しい coop_server.py をもう一度アップロードします（Oracle: 6 / Google: ファイルをアップロード）。
+2. サーバーのウィンドウでこの1行を入力します。サーバーを止め、いちばん新しくアップロードしたファイルを coop_server.py に
+   して、また起動します（Google は同じ名前のファイルを上書きせず 'coop_server_(1).py' のように溜めていきます）:
+   pkill -f coop_server; f=$(ls -t coop_server*.py | head -1); [ "$f" = coop_server.py ] || mv -f "$f" coop_server.py; for x in coop_server*.py; do [ "$x" = coop_server.py ] || rm -f -- "$x"; done; nohup python3 coop_server.py > coop.log 2>&1 &
+
+■ コミュニティサーバーを開くとき（ポート 28472）
+1. Oracle の 1〜7 か Google の 1〜3 を同じように行い、ただしポートを開く手順（Oracle 4、Google 2）は 28472 にして、
+   ファイルは coop_server.py と world_server.py の両方をアップロードします（Oracle の 6 はこの行）:
+   scp -i "C:\キーのパス\ssh-key.key" coop_server.py world_server.py ubuntu@サーバーIP:~/
+2. Oracle は、サーバーのウィンドウで 8 の代わりにこの行を入力します:
+   sudo iptables -I INPUT -p tcp --dport 28472 -j ACCEPT && sudo netfilter-persistent save
+3. 起動: nohup python3 world_server.py > world.log 2>&1 &
+4. PINを見る: cat world.log →「the PIN players add the server with」の行の接続PINと、「to change the rules in the game」の
+   行の管理者PINを控えます。
+5. サーバーが再起動しても自動で起動するようにする（1回だけ）:
+   (crontab -l 2>/dev/null; echo "@reboot cd $HOME && python3 world_server.py > world.log 2>&1") | crontab -
+6. ゲームで: メニュー → 協力 →「コミュニティサーバーを追加（IP・ポート・PIN）」→ サーバーIP、ポート 28472、接続PIN
+- 動いているか見る: pgrep -af world_server / 止める: pkill -f world_server
+- 新しいバージョン: 2つのファイルをもう一度アップロードしてから、サーバーのウィンドウでこの1行:
+  pkill -f world_server; for n in coop_server world_server; do f=$(ls -t $n*.py | head -1); [ "$f" = $n.py ] || mv -f "$f" $n.py; for x in $n*.py; do [ "$x" = $n.py ] || rm -f -- "$x"; done; done; nohup python3 world_server.py > world.log 2>&1 &
+- 同じサーバーで協力サーバーも一緒に開けます。そのときはポート 28471 と 28472 の両方を開きます。
 
 
 アップデート

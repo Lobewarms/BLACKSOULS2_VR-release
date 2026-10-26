@@ -11,7 +11,8 @@ player at a time (a lock). The first player to come into an empty world brings i
 
 Settings in world_server.json beside it (made on the first run):
     port        TCP port (default 28472) - open it on the server's firewall
-    pin         what every player's game proves to come in (given in the game: 협력 -> 커뮤니티 서버 추가)
+    pin         what every player's game proves to come in (given in the game: 협력 -> 커뮤니티 서버 추가): 6 digits,
+                as the game's PIN input has (random at first)
     adminPin    what one proves in the game's co-op menu to change the rules there: 12 digits (random at first - the
                 developer's). Proved by a key made slowly from it (PBKDF2, adminSalt) - never sent, and a proof overheard
                 on the way is no help in guessing it
@@ -571,7 +572,11 @@ def load_config(args, path):
     if args.pin: cfg['pin'] = args.pin
     if args.admin_pin: cfg['adminPin'] = args.admin_pin
     if args.max_players: cfg['maxPlayers'] = args.max_players
-    if not (isinstance(cfg['pin'], str) and cfg['pin'].isdigit() and 4 <= len(cfg['pin']) <= 12):
+    # (6 digits: the game's PIN input has six - any other PIN could never be entered there)
+    if not (isinstance(cfg['pin'], str) and cfg['pin'].isdigit() and len(cfg['pin']) == 6):
+        if cfg['pin']:
+            say('접속 PIN은 6자리 숫자여야 합니다 (world_server.json, --pin) - 무작위로 정했습니다',
+                'the PIN must be 6 digits (world_server.json, --pin): a random one was made')
         cfg['pin'] = f'{secrets.randbelow(10 ** 6):06d}'           # (a random one at first)
     if not (isinstance(cfg['adminPin'], str) and cfg['adminPin'].isdigit() and len(cfg['adminPin']) == 12):
         if args.admin_pin:

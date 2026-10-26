@@ -1,18 +1,20 @@
-﻿BLACK SOULS II VR  (버전 2026.10.26-1)
+﻿BLACK SOULS II VR  (버전 2026.10.26-9)
 ==================================
 
 블랙소울2를 1인칭 VR(PCVR)로 플레이하는 비공식 팬 모드입니다.
 - 게임 데이터는 들어 있지 않습니다. 블랙소울2 게임 폴더가 필요합니다.
-- 원작 게임 폴더와 원작 세이브는 바꾸지 않습니다. 원작 세이브(Save01~16)는 VR에서 불러올 수 있습니다.
-- 원작 세이브의 난이도(도서관에서 고르는 0~9)도 그대로 적용됩니다. 바꾸려면 원작처럼 도서관에서 바꾸세요.
-- VR 세이브(오토 + 16칸)와 설정은 이 폴더의 saves 폴더에 저장됩니다.
+- 원작 세이브(Save01~16)를 VR에서 불러올 수 있습니다. 원작 세이브의 난이도(도서관에서 고르는 0~9)도 그대로 적용되니,
+  바꾸려면 원작처럼 도서관에서 바꾸세요.
+- VR 세이브와 설정은 이 폴더의 saves 폴더에 저장됩니다.
 
 
 필요한 것
 ---------
 - Windows 10/11, 최신 Chrome 또는 Edge
 - PCVR 헤드셋: SteamVR 헤드셋, 또는 Meta Quest(Link / Air Link / Virtual Desktop)
-- (선택) RPG Maker VX Ace RTP: 설치되어 있으면 런처가 알아서 찾습니다. 없으면 몇몇 맵의 일부 타일이 비어 보이고, 말풍선(감정표현 포함)이 안 나옵니다.
+- RPG Maker VX Ace RTP (무료, 설치하면 런처가 알아서 찾습니다)
+  https://www.rpgmakerweb.com/run-time-package 의 'RPG Maker VX Ace'에서 Download Run Time Package로 받고,
+  압축을 풀어 RTP100 폴더의 Setup.exe로 설치합니다.
 
 
 실행
@@ -73,88 +75,191 @@ SteamVR
 협력 (만드는 중)
 ---------------
 친구가 내 세계에 들어와 함께 다니고 싸울 수 있습니다.
-- 호스트: coop_server.cmd를 실행하고(Python 3 필요), 메뉴 → 협력 → 내 세계 열기 (이 PC의 협력 서버).
-  서버 창에 나오는 접속 PIN과, 같은 공유기의 친구에게는 서버 창의 이 PC 주소를, 인터넷의 친구에게는 공인 IP를 알려 주세요.
-  인터넷으로 부를 때는 공유기에서 포트 28471(TCP)를 이 PC로 열고, Windows 방화벽 창이 뜨면 '공용 네트워크'도 체크하고 허용을 누르세요.
-  공유기 관리 화면의 외부(WAN) IP가 공인 IP와 다르면(통신사 공유 IP, 공유기 두 대) 포트를 열어도 밖에서 들어올 수 없습니다.
-  그때는 아래 외부 서버를 쓰세요. 접속 확인은 같은 집이 아닌 곳(휴대폰 데이터 등)에서 하세요.
-- 게스트: 메뉴 → 협력 → 친구의 세계로 가기 → 새 서버 추가 → IP, 포트, PIN.
-- 이 PC에서 서버를 열면 친구에게 내 IP가 보이고 공유기 포트가 열립니다. 이렇게 하는 협력은 믿을 수 있는 사람끼리만 하세요.
-  모르는 사람과는 외부 서버를 쓰세요 (아래 "외부 서버 만들기").
-- 외부 서버: 그 서버에서 coop_server.py를 실행하고, 내 세계 열기 (다른 곳의 협력 서버)에서 서버 IP와 호스트 PIN을 넣으세요.
-- 게임을 새 버전으로 바꾸면 서버의 coop_server.py도 같은 것으로 바꾸고 다시 켜세요.
-- 서버 규칙과 접속 PIN은 호스트가 메뉴 → 협력에서 바꿉니다.
-- 주의: 함께 맵 이동을 끄면(게스트가 따로 행동) 아직 매우 불안정합니다.
-- 주의: 게스트가 먼저 보스전 시작을 켜면 의도하지 않게 게임이 진행될 수 있습니다.
-- 게스트로 있는 동안은 저장되지 않고, 끝나면 들어가기 전 그대로 자기 세계로 돌아갑니다.
+서버를 여는 쪽이 호스트, 들어가는 쪽이 게스트입니다. 게스트는 [4]만 보면 됩니다.
+
+어떻게 열까
+- 같은 집(같은 공유기)의 친구: [1] → [2]
+- 다른 집의 친구(믿을 수 있는 사람): [1] → [2] → [3]
+- 모르는 사람과 할 때, 또는 [3]이 안 될 때: 아래 "외부 서버 만들기" (내 IP가 알려지지 않음)
+
+[1] Python 3 설치 (서버를 여는 사람만, 처음 한 번)
+  1. https://www.python.org/downloads/ 에 들어가, 큰 단추(Download Python install manager) 말고 그 아래
+     'Or get the standalone installer for Python 3.x.x'의 'Python 3.x.x'를 눌러 설치 파일을 받고 실행합니다.
+  2. 첫 화면 맨 아래의 'Add python.exe to PATH'를 꼭 체크하고 'Install Now'를 누릅니다.
+  3. 'Setup was successful'이 나오면 Close를 누릅니다.
+  - 서버 창에 'Python was not found'나 'Python 3 is needed'가 나오면 설치가 안 됐거나 2번의 체크가 빠진 것입니다.
+    설치 파일을 다시 실행해 첫 화면이 나오면 2번부터, 'Modify'가 나오면 Modify → Next →
+    'Add Python to environment variables' 체크 → Install. 그다음 서버 창을 닫고 다시 켭니다.
+
+[2] 내 PC에서 서버 열기
+  1. 이 폴더의 coop_server.cmd를 더블클릭합니다. 검은 서버 창이 열립니다.
+     - 실행할지 묻는 창이 뜨면 '실행'을 누릅니다 ('Windows의 PC 보호' 창이면 '추가 정보' → '실행').
+     - 'Windows 보안 경고' 창이 뜨면 '개인 네트워크'와 '공용 네트워크'를 둘 다 체크하고 허용을 누릅니다.
+       그냥 닫았거나 한쪽만 체크했으면: 시작 메뉴에서 '방화벽'을 검색해 'Windows Defender 방화벽'을 열고,
+       왼쪽의 '앱 또는 기능 허용' → '설정 변경' → 목록의 Python마다 '개인'과 '공용'을 체크 → '확인'.
+     - 함께 하는 동안 서버 창을 닫지 마세요. 닫으면 서버가 꺼집니다.
+  2. 서버 창에서 두 가지를 확인합니다.
+     - 접속 PIN: 친구에게 알려 줄 6자리 숫자
+     - 이 PC의 주소: 같은 집 친구에게 알려 줄 주소 (예: 192.168.0.10)
+  3. 게임을 실행하고 메뉴(VR: Y, PC: Tab) → 협력 → '내 세계 열기 (이 PC의 협력 서버)'를 고릅니다.
+  4. 친구에게 주소, 포트 28471, 접속 PIN을 알려 줍니다.
+     - 같은 집 친구: 주소 = 서버 창의 '이 PC의 주소'
+     - 다른 집 친구: 주소 = 공인 IP ([3]의 2번). [3]까지 끝내야 들어올 수 있습니다.
+  - 접속 PIN과 규칙은 게임의 메뉴 → 협력에서 바꿉니다 (내보내기·차단도).
+  - 이렇게 열면 친구에게 내 IP가 보입니다. 믿을 수 있는 사람끼리만 하세요.
+
+[3] 다른 집의 친구 부르기 (공유기 포트 열기)
+  1. 공유기 관리 화면 열기: 명령 프롬프트(시작 메뉴에서 cmd 검색)에서 ipconfig 를 입력하고,
+     '기본 게이트웨이'에 적힌 주소(예: 192.168.0.1)를 브라우저 주소창에 넣습니다.
+     로그인 아이디·비밀번호는 보통 공유기 밑면 스티커에 적혀 있습니다.
+  2. 공인 IP 확인: 관리 화면에 나오는 외부(WAN·인터넷) IP를 봅니다.
+     - 10. / 172.16~172.31. / 192.168. 로 시작하면: 이 공유기 앞에 공유기가 하나 더 있습니다
+       (통신사 공유기 뒤에 내 공유기를 단 경우 등). 이 공유기의 외부(WAN) 정보에 나오는 게이트웨이 주소를 브라우저
+       주소창에 넣어 앞 공유기 관리 화면을 열고, 거기서 이 2번을 다시 합니다. 3번 규칙은 두 공유기 모두에 만듭니다
+       (앞 공유기 규칙의 내부 IP 주소는 뒤 공유기의 외부 IP).
+     - 100.64~100.127로 시작하거나 앞 공유기 관리 화면이 열리지 않으면: 통신사가 공인 IP 하나를 여러 집이 나눠 쓰게
+       하는 회선이라 집에서는 열 수 없습니다. 아래 "외부 서버 만들기"를 쓰세요.
+     - 그 밖의 주소면: 그것이 공인 IP입니다. 다른 집 친구에게 알려 줄 주소입니다 (예: 203.0.113.45).
+  3. 포트포워드 규칙 추가: '포트포워드' 또는 '포트 포워딩' 메뉴에서 새 규칙을 추가합니다
+     (ipTIME: 관리도구 → 고급 설정 → NAT/라우터 관리 → 포트포워드 설정 → 새 규칙 추가).
+     - 내부 IP 주소: 서버 창의 '이 PC의 주소'
+     - 프로토콜: TCP
+     - 외부 포트와 내부 포트: 둘 다 28471
+     → 저장(적용)합니다.
+  4. 친구가 [4]대로 들어오지 못하면(게임에 '서버에 닿지 않습니다'가 나오면): 3번 규칙(내부 IP·TCP·28471)이 저장됐는지,
+     [2]의 1번 방화벽에서 공용 네트워크까지 허용했는지 확인하세요. 백신 프로그램에 방화벽 기능이 있으면 거기서도
+     Python을 허용하세요.
+  - PC를 다시 켜면 '이 PC의 주소'가 바뀔 수 있습니다. 3번의 내부 IP와 달라졌으면 규칙을 고치세요.
+
+[4] 친구의 세계에 들어가기 (게스트)
+  1. 호스트에게 주소(IP), 포트, 접속 PIN을 받습니다.
+  2. 메뉴 → 협력 → '친구의 세계로 가기' → '새 서버 추가 (IP·포트·PIN 입력)'를 고릅니다.
+  3. IP는 숫자 12자리로, 세 자리씩 넣습니다. 세 자리가 안 되는 칸은 앞에 0을 붙입니다.
+     예: 192.168.0.10 → 192 168 000 010
+  4. 포트(처음부터 28471이 들어 있음)와 접속 PIN을 넣으면 들어갑니다.
+     한 번 넣은 서버는 다음부터 '친구의 세계로 가기'의 목록에서 고르면 됩니다.
+  - 게스트로 있는 동안은 저장되지 않고, 끝나면 들어가기 전 그대로 자기 세계로 돌아갑니다.
+
+함께 할 때
 - 채팅·음성: 메뉴 → 협력 → 채팅·음성. 채팅은 말한 사람 머리 위 말풍선으로 보입니다 (VR 키보드는 한/영 키로 한글 입력).
   음성 채팅은 '말하기와 듣기'를 고른 동안만 마이크를 씁니다 (처음 한 번 브라우저가 마이크 권한을 묻습니다).
-- 커뮤니티 서버(메뉴 → 협력 → 커뮤니티 서버)의 진행은 따로 저장되며 본편 세이브와 이어지지 않습니다. 본편으로 가져오려면 타이틀의 '커뮤니티 서버 세이브 불러오기'로 불러온 뒤 저장하세요.
-- 커뮤니티 서버 열기: community_server.cmd를 실행하고(Python 3 필요) 포트 28472(TCP)를 열어 주세요. 들어오는 사람은
-  메뉴 → 협력 → 커뮤니티 서버 추가에 IP, 포트 28472, 서버 창의 접속 PIN을 넣습니다.
-  외부 서버에서는 world_server.py와 coop_server.py를 함께 올리고 python3 world_server.py로 켭니다.
+- 주의: 함께 맵 이동을 끄면(게스트가 따로 행동) 아직 매우 불안정합니다.
+- 주의: 게스트가 먼저 보스전 시작을 켜면 의도하지 않게 게임이 진행될 수 있습니다.
+- 게임을 새 버전으로 바꾸면 서버 창도 닫았다가 다시 켜세요 (외부 서버는 아래 '새 버전으로 바꾸기').
+
+커뮤니티 서버 (모두가 함께하는 하나의 세계)
+- 들어가기: 메뉴 → 협력 → '커뮤니티 서버 1' 또는 '커뮤니티 서버 2'.
+  다른 사람이 연 커뮤니티 서버는 '커뮤니티 서버 추가 (IP·포트·PIN 입력)'에 그 서버의 주소, 포트(처음부터 28472),
+  접속 PIN을 넣습니다.
+- 커뮤니티 서버의 진행은 따로 저장되며 본편 세이브와 이어지지 않습니다. 본편으로 가져오려면 타이틀의
+  '커뮤니티 서버 세이브 불러오기'로 불러온 뒤 저장하세요.
+- 직접 열기: community_server.cmd를 더블클릭합니다. Python 설치([1]), 방화벽 허용([2]의 1번), 포트 열기([3])는
+  협력 서버와 같고, 포트만 28472입니다. 서버 창의 접속 PIN을 사람들에게 알려 주고, 나도 '커뮤니티 서버 추가'에
+  서버 창의 '이 PC의 주소'를 넣어 들어갑니다. 관리자 PIN은 게임의 협력 메뉴에서 규칙을 바꿀 때 씁니다.
+  외부 서버에서 열려면 아래 "외부 서버 만들기"의 '커뮤니티 서버를 열 때'를 보세요.
 
 
-외부 서버 만들기 (예시)
-----------------------
-올리는 파일은 coop_server.py 하나뿐입니다. 서버는 Ubuntu, 포트는 28471(TCP)입니다.
-ssh·scp·icacls는 내 PC의 PowerShell에서, 나머지 명령은 서버에 접속한 창에서 입력합니다.
+외부 서버 만들기 (무료 클라우드 서버)
+-----------------------------------
+내 IP를 알리지 않고, 내 PC를 꺼도 켜져 있는 서버를 무료 클라우드에 만듭니다. 서버는 Ubuntu, 포트는 28471(TCP)입니다.
+명령은 이 글에서 복사해 붙여 넣고(마우스 오른쪽 클릭 또는 Ctrl+V) Enter를 누릅니다. 입력하는 곳은 두 군데입니다.
+- PowerShell: 탐색기로 이 폴더를 열고, 위쪽 주소창에 powershell 이라고 입력한 뒤 Enter를 누르면 열리는 창
+- 서버 창: 서버에 접속한 창 (오라클은 7번, 구글은 3번에서 엽니다)
+명령 안의 서버IP는 서버의 공인 IP로 바꿉니다. "C:\키경로\ssh-key.key"(따옴표 포함)는 키 파일의 경로로 바꿉니다:
+키 파일을 마우스 오른쪽 클릭(Windows 10은 Shift+오른쪽 클릭) → '경로로 복사'한 뒤 그 자리에 붙여 넣으면 됩니다.
 
-오라클 클라우드 (무료)
+■ 오라클 클라우드 (무료)
+- 오라클은 7일 동안 거의 놀고 있던 무료 서버를 멈출 수 있습니다 (협력 서버는 대개 그렇습니다). 멈췄으면 인스턴스 화면에서
+  Start를 누르세요. 자동으로 켜지게 해 두었으면(서버 켜기 3번, 커뮤니티 서버는 5번) 서버도 저절로 켜집니다.
+  아예 안 멈추게 하려면 계정을 Pay As You Go로 업그레이드하세요 (무료 범위 안에서는 요금이 나가지 않습니다).
 1. 가입: 홈 영역(Home Region)은 나중에 바꿀 수 없습니다. 한국이 목록에 없으면 일본(오사카 또는 도쿄)을 고르세요.
 2. 네트워크 먼저 만들기: 메뉴(≡) → Networking → Virtual cloud networks → Start VCN Wizard
    → Create VCN with Internet Connectivity → Start VCN Wizard → 이름만 넣고 Next → Create
 3. 서버 만들기: 왼쪽 위 메뉴(≡) → Compute → Instances → Create instance
    - Name: 아무 이름
    - Image and shape → Image의 Change image → Ubuntu → Canonical Ubuntu 22.04 (또는 24.04) → Select image
-   - Shape의 Change shape → Virtual machine → Ampere의 VM.Standard.A1.Flex (OCPU 1, 메모리 6GB)
-     → Select shape. 'Out of capacity'로 만들어지지 않으면 AMD의 VM.Standard.E2.1.Micro를 고르세요.
+   - Shape의 Change shape → Virtual machine → Ampere의 VM.Standard.A1.Flex (OCPU 1, 메모리 6GB) → Select shape
+     'Out of capacity'로 만들어지지 않으면 AMD의 VM.Standard.E2.1.Micro를 고르세요.
      (둘 다 "Always Free-eligible" 표시가 있는 무료 모양입니다)
    - Security: 그대로 둡니다
-   - Networking: Select existing virtual cloud network → 2번에서 만든 VCN과 이름에 public subnet이 들어간 서브넷,
+   - Networking: Select existing virtual cloud network → 2번에서 만든 VCN과 이름에 public subnet이 들어간 서브넷을 고르고,
      "Automatically assign public IPv4 address"를 켭니다
-   - Add SSH keys: Generate a key pair for me → Save private key (.key 파일이 내려받아집니다 - 잃어버리면 접속할 수 없으니 잘 보관)
+   - Add SSH keys: Generate a key pair for me → Save private key
+     (.key 파일이 내려받아집니다. 잃어버리면 서버에 들어갈 수 없으니 지우지 마세요)
    - Storage: 그대로 둡니다 (무료 범위 안)
-   - 맨 아래 Create → 상태가 Running이 되면 인스턴스 화면의 Public IP address를 적어 둡니다
+   - 맨 아래 Create → 상태가 Running이 되면 인스턴스 화면의 Public IP address(서버IP)를 적어 둡니다
 4. 포트 열기: 메뉴(≡) → Networking → Virtual cloud networks → 2번에서 만든 VCN → Security 탭
    → Security Lists의 Default Security List → Security rules 탭 → Add Ingress Rules
    - Source Type: CIDR / Source CIDR: 0.0.0.0/0 / IP Protocol: TCP / Destination Port Range: 28471
    - 나머지는 비워 두고 Add Ingress Rules
-5. 키 파일 권한 (내 PC의 PowerShell, 처음 한 번 - 안 하면 ssh가 키를 거부합니다).
-   키 파일은 C 드라이브(예: C:\Users\내이름\.ssh)에 두세요 - USB나 exFAT 드라이브에서는 권한이 걸리지 않습니다.
-   키 파일 이름은 받은 파일 그대로 넣으세요 (예: ssh-key-2026-10-14.key):
+5. 키 파일 권한 (PowerShell, 처음 한 번 - 안 하면 ssh가 키를 거부합니다):
    icacls "C:\키경로\ssh-key.key" /inheritance:r /grant:r "$($env:USERNAME):R"
-6. 파일 올리기 (PowerShell, coop_server.py가 있는 폴더에서):
+   키 파일은 C 드라이브에 두세요(다운로드 폴더 그대로 괜찮음). USB나 exFAT 드라이브에서는 권한이 걸리지 않습니다.
+6. 파일 올리기 (PowerShell):
    scp -i "C:\키경로\ssh-key.key" coop_server.py ubuntu@서버IP:~/
-7. 서버 접속 (PowerShell): ssh -i "C:\키경로\ssh-key.key" ubuntu@서버IP
-   처음에는 "Are you sure you want to continue connecting?"에 yes. 이후 명령은 이 창에 입력합니다.
-   - PowerShell ISE 말고 일반 PowerShell(또는 터미널) 창을 쓰세요 - ISE에서는 글자가 입력되지 않습니다.
-   - 'scp'/'ssh'를 찾을 수 없다고 나오면 전체 경로로 실행합니다
-     (예: & "C:\Windows\System32\OpenSSH\ssh.exe" -i ... ubuntu@서버IP).
-8. 서버 안 방화벽 열기 (오라클의 Ubuntu는 처음에 막혀 있습니다):
+   처음 접속할 때 나오는 "Are you sure you want to continue connecting"에는 yes를 입력합니다.
+7. 서버에 접속 (PowerShell): ssh -i "C:\키경로\ssh-key.key" ubuntu@서버IP
+   이제 이 창이 서버 창입니다.
+   - 6·7번에서 'scp'나 'ssh'를 찾을 수 없다고 나오면 전체 경로로 실행합니다
+     (예: & "C:\Windows\System32\OpenSSH\ssh.exe" -i "C:\키경로\ssh-key.key" ubuntu@서버IP / scp는 scp.exe).
+8. 서버 안 방화벽 열기 (서버 창 - 오라클의 Ubuntu는 처음에 막혀 있습니다):
    sudo iptables -I INPUT -p tcp --dport 28471 -j ACCEPT && sudo netfilter-persistent save
+9. 아래 '서버 켜기'로 넘어갑니다.
 
-구글 클라우드 (미국 리전 e2-micro 무료, 서울 리전은 유료)
+■ 구글 클라우드 (미국 리전의 e2-micro 무료)
+- 처음 가입하면 300달러 크레딧을 90일 동안 쓸 수 있습니다. 등록한 카드에 확인용 승인이 잠깐 잡힐 수 있지만 결제가
+  아니고, 은행에 따라 1~14영업일 안에 풀립니다. 체험 중에는 결제되지 않고, 90일이 지나도 직접 업그레이드하지 않으면
+  결제되지 않습니다. 크레딧이 있는 동안은 원래 유료인 서울 리전(asia-northeast3)도 크레딧으로 쓸 수 있습니다.
+- 90일이 지나거나 크레딧을 다 쓰면 서버가 멈춥니다. 계속 쓰려면 그 전에 결제(Billing) 화면의 '업그레이드'(Upgrade,
+  화면에 따라 '활성화'/Activate)로 유료 계정으로 바꾸세요 (멈춘 뒤 30일 안에 바꾸면 되살릴 수 있고, 그 뒤에는 지워집니다).
+  바꾼 뒤에는 무료 범위를 넘는 만큼이 카드로 자동 결제됩니다. 미국 리전의 e2-micro 한 대와 30GB 표준 디스크는 계속
+  무료지만, 서울 리전과 서버에서 나가는 데이터 중 월 1GB를 넘는 만큼은 요금이 나갑니다.
+  여럿이 오래 할 거면 나가는 데이터가 월 10TB까지 무료인 오라클이 낫습니다.
 1. Compute Engine → VM 인스턴스 → 인스턴스 만들기
-   - 리전: us-west1, us-central1, us-east1 중 하나 / 머신 유형: e2-micro
+   - 리전: us-west1, us-central1, us-east1 중 하나 (90일 동안만 쓸 거면 서울 asia-northeast3도 됩니다) / 머신 유형: e2-micro
    - 부팅 디스크: 변경 → Ubuntu, 디스크 유형 "표준 영구 디스크" 30GB 이하 (다른 유형은 유료)
-   - 만들기 → 외부 IP를 적어 둡니다
+   - 만들기 → 외부 IP(서버IP)를 적어 둡니다
 2. 포트 열기: VPC 네트워크 → 방화벽 → 방화벽 규칙 만들기
-   - 대상: 네트워크의 모든 인스턴스, 소스 IPv4 범위 0.0.0.0/0, TCP 28471 → 만들기
-3. VM 목록의 SSH 버튼 → 열린 창 위쪽의 "파일 업로드"(UPLOAD FILE)로 coop_server.py를 올립니다.
-   이후 명령은 이 창에 입력합니다.
+   - 대상: 네트워크의 모든 인스턴스 / 소스 IPv4 범위: 0.0.0.0/0 / TCP에 체크하고 포트 28471 → 만들기
+3. VM 목록의 SSH 버튼을 누릅니다. 열린 창이 서버 창입니다.
+   창 위쪽의 '파일 업로드'(UPLOAD FILE)로 이 폴더의 coop_server.py를 올립니다.
+4. 아래 '서버 켜기'로 넘어갑니다.
 
-서버 창에서 (둘 다)
-- 켜기: nohup python3 coop_server.py > coop.log 2>&1 &
-- 접속 PIN·호스트 PIN 보기: cat coop.log
-- 켜져 있는지 보기: pgrep -af coop_server
+■ 서버 켜기 (오라클·구글 공통, 서버 창에서)
+1. 켜기: nohup python3 coop_server.py > coop.log 2>&1 &
+2. PIN 보기: cat coop.log → 나오는 '접속 PIN'과 '호스트 PIN'을 적어 둡니다.
+3. 서버가 다시 시작돼도 저절로 켜지게 하기 (한 번만):
+   (crontab -l 2>/dev/null; echo "@reboot cd $HOME && python3 coop_server.py > coop.log 2>&1") | crontab -
+4. 게임에서 (주소는 서버IP입니다. coop.log에 나오는 '이 PC의 주소'가 아닙니다)
+   - 호스트: 메뉴 → 협력 → '내 세계 열기 (다른 곳의 협력 서버)' → '새 서버 추가 (IP·포트·PIN 입력)'
+     → 서버IP, 포트 28471, 접속 PIN, 호스트 PIN
+   - 친구: [4]처럼 서버IP, 포트 28471, 접속 PIN
+- 서버 창을 닫아도 서버는 계속 켜져 있습니다. 다시 들어갈 때는 오라클은 7번의 ssh, 구글은 SSH 버튼으로 들어갑니다.
+- 켜져 있는지 보기: pgrep -af coop_server (아무것도 안 나오면 꺼진 것 - 1번으로 켭니다)
 - 끄기: pkill -f coop_server
-- 서버가 다시 시작돼도 자동으로 켜기 (한 번만):
-  (crontab -l 2>/dev/null; echo "@reboot cd $HOME && python3 coop_server.py > coop.log 2>&1") | crontab -
-- 게임에서: 호스트는 메뉴 → 협력 → 내 세계 열기 (다른 곳의 협력 서버)에 서버 IP와 호스트 PIN,
-  친구는 친구의 세계로 가기 → 새 서버 추가에 서버 IP, 포트 28471, 접속 PIN.
-새 버전: 파일을 다시 올린 뒤(구글 클라우드는 덮어쓰지 않고 'coop_server_(1).py'처럼 쌓임) 이 한 줄:
-pkill -f coop_server; f=$(ls -t coop_server*.py | head -1); [ "$f" = coop_server.py ] || mv -f "$f" coop_server.py; for x in coop_server*.py; do [ "$x" = coop_server.py ] || rm -f -- "$x"; done; nohup python3 coop_server.py > coop.log 2>&1 &
+- 들어가지지 않으면: 켜져 있는지 보고, 포트 열기(오라클 4·8번, 구글 2번)를 다시 확인하세요.
+
+■ 새 버전으로 바꾸기
+1. 새 coop_server.py를 다시 올립니다 (오라클: 6번 / 구글: 파일 업로드).
+2. 서버 창에서 이 한 줄을 입력합니다. 서버를 끄고, 가장 최근에 올린 파일을 coop_server.py로 바꾼 뒤 다시 켭니다
+   (구글은 같은 이름의 파일을 덮어쓰지 않고 'coop_server_(1).py'처럼 따로 쌓습니다):
+   pkill -f coop_server; f=$(ls -t coop_server*.py | head -1); [ "$f" = coop_server.py ] || mv -f "$f" coop_server.py; for x in coop_server*.py; do [ "$x" = coop_server.py ] || rm -f -- "$x"; done; nohup python3 coop_server.py > coop.log 2>&1 &
+
+■ 커뮤니티 서버를 열 때 (포트 28472)
+1. 오라클 1~7번 또는 구글 1~3번을 똑같이 하되, 포트 열기(오라클 4번, 구글 2번)는 28472로 하고
+   파일은 coop_server.py와 world_server.py를 둘 다 올립니다 (오라클 6번은 이 줄):
+   scp -i "C:\키경로\ssh-key.key" coop_server.py world_server.py ubuntu@서버IP:~/
+2. 오라클은 서버 창에서 8번 대신 이 줄을 입력합니다:
+   sudo iptables -I INPUT -p tcp --dport 28472 -j ACCEPT && sudo netfilter-persistent save
+3. 켜기: nohup python3 world_server.py > world.log 2>&1 &
+4. PIN 보기: cat world.log → 나오는 '접속 PIN'과 '관리자 PIN'을 적어 둡니다.
+5. 서버가 다시 시작돼도 저절로 켜지게 하기 (한 번만):
+   (crontab -l 2>/dev/null; echo "@reboot cd $HOME && python3 world_server.py > world.log 2>&1") | crontab -
+6. 게임에서: 메뉴 → 협력 → '커뮤니티 서버 추가 (IP·포트·PIN 입력)' → 서버IP, 포트 28472, 접속 PIN
+- 켜져 있는지 보기: pgrep -af world_server / 끄기: pkill -f world_server
+- 새 버전으로 바꾸기: 두 파일을 다시 올린 뒤 서버 창에서 이 한 줄:
+  pkill -f world_server; for n in coop_server world_server; do f=$(ls -t $n*.py | head -1); [ "$f" = $n.py ] || mv -f "$f" $n.py; for x in $n*.py; do [ "$x" = $n.py ] || rm -f -- "$x"; done; done; nohup python3 world_server.py > world.log 2>&1 &
+- 같은 서버에서 협력 서버도 함께 열 수 있습니다. 그때는 포트 열기를 28471과 28472 둘 다 합니다.
 
 
 업데이트

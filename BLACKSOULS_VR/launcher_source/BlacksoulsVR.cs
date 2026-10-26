@@ -219,52 +219,30 @@ namespace BlacksoulsVR
         static readonly Dictionary<string, string[]> T = new Dictionary<string, string[]>
         {
             { "BLACK SOULS II VR 런처  v{0}", new[] { "BLACK SOULS II VR Launcher  v{0}", "BLACK SOULS II VR ランチャー  v{0}", "BLACK SOULS II VR 启动器  v{0}", "BLACK SOULS II VR — лаунчер  v{0}" } },
-            { "원작 게임 폴더는 읽기만 합니다 (아무것도 바꾸거나 저장하지 않음). VR 세이브·설정은 이 프로그램 폴더의 saves에 저장됩니다.", new[] {
-                "The original game folder is only read (nothing in it is changed or saved). VR saves and settings go to the saves folder of this program.",
-                "原作のゲームフォルダは読み込むだけです (何も変更・保存しません)。VRのセーブと設定はこのプログラムの saves フォルダに保存されます。",
-                "只读取原作游戏文件夹 (不会修改或保存任何东西)。VR 存档和设置保存在本程序的 saves 文件夹中。",
-                "Папка оригинальной игры только читается (в ней ничего не меняется и не сохраняется). VR-сохранения и настройки хранятся в папке saves этой программы." } },
             { "언어 (Language)", new[] { "Language", "言語 (Language)", "语言 (Language)", "Язык (Language)" } },
-            { "블랙소울2 게임 폴더 (Game.exe가 있는 폴더)", new[] { "BLACK SOULS II game folder (the one with Game.exe)", "ブラックソウルズ2のゲームフォルダ (Game.exe があるフォルダ)", "黑魂2 (BLACK SOULS II) 游戏文件夹 (Game.exe 所在的文件夹)", "Папка игры BLACK SOULS II (та, где Game.exe)" } },
+            { "블랙소울2 게임 폴더", new[] { "BLACK SOULS II game folder", "ブラックソウルズ2のゲームフォルダ", "黑魂2 (BLACK SOULS II) 游戏文件夹", "Папка игры BLACK SOULS II" } },
             { "찾아보기...", new[] { "Browse...", "参照...", "浏览...", "Обзор..." } },
             { "블랙소울2 게임 폴더를 고르세요", new[] { "Choose the BLACK SOULS II game folder", "ブラックソウルズ2のゲームフォルダを選んでください", "请选择黑魂2的游戏文件夹", "Выберите папку игры BLACK SOULS II" } },
-            { "RPG Maker VX Ace RTP 폴더 (선택: 일부 맵의 기본 타일. 없어도 실행됩니다)", new[] {
-                "RPG Maker VX Ace RTP folder (optional: stock tiles a few maps use; it runs without)",
-                "RPG Maker VX Ace RTP フォルダ (任意: 一部マップの標準タイル。なくても動きます)",
-                "RPG Maker VX Ace RTP 文件夹 (可选：部分地图的默认图块，没有也能运行)",
-                "Папка RPG Maker VX Ace RTP (необязательно: тайлы некоторых карт; можно без неё)" } },
+            { "RPG Maker VX Ace RTP 폴더", new[] { "RPG Maker VX Ace RTP folder", "RPG Maker VX Ace RTP フォルダ", "RPG Maker VX Ace RTP 文件夹", "Папка RPG Maker VX Ace RTP" } },
             { "RPG Maker VX Ace RTP 폴더(RPGVXAce)를 고르세요", new[] { "Choose the RPG Maker VX Ace RTP folder (RPGVXAce)", "RPG Maker VX Ace RTP フォルダ (RPGVXAce) を選んでください", "请选择 RPG Maker VX Ace RTP 文件夹 (RPGVXAce)", "Выберите папку RPG Maker VX Ace RTP (RPGVXAce)" } },
             { "브라우저", new[] { "Browser", "ブラウザ", "浏览器", "Браузер" } },
-            { "자동 (Chrome, 없으면 Edge)", new[] { "Auto (Chrome, else Edge)", "自動 (Chrome、なければ Edge)", "自动 (Chrome，没有则用 Edge)", "Авто (Chrome, иначе Edge)" } },
+            { "자동", new[] { "Auto", "自動", "自动", "Авто" } },
             { "포트", new[] { "Port", "ポート", "端口", "Порт" } },
             { "게임 창이 뜨면 VR 자동 시작", new[] { "Enter VR by itself when the game window opens", "ゲームウィンドウが開いたら自動で VR 開始", "游戏窗口打开后自动进入 VR", "Входить в VR сразу, когда откроется окно игры" } },
-            { "실행 (Launch)", new[] { "Launch", "起動 (Launch)", "启动 (Launch)", "Запуск (Launch)" } },
+            { "실행", new[] { "Launch", "起動", "启动", "Запуск" } },
             { "SteamVR 라이브러리에 등록", new[] { "Add to the SteamVR library", "SteamVR ライブラリに登録", "添加到 SteamVR 库", "Добавить в библиотеку SteamVR" } },
             { "SteamVR 등록 해제", new[] { "Remove from SteamVR", "SteamVR 登録を解除", "从 SteamVR 移除", "Удалить из SteamVR" } },
             { "세이브 폴더 열기", new[] { "Open the saves folder", "セーブフォルダを開く", "打开存档文件夹", "Открыть папку сохранений" } },
-            { "VR 런타임(OpenXR): {0}   ·   게임은 브라우저의 WebXR로 이 런타임을 씁니다", new[] {
-                "VR runtime (OpenXR): {0}   ·   the game uses it through the browser's WebXR",
-                "VR ランタイム (OpenXR): {0}   ·   ゲームはブラウザの WebXR でこのランタイムを使います",
-                "VR 运行时 (OpenXR)：{0}   ·   游戏通过浏览器的 WebXR 使用它",
-                "VR-среда (OpenXR): {0}   ·   игра использует её через WebXR браузера" } },
-            { "없음 (VR 런타임이 설치되지 않았거나 지정되지 않음)", new[] { "none (no VR runtime installed or set)", "なし (VR ランタイムが未インストールまたは未設定)", "无 (未安装或未设置 VR 运行时)", "нет (VR-среда не установлена или не выбрана)" } },
+            { "VR 런타임: {0}", new[] { "VR runtime: {0}", "VR ランタイム: {0}", "VR 运行时：{0}", "VR-среда: {0}" } },
+            { "없음", new[] { "none", "なし", "无", "нет" } },
             { "알 수 없음", new[] { "unknown", "不明", "未知", "неизвестно" } },
-            { "버전 {0}   ·   세이브 폴더: {1}", new[] { "Version {0}   ·   saves folder: {1}", "バージョン {0}   ·   セーブフォルダ: {1}", "版本 {0}   ·   存档文件夹：{1}", "Версия {0}   ·   папка сохранений: {1}" } },
             { "새 버전 받기 ({0})", new[] { "Get the new version ({0})", "新しいバージョンを入手 ({0})", "获取新版本 ({0})", "Скачать новую версию ({0})" } },
-            { "새 버전이 나왔습니다: {0} (지금 {1}). '새 버전 받기'를 누르면 받는 곳이 열립니다.", new[] {
-                "A new version is out: {0} (this one: {1}). 'Get the new version' opens its download page.",
-                "新しいバージョンが出ています: {0} (現在 {1})。「新しいバージョンを入手」でダウンロードページが開きます。",
-                "有新版本：{0} (当前 {1})。点击“获取新版本”打开下载页面。",
-                "Вышла новая версия: {0} (у вас {1}). «Скачать новую версию» откроет страницу загрузки." } },
+            { "새 버전이 나왔습니다: {0} (지금 {1})", new[] { "A new version is out: {0} (this one: {1})", "新しいバージョンが出ています: {0} (現在 {1})", "有新版本：{0} (当前 {1})", "Вышла новая версия: {0} (у вас {1})" } },
             { "최신 버전입니다.", new[] { "This is the latest version.", "最新バージョンです。", "已是最新版本。", "У вас последняя версия." } },
-            { "최신 버전인지 확인하지 못했습니다 (인터넷에 연결되지 않았거나 받는 곳에 닿지 않음).", new[] {
-                "Could not check for a new version (no internet, or the download page could not be reached).",
-                "最新バージョンか確認できませんでした (インターネット未接続、またはダウンロードページに届かない)。",
-                "无法检查新版本 (未连接互联网，或无法访问下载页面)。",
-                "Не удалось проверить наличие новой версии (нет интернета или страница загрузки недоступна)." } },
+            { "최신 버전인지 확인하지 못했습니다.", new[] { "Could not check for a new version.", "最新バージョンか確認できませんでした。", "无法检查新版本。", "Не удалось проверить наличие новой версии." } },
             { "블랙소울2 게임 폴더를 지정해 주세요.", new[] { "Choose the BLACK SOULS II game folder.", "ブラックソウルズ2のゲームフォルダを指定してください。", "请指定黑魂2的游戏文件夹。", "Укажите папку игры BLACK SOULS II." } },
             { "폴더가 없습니다: {0}", new[] { "Folder not found: {0}", "フォルダがありません: {0}", "文件夹不存在：{0}", "Папка не найдена: {0}" } },
-            { "게임 데이터(Data\\System.rvdata2)를 찾지 못했습니다: {0}", new[] { "Game data (Data\\System.rvdata2) not found: {0}", "ゲームデータ (Data\\System.rvdata2) が見つかりません: {0}", "找不到游戏数据 (Data\\System.rvdata2)：{0}", "Данные игры (Data\\System.rvdata2) не найдены: {0}" } },
+            { "게임 데이터를 찾지 못했습니다: {0}", new[] { "Game data not found: {0}", "ゲームデータが見つかりません: {0}", "找不到游戏数据：{0}", "Данные игры не найдены: {0}" } },
             { "이 폴더에서 블랙소울2를 찾지 못했습니다.\nGame.exe와 Data 폴더(또는 Game.rgss3a)가 있는 폴더를 골라 주세요.", new[] {
                 "BLACK SOULS II was not found in this folder.\nChoose the folder that has Game.exe and the Data folder (or Game.rgss3a).",
                 "このフォルダにブラックソウルズ2が見つかりません。\nGame.exe と Data フォルダ (または Game.rgss3a) があるフォルダを選んでください。",
@@ -272,36 +250,31 @@ namespace BlacksoulsVR
                 "В этой папке не найдена BLACK SOULS II.\nВыберите папку, где есть Game.exe и папка Data (или Game.rgss3a)." } },
             { "RGSS3A 형식이 아닙니다: {0}", new[] { "Not an RGSS3A archive: {0}", "RGSS3A 形式ではありません: {0}", "不是 RGSS3A 格式：{0}", "Это не архив RGSS3A: {0}" } },
             { "RGSS3A 목록이 깨져 있습니다", new[] { "The RGSS3A index is broken", "RGSS3A の目録が壊れています", "RGSS3A 目录已损坏", "Оглавление RGSS3A повреждено" } },
-            { "게임 데이터 확인됨 (압축 파일 {0}에서 읽음)", new[] { "Game data found (read from the archive {0})", "ゲームデータを確認 (アーカイブ {0} から読み込み)", "已找到游戏数据 (从压缩包 {0} 读取)", "Данные игры найдены (прочитаны из архива {0})" } },
             { "게임 데이터 확인됨", new[] { "Game data found", "ゲームデータを確認しました", "已找到游戏数据", "Данные игры найдены" } },
             { "RTP 확인됨", new[] { "RTP found", "RTP を確認しました", "已找到 RTP", "RTP найден" } },
-            { "RTP 없음 (일부 맵의 기본 타일이 비어 보일 수 있음 - 무료 'RPG Maker VX Ace RTP'를 설치하면 자동으로 찾습니다)", new[] {
-                "No RTP (stock tiles on a few maps may look empty - install the free 'RPG Maker VX Ace RTP' and it is found by itself)",
-                "RTP なし (一部マップの標準タイルが空に見えることがあります - 無料の「RPG Maker VX Ace RTP」を入れると自動で見つけます)",
-                "没有 RTP (部分地图的默认图块可能显示为空 - 安装免费的「RPG Maker VX Ace RTP」后会自动找到)",
-                "RTP нет (стандартные тайлы на нескольких картах могут выглядеть пустыми — установите бесплатный «RPG Maker VX Ace RTP», и он найдётся сам)" } },
-            { "이 폴더에 RTP(Graphics 폴더)가 없습니다", new[] { "No RTP (Graphics folder) in this folder", "このフォルダに RTP (Graphics フォルダ) がありません", "此文件夹中没有 RTP (Graphics 文件夹)", "В этой папке нет RTP (папки Graphics)" } },
+            { "RTP 없음 - 무료 'RPG Maker VX Ace RTP'를 설치하세요", new[] {
+                "No RTP - install the free 'RPG Maker VX Ace RTP'",
+                "RTP なし - 無料の「RPG Maker VX Ace RTP」をインストールしてください",
+                "没有 RTP - 请安装免费的「RPG Maker VX Ace RTP」",
+                "RTP нет — установите бесплатный «RPG Maker VX Ace RTP»" } },
+            { "이 폴더에 RTP가 없습니다", new[] { "No RTP in this folder", "このフォルダに RTP がありません", "此文件夹中没有 RTP", "В этой папке нет RTP" } },
             { "Steam을 찾지 못했습니다.", new[] { "Steam was not found.", "Steam が見つかりません。", "找不到 Steam。", "Steam не найден." } },
-            { "SteamVR이 켜져 있습니다. SteamVR을 완전히 끈 뒤 다시 눌러 주세요.\n(켜져 있는 동안 바꾸면 SteamVR이 종료될 때 되돌려 버립니다)", new[] {
-                "SteamVR is running. Quit SteamVR completely, then press again.\n(Changes made while it runs are undone when it quits)",
-                "SteamVR が起動しています。SteamVR を完全に終了してからもう一度押してください。\n(起動中に変更すると SteamVR の終了時に元に戻されます)",
-                "SteamVR 正在运行。请完全退出 SteamVR 后再按一次。\n(运行时修改会在 SteamVR 退出时被还原)",
-                "SteamVR запущен. Полностью закройте SteamVR и нажмите ещё раз.\n(Изменения, сделанные во время его работы, отменяются при его закрытии)" } },
+            { "SteamVR이 켜져 있습니다. SteamVR을 완전히 끈 뒤 다시 눌러 주세요.", new[] {
+                "SteamVR is running. Quit SteamVR completely, then press again.",
+                "SteamVR が起動しています。SteamVR を完全に終了してからもう一度押してください。",
+                "SteamVR 正在运行。请完全退出 SteamVR 后再按一次。",
+                "SteamVR запущен. Полностью закройте SteamVR и нажмите ещё раз." } },
             { "SteamVR 라이브러리에서 뺐습니다.", new[] { "Removed from the SteamVR library.", "SteamVR ライブラリから外しました。", "已从 SteamVR 库移除。", "Удалено из библиотеки SteamVR." } },
-            { "참고: SteamVR이 설치되어 있지 않은 것 같습니다. 설치 후 라이브러리에 나타납니다.", new[] {
-                "Note: SteamVR does not seem to be installed. It shows up in the library once it is.",
-                "注意: SteamVR がインストールされていないようです。インストール後にライブラリに表示されます。",
-                "注意：似乎没有安装 SteamVR。安装后会出现在库中。",
-                "Примечание: похоже, SteamVR не установлен. Игра появится в библиотеке, когда он будет установлен." } },
-            { "SteamVR 라이브러리에 'BLACK SOULS II VR'을 등록했습니다. SteamVR에서 실행하면 서버와 게임 창이 뜨고 VR로 들어갑니다. (이 폴더를 옮기면 이 런처를 한 번 다시 실행하세요)", new[] {
-                "Added 'BLACK SOULS II VR' to the SteamVR library. Started from there, it opens the server and the game window and enters VR. (If you move this folder, run this launcher once again)",
-                "SteamVR ライブラリに「BLACK SOULS II VR」を登録しました。SteamVR から起動するとサーバーとゲームウィンドウが開き、VR に入ります。(このフォルダを移動したら、このランチャーを一度起動してください)",
-                "已将「BLACK SOULS II VR」添加到 SteamVR 库。从 SteamVR 启动时会打开服务器和游戏窗口并进入 VR。(移动此文件夹后请再运行一次本启动器)",
-                "«BLACK SOULS II VR» добавлена в библиотеку SteamVR. При запуске оттуда открываются сервер и окно игры и включается VR. (Если переместите эту папку, запустите этот лаунчер ещё раз)" } },
+            { "SteamVR이 설치되어 있지 않은 것 같습니다.", new[] { "SteamVR does not seem to be installed.", "SteamVR がインストールされていないようです。", "似乎没有安装 SteamVR。", "Похоже, SteamVR не установлен." } },
+            { "SteamVR 라이브러리에 'BLACK SOULS II VR'을 등록했습니다.", new[] {
+                "Added 'BLACK SOULS II VR' to the SteamVR library.",
+                "SteamVR ライブラリに「BLACK SOULS II VR」を登録しました。",
+                "已将「BLACK SOULS II VR」添加到 SteamVR 库。",
+                "«BLACK SOULS II VR» добавлена в библиотеку SteamVR." } },
             { "SteamVR 설정을 바꾸지 못했습니다: {0}", new[] { "Could not change the SteamVR settings: {0}", "SteamVR の設定を変更できませんでした: {0}", "无法修改 SteamVR 设置：{0}", "Не удалось изменить настройки SteamVR: {0}" } },
             { "설정을 저장하지 못했습니다: {0}", new[] { "Could not save the settings: {0}", "設定を保存できませんでした: {0}", "无法保存设置：{0}", "Не удалось сохранить настройки: {0}" } },
             { "게임 폴더", new[] { "Game folder", "ゲームフォルダ", "游戏文件夹", "Папка игры" } },
-            { "서버 실행: {0}  (게임 폴더 {1})", new[] { "Server running: {0}  (game folder {1})", "サーバー起動: {0}  (ゲームフォルダ {1})", "服务器已启动：{0}  (游戏文件夹 {1})", "Сервер запущен: {0}  (папка игры {1})" } },
+            { "서버 실행: {0}", new[] { "Server running: {0}", "サーバー起動: {0}", "服务器已启动：{0}", "Сервер запущен: {0}" } },
             { "이미 실행 중인 런처가 포트 {0}에서 게임을 열고 있습니다 - 그 서버를 씁니다.", new[] {
                 "A launcher already serves the game on port {0} - using that server.",
                 "起動中のランチャーがポート {0} でゲームを開いています - そのサーバーを使います。",
@@ -319,20 +292,20 @@ namespace BlacksoulsVR
                 "缺少 app 文件夹。请保持解压后的文件结构不变再运行。",
                 "Нет папки app. Оставьте файлы в точности такими, какими они были в архиве." } },
             { "파일 누락", new[] { "Missing files", "ファイル不足", "文件缺失", "Не хватает файлов" } },
-            { "Chrome 또는 Edge를 찾지 못했습니다. 둘 중 하나를 설치해 주세요 (VR은 브라우저의 WebXR로 돌아갑니다).", new[] {
-                "Chrome or Edge was not found. Install one of them (VR runs on the browser's WebXR).",
-                "Chrome または Edge が見つかりません。どちらかをインストールしてください (VR はブラウザの WebXR で動きます)。",
-                "找不到 Chrome 或 Edge。请安装其中之一 (VR 通过浏览器的 WebXR 运行)。",
-                "Не найден ни Chrome, ни Edge. Установите один из них (VR работает через WebXR браузера)." } },
+            { "Chrome 또는 Edge를 찾지 못했습니다. 둘 중 하나를 설치해 주세요.", new[] {
+                "Chrome or Edge was not found. Install one of them.",
+                "Chrome または Edge が見つかりません。どちらかをインストールしてください。",
+                "找不到 Chrome 或 Edge。请安装其中之一。",
+                "Не найден ни Chrome, ни Edge. Установите один из них." } },
             { "{0}로 게임 창을 열었습니다.", new[] { "Opened the game window in {0}.", "{0} でゲームウィンドウを開きました。", "已用 {0} 打开游戏窗口。", "Окно игры открыто в {0}." } },
             { " VR 자동 시작을 기다립니다...", new[] { " Waiting to enter VR...", " VR の自動開始を待っています...", " 正在等待自动进入 VR...", " Ожидание входа в VR..." } },
             { " 창 아래쪽의 VR 버튼을 누르면 헤드셋 모드로 들어갑니다.", new[] { " Press the VR button at the bottom of the window to enter the headset.", " ウィンドウ下の VR ボタンを押すとヘッドセットモードに入ります。", " 按窗口下方的 VR 按钮即可进入头显模式。", " Нажмите кнопку VR внизу окна, чтобы перейти в гарнитуру." } },
             { "브라우저를 열지 못했습니다: {0}", new[] { "Could not open the browser: {0}", "ブラウザを開けませんでした: {0}", "无法打开浏览器：{0}", "Не удалось открыть браузер: {0}" } },
-            { "VR 자동 시작: 게임 창에 연결하지 못했습니다 (게임 창이 이미 열려 있었다면 닫고 다시 실행하세요). 창의 VR 버튼을 눌러 주세요.", new[] {
-                "Auto VR: could not connect to the game window (if one was already open, close it and launch again). Press the VR button in the window.",
-                "VR 自動開始: ゲームウィンドウに接続できませんでした (すでに開いていた場合は閉じてから起動し直してください)。ウィンドウの VR ボタンを押してください。",
-                "自动进入 VR：无法连接到游戏窗口 (如果之前已打开，请关闭后重新启动)。请按窗口中的 VR 按钮。",
-                "Авто-VR: не удалось подключиться к окну игры (если оно уже было открыто, закройте его и запустите снова). Нажмите кнопку VR в окне." } },
+            { "VR 자동 시작: 게임 창에 연결하지 못했습니다. 창의 VR 버튼을 눌러 주세요.", new[] {
+                "Auto VR: could not connect to the game window. Press the VR button in the window.",
+                "VR 自動開始: ゲームウィンドウに接続できませんでした。ウィンドウの VR ボタンを押してください。",
+                "自动进入 VR：无法连接到游戏窗口。请按窗口中的 VR 按钮。",
+                "Авто-VR: не удалось подключиться к окну игры. Нажмите кнопку VR в окне." } },
             { "VR 자동 시작: 다시 시도합니다...", new[] { "Auto VR: trying again...", "VR 自動開始: もう一度試します...", "自动进入 VR：再试一次...", "Авто-VR: повторная попытка..." } },
             { "VR 자동 시작: 헤드셋 모드로 들어갔습니다.", new[] { "Auto VR: entered the headset.", "VR 自動開始: ヘッドセットモードに入りました。", "自动进入 VR：已进入头显模式。", "Авто-VR: вход в гарнитуру выполнен." } },
             { "VR 자동 시작: 버튼을 눌렀지만 헤드셋 세션이 시작되지 않았습니다. 창의 VR 버튼을 직접 눌러 보세요.", new[] {
@@ -351,53 +324,29 @@ namespace BlacksoulsVR
                 "自动进入 VR：游戏没有加载完成。请按窗口中的 VR 按钮。",
                 "Авто-VR: игра не догрузилась. Нажмите кнопку VR в окне." } },
             { "VR 자동 시작 실패: {0} - 창의 VR 버튼을 눌러 주세요.", new[] { "Auto VR failed: {0} - press the VR button in the window.", "VR 自動開始に失敗: {0} - ウィンドウの VR ボタンを押してください。", "自动进入 VR 失败：{0} - 请按窗口中的 VR 按钮。", "Авто-VR не удался: {0} — нажмите кнопку VR в окне." } },
-            { "VR 자동 시작: 헤드셋 모드로 들어갔습니다 ({0}초 걸림).", new[] { "Auto VR: entered the headset ({0} s).", "VR 自動開始: ヘッドセットモードに入りました ({0} 秒)。", "自动进入 VR：已进入头显模式 (用时 {0} 秒)。", "Авто-VR: вход в гарнитуру выполнен ({0} с)." } },
             { "VR 자동 시작: 헤드셋 세션이 시작되기를 기다립니다...", new[] { "Auto VR: waiting for the headset session to start...", "VR 自動開始: ヘッドセットのセッションが始まるのを待っています...", "自动进入 VR：正在等待头显会话开始...", "Авто-VR: ожидание начала сеанса гарнитуры..." } },
             { "VR 자동 시작: 헤드셋 세션을 시작하지 못했습니다 ({0}).", new[] {
                 "Auto VR: the headset session did not start ({0}).",
                 "VR 自動開始: ヘッドセットのセッションを開始できませんでした ({0})。",
                 "自动进入 VR：头显会话未能开始 ({0})。",
                 "Авто-VR: сеанс гарнитуры не начался ({0})." } },
-            { "VR 자동 시작: {0}초를 기다려도 헤드셋 세션이 시작되지 않았습니다. 헤드셋 연결을 확인하세요 (늦게라도 시작되면 그대로 플레이하면 됩니다).", new[] {
-                "Auto VR: no headset session after {0} s. Check the headset's connection (if it starts later after all, just play on).",
-                "VR 自動開始: {0} 秒待ってもヘッドセットのセッションが始まりません。ヘッドセットの接続を確認してください (後から始まればそのまま遊べます)。",
-                "自动进入 VR：等待 {0} 秒后头显会话仍未开始。请检查头显的连接 (如果之后开始了，直接继续玩即可)。",
-                "Авто-VR: сеанса гарнитуры нет уже {0} с. Проверьте подключение гарнитуры (если он всё же начнётся позже, просто играйте)." } },
-            { "SteamVR로 실행 (VR 안에서 SteamVR 대시보드로 데스크톱 보기)", new[] {
-                "Run with SteamVR (see the desktop in VR through the SteamVR dashboard)",
-                "SteamVR で実行 (VR の中で SteamVR ダッシュボードからデスクトップを見る)",
-                "用 SteamVR 运行 (在 VR 中通过 SteamVR 仪表板查看桌面)",
-                "Запуск через SteamVR (рабочий стол виден в VR через панель SteamVR)" } },
-            { "VR 런타임(OpenXR): SteamVR (이 게임만 - 위 설정)   ·   PC 기본: {0}", new[] {
-                "VR runtime (OpenXR): SteamVR (this game only - the option above)   ·   PC default: {0}",
-                "VR ランタイム (OpenXR): SteamVR (このゲームのみ - 上の設定)   ·   PC の既定: {0}",
-                "VR 运行时 (OpenXR)：SteamVR (仅本游戏 - 上方设置)   ·   电脑默认：{0}",
-                "VR-среда (OpenXR): SteamVR (только для этой игры — опция выше)   ·   по умолчанию на ПК: {0}" } },
-            { "VR 런타임: SteamVR (이 게임 창만). SteamVR이 꺼져 있으면 게임 창이 열릴 때 켜집니다.", new[] {
-                "VR runtime: SteamVR (this game window only). If SteamVR is off, it starts when the game window opens.",
-                "VR ランタイム: SteamVR (このゲームウィンドウのみ)。SteamVR が起動していなければゲームウィンドウが開くときに起動します。",
-                "VR 运行时：SteamVR (仅本游戏窗口)。若 SteamVR 未运行，游戏窗口打开时会自动启动。",
-                "VR-среда: SteamVR (только для этого окна игры). Если SteamVR выключен, он запустится при открытии окна игры." } },
-            { "VR 런타임(OpenXR): SteamVR (이 게임만 - Meta Link의 런타임은 브라우저에서 VR 시작에 1분쯤 걸림)   ·   PC 기본: {0}", new[] {
-                "VR runtime (OpenXR): SteamVR (this game only - with Meta Link's runtime a browser takes about a minute to enter VR)   ·   PC default: {0}",
-                "VR ランタイム (OpenXR): SteamVR (このゲームのみ - Meta Link のランタイムではブラウザが VR に入るまで 1 分ほどかかる)   ·   PC の既定: {0}",
-                "VR 运行时 (OpenXR)：SteamVR (仅本游戏 - 使用 Meta Link 的运行时，浏览器进入 VR 需要约 1 分钟)   ·   电脑默认：{0}",
-                "VR-среда (OpenXR): SteamVR (только для этой игры — со средой Meta Link браузер входит в VR около минуты)   ·   по умолчанию на ПК: {0}" } },
-            { "VR 런타임(OpenXR): {0}   ·   브라우저에서는 VR 시작에 1분쯤 걸립니다 (SteamVR을 설치하면 바로 시작)", new[] {
-                "VR runtime (OpenXR): {0}   ·   a browser takes about a minute to enter VR with it (at once with SteamVR installed)",
-                "VR ランタイム (OpenXR): {0}   ·   ブラウザでは VR に入るまで 1 分ほどかかります (SteamVR をインストールするとすぐ)",
-                "VR 运行时 (OpenXR)：{0}   ·   浏览器进入 VR 需要约 1 分钟 (安装 SteamVR 后可立即开始)",
-                "VR-среда (OpenXR): {0}   ·   браузер входит с ней в VR около минуты (сразу, если установлен SteamVR)" } },
-            { "VR 런타임: SteamVR (이 게임 창만). Meta Horizon Link의 런타임은 브라우저에서 VR이 시작되기까지 1분쯤 걸려서, Link 헤드셋을 SteamVR로 씁니다. SteamVR이 꺼져 있으면 게임 창이 열릴 때 켜집니다.", new[] {
-                "VR runtime: SteamVR (this game window only). With Meta Horizon Link's runtime a browser takes about a minute to enter VR, so the Link headset is used through SteamVR. If SteamVR is off, it starts when the game window opens.",
-                "VR ランタイム: SteamVR (このゲームウィンドウのみ)。Meta Horizon Link のランタイムではブラウザが VR に入るまで 1 分ほどかかるため、Link のヘッドセットを SteamVR 経由で使います。SteamVR が起動していなければゲームウィンドウが開くときに起動します。",
-                "VR 运行时：SteamVR (仅本游戏窗口)。使用 Meta Horizon Link 的运行时，浏览器进入 VR 需要约 1 分钟，因此通过 SteamVR 使用 Link 头显。若 SteamVR 未运行，游戏窗口打开时会自动启动。",
-                "VR-среда: SteamVR (только для этого окна игры). Со средой Meta Horizon Link браузер входит в VR около минуты, поэтому гарнитура Link используется через SteamVR. Если SteamVR выключен, он запустится при открытии окна игры." } },
-            { "VR 런타임: Meta Horizon Link. 브라우저에서는 VR이 시작되기까지 1분쯤 걸립니다 (ENTER VR을 누른 뒤 기다리세요). SteamVR을 설치하면 런처가 SteamVR로 실행해서 바로 시작됩니다.", new[] {
-                "VR runtime: Meta Horizon Link. A browser takes about a minute to enter VR with it (wait after ENTER VR). With SteamVR installed, the launcher runs the game through SteamVR and it starts at once.",
-                "VR ランタイム: Meta Horizon Link。ブラウザでは VR に入るまで 1 分ほどかかります (ENTER VR を押したらお待ちください)。SteamVR をインストールすると、ランチャーが SteamVR で実行するのですぐに始まります。",
-                "VR 运行时：Meta Horizon Link。浏览器进入 VR 需要约 1 分钟 (按 ENTER VR 后请等待)。安装 SteamVR 后，启动器会通过 SteamVR 运行，可立即开始。",
-                "VR-среда: Meta Horizon Link. Браузер входит с ней в VR около минуты (подождите после ENTER VR). Если установить SteamVR, лаунчер запустит игру через SteamVR, и вход будет сразу." } },
+            { "VR 자동 시작: {0}초를 기다려도 헤드셋 세션이 시작되지 않았습니다. 헤드셋 연결을 확인하세요.", new[] {
+                "Auto VR: no headset session after {0} s. Check the headset's connection.",
+                "VR 自動開始: {0} 秒待ってもヘッドセットのセッションが始まりません。ヘッドセットの接続を確認してください。",
+                "自动进入 VR：等待 {0} 秒后头显会话仍未开始。请检查头显的连接。",
+                "Авто-VR: сеанса гарнитуры нет уже {0} с. Проверьте подключение гарнитуры." } },
+            { "SteamVR로 실행", new[] { "Run with SteamVR", "SteamVR で実行", "用 SteamVR 运行", "Запуск через SteamVR" } },
+            { "VR 런타임: SteamVR", new[] { "VR runtime: SteamVR", "VR ランタイム: SteamVR", "VR 运行时：SteamVR", "VR-среда: SteamVR" } },
+            { "VR 런타임: {0} - VR 시작에 1분쯤 걸립니다 (SteamVR을 설치하면 바로 시작)", new[] {
+                "VR runtime: {0} - entering VR takes about a minute (at once with SteamVR installed)",
+                "VR ランタイム: {0} - VR に入るまで 1 分ほどかかります (SteamVR をインストールするとすぐ)",
+                "VR 运行时：{0} - 进入 VR 需要约 1 分钟 (安装 SteamVR 后可立即开始)",
+                "VR-среда: {0} — вход в VR занимает около минуты (сразу, если установлен SteamVR)" } },
+            { "VR 런타임: Meta Horizon Link - VR 시작에 1분쯤 걸립니다 (ENTER VR을 누른 뒤 기다리세요)", new[] {
+                "VR runtime: Meta Horizon Link - entering VR takes about a minute (wait after ENTER VR)",
+                "VR ランタイム: Meta Horizon Link - VR に入るまで 1 分ほどかかります (ENTER VR を押したらお待ちください)",
+                "VR 运行时：Meta Horizon Link - 进入 VR 需要约 1 分钟 (按 ENTER VR 后请等待)",
+                "VR-среда: Meta Horizon Link — вход в VR занимает около минуты (подождите после ENTER VR)" } },
             { "SteamVR을 찾지 못해 PC 기본 VR 런타임으로 실행합니다.", new[] {
                 "SteamVR was not found: running with the PC's default VR runtime.",
                 "SteamVR が見つからないため、PC の既定の VR ランタイムで実行します。",
@@ -638,7 +587,7 @@ namespace BlacksoulsVR
                 }
                 if (!data && (archive == null || !archive.Has("Data/System.rvdata2")))
                 {
-                    problem = Lang.F("게임 데이터(Data\\System.rvdata2)를 찾지 못했습니다: {0}", c);
+                    problem = Lang.F("게임 데이터를 찾지 못했습니다: {0}", c);
                     return null;
                 }
                 return new GameFiles(Path.GetFullPath(c), archive);
@@ -649,7 +598,7 @@ namespace BlacksoulsVR
 
         public string Describe()
         {
-            return Archive != null ? Lang.F("게임 데이터 확인됨 (압축 파일 {0}에서 읽음)", Path.GetFileName(Archive.FilePath)) : Lang.S("게임 데이터 확인됨");
+            return Lang.S("게임 데이터 확인됨");
         }
 
         // a file in both the archive and the folder: the archive's, as RGSS3 takes it. Copies that ship one (Steam's, the
@@ -688,7 +637,7 @@ namespace BlacksoulsVR
         }
     }
 
-    // RPG Maker VX Ace RTP: the stock tiles a few maps use (the game runs without it, those tiles stay empty)
+    // RPG Maker VX Ace RTP: the stock pictures and sounds the game uses besides its own
     static class Rtp
     {
         public static bool Valid(string d) { return !string.IsNullOrWhiteSpace(d) && Directory.Exists(Path.Combine(d.Trim().Trim('"'), "Graphics")); }
@@ -891,6 +840,35 @@ namespace BlacksoulsVR
                 int ended = 0;
                 try { ended = BrowserXr.Reset(req.RemoteEndPoint, Port); } catch { }
                 SendJson(res, "{\"ended\": " + ended + "}");
+                return;
+            }
+            // 원작 세이브로 내보내기: a VR save made into the original game's save (src/rmsave.js) - kept in saves\to_original,
+            // never written into the game folder (the player copies it there)
+            if (path.StartsWith("/api/rmexport/"))
+            {
+                string name = path.Substring("/api/rmexport/".Length);
+                byte[] data = null;
+                if (req.ContentLength64 > 0 && req.ContentLength64 <= 64L * 1024 * 1024)
+                    using (MemoryStream ms = new MemoryStream()) { req.InputStream.CopyTo(ms); data = ms.ToArray(); }
+                if (data == null || data.Length < 2 || data[0] != 4 || data[1] != 8 || !Regex.IsMatch(name, @"^Save(0[1-9]|1[0-6])\.rvdata2$"))
+                {
+                    Send(res, Encoding.UTF8.GetBytes("{\"ok\": false, \"error\": \"not a save of the original's 16\"}"), Mime[".json"], 400);
+                    return;
+                }
+                string folder = Path.GetFullPath(Path.Combine(savesDir, "to_original")), file = Path.Combine(folder, name);
+                Directory.CreateDirectory(folder);
+                // one previous generation is kept (SaveNN.rvdata2.bak), as with the VR saves
+                if (File.Exists(file)) File.Copy(file, file + ".bak", true);
+                File.WriteAllBytes(file, data);
+                SendJson(res, Util.Json.Serialize(new Dictionary<string, object> { { "ok", true }, { "path", file }, { "folder", folder } }));
+                return;
+            }
+            if (path == "/api/rmexport-open")
+            {
+                string folder = Path.GetFullPath(Path.Combine(savesDir, "to_original"));
+                Directory.CreateDirectory(folder);
+                Process.Start("explorer.exe", "\"" + folder + "\"");
+                SendJson(res, "{\"ok\": true}");
                 return;
             }
             string target = null;
@@ -1155,7 +1133,7 @@ namespace BlacksoulsVR
                     }
                     catch { }
                 }
-                if (wsUrl == null) { log(Lang.S("VR 자동 시작: 게임 창에 연결하지 못했습니다 (게임 창이 이미 열려 있었다면 닫고 다시 실행하세요). 창의 VR 버튼을 눌러 주세요.")); return false; }
+                if (wsUrl == null) { log(Lang.S("VR 자동 시작: 게임 창에 연결하지 못했습니다. 창의 VR 버튼을 눌러 주세요.")); return false; }
                 await GrantPermissions(devtoolsPort, pageUrl);
                 ws = new ClientWebSocket();
                 await ws.ConnectAsync(new Uri(wsUrl), CancellationToken.None);
@@ -1196,8 +1174,7 @@ namespace BlacksoulsVR
                             Dictionary<string, object> w = Util.Dict(await Eval(probe));
                             if (Util.Str(w, "vr", "") == "True")
                             {
-                                int s = (int)Math.Round(since.Elapsed.TotalSeconds);
-                                log(s > 5 ? Lang.F("VR 자동 시작: 헤드셋 모드로 들어갔습니다 ({0}초 걸림).", s) : Lang.S("VR 자동 시작: 헤드셋 모드로 들어갔습니다."));
+                                log(Lang.S("VR 자동 시작: 헤드셋 모드로 들어갔습니다."));
                                 return true;
                             }
                             if (since.Elapsed.TotalSeconds > 1 && Util.Str(w, "text", "").IndexOf("ENTER VR", StringComparison.OrdinalIgnoreCase) >= 0) failed = Util.Str(w, "err", "");
@@ -1205,7 +1182,7 @@ namespace BlacksoulsVR
                         }
                         if (failed == null)
                         {
-                            log(Lang.F("VR 자동 시작: {0}초를 기다려도 헤드셋 세션이 시작되지 않았습니다. 헤드셋 연결을 확인하세요 (늦게라도 시작되면 그대로 플레이하면 됩니다).", StartWait));
+                            log(Lang.F("VR 자동 시작: {0}초를 기다려도 헤드셋 세션이 시작되지 않았습니다. 헤드셋 연결을 확인하세요.", StartWait));
                             return false;
                         }
                         if (failed != "") log(Lang.F("VR 자동 시작: 헤드셋 세션을 시작하지 못했습니다 ({0}).", failed));
@@ -1566,7 +1543,7 @@ namespace BlacksoulsVR
         // the OpenXR runtime the browser's WebXR uses (SteamVR, Meta/Oculus, ...)
         public static string OpenXrRuntime()
         {
-            try { return RuntimeName(ActiveRuntimePath()) ?? Lang.S("없음 (VR 런타임이 설치되지 않았거나 지정되지 않음)"); }
+            try { return RuntimeName(ActiveRuntimePath()) ?? Lang.S("없음"); }
             catch { return Lang.S("알 수 없음"); }
         }
 
@@ -1682,7 +1659,7 @@ namespace BlacksoulsVR
         DateTime browserStart;
         readonly TextBox gameBox = new TextBox(), rtpBox = new TextBox(), logBox = new TextBox();
         readonly Label gameState = new Label(), rtpState = new Label(), xrLabel = new Label();
-        readonly Label subLabel = new Label(), langLabel = new Label(), gameLabel = new Label(), rtpLabel = new Label(), browserLabel = new Label(), portLabel = new Label();
+        readonly Label langLabel = new Label(), gameLabel = new Label(), rtpLabel = new Label(), browserLabel = new Label(), portLabel = new Label();
         readonly ComboBox browserBox = new ComboBox(), langBox = new ComboBox();
         readonly NumericUpDown portBox = new NumericUpDown();
         readonly CheckBox autoVrBox = new CheckBox(), steamRtBox = new CheckBox();
@@ -1711,7 +1688,7 @@ namespace BlacksoulsVR
             t.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             Controls.Add(t);
 
-            Label title = new Label { Text = "BLACK SOULS II  VR", Font = new Font("Georgia", 18, FontStyle.Bold), ForeColor = Color.FromArgb(214, 60, 60), AutoSize = true, Margin = new Padding(0, 0, 0, 2) };
+            Label title = new Label { Text = "BLACK SOULS II  VR", Font = new Font("Georgia", 18, FontStyle.Bold), ForeColor = Color.FromArgb(214, 60, 60), AutoSize = true, Margin = new Padding(0, 0, 0, 10) };
             t.Controls.Add(title, 0, 0);
             // the language of this window and of the VR version's own menus (the game's own text stays as it is)
             FlowLayoutPanel langRow = new FlowLayoutPanel { AutoSize = true, WrapContents = false, Anchor = AnchorStyles.Top | AnchorStyles.Right, Margin = new Padding(0, 4, 0, 0) };
@@ -1729,8 +1706,6 @@ namespace BlacksoulsVR
             };
             langRow.Controls.Add(langLabel); langRow.Controls.Add(langBox);
             t.Controls.Add(langRow, 1, 0);
-            subLabel.AutoSize = true; subLabel.MaximumSize = new Size(800, 0); subLabel.ForeColor = Color.FromArgb(170, 162, 150); subLabel.Margin = new Padding(0, 0, 0, 10);
-            t.Controls.Add(subLabel, 0, 1); t.SetColumnSpan(subLabel, 2);
 
             StyleLabel(gameLabel);
             t.Controls.Add(gameLabel, 0, 2); t.SetColumnSpan(gameLabel, 2);
@@ -1804,7 +1779,6 @@ namespace BlacksoulsVR
             browserBox.Items.AddRange(new object[] { "", "Chrome", "Edge" });
             browserBox.SelectedIndex = cfg.Browser == "chrome" ? 1 : cfg.Browser == "edge" ? 2 : 0;
             ApplyTexts();
-            Log(Lang.F("버전 {0}   ·   세이브 폴더: {1}", PackageVersion.Value, AppPaths.SavesDir));
             // (not for the build's own picture of the window, unless a test gives its version.json)
             if (opt.Screenshot == null || opt.UpdateUrl != null) UpdateCheck = CheckUpdateAsync(opt.UpdateUrl ?? NewVersion.Source);
 
@@ -1830,12 +1804,12 @@ namespace BlacksoulsVR
             string[] latest = null;
             try { latest = await Task.Run(() => NewVersion.Latest(url)); } catch { }
             if (IsDisposed) return;
-            if (latest == null) { Log(Lang.S("최신 버전인지 확인하지 못했습니다 (인터넷에 연결되지 않았거나 받는 곳에 닿지 않음).")); return; }
+            if (latest == null) { Log(Lang.S("최신 버전인지 확인하지 못했습니다.")); return; }
             if (NewVersion.Key(latest[0]) <= NewVersion.Key(PackageVersion.Value)) { Log(Lang.S("최신 버전입니다.")); return; }
             newer = latest;
             ApplyTexts();
             updateBtn.Visible = true;
-            Log(Lang.F("새 버전이 나왔습니다: {0} (지금 {1}). '새 버전 받기'를 누르면 받는 곳이 열립니다.", newer[0], PackageVersion.Value));
+            Log(Lang.F("새 버전이 나왔습니다: {0} (지금 {1})", newer[0], PackageVersion.Value));
         }
 
         // every text of the window in the chosen language
@@ -1844,24 +1818,22 @@ namespace BlacksoulsVR
             string fam = FontFamilyFor(Lang.Current);
             if (Font.Name != fam) { Font = new Font(fam, 9.5f); launchBtn.Font = new Font(fam, 12f, FontStyle.Bold); }
             Text = Lang.F("BLACK SOULS II VR 런처  v{0}", PackageVersion.Value);
-            subLabel.Text = Lang.S("원작 게임 폴더는 읽기만 합니다 (아무것도 바꾸거나 저장하지 않음). VR 세이브·설정은 이 프로그램 폴더의 saves에 저장됩니다.");
             langLabel.Text = Lang.S("언어 (Language)");
-            gameLabel.Text = Lang.S("블랙소울2 게임 폴더 (Game.exe가 있는 폴더)");
-            rtpLabel.Text = Lang.S("RPG Maker VX Ace RTP 폴더 (선택: 일부 맵의 기본 타일. 없어도 실행됩니다)");
+            gameLabel.Text = Lang.S("블랙소울2 게임 폴더");
+            rtpLabel.Text = Lang.S("RPG Maker VX Ace RTP 폴더");
             gameBrowse.Text = rtpBrowse.Text = Lang.S("찾아보기...");
             browserLabel.Text = Lang.S("브라우저");
-            browserBox.Items[0] = Lang.S("자동 (Chrome, 없으면 Edge)");
+            browserBox.Items[0] = Lang.S("자동");
             portLabel.Text = "   " + Lang.S("포트");
             autoVrBox.Text = Lang.S("게임 창이 뜨면 VR 자동 시작");
-            steamRtBox.Text = Lang.S("SteamVR로 실행 (VR 안에서 SteamVR 대시보드로 데스크톱 보기)");
-            launchBtn.Text = Lang.S("실행 (Launch)");
+            steamRtBox.Text = Lang.S("SteamVR로 실행");
+            launchBtn.Text = Lang.S("실행");
             savesBtn.Text = Lang.S("세이브 폴더 열기");
             if (newer != null) updateBtn.Text = Lang.F("새 버전 받기 ({0})", newer[0]);
             bool steamVr = SteamVr.RuntimeJson() != null, meta = SteamVr.MetaActive();
-            xrLabel.Text = steamRtBox.Checked && steamVr ? Lang.F("VR 런타임(OpenXR): SteamVR (이 게임만 - 위 설정)   ·   PC 기본: {0}", SteamVr.OpenXrRuntime())
-                : meta && steamVr ? Lang.F("VR 런타임(OpenXR): SteamVR (이 게임만 - Meta Link의 런타임은 브라우저에서 VR 시작에 1분쯤 걸림)   ·   PC 기본: {0}", SteamVr.OpenXrRuntime())
-                : meta ? Lang.F("VR 런타임(OpenXR): {0}   ·   브라우저에서는 VR 시작에 1분쯤 걸립니다 (SteamVR을 설치하면 바로 시작)", SteamVr.OpenXrRuntime())
-                : Lang.F("VR 런타임(OpenXR): {0}   ·   게임은 브라우저의 WebXR로 이 런타임을 씁니다", SteamVr.OpenXrRuntime());
+            xrLabel.Text = steamVr && (steamRtBox.Checked || meta) ? Lang.S("VR 런타임: SteamVR")
+                : meta ? Lang.F("VR 런타임: {0} - VR 시작에 1분쯤 걸립니다 (SteamVR을 설치하면 바로 시작)", SteamVr.OpenXrRuntime())
+                : Lang.F("VR 런타임: {0}", SteamVr.OpenXrRuntime());
             UpdateSteamButton();
             CheckGame(); CheckRtp();
         }
@@ -1924,7 +1896,7 @@ namespace BlacksoulsVR
         void CheckRtp()
         {
             bool ok = Rtp.Valid(rtpBox.Text);
-            rtpState.Text = ok ? "✔ " + Lang.S("RTP 확인됨") : rtpBox.Text.Trim() == "" ? "· " + Lang.S("RTP 없음 (일부 맵의 기본 타일이 비어 보일 수 있음 - 무료 'RPG Maker VX Ace RTP'를 설치하면 자동으로 찾습니다)") : "✘ " + Lang.S("이 폴더에 RTP(Graphics 폴더)가 없습니다");
+            rtpState.Text = ok ? "✔ " + Lang.S("RTP 확인됨") : rtpBox.Text.Trim() == "" ? "· " + Lang.S("RTP 없음 - 무료 'RPG Maker VX Ace RTP'를 설치하세요") : "✘ " + Lang.S("이 폴더에 RTP가 없습니다");
             rtpState.ForeColor = ok ? Color.FromArgb(120, 200, 120) : Color.FromArgb(200, 170, 110);
         }
 
@@ -1941,7 +1913,7 @@ namespace BlacksoulsVR
             if (cfgPath == null) { MessageBox.Show(this, Lang.S("Steam을 찾지 못했습니다."), "SteamVR"); return; }
             if (SteamVr.Running())
             {
-                MessageBox.Show(this, Lang.S("SteamVR이 켜져 있습니다. SteamVR을 완전히 끈 뒤 다시 눌러 주세요.\n(켜져 있는 동안 바꾸면 SteamVR이 종료될 때 되돌려 버립니다)"), "SteamVR");
+                MessageBox.Show(this, Lang.S("SteamVR이 켜져 있습니다. SteamVR을 완전히 끈 뒤 다시 눌러 주세요."), "SteamVR");
                 return;
             }
             try
@@ -1953,10 +1925,10 @@ namespace BlacksoulsVR
                 }
                 else
                 {
-                    if (!SteamVr.SteamVrInstalled()) Log(Lang.S("참고: SteamVR이 설치되어 있지 않은 것 같습니다. 설치 후 라이브러리에 나타납니다."));
+                    if (!SteamVr.SteamVrInstalled()) Log(Lang.S("SteamVR이 설치되어 있지 않은 것 같습니다."));
                     SaveConfig();
                     SteamVr.Register(cfgPath);
-                    Log(Lang.S("SteamVR 라이브러리에 'BLACK SOULS II VR'을 등록했습니다. SteamVR에서 실행하면 서버와 게임 창이 뜨고 VR로 들어갑니다. (이 폴더를 옮기면 이 런처를 한 번 다시 실행하세요)"));
+                    Log(Lang.S("SteamVR 라이브러리에 'BLACK SOULS II VR'을 등록했습니다."));
                 }
             }
             catch (Exception e) { MessageBox.Show(this, Lang.F("SteamVR 설정을 바꾸지 못했습니다: {0}", e.Message), "SteamVR"); }
@@ -1998,7 +1970,7 @@ namespace BlacksoulsVR
                 {
                     server = new GameServer(game, rtp, AppPaths.SavesDir, AppPaths.AppDir, port);
                     server.Start();
-                    Log(Lang.F("서버 실행: {0}  (게임 폴더 {1})", url, game.Dir + (rtp != null ? ", RTP " + rtp : "")));
+                    Log(Lang.F("서버 실행: {0}", url));
                 }
                 catch (Exception e)
                 {
@@ -2022,7 +1994,7 @@ namespace BlacksoulsVR
             if (exe == null)
             {
                 WindowState = FormWindowState.Normal;
-                MessageBox.Show(this, Lang.S("Chrome 또는 Edge를 찾지 못했습니다. 둘 중 하나를 설치해 주세요 (VR은 브라우저의 WebXR로 돌아갑니다)."), Lang.S("브라우저"));
+                MessageBox.Show(this, Lang.S("Chrome 또는 Edge를 찾지 못했습니다. 둘 중 하나를 설치해 주세요."), Lang.S("브라우저"));
                 return;
             }
             bool autoVr = cfg.AutoVr || opt.Vr;
@@ -2034,9 +2006,8 @@ namespace BlacksoulsVR
             if (cfg.SteamVrRuntime || opt.Launch || meta)
             {
                 runtime = SteamVr.RuntimeJson();
-                if (runtime != null) Log(meta ? Lang.S("VR 런타임: SteamVR (이 게임 창만). Meta Horizon Link의 런타임은 브라우저에서 VR이 시작되기까지 1분쯤 걸려서, Link 헤드셋을 SteamVR로 씁니다. SteamVR이 꺼져 있으면 게임 창이 열릴 때 켜집니다.")
-                    : Lang.S("VR 런타임: SteamVR (이 게임 창만). SteamVR이 꺼져 있으면 게임 창이 열릴 때 켜집니다."));
-                else if (meta) Log(Lang.S("VR 런타임: Meta Horizon Link. 브라우저에서는 VR이 시작되기까지 1분쯤 걸립니다 (ENTER VR을 누른 뒤 기다리세요). SteamVR을 설치하면 런처가 SteamVR로 실행해서 바로 시작됩니다."));
+                if (runtime != null) Log(Lang.S("VR 런타임: SteamVR"));
+                else if (meta) Log(Lang.S("VR 런타임: Meta Horizon Link - VR 시작에 1분쯤 걸립니다 (ENTER VR을 누른 뒤 기다리세요)"));
                 else if (cfg.SteamVrRuntime) Log(Lang.S("SteamVR을 찾지 못해 PC 기본 VR 런타임으로 실행합니다."));
                 if (runtime != null && Browser.GameWindowOpen()) Log(Lang.S("게임 창이 이미 열려 있어 VR 런타임 설정이 그 창에는 적용되지 않습니다. 게임 창을 닫고 다시 실행하세요."));
             }
@@ -2158,6 +2129,21 @@ namespace BlacksoulsVR
                 own.Headers.Add("Origin", url.TrimEnd('/'));
                 check(own.UploadString(url + "api/vrsave/95", save).Contains("true"), "the game page's own save taken (its Origin)");
                 check(File.Exists(Path.Combine(saves, "slot97.json")) && !Directory.EnumerateFiles(game.Dir, "slot97*", SearchOption.AllDirectories).Any(), "saves go to the saves folder, not the game folder");
+                // 원작 세이브로 내보내기: the made save is kept in saves\to_original (the one there before as .bak); a slot past the
+                // original's 16, or bytes that are no save, are refused and change nothing
+                byte[] rm = { 4, 8, 91, 0 }, rm2 = { 4, 8, 48 };
+                WebClient rmc = new WebClient { Proxy = null };
+                string rmAns = Encoding.UTF8.GetString(rmc.UploadData(url + "api/rmexport/Save03.rvdata2", rm2));
+                rmAns += Encoding.UTF8.GetString(rmc.UploadData(url + "api/rmexport/Save03.rvdata2", rm));
+                Func<string, byte[], bool> rmRefused = (name, data) =>
+                {
+                    try { new WebClient { Proxy = null }.UploadData(url + "api/rmexport/" + name, data); return false; } catch (WebException) { return true; }
+                };
+                bool rmBad = rmRefused("Save17.rvdata2", rm) & rmRefused("Save03.rvdata2", Encoding.UTF8.GetBytes("{}"));
+                string rmFile = Path.Combine(saves, "to_original", "Save03.rvdata2");
+                check(rmAns.Contains("\"ok\":true") && rmBad && File.Exists(rmFile) && File.ReadAllBytes(rmFile).SequenceEqual(rm)
+                      && File.ReadAllBytes(rmFile + ".bak").SequenceEqual(rm2) && !File.Exists(Path.Combine(saves, "to_original", "Save17.rvdata2")),
+                      "original's save made: saves\\to_original\\Save03.rvdata2 (the one before kept as .bak); Save17 and non-save bytes refused");
                 if (o.Saves == null) try { Directory.Delete(saves, true); } catch { }
                 Dictionary<string, string> after = Snapshot(game.Dir);
                 check(before.Count == after.Count && before.All(kv => after.ContainsKey(kv.Key) && after[kv.Key] == kv.Value), "game folder unchanged (" + before.Count + " files checked)");
