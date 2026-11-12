@@ -460,7 +460,7 @@ export class MenuPart {
     const s = G.settings;
     const hex = /^#[0-9a-f]{6}$/i.test(s.skyColor || '') ? s.skyColor.toLowerCase() : DEFAULT_SKY;
     const rgb = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16));
-    // (none kept: the default - dawn; the original's black is kept as chosen)
+    // (none kept: the default - the original's black; any other colour kept as chosen)
     const set = v => {
       s.skyColor = v === DEFAULT_SKY ? undefined : v;
       G.saveSettings?.();

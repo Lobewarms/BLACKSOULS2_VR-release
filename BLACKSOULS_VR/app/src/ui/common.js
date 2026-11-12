@@ -44,8 +44,8 @@ export const clipText = (t, max) => { const a = [...String(t || '')]; return a.l
 export const minimapWhere = () => (G.vr && minimapPlace().hand ? tr('지금 있는 곳 둘레의 지도를 오른손 위에 띄웁니다') : tr('지금 있는 곳 둘레의 지도를 화면 구석에 띄웁니다'));
 // the rows of the settings menu (showSettingsMenu): coming back from one of them goes back there, not to the menu
 export const SETTING_IDS = ['minimap', 'turn', 'diff', 'options', 'adjust', 'spectator'];
-// 하늘 색's list (the first: the original's black; none chosen - dawn, sky.js DEFAULT_SKY)
-export const SKY_COLORS = ['#030305', '#0b1430', DEFAULT_SKY, '#2a2140', '#5a6470', '#7fa8d8', '#b0705a', '#9aa0a6'];
+// 하늘 색's list (the first: the original's black - none chosen too, sky.js DEFAULT_SKY; the third: dawn)
+export const SKY_COLORS = ['#030305', '#0b1430', '#3a4868', '#2a2140', '#5a6470', '#7fa8d8', '#b0705a', '#9aa0a6'];
 export const skyColorName = hex => {
   const i = SKY_COLORS.indexOf((hex || DEFAULT_SKY).toLowerCase());
   return i < 0 ? tr('직접 설정') : [tr('검정 (원작)'), tr('밤하늘'), tr('새벽'), tr('어스름'), tr('흐린 하늘'), tr('맑은 하늘'), tr('노을'), tr('안개')][i];
