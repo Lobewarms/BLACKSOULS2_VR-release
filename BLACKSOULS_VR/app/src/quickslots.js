@@ -6,7 +6,9 @@ import * as THREE from 'three';
 import { G } from './globals.js';
 import { tr } from './i18n.js';
 import { $data } from './data.js';
-import { FONT, drawIcon, stripEscapes } from './ui.js';
+import { FONT } from './fonts.js';
+import { drawIcon, stripEscapes } from './uitext.js';
+import { macroIcon, macroName, macroOf } from './macros.js';
 
 export const QUICK_SLOTS = 8;
 const HEAL_ITEMS = [1, 3, 8];
@@ -28,6 +30,7 @@ export function quickSlots() {
 }
 export function entryData(e) {
   if (!e) return null;
+  if (e.kind === 'macro') return macroOf(e.id);                // (its steps - macros.js)
   return (e.kind === 'skill' ? $data.skills[e.id] : $data.items[e.id]) || null;
 }
 export function quickSlotOf(entry) {
@@ -42,6 +45,7 @@ export function assignQuickSlot(index, entry) {
 export function entryStatus(e) {
   const d = entryData(e);
   if (!d) return null;
+  if (e.kind === 'macro') return { name: macroName(d), icon: macroIcon(d), sub: tr('{n}단계', { n: d.steps.length }), ok: d.steps.length > 0 };
   const actor = G.state?.party.leader();
   if (e.kind === 'item') {
     const n = G.state.party.itemCount('item', d.id);

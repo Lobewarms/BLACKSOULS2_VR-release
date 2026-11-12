@@ -838,7 +838,7 @@ export class GameState {
       switches: this.switches, variables: this.variables, selfSwitches: [...this.selfSwitches.keys()],
       actors: [...this.actorMap.values()].map(a => a.toJSON()), party: this.party.toJSON(),
       system: this.system, mapId: this.mapId, start: this.start, importedFrom: this.importedFrom,
-      quickSlots: this.quickSlots || null,
+      quickSlots: this.quickSlots || null, macros: this.macros || null,
     };
   }
   static fromJSON(o) {
@@ -850,6 +850,7 @@ export class GameState {
     Object.assign(s.system, o.system);
     s.mapId = o.mapId; s.start = o.start; s.importedFrom = o.importedFrom;
     s.quickSlots = Array.isArray(o.quickSlots) ? o.quickSlots : null;
+    s.macros = Array.isArray(o.macros) ? o.macros : null;
     return s;
   }
 }

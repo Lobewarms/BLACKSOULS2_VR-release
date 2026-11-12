@@ -31,7 +31,10 @@ import { TransferMarkers } from './markers.js';
 import { Spectator } from './spectator.js';
 import { PictureLayer } from './pictures.js';
 import { Hands } from './hands.js';
-import { loadUserHints, MAP_HINTS } from './maphints.js';
+import { loadUserHints, hintsOf } from './maphints.js';
+import { USER_RULES_CHANNEL, userRules } from './userrules.js';
+import { applyItemRules } from './itemrules.js';
+import { holdsPlace } from './combat/common.js';
 import { adjustStore, replaceAdjustStore, onAdjustChange } from './weapons.js';
 import { Coop } from './coop.js';
 import { Minimap } from './minimap.js';
@@ -53,12 +56,16 @@ renderer.xr.enabled = true;
 renderer.xr.setReferenceSpaceType('local-floor');
 document.getElementById('app').appendChild(renderer.domElement);
 
+// how far the view reaches: the camera's far plane. The distance fog lies only at its end (the user's wish, 2026-11-11:
+// the close fog before - 9-36 m indoors, 16-70 m outdoors - felt stuffy): a map clear all through, and what lies further
+// off fades into the sky's colour (sky.js) instead of being cut off where the camera stops
+const VIEW_FAR = 300, FOG_FROM = 200;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x030305);
-scene.fog = new THREE.Fog(0x030305, 10, 38);
+scene.fog = new THREE.Fog(0x030305, FOG_FROM, VIEW_FAR);
 const rig = new THREE.Group();
 scene.add(rig);
-const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.08, 300);
+const camera = new THREE.PerspectiveCamera(75, innerWidth / innerHeight, 0.08, VIEW_FAR);
 camera.position.set(0, G.settings.eyeHeight, 0);
 rig.add(camera);
 const hemi = new THREE.HemisphereLight(0xc8c4d8, 0x2a2018, 1.25);
@@ -241,19 +248,21 @@ async function presentMap(seeds = [], rebuild = false, open = null) {
   view.mesh = mesh;
   view.mapId = G.map.mapId;
   scene.add(mesh.group);
-  // a looping map: copies of it all round (they share its geometry), kept around the player (updateLoopView)
+  // a looping map: copies of it all round (they share its geometry), kept around the player (updateLoopView) - as many
+  // rings of them as reach the end of the view (the fog's far end), so the world never ends in sight
   view.loop = null;
   if (G.map.loopX || G.map.loopY) {
-    const copies = [];
-    for (const i of G.map.loopX ? [-1, 0, 1] : [0]) {
-      for (const j of G.map.loopY ? [-1, 0, 1] : [0]) {
+    const copies = [], W = grid.w * T, H = grid.h * T;
+    const ring = size => { const k = Math.max(1, Math.ceil(scene.fog.far / size)); return Array.from({ length: 2 * k + 1 }, (_, n) => n - k); };
+    for (const i of G.map.loopX ? ring(W) : [0]) {
+      for (const j of G.map.loopY ? ring(H) : [0]) {
         if (!i && !j) continue;
         const obj = mesh.group.clone();
         scene.add(obj);
         copies.push({ obj, i, j });
       }
     }
-    view.loop = { copies, w: grid.w * T, h: grid.h * T };
+    view.loop = { copies, w: W, h: H };
   }
   G.floorAt = (fx, fy) => mesh.floorAt(G.map.wrapFX(fx), G.map.wrapFY(fy)) * T;
   G.solidTopAt = (x, y) => mesh.solidTopAt(G.map.wrapX(x), G.map.wrapY(y));
@@ -270,22 +279,29 @@ async function presentMap(seeds = [], rebuild = false, open = null) {
   const tone = toneFromNote(G.map.map.note);
   const dark = tone ? Math.max(0, -(tone.red + tone.green + tone.blue) / 3) : 0;
   hemi.intensity = THREE.MathUtils.clamp(1.35 - dark / 120, 0.55, 1.35);
-  const outdoor = !!G.map.map.parallax_name && !/^yuka/i.test(G.map.map.parallax_name);
-  scene.fog.near = outdoor ? 16 : 9;
-  scene.fog.far = outdoor ? 70 : 36;
   G.sky.setMap(G.map.map);                 // (its background picture round the sky - sky.js)
   if (!rebuild) G.screen.startTone({ red: 0, green: 0, blue: 0, gray: 0 }, 0);
 }
 
 // the view again with the dark round a boss fight opened up (or closed again: null) - arena.js
 G.rebuildMapView = open => presentMap(view.seeds || [], true, open).catch(e => console.error('map rebuild failed', e));
-// the map editor saved its rules (mapedit.html, open in this browser): the map the player is on is built again with them at
-// once - not only when it is next entered
+// the player's own rules read again (the rule editor - userrules.js): the map's (put in by maphints.js), and the companions out
+// and the enemies here made as they now say
+async function readUserRules() {
+  const all = await loadUserHints();
+  if (!all) return null;
+  applyItemRules(all);                      // (its equipment and skills: over the game's own - itemrules.js)
+  G.combat?.allies?.relook();
+  for (const e of G.combat?.enemies || []) if (e.b?.enemyId) e.stationary = holdsPlace(e.b.enemyId);
+  return all;
+}
+// the rule editor saved (mapedit.html, open in this browser): the map the player is on is built again with its rules at once -
+// not only when it is next entered
 try {
-  new BroadcastChannel('bsvr-maphints').onmessage = async () => {
-    const id = G.map?.mapId, before = JSON.stringify(MAP_HINTS[id] ?? null);
-    await loadUserHints();
-    if (id && JSON.stringify(MAP_HINTS[id] ?? null) !== before && view.mesh && view.mapId === id && !transferBusy && !G.map.transferring) G.rebuildMapView(G.arena?.open || null);
+  new BroadcastChannel(USER_RULES_CHANNEL).onmessage = async () => {
+    const id = G.map?.mapId, before = JSON.stringify(hintsOf(id) ?? null);
+    if (!(await readUserRules())) return;
+    if (id && JSON.stringify(hintsOf(id) ?? null) !== before && view.mesh && view.mapId === id && !transferBusy && !G.map.transferring) G.rebuildMapView(G.arena?.open || null);
   };
 } catch { /* no BroadcastChannel */ }
 // an event laid a tile that opens the way (or took it away again) - gamemap.js onEventPageChanged: the view again, once for all
@@ -331,7 +347,7 @@ async function performTransfer() {
       setStatus(tr('맵 로딩: {map}', { map: mapName(t.mapId) }));
       G.screen.setBrightness(0);
       await m.load(t.mapId);
-      await loadUserHints();            // (the map editor's rules as saved now - mapedit.html)
+      await readUserRules();            // (the player's rules as saved now - the rule editor)
       await presentMap([[t.x, t.y]]);
       G.state.mapId = t.mapId;
       G.audio.autoplayMap(m.map);
@@ -796,7 +812,9 @@ function updateLoopView(head) {
   const inX = head.x - kx * L.w, inZ = head.z - kz * L.h;
   for (const c of L.copies) {
     c.obj.position.set((kx + c.i) * L.w, 0, (kz + c.j) * L.h);
-    const dx = c.i < 0 ? inX : c.i > 0 ? L.w - inX : 0, dz = c.j < 0 ? inZ : c.j > 0 ? L.h - inZ : 0;
+    // (how far its nearest edge is: the copies between, and the player's way across its own)
+    const dx = c.i < 0 ? inX + (-c.i - 1) * L.w : c.i > 0 ? c.i * L.w - inX : 0;
+    const dz = c.j < 0 ? inZ + (-c.j - 1) * L.h : c.j > 0 ? c.j * L.h - inZ : 0;
     c.obj.visible = Math.hypot(dx, dz) < reach;
   }
 }
@@ -907,11 +925,12 @@ if (new URLSearchParams(location.search).has('timer')) {
     await loadServerSettings();
     // (the developer's server this game came with - devserver.json beside it: its co-op menu's 커뮤니티 서버)
     try { const r = await fetch('/devserver.json'); if (r.ok) G.coop.setDevServers(await r.json()); } catch { /* none */ }
-    await loadUserHints();              // (the map rules changed in the map editor - mapedit.html, src/maphints.user.json)
+    await loadUserHints();              // (the player's own rules - the rule editor, saves/user_rules.json)
     await initAssets();
     if (!hasFile('Data/System.rvdata2')) throw new Error(tr('Data/System.rvdata2를 찾을 수 없습니다. 게임 폴더 설정을 확인하세요'));
     setStatus(tr('데이터베이스 로딩 중...'));
     await loadDatabase((p, name) => setStatus(tr('데이터베이스 로딩 중... {p}% ({name})', { p: Math.round(p * 100), name })));
+    applyItemRules(userRules());        // (the player's own rules for equipment and skills, read above - itemrules.js)
     // (the fonts the game's scripts name, once they are read - fonts.js)
     await Promise.all([loadScriptData().then(loadGameFonts), loadUiAssets()]);
     G.ui.attachHud(null);

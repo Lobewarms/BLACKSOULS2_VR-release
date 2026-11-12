@@ -2,7 +2,8 @@
 // 24x24 icon becomes a small voxel, like a Minecraft-style held item. Rotation / grip position /
 // size / mirroring can be tuned per item in the menu and are remembered.
 import * as THREE from 'three';
-import { getIconSet } from './ui.js';
+import { getIconSet } from './uitext.js';
+import { builtinRules } from './maphints.js';
 
 const ICON = 24;
 const KEY = 'bsvr.itemAdjust';
@@ -78,15 +79,17 @@ const ICON_POSE = {
   },
   left: { 706: { rot: 135, flip: true }, 707: { rot: 135, flip: true }, 634: { rot: 135, flip: true } },
 };
+// (BLACK SOULS II's icons: with the launcher's switch for that game's rules off, every icon held as the guess has it)
+const iconPose = (hand, iconIndex) => (builtinRules() ? ICON_POSE[hand]?.[iconIndex] : null);
 // hand: 'right' (weapon slot) or 'left' (shield slot: shields, and the guns that sit in that slot)
 export function defaultAdjust(kind, wtype, hand = 'right', iconIndex = 0) {
   if (kind === 'shield') return { rot: 0, offset: 0, scale: 1, flip: false };
   const auto = iconIndex ? autoPose(iconIndex, hand, wtype === 10) : null;
-  const { layout, ...own } = ICON_POSE[hand]?.[iconIndex] || {};
+  const { layout, ...own } = iconPose(hand, iconIndex) || {};
   return { rot: auto ? auto.rot : 45, offset: wtype === 9 || wtype === 3 ? 5 : 3, scale: 1, flip: auto ? auto.flip : false, ...own };
 }
 // how an icon's item is laid in the hand: 'fist' (a knuckle duster across the fist) or the usual way (null)
-export function iconLayout(iconIndex, hand = 'right') { return ICON_POSE[hand]?.[iconIndex]?.layout || null; }
+export function iconLayout(iconIndex, hand = 'right') { return iconPose(hand, iconIndex)?.layout || null; }
 export function getAdjust(key, kind, wtype, hand, iconIndex = 0) {
   return { ...defaultAdjust(kind, wtype, hand, iconIndex), ...(store[key] || {}) };
 }

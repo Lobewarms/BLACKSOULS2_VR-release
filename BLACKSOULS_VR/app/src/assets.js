@@ -1,5 +1,6 @@
 // Asset lookup / loading from the original game folder (served under /game/).
 import * as THREE from 'three';
+import { useBuiltinRules } from './maphints.js';
 
 let manifest = null;          // lowercased "Folder/Name.ext" -> real path
 const byStem = new Map();      // lowercased "Folder/Name" -> [real paths]
@@ -12,7 +13,10 @@ const AUDIO_EXT = ['.ogg', '.m4a', '.mp3', '.wav'];
 
 export async function initAssets() {
   const res = await fetch('/api/manifest');
-  const { files, rtp = [] } = await res.json();
+  const { files, rtp = [], mapRules } = await res.json();
+  // the launcher's switch for BLACK SOULS II's own map rules (on unless it says off; a dev page's ?maprules=0|1 - maphints.js)
+  const asked = new URLSearchParams(location.search).get('maprules');
+  useBuiltinRules(asked === '0' ? false : asked === '1' ? true : mapRules !== false);
   manifest = new Map();
   const add = (key, value) => {
     const lower = key.toLowerCase();

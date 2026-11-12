@@ -11,6 +11,9 @@ import { itemData } from './state.js';
 // (coopworld.js writeSyncs)
 let running = null;
 export const runningInterpreter = () => running;
+// runs begun so far: each run of an event its own number (run) - the map's interpreter goes on to run other events after
+// one, the same object (coop.js bringFightAlong tells the run that began a boss fight by it)
+let runs = 0;
 
 export class Interpreter {
   // kind: what kind of run it is - 'main', the map's own (what a player began, a cutscene, a fight an event began);
@@ -29,6 +32,7 @@ export class Interpreter {
     this.indent = 0; this.params = null; this.choiceGroup = null; this.battle = null;
     this.battleBgmBefore = undefined;
     this.undo = null;
+    this.carried = false;
   }
   // what an event's run changed (switches, variables, self switches: key -> the value before), kept on its root so a
   // fight it starts and that is never finished can be undone with all of it (combat.js undoFightEvent): its scene then
@@ -42,6 +46,7 @@ export class Interpreter {
   }
   setup(list, eventId = 0) {
     this.clear();
+    this.run = ++runs;
     this.mapId = G.map.mapId;
     this.eventId = eventId;
     this.list = list;
@@ -582,6 +587,10 @@ export class Interpreter {
     const c = this.character(this.params[0]);
     if (c) {
       c.forceMoveRoute(this.params[1]);
+      // (the player carried past what stands in its way - a route that lets it through: a boss fight's event taking it on
+      // through doors that shut behind it, 보스 러시. Co-op: the others in that fight come along when the event is done -
+      // coop.js eventDone)
+      if (c === G.map.playerChar && this.params[1].list?.some(mc => mc.code === 37)) (this.root || this).carried = true;
       if (this.params[1].wait) { this.waitMode = 'route'; this.waitChar = c; }
     }
     return true;

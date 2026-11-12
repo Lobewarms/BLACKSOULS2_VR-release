@@ -218,8 +218,8 @@ export class GameMap {
     } else if (EVENT_PASS_REGIONS.includes(r)) return true;
     return g.passable(x, y, d, this.tilesAt(x, y));
   }
-  // can one stand on this cell (the dark a boss arena opened counts - arena.js)
-  walkable(x, y) { return this.grid.anyPassable(x, y) || !!G.arena?.opens?.(x, y); }
+  // can one stand on this cell (the dark or a way a boss arena opened counts, what it shut does not - arena.js)
+  walkable(x, y) { return (this.grid.anyPassable(x, y) || !!G.arena?.opens?.(x, y)) && !G.arena?.shuts?.(x, y); }
   // used by the free-moving player collision: can the player cross from (x,y) in direction d?
   playerEdgePassable(x, y, d) {
     const dx = d === 4 ? -1 : d === 6 ? 1 : 0, dy = d === 8 ? -1 : d === 2 ? 1 : 0;
@@ -229,7 +229,8 @@ export class GameMap {
     if (!g.valid(x2, y2)) return false;
     if (this.blockedCells?.has(x2 + y2 * g.w)) return false;
     if (G.arena?.blocksCell(x2, y2)) return false;      // a way out walled with fog during a boss fight
-    // (the dark opened round a boss fight: open both ways between it and the floor)
+    if (G.arena?.shuts?.(x2, y2)) return false;         // (beyond the ways a boss fight opened: a solid block - arena.js)
+    // (the dark opened round a boss fight, a way it opened: open both ways between it and the floor)
     if ((G.arena?.opens(x2, y2) || G.arena?.opens(x, y)) && this.walkable(x, y) && this.walkable(x2, y2)) return true;
     const r1 = g.region(x, y), r2 = g.region(x2, y2);
     if (PLAYER_BLOCK_REGIONS.includes(r2)) return false;
@@ -268,7 +269,7 @@ export class GameMap {
       if (this.interpreter.running()) return;
       if (this.interpreter.eventId > 0) {
         this.events[this.interpreter.eventId]?.unlock();
-        G.coop?.eventDone?.(this.interpreter.mapId, this.interpreter.eventId);     // (the developer's world: its lock goes)
+        G.coop?.eventDone?.(this.interpreter.mapId, this.interpreter.eventId, this.interpreter);     // (the developer's world: its lock goes)
         this.interpreter.clear();
       }
       if (this.transferring) return;

@@ -13,12 +13,12 @@ import { skyPicture, skyAllOver } from './maphints.js';
 
 const R = 200;                              // m: its corners stay inside the camera's far plane
 const REACH = Math.tan(40 * Math.PI / 180); // the band reaches about 40° up and down from eye level
-const FOG = 0x030305;                       // the fog / background without a sky: the original's black (main.js)
-// the sky where the map shows no picture, and the fog far walls fade into: black as the original's, or the colour the
-// player chose (setting 하늘 색 - '#rrggbb')
+// the sky where the map shows no picture, and the fog far walls fade into: dawn unless the player chose another colour
+// (setting 하늘 색 - '#rrggbb'; the original's is black, #030305 - the user's choice of default, 2026-11-11)
+export const DEFAULT_SKY = '#3a4868';
 export function baseSky() {
   const c = G.settings?.skyColor;
-  return /^#[0-9a-f]{6}$/i.test(c || '') ? new THREE.Color(c) : new THREE.Color(FOG);
+  return new THREE.Color(/^#[0-9a-f]{6}$/i.test(c || '') ? c : DEFAULT_SKY);
 }
 
 // the picture without a border line drawn round it (a black column or a few black rows at its edge): repeated or

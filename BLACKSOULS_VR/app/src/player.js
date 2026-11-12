@@ -310,7 +310,10 @@ export class Player {
       for (let i = 0; i < steps; i++) {
         fx += mvx / steps; fy += mvy / steps;
         [fx, fy] = this.resolve(fx, fy);
-        if (bodies?.length) [fx, fy] = G.combat.blockPlayer(fx, fy, this, bodies);
+        if (bodies?.length) {
+          const [bx, by] = G.combat.blockPlayer(fx, fy, this, bodies);
+          if (bx !== fx || by !== fy) [fx, fy] = this.slideTo(fx, fy, bx, by);
+        }
       }
       if (G.time >= this.knockedUntil) this.checkBump(mvx, mvy, fx, fy);
     } else {
@@ -517,6 +520,16 @@ export class Player {
     const KEEP = 0.45;                                       // tiles from the way's middle line
     if (axis === 'x') { const c = G.map.nearY(pc.y, fy); fy = Math.min(c + KEEP, Math.max(c - KEEP, fy)); }
     else { const c = G.map.nearX(pc.x, fx); fx = Math.min(c + KEEP, Math.max(c - KEEP, fx)); }
+    return [fx, fy];
+  }
+
+  // from one spot toward another in steps no wall can be crossed in, each held by the walls as the player's own steps
+  // are - an enemy's body putting the player out of it (combat.js pushPlayer, and blockPlayer in the steps above): in
+  // one jump - a big body coming out of hiding or growing beside a player at a wall, a co-op host's enemy walking into
+  // it - the player was put past the wall's line, inside it
+  slideTo(fx, fy, tx, ty) {
+    const dx = tx - fx, dy = ty - fy, n = Math.ceil(Math.hypot(dx, dy) / 0.1);
+    for (let i = 0; i < n; i++) [fx, fy] = this.resolve(fx + dx / n, fy + dy / n);
     return [fx, fy];
   }
 

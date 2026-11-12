@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>BLACKSOULS VR - 규칙 편집기</title>
+<style>
+  :root { --bg: #15151a; --panel: #1e1e25; --line: #34343e; --text: #ddd; --dim: #8a8a96; --accent: #e8c86a; --ok: #8fd18f; --bad: #ff9a9a; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px "Malgun Gothic", sans-serif; overflow: hidden; }
+  button, select, input, textarea { font: inherit; color: var(--text); background: #2a2a33; border: 1px solid var(--line); border-radius: 4px; }
+  button { padding: 3px 8px; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button:disabled { opacity: 0.4; cursor: default; }
+  button.primary { background: #5a4a1c; border-color: var(--accent); color: #fff3cf; }
+  button.primary:hover { background: #6e5a22; }
+  input[type=number] { width: 64px; }
+  h3 { margin: 0 0 6px; font-size: 13px; color: var(--accent); display: flex; align-items: center; gap: 6px; }
+  h3 .n { display: inline-flex; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); color: #1e1e25; font-size: 11px; align-items: center; justify-content: center; flex: none; }
+  h3 .sub { color: var(--dim); font-weight: normal; }
+  #left { position: fixed; left: 0; top: 0; bottom: 0; width: 360px; overflow-y: auto; background: var(--panel); border-right: 1px solid var(--line); }
+  .sec { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  .sec.head { position: sticky; top: 0; z-index: 2; background: #23232b; }
+  .row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: 4px 0; }
+  .tabs { display: flex; gap: 4px; align-items: center; flex-wrap: wrap; margin-bottom: 6px; }
+  .tabs button[data-tab] { padding: 3px 9px; }
+  .tabs button, #dirty { white-space: nowrap; }
+  .tabs button.on { background: #4a3f1c; border-color: var(--accent); color: #fff3cf; }
+  .tabs .grow { flex: 1; }
+  body:not([data-tab="map"]) .tab-map, body:not([data-tab="ally"]) .tab-ally, body:not([data-tab="foe"]) .tab-foe,
+  body:not([data-tab="item"]) .tab-item, body[data-tab="map"] .tab-roster,
+  body[data-itemkind="skills"] .tab-equip, body:not([data-itemkind="skills"]) .tab-skill { display: none !important; }
+  .filter { width: 100%; box-sizing: border-box; padding: 4px 6px; }
+  .list { height: 150px; overflow-y: auto; margin-top: 6px; border: 1px solid var(--line); border-radius: 4px; }
+  .list div { padding: 2px 6px; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list div:hover { background: #2c2c36; }
+  .list div.on { background: #4a3f1c; }
+  .list div.user::after { content: " ✎"; color: var(--accent); }
+  #allyList, #foeList, #itemList { height: 260px; }
+  #mapList { height: 320px; }
+  /* the maps as RPG Maker VX Ace's map tree: a parent folded / unfolded by its triangle */
+  #mapList .tw { display: inline-block; width: 14px; color: var(--dim); text-align: center; }
+  #mapList .tw.has { color: var(--accent); cursor: pointer; }
+  #mapList .tw.has:hover { color: #fff3cf; }
+  #mapList .path { color: var(--dim); }
+  /* the 장비·스킬 tab: a row of a feature / an effect */
+  .frow { display: flex; gap: 4px; align-items: center; margin: 3px 0; padding: 2px 3px; border-radius: 4px; background: #24242c; }
+  .frow .f-code, .frow .e-code { width: 104px; flex: none; }
+  .frow .f-data, .frow .e-data { flex: 1 1 80px; min-width: 60px; }
+  .frow input { width: 52px; flex: none; }
+  .frow .unit { color: var(--dim); white-space: nowrap; }
+  .frow button { padding: 0 6px; margin-left: auto; flex: none; }
+  #paramRows label { display: inline-flex; gap: 4px; align-items: center; margin: 2px 8px 2px 0; }
+  #itemNote, #itemDesc { width: 100%; box-sizing: border-box; font: 12px Consolas, "Malgun Gothic", monospace; }
+  #itemNote { height: 80px; }
+  #itemDesc { height: 44px; }
+  #dmgFormula { width: 100%; box-sizing: border-box; }
+  #mapTitle { font-size: 14px; }
+  #dirty { color: var(--bad); }
+  #saveMsg { color: var(--dim); min-height: 16px; }
+  #saveMsg.ok { color: var(--ok); } #saveMsg.bad { color: var(--bad); }
+  #selInfo { padding: 5px 7px; border: 1px dashed var(--line); border-radius: 4px; color: var(--dim); }
+  #selInfo.on { border: 1px solid #ffd040; color: #ffe9a8; background: rgba(255, 208, 64, 0.08); }
+  #ruleType { width: 100%; padding: 3px; }
+  #ruleParams label { display: inline-flex; gap: 4px; align-items: center; margin-right: 8px; }
+  #ruleParams:empty::before { content: "정할 값이 없는 규칙입니다"; color: var(--dim); }
+  #editNote { color: var(--ok); }
+  .rule { display: flex; gap: 4px; align-items: center; padding: 2px 4px; border-radius: 4px; }
+  .rule:hover { background: #2a2a33; }
+  .rule.on { background: #4a3f1c; }
+  .rule .txt { flex: 1; cursor: pointer; }
+  .rule .sw { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+  .rule button { padding: 0 6px; }
+  .other { color: var(--dim); }
+  textarea#json { width: 100%; box-sizing: border-box; height: 200px; font: 12px Consolas, monospace; }
+  .help { color: var(--dim); line-height: 1.55; }
+  .help b { color: var(--text); font-weight: normal; }
+  .from { padding: 4px 7px; border-radius: 4px; background: #26262e; margin-bottom: 4px; }
+  .from.user { color: #ffe9a8; background: rgba(255, 208, 64, 0.1); }
+  #view { position: fixed; left: 360px; top: 0; bottom: 0; right: 38%; }
+  body.no2d #view { right: 0; }
+  #view canvas { cursor: crosshair; }
+  #hud { position: absolute; inset: 0; pointer-events: none; }
+  #cross { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); color: #fff; text-shadow: 0 0 3px #000; font-size: 18px; }
+  #cellInfo { position: absolute; left: 8px; bottom: 8px; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px; white-space: pre; }
+  #status { position: absolute; left: 8px; top: 8px; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px; transition: background 0.4s; }
+  #status.ok { background: rgba(40, 110, 50, 0.85); }
+  #lookHint { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); background: rgba(0,0,0,0.65); padding: 6px 12px; border-radius: 6px; width: max-content; max-width: 90%; text-align: center; color: #eee; }
+  #lookHint b { color: var(--accent); font-weight: normal; }
+  #viewBar { position: absolute; right: 8px; top: 8px; display: flex; gap: 6px; pointer-events: auto; }
+  #right { position: fixed; right: 0; top: 0; bottom: 0; width: 38%; display: flex; flex-direction: column; background: #000; border-left: 1px solid var(--line); }
+  body.no2d #right { display: none; }
+  #right .bar { display: flex; gap: 6px; align-items: center; padding: 4px 8px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  #hover2d { color: var(--dim); margin-left: auto; white-space: nowrap; }
+  #wrap2d { flex: 1; overflow: auto; }
+  #c2d { image-rendering: pixelated; display: block; cursor: crosshair; }
+  body:not([data-tab="map"]) #view, body:not([data-tab="map"]) #right { display: none; }
+  #preview { position: fixed; left: 360px; top: 0; bottom: 0; right: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 14px; background: #101014; }
+  body:not([data-tab="map"]) #preview { display: flex; }
+  #previewCv { image-rendering: pixelated; max-width: 90%; max-height: 75%; background: repeating-conic-gradient(#1c1c22 0% 25%, #24242b 0% 50%) 0 0 / 24px 24px; }
+  #previewNote { color: var(--dim); text-align: center; white-space: pre-line; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/build/three.module.js",
+  "three/addons/": "./vendor/three/examples/jsm/"
+} }
+</script>
+</head>
+<body data-tab="map" data-itemkind="armors">
+<div id="left">
+  <div class="sec head">
+    <div class="tabs"><button data-tab="map" class="on">맵</button><button data-tab="ally">동료</button><button data-tab="foe">적</button><button data-tab="item">장비·스킬</button>
+      <span class="grow"></span><span id="dirty"></span>
+      <button id="save" class="primary" title="맵·동료·적·장비·스킬의 내 규칙을 모두 저장 (saves 폴더의 user_rules.json - 이 브라우저에 열린 게임에는 바로, 그 밖에는 맵에 다시 들어갈 때 적용)">저장</button></div>
+    <div><b id="mapTitle">맵을 고르세요</b></div>
+    <div class="row">
+      <button id="revert" title="고른 것의 저장하지 않은 변경을 버림">되돌리기</button>
+      <button id="builtin" title="고른 것의 내 규칙을 지움 (블랙소울 전용 규칙이 있으면 그것, 없으면 일반 규칙으로)">내 규칙 지우기</button>
+      <button id="play" class="tab-map" title="이 맵을 게임에서 엽니다 (세이브는 쓰지 않음)">게임에서 열기</button>
+    </div>
+    <div class="row" title="이 체크는 편집기에서 보이는 모습만 바꿉니다 (블랙소울 모드용 규칙을 만들 땐 켜고, 다른 게임용이면 끄고). 게임은 런처의 '블랙소울 전용 보정 적용' 설정을 따르고, 내 규칙은 어느 쪽이든 먼저 적용됩니다."><label><input id="bs2View" type="checkbox"> 블랙소울 전용 보정 켜고 보기</label><span class="other">— 게임은 런처 설정대로</span></div>
+    <div id="saveMsg"></div>
+  </div>
+  <div class="sec tab-map">
+    <h3><span class="n">1</span>맵 고르기</h3>
+    <input id="mapFilter" class="filter" placeholder="맵 찾기 (번호나 이름 일부)">
+    <div id="mapList" class="list"></div>
+  </div>
+  <div class="sec tab-map">
+    <h3><span class="n">2</span>고칠 곳 고르기</h3>
+    <div id="selInfo">아직 고른 곳이 없습니다</div>
+    <div class="help">2D 지도나 3D에서 <b>클릭</b>하면 그 칸, <b>끌면</b> 영역을 고릅니다. <b>Ctrl</b>을 누른 채 클릭·끌기로 여러 곳을 함께 고르고(고른 곳을 Ctrl+클릭하면 빠짐), 규칙은 고른 곳마다 한 번에 들어갑니다. 3D 둘러보기: <b>마우스 오른쪽 버튼을 누른 채 끌기</b>. 가운데 <b>+</b>: <b>F</b> 그 칸 고르기, <b>G</b> 거기까지 넓히기.</div>
+    <div class="row"><button id="frameSel" disabled>3D에서 다시 보기</button><button id="clearSel" disabled>선택 해제</button></div>
+  </div>
+  <div class="sec tab-map">
+    <h3><span class="n">3</span>규칙 고르기</h3>
+    <select id="ruleType"></select>
+    <div id="ruleDesc" class="help"></div>
+  </div>
+  <div class="sec tab-map">
+    <h3><span class="n">4</span><span id="step4">값 정하고 추가</span></h3>
+    <div id="ruleParams" class="row"></div>
+    <div class="row"><button id="addRule" class="primary">고른 곳에 추가</button><button id="replaceRule" disabled title="아래 목록에서 고른 규칙을 위의 종류·값으로 바꿉니다">고른 규칙을 이걸로 바꾸기</button></div>
+    <div id="editNote" class="help"></div>
+  </div>
+  <div class="sec tab-map"><h3>이 맵의 규칙 <span class="sub">— 눌러서 고치기</span></h3><div id="rules"></div></div>
+  <div class="sec tab-map">
+    <h3>맵 전체</h3>
+    <div class="row"><label>벽 최대 높이 <input id="wallCap" type="number" min="1" max="30" step="1" placeholder="6"> 칸</label></div>
+    <div class="row"><label><input id="openSky" type="checkbox"> 열린 하늘 (배경이 맵 둘레의 하늘)</label></div>
+    <div class="row"><label><input id="overlaps" type="checkbox"> 겹쳐 그린 그림을 하나씩 세우기</label></div>
+    <div class="row"><label><input id="massBackdrop" type="checkbox"> 쌓인 물건 덩어리 면에 뒤 벽 그림</label></div>
+    <div class="row"><label>낮은 둔덕: A2 종류 <input id="moundKinds" placeholder="예: 2" style="width:60px"></label><label>높이 <input id="moundH" type="number" step="0.05" placeholder="0.35"> 칸</label></div>
+    <div class="row" title="바닥에 그려 넣은 절벽: 이 칸에서 걸어서 못 가는 땅을 이 높이로 올리고, 그 가장자리 아래 그려진 바위면을 절벽으로 세웁니다"><label>그린 절벽 위 땅 <input id="highH" type="number" min="0" step="0.5" placeholder="없음" style="width:60px"> 칸</label><label>걸어 다니는 칸 <input id="highFrom" placeholder="x,y" style="width:60px"></label></div>
+    <div class="row" title="옆에서 그린 탑(오르는 발판과 계단): 높이를 이 맵의 떨어지는 이벤트로 정합니다 - n줄 아래로 떨어뜨리는 곳은 n칸 낮게, 떨어지며 지나는 칸은 빈 공중"><label><input id="sideView" type="checkbox"> 옆에서 그린 탑 (떨어지는 이벤트로 높이)</label></div>
+    <div class="row" title="떨어지는 이벤트로 높이가 정해지는 맵에서, 정면에서 그린 복도 폭의 계단 타일(A5 번호): 바닥끼리 잇는 바닥 대신 그 사이를 오르는 계단으로"><label>정면 계단 A5 번호 <input id="stairs" placeholder="예: 32,33,40" style="width:150px"></label></div>
+    <div class="row" title="바닥 타일(A5)로 그린 계단으로 오르는 계단식 마을: 그 계단은 바닥이 아니라 오르막이고, 지붕·테라스마다 그 아래 그린 벽만큼 높은 층이 됩니다"><label>계단식 마을: 정면 계단 A5 <input id="terrStairs" placeholder="예: 8,9" style="width:90px"></label><label>옆 계단 A5 <input id="terrSide" placeholder="예: 3,4" style="width:90px"></label></div>
+    <div class="row" title="이 타일 번호의 작은 그림은 보는 사람 쪽으로 돌지 않고 2D 그대로의 방향으로 섭니다 (앞뒤에서 보이는 판 하나)"><label>돌지 않는 그림 타일 <input id="flatPictures" placeholder="예: 912" style="width:150px"></label></div>
+    <div class="row" title="이 맵의 전투는 보스전이라도 맵을 닫지 않습니다 (출구가 열린 채, 모두가 보이는 채)"><label><input id="openFights" type="checkbox"> 보스전에도 맵을 닫지 않음</label></div>
+    <div class="help">타일 번호는 지도 위 칸에 마우스를 올리면 아래에 나옵니다 (A5 번호도).</div>
+  </div>
+  <details class="sec tab-map">
+    <summary>JSON (고급 — 이 맵의 모든 규칙)</summary>
+    <textarea id="json" spellcheck="false"></textarea>
+    <div class="row"><button id="applyJson">JSON 적용</button><span id="jsonMsg" class="other"></span></div>
+  </details>
+  <div class="sec help tab-map">
+    고치면 3D가 바로 다시 지어집니다(왼쪽 위에 <b>반영됨</b>). 높이 단위는 <b>칸</b> (1칸 = 1.5m).<br>
+    <b>저장</b>하면 <b>saves 폴더의 user_rules.json</b>에 기록되고, 블랙소울 전용 규칙보다 먼저 적용됩니다 — 이 브라우저에 열린 게임은 지금 맵을 바로 다시 짓고, 그 밖에는 그 맵에 다시 들어갈 때 적용됩니다.<br>
+    2D 지도: 두 번 클릭하면 그 칸으로 날아갑니다 · 위의 <b>-</b> <b>+</b>로 확대
+  </div>
+
+  <div class="sec tab-ally">
+    <h3><span class="n">1</span>동료 고르기</h3>
+    <input id="allyFilter" class="filter" placeholder="동료 찾기 (번호나 이름 일부)">
+    <div id="allyList" class="list"></div>
+  </div>
+  <div class="sec tab-ally">
+    <h3><span class="n">2</span>모습</h3>
+    <div class="row"><select id="allyKind" style="width:100%">
+      <option value="">자동 — 캐릭터 칩, 없으면 얼굴 이름의 칩, 없으면 얼굴</option>
+      <option value="chip">캐릭터 칩 (Characters)</option>
+      <option value="face">얼굴 (Faces)</option>
+      <option value="book">그림 (Pictures)</option>
+      <option value="battler">전투 그림 (Battlers)</option>
+    </select></div>
+    <div class="row" id="allyFileRow"><label>파일 <input id="allyFile" list="allyFiles" style="width:190px"></label><datalist id="allyFiles"></datalist>
+      <label id="allyIndexL">번호 <input id="allyIndex" type="number" min="0" step="1" value="0"></label></div>
+    <div class="row" title="부른 자리에 서서 움직이지 않는 벽이 됩니다 (그 높이, m) - 0이면 다른 동료처럼 따라다님"><label>벽으로 세우기 <input id="allyWall" type="number" min="0" max="10" step="0.1" placeholder="0"> m</label></div>
+    <div class="row" title="이 동료와 한 몸으로 그려질 동료 번호 (그림 하나에 HP 둘 - 함께 있을 때)"><label>한 몸으로 묶을 동료 <input id="allyWith" placeholder="예: 101" style="width:90px"></label></div>
+    <div class="help">파일은 목록에서 고르거나 이름을 적습니다. 번호: 칩·얼굴 그림에서 몇 번째인지 (왼쪽 위부터 0).</div>
+  </div>
+  <div class="sec tab-foe">
+    <h3><span class="n">1</span>적 고르기</h3>
+    <input id="foeFilter" class="filter" placeholder="적 찾기 (번호나 이름 일부)">
+    <div id="foeList" class="list"></div>
+  </div>
+  <div class="sec tab-foe">
+    <h3><span class="n">2</span>전투 중 움직임</h3>
+    <div class="row"><label><input type="radio" name="foeHold" value=""> 기본</label></div>
+    <div class="row"><label><input type="radio" name="foeHold" value="hold"> 제자리에 서 있기 — 걷지 않고, 맞아도 밀려나지 않음</label></div>
+    <div class="row"><label><input type="radio" name="foeHold" value="move"> 움직이기 — 다른 적처럼 다가오고 밀려남</label></div>
+  </div>
+  <div class="sec tab-item">
+    <h3><span class="n">1</span>장비·스킬 고르기</h3>
+    <div class="row"><select id="itemKind"><option value="weapons">무기</option><option value="armors" selected>방어구</option><option value="skills">스킬</option></select>
+      <input id="itemFilter" class="filter" placeholder="찾기 (번호나 이름 일부)" style="flex:1; width:auto"></div>
+    <div id="itemList" class="list"></div>
+  </div>
+  <div class="sec tab-item tab-equip">
+    <h3><span class="n">2</span>특징</h3>
+    <div class="help">원작 데이터베이스의 '특징' — 마법 반사율, 속성·상태 유효도, 공격 시 상태 ...</div>
+    <div id="featRows"></div>
+    <div class="row"><button id="featAdd">+ 특징 추가</button></div>
+  </div>
+  <div class="sec tab-item tab-equip">
+    <h3>능력치</h3>
+    <div class="help">장비하면 더해지는 값</div>
+    <div id="paramRows" class="row"></div>
+  </div>
+  <div class="sec tab-item tab-skill">
+    <h3><span class="n">2</span>사용 효과</h3>
+    <div class="help">상태 부여·해제, 강화·약화, 회복, 공통 이벤트 ...</div>
+    <div id="effRows"></div>
+    <div class="row"><button id="effAdd">+ 사용 효과 추가</button></div>
+  </div>
+  <div class="sec tab-item tab-skill">
+    <h3>피해와 명중</h3>
+    <div class="row"><label>피해 <select id="dmgType"></select></label><label>속성 <select id="dmgElement"></select></label></div>
+    <div class="row"><input id="dmgFormula" placeholder="계산식 (예: a.mat * 5 - b.mdf * 2)" spellcheck="false"></div>
+    <div class="row"><label>분산도 <input id="dmgVariance" type="number" min="0" max="100" step="1"> %</label><label><input id="dmgCritical" type="checkbox"> 치명타</label></div>
+    <div class="row"><label>명중 타입 <select id="hitType"></select></label><label>성공률 <input id="hitRate" type="number" min="0" max="100" step="1"> %</label></div>
+    <div class="row"><label>연속 횟수 <input id="hitRepeats" type="number" min="1" max="9" step="1"></label><label>MP 소비 <input id="costMp" type="number" min="0" step="1"></label><label>TP 소비 <input id="costTp" type="number" min="0" max="100" step="1"></label></div>
+  </div>
+  <div class="sec tab-item">
+    <h3>메모</h3>
+    <div class="help">원작 스크립트가 읽는 태그 — 예: 가디언 엔젤 &lt;自動蘇生:HP,애니메이션,확률&gt;</div>
+    <textarea id="itemNote" spellcheck="false"></textarea>
+    <h3 style="margin-top:6px">설명</h3>
+    <div class="help">메뉴에 나오는 글</div>
+    <textarea id="itemDesc" spellcheck="false"></textarea>
+    <div class="help">고치면 오른쪽에 지금 어떻게 되는지 나옵니다. 원작과 같은 것은 규칙에 남지 않습니다(전부 같으면 내 규칙 없음).</div>
+  </div>
+  <div class="sec help tab-roster">
+    <b>저장</b>하면 <b>saves 폴더의 user_rules.json</b>에 기록되고, 블랙소울 전용 규칙보다 먼저 적용됩니다 — 게임에서는 맵에 다시 들어갈 때(이 브라우저에 열린 게임은 바로) 바뀝니다.
+  </div>
+</div>
+<div id="view">
+  <div id="hud"><div id="cross">+</div><div id="cellInfo"></div><div id="status">불러오는 중...</div><div id="lookHint"></div>
+    <div id="viewBar"><button id="toggle2d">2D 지도</button><button id="toggleEv">이벤트 표시</button><button id="toggleFog">안개</button><button id="rebuild">다시 짓기</button></div>
+  </div>
+</div>
+<div id="right">
+  <div class="bar"><b>2D</b><button id="zoomOut">-</button><button id="zoomIn">+</button><span id="hover2d"></span></div>
+  <div id="wrap2d"><canvas id="c2d"></canvas></div>
+</div>
+<div id="preview"><canvas id="previewCv" width="1" height="1"></canvas><div id="previewNote"></div></div>
+<script type="module" src="src/editor/mapedit.js"></script>
+</body>
+</html>

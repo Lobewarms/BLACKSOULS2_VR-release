@@ -66,13 +66,25 @@
 //  highGround: { from: [x, y], height in tiles }: cliffs painted on ground that is all one level (their faces B-E tiles): the ground
 //            a walk from (x, y) never gets to is the top of the cliffs, that high, and what is drawn straight down from its edge that
 //            nobody walks through is a cliff's face, standing from the ground at its foot up to it (mapmesh.js)
+//  fightWays: cells a boss fight here opens for as long as it lasts [x0, y0, x1, y1] - kept off in the original by an invisible
+//            tile, its fight fought on a battle screen: walked over both ways, by the players and the enemies, onto the ground
+//            beyond them, the 3D view as it is (a ledge there walked on its top); what that view stands solid on that ground (a
+//            wall top nobody reached in the original) stays shut (arena.js openWays)
+import { loadUserRules } from './userrules.js';
+
 const LIBRARY_GALLERY = [[11, 11, 32, 14, 2, 2], [13, 15, 15, 17, 2, 0], [28, 15, 30, 17, 2, 0]];
 const LIBRARY_FRONT = [[11, 15, 32, 17, 2]];      // (the gallery's front: no higher than the gallery)
 // (its back wall over the gallery, rows 6-11: one block as tall as its front - its back rows stood two tiles lower, so what is
 // drawn on their part of the wall, the ten candles over the white door, sat on that lower top behind the front, hidden)
 const LIBRARY_BACK = [[11, 6, 32, 10, 7]];
 export const MAP_HINTS = {
-  1: { sideView: true },     // 추락의 방: ledges and stairs up a brick tower, falls down its shaft
+  // 추락의 방: ledges and stairs up a brick tower, falls down its shaft. At its foot, round the pool of blood the fall ends in, the
+  // bones of those who fell lie heaped along the walls (upper-layer bone tiles nobody walks through): low heaps sloping from the
+  // wall down into the room - 0.8 tiles (1.2 m) against the wall, 0.55 (0.8 m), 0.3 (0.45 m) at their foot, the bones on top -
+  // not blocks 5-6 tiles (8 m) tall with the bones up their faces
+  1: { sideView: true, lips: [[13, 55, 13, 63, 0.8], [14, 55, 14, 63, 0.55], [15, 55, 15, 63, 0.3],
+    [27, 55, 27, 63, 0.8], [26, 55, 26, 63, 0.55], [25, 55, 25, 63, 0.3],
+    [13, 64, 27, 64, 0.3], [13, 65, 27, 65, 0.55], [13, 66, 27, 66, 0.8]] },
   // 옥스・워드 대학교 １: the gallery along the library (rows 12-13), the walk round the skylit roof and the chapel off it a floor
   // over the hall (as far as the fall off the roof's edge drops); the great stairs (x30-32) down from the gallery to the hall's
   // corridor and on up to the third floor's door (30,4). The stairs, three wide, had read as floor: the gallery, the stairs and
@@ -131,8 +143,9 @@ export const MAP_HINTS = {
   // block, the camera on its tripod in it (12, 9) a pillar. The room is floor, the walls are the picture's curtain
   274: { walkedTo: [[15, 10], [12, 9]], parallaxWalls: { back: [240, 93, 288, 100], front: [144, 435, 224, 90], backdrop: [93, 195] } },
   // 퀸・랜드 ３ (the theatre): the stage (rows 6-10, reached only through its door from ４) stands 0.9 m above the house, its front
-  // row - kept off by a blocking tile drawn as more stage - its lip (as 하얀 성시 ７－１１ BOSS ２'s)
-  167: { floors: [[3, 6, 34, 10, 0.6, 0.6]], lips: [[3, 11, 34, 11, 0.1]] },
+  // row - kept off by a blocking tile, drawn as more stage with its front edge at its foot - more stage, as high as the rest of it
+  // (as 하얀 성시 ７－１１ BOSS ２'s; the user's wish: it stood 0.15 m over the stage, a step the original has not)
+  167: { floors: [[3, 6, 34, 10, 0.6, 0.6]], lips: [[3, 11, 34, 11, 0]] },
   // 퀸・랜드 ５ (her bedroom): the cabinets in a row along the west wall, each its own (they stood as one block of the wall,
   // the wall's own colour on its face); the bed in the alcove and its curtains the same (with the alcove behind it they
   // made a block three tiles high, the quilt stacked up its face) - the bed lies, the curtains hang beside it
@@ -180,9 +193,11 @@ export const MAP_HINTS = {
   372: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT, tops: LIBRARY_BACK, massBackdrop: true },
   373: { floors: LIBRARY_GALLERY, caps: LIBRARY_FRONT },
   // 하얀 성시 ７－１１ BOSS ２ (그랑・기뇰's theatre): the stage (rows 6-10) stands 0.9 m above the house; its front
-  // row, kept off in the original by an invisible tile and drawn as more stage, is the stage's lip - not a wall
-  // between the stage and the house
-  374: { floors: [[3, 6, 31, 10, 0.6, 0.6]], lips: [[3, 11, 31, 11, 0.1]] },
+  // row, kept off in the original by an invisible tile and drawn as more stage (its front edge drawn at its foot), is
+  // more stage - as high as the rest of it (the user's wish: it stood 0.15 m over the stage, a step the original has
+  // not), not a wall between the stage and the house. 그랑・기뇰's play is fought down in the house too (the user's
+  // wish): that row is a way down off the stage and back up for as long as the fight lasts
+  374: { floors: [[3, 6, 31, 10, 0.6, 0.6]], lips: [[3, 11, 31, 11, 0]], fightWays: [[4, 11, 30, 11]] },
   // 하얀 성시 ３: the way up through the castle - from the snowy yard (rows 42-48) up four flights of stairs drawn on the floor (x4-5,
   // x18-19, x4-5 with a landing at rows 15-16) to three corridors, each a storey over the last: all of it lay flat. The walls
   // between two corridors stand two tiles over the higher one (left to themselves they rose in steps, ledges up their faces)
@@ -195,65 +210,110 @@ export const MAP_HINTS = {
   // 하얀 성시 ７ (윈터벨): white houses with flat roofs and terraces, stairs between them drawn as A5 floor tiles -
   // all of it one flat level otherwise (the stairs joined every level)
   353: { terraces: { stairs: [8, 9, 10, 16, 17, 18], sideStairs: [3, 4, 11, 12, 13, 22, 23, 30, 31, 37, 38, 43, 44] } },
+  // 캐럴강●: wooden bridges over the river between islands standing at different heights - each one slopes evenly the whole way
+  // from the island it leaves to the one it reaches, instead of dropping it all in the cell or two where it passes the island's
+  // stone wall (2 tiles in 1.5 m at the bridge from the well's island) and running flat the rest of the way; the east island's
+  // stairs down to the shore evenly too
+  31: { floors: [[16, 50, 16, 64, 0, -4], [51, 36, 53, 52, 0, -2], [89, 62, 90, 66, -2, -4]] },
+  // 하노버 폐역/이름 없는 숲 １: the clearing with the spider's web runs down past the orange tree to the woodcutter's house - one
+  // slope in the drawing. The forest north of it stands 10 up (the fall off the cornfield's cliff, east), the house's ground at
+  // -1: the clearing slopes all the way down from where it leaves the forest (row 30, 10) to the house's ground (row 47, -1)
+  // instead of the whole climb in its last cell (16 m in one step)
+  161: { floors: [[27, 30, 38, 35, 10, 6.33], [26, 36, 31, 47, 6.33, -1]] },
+  // 크리미아 간호 묘지 １－１: the stairs up from the trench round the graves to the door at the top of its wall (east end), drawn
+  // flat - a climb from the trench's floor (-2) to the top of the wall the door is in (0), not a 3 m step half way up
+  313: { floors: [[81, 28, 83, 31, 0, -2]] },
   // 하얀 성시 ７－３: the same town along the shore (the street over the wall west of the garden, stairs up to the arches)
   356: { terraces: { stairs: [8, 9, 10, 16, 17, 18], sideStairs: [3, 4, 11, 12, 13, 22, 23, 30, 31, 37, 38, 43, 44] } },
 };
 
-// the rules as this file has them, before the map editor's (mapedit.html) are put over them
+// the rules as this file has them, before the player's own (the rule editor - userrules.js) are put over them
 export const BUILTIN_HINTS = JSON.parse(JSON.stringify(MAP_HINTS));
-// The map editor's rules (src/maphints.user.json - mapedit.html writes it): a map there has its rules from there, all of them
-// (an empty {} - none); a map not there keeps this file's. Read as the game starts and again each time it goes to another map
-// (main.js), so what the editor saved shows on going into the map again; a map taken out of the file has this file's back.
-// -> the rules read (null: the file could not be read - those in use stay)
-export const USER_HINTS_FILE = 'src/maphints.user.json';
-let userApplied = [];
+// This file's rules are BLACK SOULS II's own, by its map numbers - some play the game's maps of another VX Ace game with this
+// port. The launcher's switch turns them off (블랙소울 전용 보정 적용, on by default: the manifest's mapRules, a dev page's
+// ?maprules=0|1 - assets.js), and each applies only to a map as big as the game's map of that number and drawn with its
+// tileset ([width, height, tileset] here, as the game has them in every language): another game's map of the same number is
+// built by the general rules alone. The player's own rules (userrules.js) apply wherever they were made.
+const BS2_MAPS = {
+  1: [40, 75, 21], 24: [25, 25, 85], 31: [100, 70, 53], 33: [70, 100, 29], 38: [80, 41, 38], 46: [30, 30, 95], 49: [30, 80, 100],
+  57: [32, 90, 95], 60: [25, 20, 97], 71: [90, 40, 38], 72: [20, 20, 38], 73: [40, 31, 38], 74: [25, 30, 38], 101: [44, 50, 19],
+  134: [40, 40, 76], 142: [25, 55, 77], 154: [44, 50, 87], 155: [110, 38, 80], 159: [70, 30, 86], 161: [140, 170, 89],
+  165: [39, 35, 96], 167: [35, 40, 96], 169: [21, 20, 97], 170: [41, 30, 97], 173: [26, 22, 1], 174: [25, 22, 1], 184: [24, 40, 31],
+  260: [25, 35, 94], 274: [26, 22, 1], 275: [40, 25, 94], 276: [30, 20, 41], 313: [90, 40, 123], 346: [23, 50, 124],
+  350: [26, 45, 127], 353: [60, 110, 133], 356: [80, 25, 133], 372: [44, 50, 19], 373: [44, 50, 100], 374: [35, 22, 96],
+  389: [60, 20, 100],
+};
+let builtinOn = true;
+export function useBuiltinRules(on) { builtinOn = on !== false; }
+export const builtinRules = () => builtinOn;
+const seenMaps = new Map();                // map number -> [width, height, tileset] of the map loaded (data.js loadMap)
+export function noteMap(mapId, map) { if (map) seenMaps.set(+mapId, [map.width, map.height, map.tileset_id]); }
+// where a map's rules come from: 'user' (the player's own - userrules.js), 'bs2' (this file's, applied), 'off' (this file's,
+// the launcher's switch off), 'other' (this file's, but the map is another game's of that number), '' (none: the general rules)
+export function ruleSource(mapId) {
+  if (userIds.has(String(mapId))) return 'user';
+  if (!BUILTIN_HINTS[mapId]) return '';
+  if (!builtinOn) return 'off';
+  const want = BS2_MAPS[mapId], got = seenMaps.get(+mapId);
+  return !want || !got || want.every((v, i) => v === got[i]) ? 'bs2' : 'other';
+}
+// the rules a map is built by: the player's for it, else this file's while they are on and the map is the game's
+export function hintsOf(mapId) {
+  const s = ruleSource(mapId);
+  return s === 'user' || s === 'bs2' ? MAP_HINTS[mapId] : undefined;
+}
+// The player's map rules (userrules.js - the rule editor, saves/user_rules.json): a map there has its rules from there, all of
+// them (an empty {} - none); a map not there keeps this file's. Read as the game starts and again each time it goes to another
+// map (main.js), so what the editor saved shows on going into the map again; a map taken out of them has this file's back.
+// loadUserHints reads all the player's rules (companions' and enemies' too) -> them (null: they could not be read - those in
+// use stay)
+let userIds = new Set();
 export async function loadUserHints() {
-  let user;
-  try {
-    const r = await fetch(USER_HINTS_FILE, { cache: 'no-store' });
-    if (!r.ok) return null;
-    user = await r.json();
-  } catch { return null; }
-  if (!user || typeof user !== 'object' || Array.isArray(user)) return null;
-  for (const id of userApplied) {
-    if (BUILTIN_HINTS[id]) MAP_HINTS[id] = JSON.parse(JSON.stringify(BUILTIN_HINTS[id]));
-    else delete MAP_HINTS[id];
-  }
-  userApplied = [];
-  for (const [id, entry] of Object.entries(user)) {
-    if (!/^\d+$/.test(id) || !entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
-    MAP_HINTS[id] = entry;
-    userApplied.push(id);
-  }
-  return user;
+  const all = await loadUserRules();
+  if (all) setUserMaps(all.maps);
+  return all;
+}
+const builtinCopy = id => JSON.parse(JSON.stringify(BUILTIN_HINTS[id]));
+export function setUserMaps(maps) {
+  for (const id of userIds) if (BUILTIN_HINTS[id]) MAP_HINTS[id] = builtinCopy(id); else delete MAP_HINTS[id];
+  userIds = new Set();
+  for (const [id, entry] of Object.entries(maps || {})) setUserMap(id, entry);
+}
+// one map's (the editor, as it is changed): null - none of the player's, this file's back
+export function setUserMap(mapId, entry) {
+  const id = String(mapId);
+  if (entry) { MAP_HINTS[id] = entry; userIds.add(id); return; }
+  userIds.delete(id);
+  if (BUILTIN_HINTS[id]) MAP_HINTS[id] = builtinCopy(id); else delete MAP_HINTS[id];
 }
 
-export function floorHints(mapId) { return MAP_HINTS[mapId]?.floors || null; }
-export function lipHints(mapId) { return MAP_HINTS[mapId]?.lips || null; }
-export function abyssHints(mapId) { return MAP_HINTS[mapId]?.abyss || null; }
-export function openFights(mapId) { return !!MAP_HINTS[mapId]?.openFights; }
-export function isSideView(mapId) { return !!MAP_HINTS[mapId]?.sideView; }
-export function flatPictures(mapId) { return MAP_HINTS[mapId]?.flatPictures || null; }
-export function terraceHints(mapId) { return MAP_HINTS[mapId]?.terraces || null; }
-export function propHints(mapId) { return MAP_HINTS[mapId]?.props || null; }
-export function wholeHints(mapId) { return MAP_HINTS[mapId]?.whole || null; }
-export function cabinetHints(mapId) { return MAP_HINTS[mapId]?.cabinets || null; }
-export function walkedTo(mapId) { return MAP_HINTS[mapId]?.walkedTo || []; }
-export function parallaxWalls(mapId) { return MAP_HINTS[mapId]?.parallaxWalls || null; }
-export function hideArtHints(mapId) { return MAP_HINTS[mapId]?.hideArt || null; }
-export function capHints(mapId) { return MAP_HINTS[mapId]?.caps || null; }
-export function onWallHints(mapId) { return MAP_HINTS[mapId]?.onWall || null; }
-export function solidHints(mapId) { return MAP_HINTS[mapId]?.solids || null; }
-export function wallFloorHints(mapId) { return MAP_HINTS[mapId]?.wallFloors || null; }
-export function moundHints(mapId) { return MAP_HINTS[mapId]?.mounds || null; }
-export function highGround(mapId) { return MAP_HINTS[mapId]?.highGround || null; }
-export function stairHints(mapId) { return MAP_HINTS[mapId]?.stairs || null; }
-export function overlapHints(mapId) { return !!MAP_HINTS[mapId]?.overlaps; }
-export function topHints(mapId) { return MAP_HINTS[mapId]?.tops || null; }
-export function massBackdrop(mapId) { return !!MAP_HINTS[mapId]?.massBackdrop; }
-export function openSky(mapId) { return !!MAP_HINTS[mapId]?.openSky; }
-export function wallCap(mapId) { return MAP_HINTS[mapId]?.wallCap || 0; }
-export function doorTops(mapId) { return MAP_HINTS[mapId]?.doorTops || null; }
+export function floorHints(mapId) { return hintsOf(mapId)?.floors || null; }
+export function lipHints(mapId) { return hintsOf(mapId)?.lips || null; }
+export function abyssHints(mapId) { return hintsOf(mapId)?.abyss || null; }
+export function openFights(mapId) { return !!hintsOf(mapId)?.openFights; }
+export function fightWays(mapId) { return hintsOf(mapId)?.fightWays || null; }
+export function isSideView(mapId) { return !!hintsOf(mapId)?.sideView; }
+export function flatPictures(mapId) { return hintsOf(mapId)?.flatPictures || null; }
+export function terraceHints(mapId) { return hintsOf(mapId)?.terraces || null; }
+export function propHints(mapId) { return hintsOf(mapId)?.props || null; }
+export function wholeHints(mapId) { return hintsOf(mapId)?.whole || null; }
+export function cabinetHints(mapId) { return hintsOf(mapId)?.cabinets || null; }
+export function walkedTo(mapId) { return hintsOf(mapId)?.walkedTo || []; }
+export function parallaxWalls(mapId) { return hintsOf(mapId)?.parallaxWalls || null; }
+export function hideArtHints(mapId) { return hintsOf(mapId)?.hideArt || null; }
+export function capHints(mapId) { return hintsOf(mapId)?.caps || null; }
+export function onWallHints(mapId) { return hintsOf(mapId)?.onWall || null; }
+export function solidHints(mapId) { return hintsOf(mapId)?.solids || null; }
+export function wallFloorHints(mapId) { return hintsOf(mapId)?.wallFloors || null; }
+export function moundHints(mapId) { return hintsOf(mapId)?.mounds || null; }
+export function highGround(mapId) { return hintsOf(mapId)?.highGround || null; }
+export function stairHints(mapId) { return hintsOf(mapId)?.stairs || null; }
+export function overlapHints(mapId) { return !!hintsOf(mapId)?.overlaps; }
+export function topHints(mapId) { return hintsOf(mapId)?.tops || null; }
+export function massBackdrop(mapId) { return !!hintsOf(mapId)?.massBackdrop; }
+export function openSky(mapId) { return !!hintsOf(mapId)?.openSky; }
+export function wallCap(mapId) { return hintsOf(mapId)?.wallCap || 0; }
+export function doorTops(mapId) { return hintsOf(mapId)?.doorTops || null; }
 
 // Background pictures (parallaxes) not wrapped round the sky (sky.js) - the user's choice: 루트위지 시가지's stone
 // street and 도지슨교's town under clouds, the book of 도서관의 꿈 (also 하얀 성시 ７－１１ BOSS), cave rock

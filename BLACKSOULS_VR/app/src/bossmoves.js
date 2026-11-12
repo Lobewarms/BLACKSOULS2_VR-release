@@ -23,6 +23,7 @@ import { $data } from './data.js';
 import { T } from './mapmesh.js';
 import { FloorMarker, MARK } from './telegraph.js';
 import { lineOfSight } from './collision.js';
+import { builtinRules } from './maphints.js';
 
 export const NEW_MOVES = ['farOrb', 'blinkChain', 'starSpin', 'lattice', 'stripes', 'cloakLeap'];
 // the moves laid down in parts (combat.js updateMulti / landPart)
@@ -50,8 +51,10 @@ const tmpV = new THREE.Vector3(), tmpW = new THREE.Vector3();
 
 export const bossMoves = {
   // ---- which move a skill is ----------------------------------------------------------------------------------------
-  // (before combat.js's own rules: 린다메아's, and a leap over the player - a skill on itself, no harm)
+  // (before combat.js's own rules: 린다메아's, and a leap over the player - a skill on itself, no harm. Both BLACK SOULS II's
+  // own, by its skills' names and words: none with the launcher's switch for that game's rules off - the general rules then)
   specialFamily(s) {
+    if (!builtinRules()) return undefined;
     const name = (s.name || '').trim(), text = `${name} ${s.message1 || ''}`;
     if (s.scope === 11 && /흑의를 펼치고|날아올랐|飛び上が|舞い上が|飛翔|腾空|\b(?:soar|flew up|took to the air)/i.test(text)) return 'cloakLeap';
     const linda = LINDA.find(([re]) => re.test(name))?.[1];
@@ -59,6 +62,7 @@ export const bossMoves = {
     return { lance: 'blinkChain', void: 'lattice', punish: 'stripes', blackLight: 'starSpin', sanction: 'blinkChain', noah: 'farOrb' }[linda];
   },
   lindaKind(s) {
+    if (!builtinRules()) return null;
     if (s._linda === undefined) s._linda = LINDA.find(([re]) => re.test((s.name || '').trim()))?.[1] || null;
     return s._linda;
   },

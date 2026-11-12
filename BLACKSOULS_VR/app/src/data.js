@@ -1,6 +1,7 @@
 // Database loading ($data_* equivalents) from Data/*.rvdata2
 import { loadMarshal } from './marshal.js';
 import { fetchBinary, resolve } from './assets.js';
+import { noteMap } from './maphints.js';
 
 export const $data = {
   actors: null, classes: null, skills: null, items: null, weapons: null, armors: null,
@@ -37,6 +38,7 @@ const mapCache = new Map();
 export async function loadMap(mapId) {
   if (mapCache.has(mapId)) return mapCache.get(mapId);
   const map = await loadRvdata(`Map${String(mapId).padStart(3, '0')}`);
+  noteMap(mapId, map);                 // (BLACK SOULS II's own rules apply to its own maps only - maphints.js)
   mapCache.set(mapId, map);
   if (mapCache.size > 6) mapCache.delete(mapCache.keys().next().value);
   return map;

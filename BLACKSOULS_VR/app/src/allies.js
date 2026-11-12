@@ -8,7 +8,9 @@
 import * as THREE from 'three';
 import { G } from './globals.js';
 import { $data } from './data.js';
-import { loadCanvas } from './assets.js';
+import { loadCanvas, resolveImage } from './assets.js';
+import { builtinRules } from './maphints.js';
+import { userCompanion, userCompanionIds } from './userrules.js';
 import { T } from './mapmesh.js';
 import { evalFormula } from './rubyexpr.js';
 import { resolveCircle, lineOfSight } from './collision.js';
@@ -17,7 +19,8 @@ import { sheetInfo } from './sprites.js';
 // how each looks. book: the picture(s) its summoning book shows (Graphics/Pictures) - [name, metres to the side,
 // metres back], a group laid out as the book lays it out; battler: a battle picture of the same one; chip: a
 // character sheet [name, index] (else its own); face: [name, index]; with: actors that are one body with it
-// (Pinocchio and his doll: one picture, two HP); partOf: such an actor (its own look only without the other)
+// (Pinocchio and his doll: one picture, two HP - the doll's own look only without him); wall: it stands where it was called up,
+// a wall that tall (metres)
 const LOOK = {
   50: { book: [['夢霊　アヒル']] },                                    // the ugly duckling
   51: { book: [['夢霊　ヘングレ (1)']] },                              // Hansel
@@ -34,7 +37,7 @@ const LOOK = {
   66: { book: [['イナバ']] },                                          // Vernai
   68: { book: [['夢霊　ロビン']] },
   100: { book: [['夢霊　ピノッキオ']], with: [101] },                  // Pinocchio, his doll in his picture
-  101: { partOf: 100, chip: ['人形', 6] },
+  101: { chip: ['人形', 6] },
   60: { battler: 'パンプキン' },                                       // the pumpkin knight (Liddell's graveyard)
   67: { battler: 'boss15' },                                          // Red Riding Hood
   69: { battler: 'boss14' },                                          // Mary
@@ -45,6 +48,41 @@ const LOOK = {
   62: { chip: ['$ハンプティ', 0] },
   111: { face: ['niku', 0], wall: 2.6 },                              // the meat shield: a big wall of it
 };
+// LOOK is BLACK SOULS II's own, by its actor numbers: it applies while the launcher's switch for the game's own corrections is
+// on (maphints.js builtinRules - 블랙소울 전용 보정 적용) and the actor is the game's - its face file as BLACK SOULS II has it
+// (BS2_FACES; the same in every language). Another game's actor of the same number, or any with the switch off: the general
+// rule (autoLook). The player's own rule for a companion (the rule editor - userrules.js) comes before both, the switch on or off
+const BS2_FACES = {
+  13: 'poro', 50: 'ahiru', 51: 'へんぜる', 52: 'ぐれーてる', 53: 'シンド', 54: 'ぶれーめん', 55: 'はんす', 56: 'ぱと', 57: 'kata', 58: 'ほし',
+  59: 'よろい', 60: 'ぱんぷ', 61: 'グリフィ', 62: 'ハン', 64: 'roba', 65: 'あし', 66: 'うさぎ騎士', 67: '紅ずきん', 68: 'ロビン', 69: 'メアリー',
+  71: 'グリフィ', 100: 'ピノッキオ', 101: 'ピノッキオ２', 107: 'me', 108: 'hain', 111: 'niku',
+};
+export function lookOf(id) { return userCompanion(id) || bs2Look(id); }
+export function bs2Look(id) {
+  const L = LOOK[id];
+  return L && builtinRules() && $data.actors[id]?.face_name === BS2_FACES[id] ? L : null;
+}
+// the companion one is one body with (Pinocchio's doll: Pinocchio - his look's `with`), or 0
+const WITH_HOSTS = Object.keys(LOOK).map(Number).filter(id => LOOK[id].with);
+export function hostOf(id) {
+  for (const h of userCompanionIds()) if (h !== id && lookOf(h)?.with?.includes(id)) return h;
+  for (const h of WITH_HOSTS) if (h !== id && lookOf(h)?.with?.includes(id)) return h;
+  return 0;
+}
+// a look that names a picture of its own (else the general rule's picture: one with a wall or a body-mate only)
+const pictured = L => !!(L && (L.book || L.battler || L.face || L.chip));
+// the general rule, for any companion of any game: its character sheet as the game has it now (the database's, as Change Actor
+// Graphic left it), else the sheet named as its face - RPG Maker's own way (a face sheet and the character sheet of the same
+// people share the name and the place on it: Actor1's face 3 is Actor1's character 3; a sheet of one is '$name' / '!$name')
+// - else its face standing as a picture. chip / face: [name, index]
+export function autoLook(id) {
+  const a = G.state?.actor?.(id), d = $data.actors[id];
+  const name = a ? a.characterName : d?.character_name, index = (a ? a.characterIndex : d?.character_index) || 0;
+  if (name) return { chip: [name, index] };
+  const face = (a ? a.faceName : d?.face_name) || '', fi = (a ? a.faceIndex : d?.face_index) || 0;
+  if (face) for (const pre of ['', '$', '!$', '!']) if (resolveImage('Graphics/Characters', pre + face)) return { chip: [pre + face, pre.includes('$') ? 0 : fi] };
+  return { face: [face, fi] };
+}
 const BODY = 0.3;               // metres: how wide one is, for blows and shots
 const TURN = 6;                 // s: a turn of the original's battles (combat.js TURN_SECONDS)
 const MAX_ALLIES = 3;           // VX Ace fights with four: the leader and three
@@ -76,9 +114,12 @@ function standable(fx, fy) {
 class Ally {
   constructor(sys, id) {
     this.sys = sys; this.id = id;
-    const a = $data.actors[id];
-    const look = LOOK[id] || (a?.character_name ? { chip: [a.character_name, a.character_index] } : { face: [a?.face_name || '', a?.face_index || 0] });
+    const own = lookOf(id);
+    const look = own || autoLook(id);
     this.look = look;
+    this.ruleKey = JSON.stringify(own);
+    this.byRule = !pictured(own);    // (the general rule's look: made again when the game changes the actor's graphic)
+    this.lookKey = this.graphicKey();
     this.ids = [id, ...(look.with || [])];
     this.group = new THREE.Group();
     this.group.visible = false;
@@ -112,17 +153,7 @@ class Ally {
   chest(out = new THREE.Vector3()) { this.worldPos(out); out.y += this.h * 0.6; return out; }
 
   async build() {
-    const L = this.look;
-    let ok = false;
-    if (L.book) for (const [name, side = 0, back = 0] of L.book) ok = (await this.addPicture('Graphics/Pictures', name, side, back, L.book.length > 1)) || ok;
-    else if (L.battler) ok = await this.addPicture('Graphics/Battlers', L.battler, 0, 0, false);
-    else if (L.face) ok = await this.addFace(L.face[0], L.face[1], this.wall || 1.2);
-    if (!ok) {
-      const a = $data.actors[this.id];
-      const [name, index] = L.chip || [a?.character_name, a?.character_index];
-      if (name) ok = await this.addChip(name, index || 0);
-      if (!ok && a?.face_name) await this.addFace(a.face_name, a.face_index, 1.2);
-    }
+    await this.buildBody();
     // the HP of each of its actors, over its head while there is a fight
     const cv = document.createElement('canvas'); cv.width = 128; cv.height = 4 + 14 * this.ids.length;
     this.barCanvas = cv;
@@ -134,6 +165,35 @@ class Ally {
     this.bar.visible = false;
     this.group.add(this.bar);
     this.drawBar();
+  }
+  // what it looks like (LOOK, else the general rule - autoLook): a picture, its face, its character sheet - one that will not
+  // load: its character sheet by the general rule, else its face
+  async buildBody() {
+    const L = this.look;
+    let ok = false;
+    if (L.book) for (const [name, side = 0, back = 0] of L.book) ok = (await this.addPicture('Graphics/Pictures', name, side, back, L.book.length > 1)) || ok;
+    else if (L.battler) ok = await this.addPicture('Graphics/Battlers', L.battler, 0, 0, false);
+    else if (L.face) ok = await this.addFace(L.face[0], L.face[1], this.wall || 1.2);
+    if (!ok) {
+      const auto = autoLook(this.id);
+      const [name, index] = L.chip || auto.chip || [];
+      if (name) ok = await this.addChip(name, index || 0);
+      const face = auto.face || [$data.actors[this.id]?.face_name, $data.actors[this.id]?.face_index];
+      if (!ok && face[0]) await this.addFace(face[0], face[1] || 0, 1.2);
+    }
+  }
+  // the actor's graphic now (Change Actor Graphic changes it)
+  graphicKey() {
+    const a = G.state?.actor?.(this.id);
+    return a ? `${a.characterName}|${a.characterIndex}|${a.faceName}|${a.faceIndex}` : '';
+  }
+  // (the general rule's look) made again when the game has changed the actor's graphic
+  async rebuildLook() {
+    this.look = lookOf(this.id) || autoLook(this.id);
+    const old = this.parts;
+    this.parts = []; this.chip = null;
+    for (const { mesh, mat } of old) { mesh.parent?.remove(mesh); mat.map?.dispose(); mat.dispose(); mesh.geometry.dispose(); }
+    await this.buildBody();
   }
   // a picture standing up as it is drawn (as an enemy's battle picture stands): a book's group keeps its sizes
   async addPicture(folder, name, side, back, group) {
@@ -243,6 +303,11 @@ class Ally {
 
   update(dt, ctx) {
     if (!this.members().length && !this.leaving) return;
+    if (this.byRule && !this.relooking && (this.keyCheck = (this.keyCheck || 0) - dt) <= 0) {
+      this.keyCheck = 0.5;
+      const k = this.graphicKey();
+      if (k !== this.lookKey) { this.lookKey = k; this.relooking = true; this.rebuildLook().catch(e => console.warn('companion look', this.id, e)).finally(() => { this.relooking = false; }); }
+    }
     const pc = ctx.pc;
     // a looping map: where it is nearest the player
     if (G.map.loopX) this.fx = G.map.nearX(this.fx, pc.fx);
@@ -641,6 +706,17 @@ export class AllySystem {
   // Followers); a fight brings them out anyway, as every battle member fights in the original
   followersShown() { const f = G.state?.system?.followers; return f ?? !!$data.system?.opt_followers; }
   reset() { for (const a of this.list) a.dispose(); this.list = []; this.cools.clear(); }
+  // the player's rules read again (the rule editor saved, another map gone into): one whose look they changed is made again
+  // where it stands
+  relook() {
+    for (const a of [...this.list]) {
+      if (a.gone || a.leaving || JSON.stringify(lookOf(a.id)) === a.ruleKey) continue;
+      const n = new Ally(this, a.id);
+      Object.assign(n, { fx: a.fx, fy: a.fy, placed: a.placed, dir: a.dir, appear: a.appear });
+      a.dispose();
+      this.list[this.list.indexOf(a)] = n;
+    }
+  }
   onMapLoaded() { for (const a of this.list) a.placed = false; }
   unitOf(id) { return this.list.find(x => x.ids.includes(id) && !x.leaving && !x.gone) || null; }
   // skill cool-downs (script 141, <クールタイム:n>): n turns of COOL_TURN s each, as the player's; cleared when the
@@ -663,16 +739,16 @@ export class AllySystem {
     // come and go with the party (one of two that are one body comes as that body when the other is there)
     for (const id of ids) {
       if (!$data.actors[id]) continue;
-      const host = LOOK[id]?.partOf;
+      const host = hostOf(id);
       const unitId = host && ids.includes(host) ? host : id;
       const u = this.unitOf(unitId);
-      if (!u && (out || LOOK[unitId]?.wall)) this.list.push(new Ally(this, unitId));
+      if (!u && (out || lookOf(unitId)?.wall)) this.list.push(new Ally(this, unitId));
     }
     for (const a of this.list) {
       if (a.leaving || a.gone) continue;
       if (!a.ids.some(id => ids.includes(id)) || (!out && !a.wall)) a.leaving = true;
       // (one that came alone joins its other half's body when that one comes)
-      if (LOOK[a.id]?.partOf && ids.includes(LOOK[a.id].partOf)) a.leaving = true;
+      if (ids.includes(hostOf(a.id))) a.leaving = true;
     }
     const pc = G.map.playerChar;
     const head = G.player.headWorld(new THREE.Vector3());

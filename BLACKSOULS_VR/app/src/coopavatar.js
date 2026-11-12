@@ -10,6 +10,7 @@ import { T } from './mapmesh.js';
 import { TS } from './tiles.js';
 import { CharacterSprite } from './sprites.js';
 import { buildIconModel } from './weapons.js';
+import { heldPoint } from './combat/shotlooks.js';
 import { makeHand } from './hands.js';
 import { $data } from './data.js';
 import { BALLOON_TIME } from './balloons.js';
@@ -58,6 +59,7 @@ function disposeTree(o) {
 }
 // (what a hand holds ready: a spell's light shares the glow picture of combat.js - kept; an icon's picture goes)
 function disposeUse(o) {
+  if (o.userData?.dispose) { o.userData.dispose(); return; }        // (a spell's look - combat/shotlooks.js)
   const glow = G.combat?._glowTex;
   o.traverse(c => {
     if (c.isMesh) { c.geometry?.dispose(); c.material?.map?.dispose?.(); c.material?.dispose?.(); }
@@ -317,6 +319,8 @@ export class CoopAvatar {
       if (h.model && h.hand.visible) h.model.pose(dt, d.c?.[0] || 0, d.c?.[1] || 0, (d.c?.[2] || 0) > 0.5);
     }
     this.placePart(this.held, 'use', this.held.use.children.length ? p.u : null, ox, oz, k);
+    const look = this.held.use.children[0];
+    if (look?.userData.animate && this.held.use.visible) look.userData.animate(dt, (this.heldPt = heldPoint(this.held.use, this.heldPt)));
     if (appear) {
       const at = new THREE.Vector3(c.x, (G.floorAt ? G.floorAt(b.realX, b.realY) : 0) + 0.9, c.z);
       G.combat?.spawnGlow?.(at, { color: 0xd8e8ff, size: 1.2, life: 0.5, grow: 1.6 });

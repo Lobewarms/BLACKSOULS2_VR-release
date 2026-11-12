@@ -14,6 +14,7 @@ import * as THREE from 'three';
 import { G } from './globals.js';
 import { T } from './mapmesh.js';
 import { clearEdgeCache } from './collision.js';
+import { fightWays } from './maphints.js';
 
 const FOG_H = 2.4;                   // tiles
 // A fight in the dark: where the original draws nothing at all round a narrow way (pure black, no parallax - the
@@ -142,8 +143,10 @@ export class BossArena {
     this.token = 0;
   }
   hides(ev) { return this.active && this.hidden.has(ev); }
-  // a cell of the dark opened for the fight (openDark)
-  opens(x, y) { return !!this.open && this.open.has(x + y * G.map.grid.w); }
+  // a cell the fight opens: of the dark round it (openDark), or a way it opens (openWays)
+  opens(x, y) { const k = x + y * G.map.grid.w; return (!!this.open && this.open.has(k)) || (!!this.ways && this.ways.has(k)); }
+  // a cell nobody goes into while the fight's ways are open (openWays)
+  shuts(x, y) { return !!this.shut && this.shut.has(x + y * G.map.grid.w); }
   // talking, touching, bumping: only the fight's own event
   blocksTrigger(ev) { return this.active && ev !== this.battle?.event; }
   blocksCell(x, y) { return this.active && this.blocked.has(x + y * G.map.grid.w); }
@@ -240,7 +243,36 @@ export class BossArena {
     }
     console.info(`[arena] boss fight: ${this.hidden.size} events out of sight, ${this.blocked.size} cells of ways out in fog`);
     this.openDark();
+    this.openWays();
     if (!battle.remote && !battle.private) G.coop?.onArena?.(true, battle, this.entry);     // (its co-op guests' fog closes too)
+  }
+  // the ways a fight here opens (maphints fightWays - 그랑・기뇰's play: the lip in front of the stage, kept off in the
+  // original by an invisible tile, down into the house and back): walked over both ways while it lasts, the 3D view as it
+  // is. On the ground they lead to, what that view stands solid (the black wall tops either side of the house, walkable in
+  // the original's tiles but out of its reach) is not walked into - the walk from the ways stops at it
+  openWays() {
+    const m = G.map, g = m.grid, w = g.w, mesh = G.view?.mesh;
+    const rects = fightWays(m.mapId);
+    if (!rects || !mesh) return;
+    const ways = new Set();
+    for (const [x0, y0, x1, y1] of rects) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (g.valid(x, y)) ways.add(x + y * w);
+    const shut = new Set(), seen = new Set(ways), q = [...ways];
+    while (q.length) {
+      const k = q.pop(), x = k % w, y = (k - x) / w;
+      for (const [dx, dy, d] of [[0, 1, 2], [-1, 0, 4], [1, 0, 6], [0, -1, 8]]) {
+        const nx = x + dx, ny = y + dy, nk = nx + ny * w;
+        if (!g.valid(nx, ny) || seen.has(nk) || !g.anyPassable(nx, ny)) continue;
+        // (out of a way to any floor beside it; on, as the original's tiles let one)
+        if (!ways.has(k) && !(g.passable(x, y, d) && g.passable(nx, ny, 10 - d))) continue;
+        seen.add(nk);
+        if (mesh.isSolid(nx, ny)) shut.add(nk);
+        else q.push(nk);
+      }
+    }
+    this.ways = ways;
+    this.shut = shut;
+    clearEdgeCache();
+    console.info(`[arena] ${ways.size} cells of ways opened for the fight, ${shut.size} shut beyond them`);
   }
   // (round where the fight began)
   openDark() {
@@ -335,6 +367,8 @@ export class BossArena {
       clearEdgeCache();
       if (G.map?.mapId === this.mapId && !G.map.transferring) G.rebuildMapView?.(null);
     }
+    // (and the ways it opened)
+    if (this.ways) { this.ways = null; this.shut = null; clearEdgeCache(); }
     this.hidden.clear();
     this.blocked.clear();
     for (const e of this.sleeping) if (e.group) e.group.visible = true;

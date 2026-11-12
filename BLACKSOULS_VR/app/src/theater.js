@@ -4,9 +4,11 @@
 // scenery, then it opens (CE 363 / 364) on the new act to applause and the act's title. The play is put on here on
 // the stage the fight stands on (a troop whose events open and close that curtain is a play):
 //  - the troop takes its places upstage, across the stage as the original lays it out on its battle screen;
-//  - the curtain is the original's own pictures, hung as a real curtain that closes in front of the player (its
-//    outer folds reach on to both sides and up); while it is closed the act's new players take their places behind
-//    it, and nobody moves - the original's battle waits for its events too;
+//  - the curtain is the original's own pictures, hung as the stage's own curtain along its front edge: the picture as
+//    big as it always was in the middle, the rest of the opening - out to its side walls, up to its back wall's top -
+//    the same curtain's cloth, its folds standing as they hang (the user's wish - it came down before the player,
+//    toward the act's lead; then the picture was stretched over the whole opening); while it is closed the act's new
+//    players take their places upstage behind it, and nobody moves - the original's battle waits for its events too;
 //  - the battle back is the act's scenery: a backdrop hung on the stage's back wall;
 //  - a spotlight from the flies follows each of the act's leads;
 //  - the applause and the laughter come from the house, beyond the stage's edge;
@@ -19,12 +21,20 @@ import { $data } from './data.js';
 import { T } from './mapmesh.js';
 import { loadImage, loadCanvas } from './assets.js';
 import { resolveCircle } from './collision.js';
+import { builtinRules } from './maphints.js';
 
 const CURTAIN_CES = [362, 363, 364];
 const CURTAIN_PIC = /^幕[１２３４５６７８]?$/;
-// the curtain: its picture this wide (m; 4:3, the game's screen), this far before the eyes, its outer folds reaching
-// on another picture's width to each side and half a picture up
-const CURTAIN = { w: 8.8, dist: 2.3, wings: 1, up: 0.3 };
+// the curtain: the stage's own, in its opening (proscenium - its side walls looked for this many cells beside the
+// stage's front row): its picture this wide (m; 4:3, the game's screen) at the foot of the opening's middle, the rest of
+// the opening its cloth. No stage found: before the eyes, this far off, the cloth reaching on another picture's width to
+// each side and 0.3 of its height above it
+const CURTAIN = { sideReach: 4, w: 8.8, dist: 2.3, wings: 1, up: 0.3 };
+// the curtain's cloth: its folds as they hang in the closed picture (幕, 640 x 480; px x0, y0, x1, y1 - below the
+// valance's shadow, clear of the drapes at its sides and of the seam in its middle), laid side by side as wide as the
+// picture's own, each next one turned over (no seam where they meet), drawn up the opening's whole height - standing.
+// (Before, the picture's outermost column was drawn out sideways: the cloth's folds lay on their side)
+const CLOTH = [100, 200, 310, 480];
 // the next act's players stand this far behind the curtain (m), spread across up to this far either way
 const BEHIND = { depth: 3.4, spread: 3.2 };
 // the scenery on the back wall: at most this wide / high (m)
@@ -76,6 +86,39 @@ function beamTexture() {
   beamTex = new THREE.CanvasTexture(c);
   return beamTex;
 }
+// rectangles in a plane facing +z (x across, y up): [x0, y0, x1, y1] each (an empty one left out), uv(x, y) at corners
+function rects(list, uv) {
+  const pos = [], uvs = [], idx = [];
+  for (const [x0, y0, x1, y1] of list) {
+    if (x1 - x0 < 1e-3 || y1 - y0 < 1e-3) continue;
+    const n = pos.length / 3;
+    for (const [x, y] of [[x0, y0], [x1, y0], [x0, y1], [x1, y1]]) { pos.push(x, y, 0); uvs.push(...uv(x, y)); }
+    idx.push(n, n + 1, n + 2, n + 2, n + 1, n + 3);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+  geo.setIndex(idx);
+  return geo;
+}
+// a curtain picture with its outermost 2 rows and columns of pixels all round made the ones just inside them: along some
+// frames' edges runs a line far lighter than the cloth (a top, bottom, left or right one - 幕８'s bottom two rows), unseen
+// at the original's screen edge, a seam across the stage's curtain here where the cloth meets the picture
+function edgeless(img) {
+  const c = document.createElement('canvas'), w = c.width = img.width, h = c.height = img.height, ctx = c.getContext('2d'), k = 2;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(img, 0, 0);
+  // (the rows first, then the columns their whole height - the corners too)
+  for (let i = 0; i < k; i++) for (const [s, d] of [[k, i], [h - 1 - k, h - 1 - i]]) { ctx.clearRect(0, d, w, 1); ctx.drawImage(c, 0, s, w, 1, 0, d, w, 1); }
+  for (let i = 0; i < k; i++) for (const [s, d] of [[k, i], [w - 1 - k, w - 1 - i]]) { ctx.clearRect(d, 0, 1, h); ctx.drawImage(c, s, 0, 1, h, d, 0, 1, h); }
+  return c;
+}
+// the curtain's picture and its cloth: cut out along the picture's edges, lit by nothing (as on the original's screen)
+function curtainMaterial() {
+  const m = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, toneMapped: false });
+  m.color.setScalar(0.92);
+  return m;
+}
 
 export class Theater {
   constructor(scene) {
@@ -87,9 +130,11 @@ export class Theater {
     this.spotPool = null;            // the spotlights, hung for the whole play
     this.strings = new Map();        // enemy -> its string up to the machine
   }
-  // a play: a troop whose own events open and close the curtain
+  // a play: a troop whose own events open and close the curtain - BLACK SOULS II's (its common events 362-364, its
+  // pictures, its enemies): none with the launcher's switch for that game's own rules off (the user's wish - another game's
+  // events of those numbers are something else), the fight then fought as any other
   isPlay(troop) {
-    if (!troop) return false;
+    if (!troop || !builtinRules()) return false;
     if (troop._play === undefined) troop._play = !!troop.pages?.some(p => p.list?.some(c => c.code === 117 && CURTAIN_CES.includes(c.parameters[0])));
     return troop._play;
   }
@@ -99,13 +144,17 @@ export class Theater {
     if (this.active || !this.isPlay(battle.troop) || !G.map?.grid) return;
     this.active = true;
     this.battle = battle;
-    this.stage = this.measureStage();
+    // (measured once on a map: begun again - 그랑・기뇰's 재도전 - the play may find the player down in the house, where the
+    // fight's ways let them go - arena.js openWays)
+    if (this.measured?.mapId !== G.map.mapId) this.measured = { mapId: G.map.mapId, stage: this.measureStage() };
+    this.stage = this.measured.stage;
     this.lastAnimated = null;
     // the curtain's pictures and the acts' scenery, loaded now so nothing waits as the acts change - one after
     // another, after what the fight itself needs (its players' pictures)
     const want = ['幕', ...'１２３４５６７８'.split('').map(d => '幕' + d)].map(n => ['Graphics/Pictures', n]);
     for (const p of battle.troop.pages) for (const c of p.list) if (c.code === 283 && c.parameters[0]) want.push(['Graphics/Battlebacks1', c.parameters[0]]);
     (async () => { for (const [f, n] of want) { if (!this.active) return; await this.texture(f, n).promise; } })();
+    this.cloth();
     // the troop takes its places upstage
     if (this.stage) for (const e of battle.enemies) this.place(e, this.stageSpot(e));
     for (const e of battle.enemies) this.dress(e);
@@ -121,6 +170,7 @@ export class Theater {
   // than as the play begins
   reset() {
     if (this.active) this.takeDown();
+    this.measured = null;
     for (const s of this.spotPool || []) { this.root.remove(s.light, s.light.target, s.cone); s.cone.geometry.dispose(); s.cone.material.dispose(); s.light.dispose?.(); }
     this.spotPool = null;
   }
@@ -142,7 +192,8 @@ export class Theater {
     for (const s of this.spotPool || []) { s.e = null; s.k = 0; s.want = 0; s.light.intensity = 0; s.cone.visible = false; }
     for (const s of this.strings.values()) { s.geometry.dispose(); s.material.dispose(); }
     this.strings.clear();
-    this.curtain = null; this.backdrop = null; this.oldBackdrop = null;
+    this.dropCurtain();
+    this.backdrop = null; this.oldBackdrop = null;
   }
 
   // ---- the stage ----------------------------------------------------------------------------------------
@@ -329,46 +380,115 @@ export class Theater {
   }
   showCurtain(name) {
     if (!this.curtain) this.hangCurtain();
-    const t = this.tex.get(`Graphics/Pictures/${name}`)?.ready;
-    if (t && this.curtain.material.map !== t) { this.curtain.material.map = t; this.curtain.material.needsUpdate = true; }
-    // (drawn once its picture is there)
-    this.curtain.visible = !!this.curtain.material.map;
+    const face = this.curtainFace, t = this.tex.get(`Graphics/Pictures/${name}`)?.ready;
+    if (t && face.material.map !== t) { face.material.map = t; face.material.needsUpdate = true; }
+    // (drawn once its picture is there - the cloth with it, once it is cut)
+    face.visible = !!face.material.map;
+    this.dressCloth();
     if (!this.up) this.stopTheAct();
     this.up = true;
     this.closed = name === '幕';
   }
-  // the curtain comes down between the player and where they look, the act's last lead (the one its animation
-  // played on) behind it if it stands that way
+  // the curtain comes down on the stage, in its opening, wherever the player is - before them from the house or the lip,
+  // behind them up on the stage, as a theatre's: its picture as big as it always was at the foot of the opening's middle,
+  // the cloth round it out to the side walls and up to the back wall's top. No stage found: between the player and where
+  // they look, the act's last lead (the one its animation played on) behind it if it stands that way
   hangCurtain() {
-    const head = G.player.headWorld(new THREE.Vector3());
-    let f = G.player.forward2D();
-    const lead = this.lastAnimated?.alive !== false ? this.lastAnimated : null;
-    if (lead) {
-      const p = lead.worldPos(tmp), dx = p.x - head.x, dz = p.z - head.z, d = Math.hypot(dx, dz);
-      // (toward it when it is somewhere ahead; else where the player looks)
-      if (d > 0.5 && (dx * f.x + dz * f.z) / d > 0.2) f = { x: dx / d, z: dz / d };
+    const at = this.proscenium(), group = new THREE.Group();
+    let w, top;
+    if (at) {
+      group.position.set(at.x, at.y, at.z);
+      group.rotation.y = at.ry;
+      w = at.w; top = at.h;
+      this.curtainAxis = { stage: true };
+    } else {
+      const head = G.player.headWorld(new THREE.Vector3());
+      let f = G.player.forward2D();
+      const lead = this.lastAnimated?.alive !== false ? this.lastAnimated : null;
+      if (lead) {
+        const p = lead.worldPos(tmp), dx = p.x - head.x, dz = p.z - head.z, d = Math.hypot(dx, dz);
+        // (toward it when it is somewhere ahead; else where the player looks)
+        if (d > 0.5 && (dx * f.x + dz * f.z) / d > 0.2) f = { x: dx / d, z: dz / d };
+      }
+      const cx = head.x + f.x * CURTAIN.dist, cz = head.z + f.z * CURTAIN.dist;
+      group.position.set(cx, G.floorAt ? G.floorAt(cx / T - 0.5, cz / T - 0.5) : 0, cz);
+      group.rotation.y = Math.atan2(-f.x, -f.z);
+      w = CURTAIN.w * (1 + 2 * CURTAIN.wings); top = CURTAIN.w * 0.75 * (1 + CURTAIN.up);
+      this.curtainAxis = { x: head.x, z: head.z, ux: f.x, uz: f.z };
     }
-    const W = CURTAIN.w, H = W * 0.75, x0 = -W / 2 - W * CURTAIN.wings, x1 = W / 2 + W * CURTAIN.wings, y1 = H * (1 + CURTAIN.up);
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute('position', new THREE.Float32BufferAttribute([x0, 0, 0, x1, 0, 0, x0, y1, 0, x1, y1, 0], 3));
-    const u = x => (x + W / 2) / W, v = y => y / H;
-    geo.setAttribute('uv', new THREE.Float32BufferAttribute([u(x0), v(0), u(x1), v(0), u(x0), v(y1), u(x1), v(y1)], 2));
-    geo.setIndex([0, 1, 2, 2, 1, 3]);
-    const mat = new THREE.MeshBasicMaterial({ alphaTest: 0.5, side: THREE.DoubleSide, toneMapped: false });
-    mat.color.setScalar(0.92);
-    const mesh = new THREE.Mesh(geo, mat);
-    const cx = head.x + f.x * CURTAIN.dist, cz = head.z + f.z * CURTAIN.dist;
-    mesh.position.set(cx, G.floorAt ? G.floorAt(cx / T - 0.5, cz / T - 0.5) : 0, cz);
-    mesh.rotation.y = Math.atan2(-f.x, -f.z);
-    mesh.renderOrder = 2;
-    mesh.visible = false;
-    this.root.add(mesh);
-    this.curtain = mesh;
-    this.curtainAxis = { x: head.x, z: head.z, ux: f.x, uz: f.z };
+    // (the picture narrower on a stage too narrow for it; the cloth's folds as wide as the picture's own)
+    const W = Math.min(CURTAIN.w, w), H = W * 0.75, fold = (CLOTH[2] - CLOTH[0]) * W / 640;
+    top = Math.max(top, H);
+    const face = new THREE.Mesh(rects([[-W / 2, 0, W / 2, H]], (x, y) => [(x + W / 2) / W, y / H]), curtainMaterial());
+    const cloth = new THREE.Mesh(rects([[-w / 2, 0, -W / 2, top], [W / 2, 0, w / 2, top], [-W / 2, H, W / 2, top]],
+      (x, y) => [x / fold, y / top]), curtainMaterial());
+    for (const m of [face, cloth]) { m.renderOrder = 2; m.visible = false; group.add(m); }
+    this.root.add(group);
+    this.curtain = group; this.curtainFace = face; this.curtainCloth = cloth;
+  }
+  // the cloth round the picture, once it is cut - drawn with the picture
+  dressCloth() {
+    const m = this.curtainCloth, t = this.cloth().ready;
+    if (!m || !t) return;
+    if (m.material.map !== t) { m.material.map = t; m.material.needsUpdate = true; }
+    m.visible = !!this.curtainFace?.visible;
+  }
+  // the curtain's cloth (CLOTH), cut out of the closed picture once it is there: { promise, ready }
+  cloth() {
+    if (!this.tex.has('cloth')) {
+      const entry = { ready: null };
+      entry.promise = this.texture('Graphics/Pictures', '幕').promise.then(pic => {
+        if (!pic) return null;
+        const img = pic.image, kx = img.width / 640, ky = img.height / 480, [x0, y0, x1, y1] = CLOTH;
+        const c = document.createElement('canvas');
+        c.width = Math.round((x1 - x0) * kx); c.height = Math.round((y1 - y0) * ky);
+        c.getContext('2d').drawImage(img, x0 * kx, y0 * ky, c.width, c.height, 0, 0, c.width, c.height);
+        const tex = new THREE.CanvasTexture(c);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        tex.wrapS = THREE.MirroredRepeatWrapping;
+        tex.anisotropy = 8;
+        entry.ready = tex;
+        this.dressCloth();
+        return tex;
+      });
+      this.tex.set('cloth', entry);
+    }
+    return this.tex.get('cloth');
+  }
+  // the curtain taken down: its parts let go (their pictures stay loaded for the next time)
+  dropCurtain() {
+    if (!this.curtain) return;
+    this.root.remove(this.curtain);
+    for (const m of this.curtain.children) { m.geometry.dispose(); m.material.dispose(); }
+    this.curtain = this.curtainFace = this.curtainCloth = null;
+  }
+  // the stage's opening (world): its front edge - the line between the stage and what lies before it (its lip, the
+  // house) - from the wall beside its front row on one side to the one on the other (the stage's own sides when none
+  // stands within reach), from the stage's floor up to its back wall's top (the picture's own height if it has none)
+  proscenium() {
+    const s = this.stage, mesh = G.view?.mesh, g = G.map?.grid;
+    if (!s || !mesh || !g || !G.solidTopAt) return null;
+    // (across the stage / its depth -> cell; the front row, the edge line before it, the back wall's row)
+    const ns = s.up === 'n' || s.up === 's';
+    const cell = (a, d) => (ns ? [a, d] : [d, a]);
+    const solid = (a, d) => { const [x, y] = cell(a, d); return g.valid(x, y) && mesh.isSolid(x, y); };
+    const a0 = ns ? s.minX : s.minY, a1 = ns ? s.maxX : s.maxY;
+    const front = { n: s.maxY, s: s.minY, w: s.maxX, e: s.minX }[s.up];
+    const line = { n: s.maxY + 1, s: s.minY, w: s.maxX + 1, e: s.minX }[s.up];
+    const back = { n: s.minY - 1, s: s.maxY + 1, w: s.minX - 1, e: s.maxX + 1 }[s.up];
+    let lo = a0, hi = a1 + 1;
+    for (let k = 1; k <= CURTAIN.sideReach; k++) if (solid(a0 - k, front)) { lo = a0 - k + 1; break; }
+    for (let k = 1; k <= CURTAIN.sideReach; k++) if (solid(a1 + k, front)) { hi = a1 + k; break; }
+    const floor = G.floorAt ? G.floorAt(...cell((a0 + a1) / 2, front)) : 0;
+    let top = 0;
+    for (let a = a0; a <= a1; a++) if (solid(a, back)) top = Math.max(top, G.solidTopAt(...cell(a, back)) * T);
+    const w = (hi - lo) * T, h = top > floor + 1 ? top - floor : w * 0.75;
+    const mid = (lo + hi) / 2 * T, at = line * T;
+    const up = { n: [0, -1], s: [0, 1], w: [-1, 0], e: [1, 0] }[s.up];
+    return { x: ns ? mid : at, z: ns ? at : mid, y: floor, w, h, ry: Math.atan2(-up[0], -up[1]) };
   }
   openCurtain() {
-    if (this.curtain) { this.root.remove(this.curtain); this.curtain.geometry.dispose(); this.curtain.material.dispose(); }
-    this.curtain = null;
+    this.dropCurtain();
     this.up = false;
     this.closed = false;
     if (this.oldBackdrop) { this.root.remove(this.oldBackdrop); this.oldBackdrop = null; }
@@ -381,8 +501,10 @@ export class Theater {
     }
     C.clearEnemyFx?.(this.battle);
   }
-  // a new player's place behind the curtain: across it by its place on the original's battle screen
+  // a new player's place behind the curtain: the stage's - its place upstage, as the play began; else across it by its
+  // place on the original's battle screen
   behindCurtain(e) {
+    if (this.curtainAxis.stage) return this.stageSpot(e);
     const a = this.curtainAxis, m = this.battle?.troop?.members?.[e.memberIndex];
     const across = m ? THREE.MathUtils.clamp((m.x - SCREEN.mid) / SCREEN.half, -1.3, 1.3) * BEHIND.spread : 0;
     const d = CURTAIN.dist + BEHIND.depth;
@@ -434,7 +556,8 @@ export class Theater {
       const entry = { ready: null };
       entry.promise = loadImage(folder, name).then(img => {
         if (!img) return null;
-        const t = new THREE.Texture(img);
+        // (the curtain's pictures without the light lines along their edges - edgeless)
+        const t = new THREE.Texture(folder === 'Graphics/Pictures' && CURTAIN_PIC.test(name) ? edgeless(img) : img);
         t.colorSpace = THREE.SRGBColorSpace;
         t.anisotropy = 8;
         t.needsUpdate = true;

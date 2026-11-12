@@ -233,6 +233,8 @@ namespace BlacksoulsVR
             { "SteamVR 라이브러리에 등록", new[] { "Add to the SteamVR library", "SteamVR ライブラリに登録", "添加到 SteamVR 库", "Добавить в библиотеку SteamVR" } },
             { "SteamVR 등록 해제", new[] { "Remove from SteamVR", "SteamVR 登録を解除", "从 SteamVR 移除", "Удалить из SteamVR" } },
             { "세이브 폴더 열기", new[] { "Open the saves folder", "セーブフォルダを開く", "打开存档文件夹", "Открыть папку сохранений" } },
+            { "규칙 편집기", new[] { "Rule editor", "ルールエディタ", "规则编辑器", "Редактор правил" } },
+            { "규칙 편집기를 열었습니다.", new[] { "Opened the rule editor.", "ルールエディタを開きました。", "已打开规则编辑器。", "Редактор правил открыт." } },
             { "VR 런타임: {0}", new[] { "VR runtime: {0}", "VR ランタイム: {0}", "VR 运行时：{0}", "VR-среда: {0}" } },
             { "없음", new[] { "none", "なし", "无", "нет" } },
             { "알 수 없음", new[] { "unknown", "不明", "未知", "неизвестно" } },
@@ -336,6 +338,7 @@ namespace BlacksoulsVR
                 "自动进入 VR：等待 {0} 秒后头显会话仍未开始。请检查头显的连接。",
                 "Авто-VR: сеанса гарнитуры нет уже {0} с. Проверьте подключение гарнитуры." } },
             { "SteamVR로 실행", new[] { "Run with SteamVR", "SteamVR で実行", "用 SteamVR 运行", "Запуск через SteamVR" } },
+            { "블랙소울 전용 보정 적용 (맵·동료·전투)", new[] { "Apply BLACK SOULS-specific fixes (maps, companions, combat)", "ブラックソウルズ専用の補正を適用（マップ・仲間・戦闘）", "应用黑魂专用修正（地图・同伴・战斗）", "Поправки для BLACK SOULS (карты, спутники, бой)" } },
             { "VR 런타임: SteamVR", new[] { "VR runtime: SteamVR", "VR ランタイム: SteamVR", "VR 运行时：SteamVR", "VR-среда: SteamVR" } },
             { "VR 런타임: {0} - VR 시작에 1분쯤 걸립니다 (SteamVR을 설치하면 바로 시작)", new[] {
                 "VR runtime: {0} - entering VR takes about a minute (at once with SteamVR installed)",
@@ -430,6 +433,11 @@ namespace BlacksoulsVR
         {
             return string.Equals(Path.GetFileName(exe ?? ""), "msedge.exe", StringComparison.OrdinalIgnoreCase) ? EdgeProfileDir : ProfileDir;
         }
+        // the rule editor's while the game window is not open (named apart: the game's window is found by its profile's path)
+        public static string EditorProfileFor(string exe)
+        {
+            return Path.Combine(LocalDir, string.Equals(Path.GetFileName(exe ?? ""), "msedge.exe", StringComparison.OrdinalIgnoreCase) ? "editor-profile-edge" : "editor-profile");
+        }
 
         static string OwnPath()
         {
@@ -462,6 +470,7 @@ namespace BlacksoulsVR
         public int Port = 8150;
         public bool AutoVr = true;
         public bool SteamVrRuntime;          // the game's browser uses SteamVR's OpenXR runtime
+        public bool MapRules = true;         // BLACK SOULS II's own fixes - its map rules (src/maphints.js), its companions' looks (src/allies.js) - off for another game
 
         public static LauncherConfig Load()
         {
@@ -478,6 +487,7 @@ namespace BlacksoulsVR
                 if (int.TryParse(Util.Str(d, "port", "8150"), out p) && p > 0 && p < 65536) c.Port = p;
                 c.AutoVr = Util.Str(d, "autoVr", "True").ToLowerInvariant() != "false";
                 c.SteamVrRuntime = Util.Str(d, "steamVrRuntime", "False").ToLowerInvariant() == "true";
+                c.MapRules = Util.Str(d, "mapRules", "True").ToLowerInvariant() != "false";
             }
             catch { }
             return c;
@@ -488,6 +498,7 @@ namespace BlacksoulsVR
             Dictionary<string, object> d = new Dictionary<string, object>();
             d["gameDir"] = GameDir; d["rtpDir"] = RtpDir; d["browser"] = Browser; d["port"] = Port; d["autoVr"] = AutoVr; d["lang"] = Lang;
             d["steamVrRuntime"] = SteamVrRuntime;
+            d["mapRules"] = MapRules;
             File.WriteAllText(AppPaths.ConfigPath, Util.Json.Serialize(d), new UTF8Encoding(false));
         }
     }
@@ -695,6 +706,8 @@ namespace BlacksoulsVR
         readonly string rtpDir, savesDir, appDir;
         readonly HttpListener listener = new HttpListener();
         public string Url { get { return "http://localhost:" + Port + "/"; } }
+        // the launcher's switch for BLACK SOULS II's own fixes (map rules, companions' looks), told to the page with the file list (/api/manifest)
+        public volatile bool MapRules = true;
 
         static readonly Dictionary<string, string> Mime = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
@@ -771,6 +784,7 @@ namespace BlacksoulsVR
                     Dictionary<string, object> m = new Dictionary<string, object>();
                     m["files"] = Game.List();
                     m["rtp"] = Rtp.List(rtpDir);
+                    m["mapRules"] = MapRules;
                     SendJson(res, Util.Json.Serialize(m));
                 }
                 else if (path == "/api/vrsaves" || path == "/api/worldsaves") SendJson(res, Util.Json.Serialize(new Dictionary<string, object> { { "slots", Slots(SaveFolder(path)) } }));
@@ -779,9 +793,9 @@ namespace BlacksoulsVR
                     string slot = Regex.Replace(path.Substring(path.LastIndexOf('/') + 1), @"\D", "");
                     SendFile(res, slot.Length > 0 ? Path.Combine(SaveFolder(path), "slot" + slot + ".json") : null);
                 }
-                else if (path == "/api/settings")
+                else if (path == "/api/settings" || path == "/api/userrules")
                 {
-                    string p = Path.Combine(savesDir, "settings.json");
+                    string p = Path.Combine(savesDir, path == "/api/settings" ? "settings.json" : "user_rules.json");
                     if (File.Exists(p)) SendFile(res, p); else SendJson(res, "{}");
                 }
                 else if (path.StartsWith("/game/"))
@@ -863,6 +877,26 @@ namespace BlacksoulsVR
                 SendJson(res, Util.Json.Serialize(new Dictionary<string, object> { { "ok", true }, { "path", file }, { "folder", folder } }));
                 return;
             }
+            // the player's own rules (the rule editor - app\src\userrules.js): { "maps" | "companions" | "enemies" | "weapons" |
+            // "armors" | "skills": { "<number>": { ... } } } - kept in saves\user_rules.json as the editor wrote them (the one before
+            // as .bak)
+            if (path == "/api/userrules")
+            {
+                byte[] data = null;
+                if (req.ContentLength64 > 0 && req.ContentLength64 <= 4L * 1024 * 1024)
+                    using (MemoryStream ms = new MemoryStream()) { req.InputStream.CopyTo(ms); data = ms.ToArray(); }
+                if (data == null || !UserRules(data))
+                {
+                    Send(res, Encoding.UTF8.GetBytes("{\"ok\": false, \"error\": \"not rules\"}"), Mime[".json"], 400);
+                    return;
+                }
+                string file = Path.Combine(savesDir, "user_rules.json");
+                Directory.CreateDirectory(savesDir);
+                if (File.Exists(file)) File.Copy(file, file + ".bak", true);
+                File.WriteAllBytes(file, data);
+                SendJson(res, "{\"ok\": true}");
+                return;
+            }
             if (path == "/api/rmexport-open")
             {
                 string folder = Path.GetFullPath(Path.Combine(savesDir, "to_original"));
@@ -888,6 +922,25 @@ namespace BlacksoulsVR
             if (File.Exists(target)) File.Copy(target, target + ".bak", true);
             File.WriteAllBytes(target, body);
             SendJson(res, "{\"ok\": true}");
+        }
+
+        static readonly string[] RuleKinds = { "maps", "companions", "enemies", "weapons", "armors", "skills" };
+        static bool UserRules(byte[] data)
+        {
+            try
+            {
+                Dictionary<string, object> d = Util.Json.DeserializeObject(Encoding.UTF8.GetString(data)) as Dictionary<string, object>;
+                if (d == null) return false;
+                foreach (KeyValuePair<string, object> kind in d)
+                {
+                    Dictionary<string, object> entries = kind.Value as Dictionary<string, object>;
+                    if (Array.IndexOf(RuleKinds, kind.Key) < 0 || entries == null) return false;
+                    foreach (KeyValuePair<string, object> e in entries)
+                        if (!Regex.IsMatch(e.Key, @"^[1-9][0-9]*$") || !(e.Value is Dictionary<string, object>)) return false;
+                }
+                return true;
+            }
+            catch { return false; }
         }
 
         static string MimeOf(string path)
@@ -976,9 +1029,9 @@ namespace BlacksoulsVR
         // from the user's browsing; devtoolsPort > 0 opens the local DevTools port the auto-VR click goes through
         // xrRuntimeJson: an OpenXR runtime manifest for this browser only (the OpenXR loader in its WebXR process
         // takes XR_RUNTIME_JSON over the PC's active runtime); null = the PC's own
-        public static Process Launch(string exe, string url, int devtoolsPort, string xrRuntimeJson = null)
+        public static Process Launch(string exe, string url, int devtoolsPort, string xrRuntimeJson = null, string profile = null)
         {
-            string profile = AppPaths.ProfileFor(exe);
+            profile = profile ?? AppPaths.ProfileFor(exe);
             Directory.CreateDirectory(profile);
             // (CalculateNativeWinOcclusion off: a window that others cover - a video in front, the game opened behind them from
             // the SteamVR library - counted as a hidden page, which WebXR refuses: "The page is not visible", and it was told
@@ -1662,8 +1715,8 @@ namespace BlacksoulsVR
         readonly Label langLabel = new Label(), gameLabel = new Label(), rtpLabel = new Label(), browserLabel = new Label(), portLabel = new Label();
         readonly ComboBox browserBox = new ComboBox(), langBox = new ComboBox();
         readonly NumericUpDown portBox = new NumericUpDown();
-        readonly CheckBox autoVrBox = new CheckBox(), steamRtBox = new CheckBox();
-        readonly Button launchBtn = new Button(), steamBtn = new Button(), savesBtn = new Button(), updateBtn = new Button();
+        readonly CheckBox autoVrBox = new CheckBox(), steamRtBox = new CheckBox(), mapRulesBox = new CheckBox();
+        readonly Button launchBtn = new Button(), steamBtn = new Button(), savesBtn = new Button(), editorBtn = new Button(), updateBtn = new Button();
         string[] newer;                 // a newer version on the share page and that page ({ version, page }), or null
         public Task UpdateCheck;
         Button gameBrowse, rtpBrowse;
@@ -1745,6 +1798,10 @@ namespace BlacksoulsVR
             steamRtBox.Enabled = SteamVr.RuntimeJson() != null || cfg.SteamVrRuntime;
             steamRtBox.CheckedChanged += (s, e) => { SaveConfig(); ApplyTexts(); };
             opts.Controls.Add(steamRtBox);
+            // BLACK SOULS II's own fixes (by its map and actor numbers): for another game, off - a game running now gets it on reloading
+            mapRulesBox.AutoSize = true; mapRulesBox.Checked = cfg.MapRules; mapRulesBox.Margin = new Padding(16, 6, 3, 3);
+            mapRulesBox.CheckedChanged += (s, e) => { SaveConfig(); if (server != null) server.MapRules = mapRulesBox.Checked; };
+            opts.Controls.Add(mapRulesBox);
             t.Controls.Add(opts, 0, 8); t.SetColumnSpan(opts, 2);
 
             FlowLayoutPanel btns = new FlowLayoutPanel { AutoSize = true, WrapContents = true, Margin = new Padding(0, 0, 0, 6) };
@@ -1760,6 +1817,9 @@ namespace BlacksoulsVR
             savesBtn.AutoSize = true; savesBtn.MinimumSize = new Size(150, 48); savesBtn.Padding = new Padding(8, 0, 8, 0); savesBtn.FlatStyle = FlatStyle.Flat;
             savesBtn.Click += (s, e) => { Directory.CreateDirectory(AppPaths.SavesDir); Process.Start("explorer.exe", "\"" + AppPaths.SavesDir + "\""); };
             btns.Controls.Add(savesBtn);
+            editorBtn.AutoSize = true; editorBtn.MinimumSize = new Size(150, 48); editorBtn.Padding = new Padding(8, 0, 8, 0); editorBtn.FlatStyle = FlatStyle.Flat;
+            editorBtn.Click += (s, e) => OpenEditor();
+            btns.Controls.Add(editorBtn);
             updateBtn.AutoSize = true; updateBtn.MinimumSize = new Size(150, 48); updateBtn.Padding = new Padding(8, 0, 8, 0); updateBtn.FlatStyle = FlatStyle.Flat;
             updateBtn.BackColor = Color.FromArgb(176, 132, 40); updateBtn.ForeColor = Color.White; updateBtn.Visible = false;
             updateBtn.Click += (s, e) => { if (newer != null) try { Process.Start(newer[1]); } catch (Exception x) { Log(x.Message); } };
@@ -1827,8 +1887,10 @@ namespace BlacksoulsVR
             portLabel.Text = "   " + Lang.S("포트");
             autoVrBox.Text = Lang.S("게임 창이 뜨면 VR 자동 시작");
             steamRtBox.Text = Lang.S("SteamVR로 실행");
+            mapRulesBox.Text = Lang.S("블랙소울 전용 보정 적용 (맵·동료·전투)");
             launchBtn.Text = Lang.S("실행");
             savesBtn.Text = Lang.S("세이브 폴더 열기");
+            editorBtn.Text = Lang.S("규칙 편집기");
             if (newer != null) updateBtn.Text = Lang.F("새 버전 받기 ({0})", newer[0]);
             bool steamVr = SteamVr.RuntimeJson() != null, meta = SteamVr.MetaActive();
             xrLabel.Text = steamVr && (steamRtBox.Checked || meta) ? Lang.S("VR 런타임: SteamVR")
@@ -1943,6 +2005,7 @@ namespace BlacksoulsVR
             cfg.Port = (int)portBox.Value;
             cfg.AutoVr = autoVrBox.Checked;
             cfg.SteamVrRuntime = steamRtBox.Checked;
+            cfg.MapRules = mapRulesBox.Checked;
             cfg.Lang = Lang.Current;
             try { cfg.Save(); } catch (Exception e) { Log(Lang.F("설정을 저장하지 못했습니다: {0}", e.Message)); }
         }
@@ -1957,33 +2020,8 @@ namespace BlacksoulsVR
                 return;
             }
             SaveConfig();
-            int port = cfg.Port;
-            string rtp = Rtp.Valid(rtpBox.Text) ? rtpBox.Text.Trim().Trim('"') : null;
-            if (server != null && (server.Port != port || !string.Equals(server.Game.Dir, game.Dir, StringComparison.OrdinalIgnoreCase)))
-            {
-                server.Stop(); server = null;
-            }
-            string url = "http://localhost:" + port + "/";
-            if (server == null)
-            {
-                try
-                {
-                    server = new GameServer(game, rtp, AppPaths.SavesDir, AppPaths.AppDir, port);
-                    server.Start();
-                    Log(Lang.F("서버 실행: {0}", url));
-                }
-                catch (Exception e)
-                {
-                    server = null;
-                    if (GameServer.Ours(port)) Log(Lang.F("이미 실행 중인 런처가 포트 {0}에서 게임을 열고 있습니다 - 그 서버를 씁니다.", port));
-                    else
-                    {
-                        WindowState = FormWindowState.Normal;
-                        MessageBox.Show(this, Lang.F("포트 {0}을(를) 열지 못했습니다 ({1}).\n다른 프로그램이 쓰고 있다면 포트 번호를 바꿔 보세요.", port, e.Message), Lang.S("서버"));
-                        return;
-                    }
-                }
-            }
+            string url = EnsureServer(game);
+            if (url == null) return;
             if (!File.Exists(Path.Combine(AppPaths.AppDir, "index.html")))
             {
                 MessageBox.Show(this, Lang.S("app 폴더가 없습니다. 공유 파일을 압축을 푼 그대로 두고 실행해 주세요."), Lang.S("파일 누락"));
@@ -2021,6 +2059,76 @@ namespace BlacksoulsVR
             }
             catch (Exception e) { Log(Lang.F("브라우저를 열지 못했습니다: {0}", e.Message)); return; }
             if (autoVr) await new AutoVr(Log).Run(devtools, url, runtime != null ? 120 : 40);
+        }
+
+        // the game's server for this game folder and port: started if it is not running (or a launcher of ours already serving
+        // there used) -> its address, or null (told)
+        string EnsureServer(GameFiles game)
+        {
+            int port = cfg.Port;
+            string rtp = Rtp.Valid(rtpBox.Text) ? rtpBox.Text.Trim().Trim('"') : null;
+            if (server != null && (server.Port != port || !string.Equals(server.Game.Dir, game.Dir, StringComparison.OrdinalIgnoreCase)))
+            {
+                server.Stop(); server = null;
+            }
+            string url = "http://localhost:" + port + "/";
+            if (server == null)
+            {
+                try
+                {
+                    server = new GameServer(game, rtp, AppPaths.SavesDir, AppPaths.AppDir, port) { MapRules = cfg.MapRules };
+                    server.Start();
+                    Log(Lang.F("서버 실행: {0}", url));
+                }
+                catch (Exception e)
+                {
+                    server = null;
+                    if (GameServer.Ours(port)) Log(Lang.F("이미 실행 중인 런처가 포트 {0}에서 게임을 열고 있습니다 - 그 서버를 씁니다.", port));
+                    else
+                    {
+                        WindowState = FormWindowState.Normal;
+                        MessageBox.Show(this, Lang.F("포트 {0}을(를) 열지 못했습니다 ({1}).\n다른 프로그램이 쓰고 있다면 포트 번호를 바꿔 보세요.", port, e.Message), Lang.S("서버"));
+                        return null;
+                    }
+                }
+            }
+            return url;
+        }
+
+        // the rule editor (app\mapedit.html: the player's own rules for maps, companions, enemies, equipment and skills -
+        // saves\user_rules.json) on the
+        // game's server: in the game's browser while its window is open (a save there builds the map the game is on again at
+        // once), else in a browser profile of its own - the game started after it still gets a browser started for it (its VR
+        // runtime, the auto VR start)
+        void OpenEditor()
+        {
+            GameFiles game = CheckGame();
+            if (game == null)
+            {
+                MessageBox.Show(this, gameState.Text.TrimStart('✘', ' '), Lang.S("게임 폴더"));
+                return;
+            }
+            if (!File.Exists(Path.Combine(AppPaths.AppDir, "mapedit.html")))
+            {
+                MessageBox.Show(this, Lang.S("app 폴더가 없습니다. 공유 파일을 압축을 푼 그대로 두고 실행해 주세요."), Lang.S("파일 누락"));
+                return;
+            }
+            SaveConfig();
+            string url = EnsureServer(game);
+            if (url == null) return;
+            string bname;
+            string exe = Browser.Find(cfg.Browser, out bname);
+            if (exe == null)
+            {
+                MessageBox.Show(this, Lang.S("Chrome 또는 Edge를 찾지 못했습니다. 둘 중 하나를 설치해 주세요."), Lang.S("브라우저"));
+                return;
+            }
+            try
+            {
+                Browser.Launch(exe, url + "mapedit.html", 0, null, Browser.GameWindowOpen() ? null : AppPaths.EditorProfileFor(exe));
+                Log(Lang.S("규칙 편집기를 열었습니다."));
+            }
+            catch (Exception e) { Log(Lang.F("브라우저를 열지 못했습니다: {0}", e.Message)); }
         }
 
         // started from SteamVR: when its game window is closed, the launcher goes too. The process started is not always the
@@ -2080,6 +2188,10 @@ namespace BlacksoulsVR
                 List<string> files = ((IEnumerable)man["files"]).Cast<object>().Select(x => Convert.ToString(x)).ToList();
                 int rtpCount = ((IEnumerable)man["rtp"]).Cast<object>().Count();
                 check(files.Any(f => f.Equals("Data/System.rvdata2", StringComparison.OrdinalIgnoreCase)), "manifest: " + files.Count + " game files, " + rtpCount + " RTP files");
+                server.MapRules = false;
+                bool rulesOff = !Convert.ToBoolean(Util.Dict(Util.Json.DeserializeObject(wc.DownloadString(url + "api/manifest")))["mapRules"]);
+                server.MapRules = true;
+                check(Convert.ToBoolean(man["mapRules"]) && rulesOff, "manifest: the switch for BLACK SOULS II's own fixes (on by default, off as switched)");
                 string sys = files.First(f => f.Equals("Data/System.rvdata2", StringComparison.OrdinalIgnoreCase));
                 check(wc.DownloadData(url + "game/" + Uri.EscapeDataString(sys).Replace("%2F", "/")).SequenceEqual(game.Read(sys)), "game file bytes: " + sys);
                 string intl = files.FirstOrDefault(f => f.Any(ch => ch > 127) && f.StartsWith("Graphics/", StringComparison.OrdinalIgnoreCase));
@@ -2112,6 +2224,19 @@ namespace BlacksoulsVR
                       "developer-server save slot 97: written, read back, listed apart (saves\\world)");
                 check(wc.UploadString(url + "api/settings", "{\"moveSpeed\":5}").Contains("true") && wc.DownloadString(url + "api/settings") == "{\"moveSpeed\":5}", "settings round trip");
                 check(wc.UploadString(url + "api/xr-reset", "").Contains("\"ended\": 0"), "WebXR process reset: answers, ends nothing for a non-browser client");
+                // the player's own rules (the rule editor): none at first; kept as sent, the one before as .bak; what is not rules
+                // refused, nothing written (the editor's six kinds: maps, companions, enemies, weapons, armors, skills - "spells" none)
+                string rules1 = "{\n \"maps\": {\n  \"5\": {\n   \"wallCap\": 3\n  }\n },\n \"companions\": {},\n \"enemies\": {},\n \"weapons\": {},\n \"armors\": {},\n \"skills\": {}\n}\n";
+                string rules2 = "{\"maps\":{},\"companions\":{\"61\":{\"chip\":[\"Actor1\",2]}},\"enemies\":{\"541\":{\"holdPlace\":false}},\"skills\":{\"12\":{\"mp_cost\":0}}}";
+                bool rulesNone = wc.DownloadString(url + "api/userrules") == "{}";
+                bool rulesPut = wc.UploadString(url + "api/userrules", rules1).Contains("true") && wc.UploadString(url + "api/userrules", rules2).Contains("true");
+                Func<string, bool> rulesRefused = body => { try { wc.UploadString(url + "api/userrules", body); return false; } catch (WebException) { return true; } };
+                bool rulesBad = rulesRefused("[]") & rulesRefused("{\"maps\":{\"x\":{}}}") & rulesRefused("{\"spells\":{}}") & rulesRefused("{\"maps\":{\"5\":3}}") & rulesRefused("not json");
+                string rulesFile = Path.Combine(saves, "user_rules.json");
+                check(rulesNone && rulesPut && rulesBad && wc.DownloadString(url + "api/userrules") == rules2 && File.ReadAllText(rulesFile) == rules2
+                      && File.ReadAllText(rulesFile + ".bak") == rules1, "the player's rules: none at first, saves\\user_rules.json as sent (the one before as .bak), what is not rules refused");
+                check(wc.DownloadString(url + "mapedit.html").Contains("src/editor/mapedit.js") && wc.DownloadString(url + "src/userrules.js").Contains("/api/userrules"),
+                      "the rule editor (mapedit.html) served from app\\");
                 check(wc.UploadString(url + "api/haptic?h=r&v=0&ms=0", "").Contains("\"status\""), "controller vibration (SteamVR): answers (a status query does not connect)");
                 bool bad;
                 try { wc.UploadString(url + "api/vrsave/96", "not json"); bad = false; } catch (WebException) { bad = true; }

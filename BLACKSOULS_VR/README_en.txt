@@ -1,4 +1,4 @@
-﻿BLACK SOULS II VR  (version 2026.10.26-9)
+﻿BLACK SOULS II VR  (version 2026.11.12-7)
 ==================================
 
 An unofficial fan mod for playing BLACK SOULS II in first-person VR (PCVR).
@@ -6,6 +6,8 @@ An unofficial fan mod for playing BLACK SOULS II in first-person VR (PCVR).
 - Your original saves (Save01-16) can be loaded in VR. Their difficulty (0-9, picked in the library) applies too:
   change it in the library, as in the original.
 - VR saves and settings go to the saves folder in this folder.
+- Rules made in the launcher's "Rule editor" are saved to user_rules.json in the saves folder and come before the
+  BLACK SOULS-specific fixes.
 
 
 You need
@@ -66,7 +68,6 @@ full. Get out of it before that.
 - Groggy: the pale bar under an enemy's HP bar. Weapon hits wear it down; when it runs out the enemy is
   defenceless, as after a Break.
 - An enemy shimmering blue strikes back as soon as you hit it. Right after the shimmer starts, a Break works.
-- Swinging again and again in quick succession: from the third swing the damage drops (red numbers).
 - A gun in the shield slot: the Break button fires it (through enemies). You cannot guard then, but hitting the
   attacker just before its attack lands is a perfect guard, and the enemy's action is cancelled.
 - An NPC with a "kill" choice: two weapon hits within 3 seconds are the same as picking that choice.

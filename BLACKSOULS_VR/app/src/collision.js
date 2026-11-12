@@ -11,7 +11,8 @@ function edgeOpen(x, y, d) {
   x = m.wrapX(x); y = m.wrapY(y);
   const x2 = m.wrapX(x + dx), y2 = m.wrapY(y + dy);
   if (!g.valid(x, y) || !g.valid(x2, y2)) return false;
-  // (the dark opened round a boss fight - arena.js)
+  // (the dark or a way opened for a boss fight, and what it shut beyond the way - arena.js)
+  if (G.arena?.shuts?.(x, y) || G.arena?.shuts?.(x2, y2)) return false;
   if ((G.arena?.opens(x2, y2) || G.arena?.opens(x, y)) && m.walkable(x, y) && m.walkable(x2, y2)) return true;
   const fake = { isPlayer: false };
   return m.passableFor(fake, x, y, d) && m.passableFor(fake, x2, y2, 10 - d);
@@ -66,7 +67,7 @@ function push(px, py, ax, ay, bx, by, r) {
 }
 
 // a cell no mover can be in: its own tile lets no one out of any side (a pillar, a wall mass, deep water) and no
-// boss arena opened it (cached with the edges: key d 0)
+// boss arena opened it - or one shut it (cached with the edges: key d 0)
 function cellShut(x, y) {
   const m = G.map;
   x = m.wrapX(x); y = m.wrapY(y);
@@ -74,7 +75,7 @@ function cellShut(x, y) {
   let v = edgeCache.get(k);
   if (v === undefined) {
     const fake = { isPlayer: false };
-    v = m.grid.valid(x, y) && !G.arena?.opens(x, y) && ![2, 4, 6, 8].some(d => m.passableFor(fake, x, y, d));
+    v = m.grid.valid(x, y) && (!!G.arena?.shuts?.(x, y) || (!G.arena?.opens(x, y) && ![2, 4, 6, 8].some(d => m.passableFor(fake, x, y, d))));
     edgeCache.set(k, v);
   }
   return v;

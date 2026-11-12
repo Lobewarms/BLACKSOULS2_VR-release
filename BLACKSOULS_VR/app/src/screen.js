@@ -4,6 +4,7 @@ import { G } from './globals.js';
 import { $data } from './data.js';
 import { T } from './mapmesh.js';
 import { loadCanvas } from './assets.js';
+import { builtinRules } from './maphints.js';
 
 // brightness of flashes and animation sprites (setting 이펙트 밝기)
 const fxk = () => THREE.MathUtils.clamp(G.settings.fxBrightness ?? 0.5, 0.1, 1);
@@ -339,7 +340,7 @@ export class ScreenFx {
           if (Math.round(tm.frame * rate) === frame) {
             if (tm.se?.name && !opts.mute) G.audio?.playSe(tm.se, sePos);          // (mute: its pictures only)
             if (tm.flash_scope === 1 && !onPlayer && show) G.combat?.flashAt?.(pos, tm.flash_color);
-            if (tm.flash_scope === 2 && !NO_SCREEN_FLASH.has(anim.id)) fx.startFlash(tm.flash_color, tm.flash_duration * rate);
+            if (tm.flash_scope === 2 && !(NO_SCREEN_FLASH.has(anim.id) && builtinRules())) fx.startFlash(tm.flash_color, tm.flash_duration * rate);
             if (tm.flash_scope === 3) opts.onHide?.(tm.flash_duration * rate);
           }
         }

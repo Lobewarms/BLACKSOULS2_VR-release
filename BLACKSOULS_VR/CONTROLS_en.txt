@@ -1,4 +1,4 @@
-﻿BLACK SOULS II VR - Controls  (version 2026.10.26-9)
+﻿BLACK SOULS II VR - Controls  (version 2026.11.12-7)
 ================================================
 
 VR
@@ -14,6 +14,7 @@ Disarm            Click the right stick
 Examine / talk    Flick the right stick down
 Jump              Flick the right stick up
 Quick slots       Hold X, move your left hand onto a slot, release X
+Macros            Menu -> Macros: put equipment, items and skills in order, then set it in a quick slot (X while it runs: stop)
 Spells / throws   Pick from the quick slots, aim with your right hand, right trigger
 Weapon arts       Pick from the quick slots, then hit an enemy with the weapon
 Emotes            Hold B, move your right hand onto a balloon, release B
@@ -40,6 +41,7 @@ Jump              C
 Examine / talk /  E / Enter
 confirm
 Quick slots       Hold Q and pick with the mouse / keys 1-8
+Macros            Make one in Menu -> Macros and set it in a quick slot (Q while it runs: stop)
 Emotes            Hold T and pick with the mouse
 Chat (co-op)      / (Enter sends, Esc closes)
 Menu              Tab
