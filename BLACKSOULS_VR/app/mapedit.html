@@ -231,6 +231,11 @@
     <div class="row"><label>명중 타입 <select id="hitType"></select></label><label>성공률 <input id="hitRate" type="number" min="0" max="100" step="1"> %</label></div>
     <div class="row"><label>연속 횟수 <input id="hitRepeats" type="number" min="1" max="9" step="1"></label><label>MP 소비 <input id="costMp" type="number" min="0" step="1"></label><label>TP 소비 <input id="costTp" type="number" min="0" max="100" step="1"></label></div>
   </div>
+  <div class="sec tab-item tab-skill">
+    <h3>VR 판정</h3>
+    <div class="help">VR에서 이 스킬이 어떻게 움직이고 보이는지 — 스킬 번호로 정합니다. 기본은 블랙소울 2의 번호 표(블랙소울 전용 보정이 켜져 있을 때), 아니면 스킬 데이터(범위·명중 타입·피해)로 정해진 값입니다.</div>
+    <div id="vrRows"></div>
+  </div>
   <div class="sec tab-item">
     <h3>메모</h3>
     <div class="help">원작 스크립트가 읽는 태그 — 예: 가디언 엔젤 &lt;自動蘇生:HP,애니메이션,확률&gt;</div>

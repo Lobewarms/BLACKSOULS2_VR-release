@@ -7,6 +7,7 @@ import { SHOT_STYLES } from '../combat/shotlooks.js';
 import { NO_H_SWITCH, isRef } from '../coopguard.js';
 import { cleanName } from '../coopnet.js';
 import { senIds } from '../coopworld.js';
+import * as J from '../skilljudge.js';
 import { $data } from '../data.js';
 import { G } from '../globals.js';
 import { runningInterpreter } from '../interpreter.js';
@@ -63,28 +64,31 @@ export const BOSS_MOVES = new Set(['charge', 'lunge', 'leap', 'fissure', 'quake'
 export const FX_PER_SEND = 8;         // the host's event sounds, animations and flashes sent at once (more are dropped)
 // The host's scenes stay its own. What its events show - messages, pictures, their sounds, animations and flashes - goes
 // to its guests only on the game's own route without the adult scenes (switch 20 Hシーン表示しない on: the prologue's
-// question sets it) and never out of one of those scenes (the common events named シーン), wherever one is called from -
+// question sets it) and never out of one of those scenes (BLACK SOULS II's scene common events, by number - skilljudge.js),
+// wherever one is called from -
 // the recollection room as well. A guest takes them only as places in the game's events it checks itself and shows
 // from its own copy of the game (coopguard.js), whatever the other game sends
+// (the lists of BLACK SOULS II's common events of a kind - skilljudge.js, by number)
+const listsOf = kind => new Set([...J.commonEventIds(kind)].map(id => $data.commonEvents?.[id]?.list).filter(Boolean));
 export let sceneLists = null;
 export function inScene(interp) {
-  if (!sceneLists) sceneLists = new Set(($data.commonEvents || []).filter(c => c && /シーン/.test(c.name || '')).map(c => c.list));
+  if (!sceneLists) sceneLists = listsOf('scene');
   for (let it = interp?.root || interp; it; it = it.child) if (it.list && sceneLists.has(it.list)) return true;
   return false;
 }
-// The host's death is its own: what its death's common events (全滅処理: the YOU DIED, its sound, the dark) show its
+// The host's death is its own: what its death's common events (the YOU DIED, its sound, the dark) show its
 // guests do not see or hear, nor its screen going dark for it (deathOn) - nor a YOU DIED an event writes elsewhere
 export let deathLists = null;
 export function inDeath(interp) {
-  if (!deathLists) deathLists = new Set(($data.commonEvents || []).filter(c => c && /全滅処理/.test(c.name || '')).map(c => c.list));
+  if (!deathLists) deathLists = listsOf('death');
   for (let it = interp?.root || interp; it; it = it.child) if (it.list && deathLists.has(it.list)) return true;
   return false;
 }
-export const YOU_DIED = /YOU\s*DIED/i;
-// the bonfire common event an event's page rests at (the original's 篝火 ones, called at its top), or null
+// the bonfire common event an event's page rests at (the original's bonfire ones - by number, skilljudge.js - called at its
+// top), or null
 export let fireIds = null;
 export function bonfireOf(list) {
-  if (!fireIds) fireIds = new Set(($data.commonEvents || []).filter(c => c && /篝火/.test(c.name || '')).map(c => c.id));
+  if (!fireIds) fireIds = J.commonEventIds('bonfire');
   const call = (list || []).find(c => c.indent === 0 && c.code === 117 && fireIds.has(c.parameters[0]));
   return call ? $data.commonEvents[call.parameters[0]] : null;
 }
@@ -100,7 +104,7 @@ export function eventLoot() {
   if (!root || !(root.eventId > 0) || (root.kind !== 'main' && root.kind !== 'symbol')) return false;
   const cmd = it.list?.[it.index];
   if (!cmd || cmd.code < 125 || cmd.code > 128 || cmd.parameters[cmd.code === 125 ? 1 : 2] !== 0) return false;
-  if (!ownCes) ownCes = new Set(($data.commonEvents || []).filter(c => c && /篝火|全滅処理/.test(c.name || '')).map(c => c.id));
+  if (!ownCes) ownCes = new Set([...J.commonEventIds('bonfire'), ...J.commonEventIds('death')]);
   for (let x = root; x; x = x.child) if (ownCes.has(x.commonEventId)) return false;
   const ev = root.event();
   return !(root.kind === 'symbol' && ev && G.combat?.privateSymbol?.(ev));
@@ -161,9 +165,8 @@ export function hazardOf(list) {
     if (c.code === 311 && p[2] === 1) get().hits.push({ c: p[3] === 0 ? p[4] : null, v: p[3] === 0 ? 0 : p[4], knockout: !!p[5] });
     else if (c.code === 353) get().death = true;
     else if (c.code === 117) {
-      const name = $data.commonEvents?.[p[0]]?.name || '';
-      if (/罠死亡判定/.test(name)) get().check = true;
-      else if (/全滅処理/.test(name)) get().death = true;
+      if (J.commonEventIs('trapDeath', p[0])) get().check = true;
+      else if (J.commonEventIs('death', p[0])) get().death = true;
     }
   }
   if (h) for (const c of list) {

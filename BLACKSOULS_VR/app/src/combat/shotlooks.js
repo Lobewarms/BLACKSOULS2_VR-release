@@ -1,6 +1,6 @@
 // What a shot looks like in flight (effects.js spawnProjectile - its style: shotStyleOf). A gun's round is a brass slug
-// with a tracer streaking behind it, a thrown knife a turning blade - and a spell is what it is: its element, else the words
-// of its animation and name. Fire: a flickering fireball shedding embers. Ice: a spinning crystal shard trailing frost.
+// with a tracer streaking behind it, a thrown knife a turning blade - and a spell is what it is: its element, else what
+// BLACK SOULS II's table has for its number (skilljudge.js) or the player's rule for it. Fire: a flickering fireball shedding embers. Ice: a spinning crystal shard trailing frost.
 // Thunder: a white-hot ball crackling with arcs. Dark: a void ringed with purple, wisps circling it, trailing smoke. Light:
 // a radiant star. A soul arrow (ソウルの太矢): a bright dart with a comet's tail. Poison / acid: a wobbling green glob,
 // dripping. Water: a droplet. Wind: spinning crescents. Blood, drain: a crimson orb, dripping. Earth: a tumbling rock.
@@ -10,7 +10,7 @@
 // meaning (an enemy's sure-hit shot: purple) over the look's own; scale: an enemy's shots are bigger, to be seen coming;
 // busy(): many shots in the air - half the trail
 import * as THREE from 'three';
-import { $data } from '../data.js';
+import * as J from '../skilljudge.js';
 
 export const SHOT_STYLES = ['bullet', 'knife', 'fire', 'ice', 'thunder', 'dark', 'holy', 'soul', 'poison', 'water', 'wind', 'blood',
   'earth', 'arcane'];
@@ -24,36 +24,9 @@ export function heldPoint(obj, into) {
 }
 
 // ---- which look a skill's shot has (look: enemies.js skillLook - 'gun', 'knife'...) ----------------------------------------
-const EL_STYLE = { 2: 'blood', 3: 'fire', 4: 'ice', 5: 'thunder', 10: 'dark', 11: 'blood', 12: 'fire', 15: 'thunder', 18: 'poison' };
-const WORDS = [
-  ['soul', /ソウル|太矢|소울|\bsoul/i],
-  ['fire', /火|炎|焔|フレア|爆|燃|불꽃|화염|파이어|플레어|폭발|헬 ?브레스|\b(?:fire|flame|blaze|burn|flare|inferno)/i],
-  ['ice', /氷|冷気|吹雪|凍|얼음|빙결|빙주|냉기|아이스|프로스트|블리자드|\b(?:ice|frost|freez|blizzard|glacia)/i],
-  ['thunder', /雷|電|稲妻|번개|뇌격|뇌전|썬더|라이트닝|\b(?:thunder|lightning|spark)/i],
-  ['poison', /毒|酸|독|황산|산성|\b(?:poison|venom|acid|toxic)/i],
-  ['blood', /血|ブラッド|吸収|ドレイン|흡혈|피의|블러드|드레인|\b(?:blood|drain|vampir|leech)/i],
-  ['dark', /闇|暗黒|黒|怨|呪|ゾンビ|死|어둠|암흑|검은|저주|원망|원한|다크|\b(?:dark|shadow|curse|doom|death)/i],
-  ['holy', /光|聖|閃|天術|神聖|빛|신성|성스러|홀리|섬광|\b(?:light|holy|sacred|radian|divine)/i],
-  ['water', /水|泡|流|물|거품|아쿠아|\b(?:water|bubble|aqua|wave)/i],
-  ['wind', /風|嵐|ストーム|竜巻|바람|폭풍|선풍|\b(?:wind|storm|gale|tornado|cyclone)/i],
-  ['earth', /岩|石|土|大地|砂|바위|돌|대지|\b(?:rock|stone|earth|boulder)/i],
-];
-export function shotStyleOf(skill, look = null) {
-  if (look === 'gun') return 'bullet';
-  if (look === 'knife') return 'knife';
-  if (!skill) return 'arcane';
-  if (skill._shotStyle) return skill._shotStyle;
-  const anim = $data.animations?.[skill.animation_id]?.name || '';
-  const text = `${anim} ${skill.name || ''}`;
-  const el = skill.damage?.element_id | 0;
-  let st = null;
-  if (el === 9) st = WORDS[0][1].test(text) ? 'soul' : 'holy';             // (light: a soul arrow, else a star)
-  else if (EL_STYLE[el]) st = EL_STYLE[el];
-  else if (look === 'drain') st = 'blood';
-  else if (look === 'death') st = 'dark';
-  else for (const [s, re] of WORDS) if (re.test(text)) { st = s; break; }
-  return (skill._shotStyle = st || 'arcane');
-}
+// (the player's rule for the skill, a gun's round, a thrown knife, its element, a drain, a death spell, BLACK SOULS II's
+// table - skilljudge.js, by number -, else an orb in a rune circle)
+export function shotStyleOf(skill, look = null) { return J.shotStyle(skill, look); }
 
 // ---- textures (drawn once) ------------------------------------------------------------------------------------------------
 const TEX = {};

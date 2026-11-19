@@ -9,7 +9,7 @@ import { FloorMarker, MARK } from '../telegraph.js';
 import { BODY_R, BOSS_AREA, CHARGE_KNOCK, CHARGE_SPEED, LEAP_LAUNCH, PARRY_SLIDE, POOL, PURSUIT, SPIN_COIL, SPIN_TIME,
   firstContact, fxk, segDist, spinAngle, tmpColor, turnWidth } from './common.js';
 import { shotStyleOf } from './shotlooks.js';
-import { builtinRules } from '../maphints.js';
+import * as J from '../skilljudge.js';
 
 // (never made: its methods are CombatSystem's own - mixed into it in combat.js)
 export class BossActPart {
@@ -53,51 +53,9 @@ export class BossActPart {
     }
     return false;
   }
-  skillHits(skill) { return THREE.MathUtils.clamp((skill.repeats || 1) * ({ 3: 1, 4: 2, 5: 3, 6: 4 }[skill.scope] || 1), 1, 6); }
-  bossFamily(s) {
-    if (s._bossFam !== undefined) return s._bossFam;
-    // (흑기사 린다메아's own moves; a leap over the player in a cloak - bossmoves.js)
-    const special = this.specialFamily(s);
-    if (special !== undefined) return (s._bossFam = special);
-    let f = null;
-    if (s.scope >= 1 && s.scope <= 6 && (s.damage?.type === 1 || s.damage?.type === 5)) {
-      const text = `${s.name} ${s.message1 || ''}`;
-      const anim = $data.animations?.[s.animation_id]?.name || '';
-      const style = this.skillStyle(s), hits = this.skillHits(s);
-      const atk = +(/a\.atk\s*\*\s*([\d.]+)/.exec(s.damage.formula || '')?.[1] || 0);
-      const magic = s.hit_type === 2;
-      if (/돌진|달려\s?들|돌격|몸통박치기|태클|저돌|습보|전력투구|덤벼들|일섬|突進|突撃|突进|冲锋|冲撞|撞击|体当たり|タックル|飛びかか|襲いかか|一閃|一闪|\b(?:charg|rush|tackl|body ?slam|lung|pounc)/i.test(text) || /突進|体当たり|ぶちかまし/.test(anim)) f = 'charge';
-      else if (/점프|뛰어\s?올라|도약|떠올라|날아올라|문설트|프레스|짓눌|짓밟|낙하|공중에서|내리찍|내려찍|ジャンプ|跳躍|跳跃|跳び|飛び上が|舞い上が|ムーンサルト|プレス|押し潰|踏みつけ|踏み潰|踩踏|践踏|落下|空中|叩きつけ|砸|\b(?:jump|leap|lept|press|stomp|trampl|plung|slam)/i.test(text) || /ムーンサルト|プレス|踏み/.test(anim)) f = 'leap';
-      else if (/땅을 갈|대지를 가|지면을 가|균열|大地を割|地割れ|地裂|裂地|split the (?:ground|earth)|\bfissur/i.test(text)) f = 'fissure';
-      else if (/땅울림|땅을 울|대지|충격파|지진|地響き|地鳴り|大地|衝撃波|冲击波|地震|地鸣|\b(?:quake|earthquake|shock ?wave|tremor)/i.test(text)) f = 'quake';
-      else if (/포효|울부짖|외침|외쳤|절규|우렁찬|굉음|비명|소리를 질|咆哮|雄叫び|叫び|絶叫|吼え|悲鳴|怒吼|嚎叫|尖叫|\b(?:roar|howl|scream|shriek|bellow)/i.test(text) || /咆哮/.test(anim)) f = 'roar';
-      else if (/숨결|브레스|숨을 내|내뿜|뿜어|뿜었|토해|내뱉|화염을 발사|ブレス|吐息|吐き|吐いた|噴き|吹き付け|喷吐|喷出|吐出|\b(?:breath|spit|spew|exhal|vomit)/i.test(text) || /^息/.test(anim)) f = 'breath';
-      else if (/회전|선풍|회오리|소용돌이|휘몰아|回転|旋風|竜巻|渦|旋转|旋风|龙卷|\bspin(?:s|ning)?\b|\b(?:whirl|cyclon|tornado|vortex)/i.test(text)) f = 'spin';
-      else if (/파도|해일|물결|웨이브|격류|급류|波|津波|激流|\b(?:wave|tide|tsunami|surge|torrent)/i.test(text)) f = 'wave';
-      else if (/십자|크로스|오망성|육망성|クロス|十字|五芒|六芒|\b(?:cross|pentagram|hexagram)/i.test(text)) f = 'cross';
-      else if (/덥석|움켜|붙잡|부여잡|구속|촉수|후크|갈고리|해초|껴안|휘감|掴|捕ま|触手|フック|拘束|抱き|絡め|\b(?:grab|seiz|grasp|clutch|tentacle|hook|embrac|entangl)/i.test(text) || /掴み|触手|捕食/.test(anim)) f = 'grab';
-      else if (/물어|씹어|잡아먹|취식|포식|噛み|喰らい|食らい|捕食|撕咬|啃咬|吞食|\bbit(?:e|es|ing)\b|\b(?:devour|chomp)/i.test(text) && atk >= 10) f = 'charge';
-      else if (/참수|처형|단두|길로틴|필살|목을 베|斬首|処刑|断頭|ギロチン|必殺|\b(?:behead|execut|decapitat|guillotin)/i.test(text)) f = 'execute';
-      else if (/난사|소나기|화살 비|사우전드|サウザンド|\bthousand|유성|쏟아|흩뿌|사방으로|빗발|천둥|벼락|乱射|の雨|流星|降り注|撒き散|四方|雷|之雨|倾泻|\brain(?:s|fall)?\b|\b(?:barrage|meteor|shower|scatter|thunder|lightning)/i.test(text) && style !== 'melee') f = 'rain';
-      else if (/연사|연발|연속투척|대령|대포|일제|連射|連発|連続投擲|大砲|一斉|连射|连发|大炮|齐射|\b(?:volley|rapid|salvo|cannon)/i.test(text)) f = 'volley';
-      else if (s.scope !== 1 && (/안개|맹독|독가스|독 ?늪|늪을|역병|흑사|미아즈마|瘴|霧|猛毒|毒ガス|毒沼|疫|黒死|\b(?:fog|mist|poison|venom|miasma|swamp|plague|toxic)/i.test(text) ||
-        (builtinRules() && (s.effects || []).some(ef => ef.code === 21 && (ef.data_id === 2 || ef.data_id === 3))))) f = 'field';
-      else if (/찌르|찔러|찔렀|관통|꿰뚫|뚫기|창으로|레이피어|판트|부리|뿔|刺突|突き|貫|槍|レイピア|嘴|\b(?:thrust|pierc|stab|lance|impal|skewer|rapier|fente)/i.test(text) && style === 'melee' && s.scope === 1) f = 'thrust';
-      else if (/후려|휩쓸|쓸어|베어 ?내|베어 ?넘|횡일|꼬리|사복검|채찍|薙|払|尻尾|鞭|蛇腹|横一|\b(?:sweep|swipe|tail|whip|mow|cleave|lash)/i.test(text) && !magic) f = 'sweep';
-      // (a beam or a cage, a storm over all, rows of blades, a moon from afar, a cut from behind - bossmoves.js)
-      else if ((f = this.newFamily(s, text, anim, style, hits, atk, magic))) { /* f */ }
-      else if (style === 'projectile' && hits >= 2) f = s.scope === 1 ? 'volley' : 'rain';
-      else if (style === 'area' && !atk && hits >= 2) f = 'rain';
-      else if (style === 'melee' && atk && hits >= 2) f = 'flurry';
-      // spells on one: shots that come round after the player (an arrow, an orb, a bubble), else eruptions under
-      // them one after another; spells on all: a blast round the boss (or round it but not close in); a wide
-      // physical blow on all: a sweep
-      else if (magic && s.scope === 1) f = /화살|구슬|탄환|볼|구체|거품|矢|弾|玉|球|泡|\b(?:arrow|orb|ball|bolt|bullet|sphere|missile|bubble)/i.test(text) ? 'orbs' : 'pursuit';
-      else if (magic && s.scope === 2) f = 'nova';
-      else if (style === 'area' && s.hit_type === 1) f = !atk && /\ba\.mat\b/.test(s.damage.formula || '') ? 'nova' : 'sweep';
-    }
-    return (s._bossFam = f);
-  }
+  skillHits(skill) { return J.skillHits(skill); }
+  // the move a skill is (skilljudge.js: the player's rule for its number, BLACK SOULS II's table, else its own fields)
+  bossFamily(s) { return J.bossFamily(s); }
   // a boss none of whose skills has a move of its own: its heaviest blow becomes a lunge; a caster with no blow
   // casts its strongest shot as a fan
   bossFallback(e) {
@@ -376,7 +334,7 @@ export class BossActPart {
     const d = this.delayedData(s);
     if (!d || d.turnEnd || !this.delayedDoes($data.skills[d.id])) return null;
     const later = $data.skills[d.id];
-    if (/隕石/.test($data.animations?.[later.animation_id]?.name || '')) return 'rain';
+    if (J.meteorBlow(later)) return 'rain';
     return this.bossFamily(later) || (later.damage?.type === 1 || later.damage?.type === 5 ? 'pursuit' : null);
   }
   scheduleDelayed(e, skill) {
@@ -501,8 +459,7 @@ export class BossActPart {
       }
       // lines through where the player stands: a cross (4 arms), a pentagram (5), a hexagram (6)
       case 'cross': {
-        const text = `${s.name} ${s.message1 || ''}`;
-        const n = /오망|五芒|pentagram/i.test(text) ? 5 : /육망|六芒|hexagram/i.test(text) ? 6 : 4;
+        const n = J.crossPoints(s);
         const rot = Math.random() * Math.PI * 2, y = G.floorAt(head.x / T - 0.5, head.z / T - 0.5), parts = [];
         for (let i = 0; i < n; i++) parts.push({ shape: 'line', len: 11, width: 1.8, x: head.x, y, z: head.z, aim: rot + i * Math.PI * 2 / n });
         return { ...base, shape: 'multi', parts, gap: 0, heavy: false, certain: s.hit_type === 0, tempo: 1.1, tmin: 1.2, tmax: 2.2 };
@@ -572,13 +529,8 @@ export class BossActPart {
     }
     return this.planNewMove(e, fam, s, head, ep, base) ?? null;
   }
-  // the face a die skill shows: the digit its name ends with (１D６주사위4), else its fixed damage in ten thousands
-  diceFace(s) {
-    const name = (s.name || '').trim().replace(/[０-９]/g, c => String.fromCharCode(c.charCodeAt(0) - 0xFEE0));
-    const m = /(\d)$/.exec(name);
-    const k = m ? +m[1] : Math.round((+s.damage?.formula || 10000) / 10000);
-    return THREE.MathUtils.clamp(k || 1, 1, 6);
-  }
+  // the face a die skill shows (BLACK SOULS II's by number - skilljudge.js), else its fixed damage in ten thousands
+  diceFace(s) { return J.diceFace(s); }
   // the move goes off as its wind-up ends
   releaseBossMove(e) {
     const plan = e.plan, s = e.skill, fam = e.move;

@@ -4,6 +4,7 @@ import { NO_H_SWITCH } from '../coopguard.js';
 import { WorldLink, cleanName, isTag } from '../coopnet.js';
 import { LIT_FROM_START, changesWorld, mergeWorld, worldPart, worldSwitch, worldVariable,
   writeSyncs } from '../coopworld.js';
+import * as J from '../skilljudge.js';
 import { $data } from '../data.js';
 import { G } from '../globals.js';
 import { tr } from '../i18n.js';
@@ -402,8 +403,8 @@ export class WorldPart {
     this.send({ t: 'down' }, to);
     return false;
   }
-  // (the developer's world) the common events left out: the adult scenes (シーン)
-  worldSkips(id) { return /シーン/.test($data.commonEvents?.[id]?.name || ''); }
+  // (the developer's world) the common events left out: the adult scenes (BLACK SOULS II's, by number - skilljudge.js)
+  worldSkips(id) { return J.commonEventIs('scene', id); }
 
   // ---- the next cycle is everyone's to say: an event of this player's reaching its preparation (周回プレイ準備) asks
   // the server for a vote (one a player may call once an hour) - everyone on the server says yes or no, more than half

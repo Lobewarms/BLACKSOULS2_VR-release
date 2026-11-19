@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { BALLOON_SIZE, BalloonIcon } from '../balloons.js';
 import { lineOfSight, nextStep, resolveCircle } from '../collision.js';
+import * as J from '../skilljudge.js';
 import { $data } from '../data.js';
 import { G } from '../globals.js';
 import { T } from '../mapmesh.js';
@@ -232,54 +233,15 @@ export class EnemyPart {
       default: return true;
     }
   }
-  // How an enemy's skill shows, by its own battle animation and name (the original's): 'lob' a bottle, a jar, a
-  // dumpling, mud or a stone thrown in an arc onto where the player stood; 'gun' a shot from a rifle, a shotgun or a
-  // pistol (fast, with a flash and a streak); 'knife' a knife or a hook thrown straight (fast, a streak); 'death' a death spell (a dark
-  // circle that keeps to the player and settles a moment before it strikes); 'drain' life or mana drawn out (it
-  // flows back into the one who drew it)
-  skillLook(s) {
-    if (!s) return null;
-    if (s._look !== undefined) return s._look;
-    const anim = $data.animations?.[s.animation_id]?.name || '';
-    const name = (s.name || '').trim();
-    let look = null;
-    if (/油壷|火炎壷|毒団子|泥|投石|爆弾|瓶/.test(anim) || (/병\b|던지|투척|던져|壷|瓶|投げ|\b(?:bottle|jar|throw|toss|hurl)/i.test(name) && !/나이프|메스|メス|ナイフ|화살|\bknife/i.test(name))) look = 'lob';
-    else if (/長銃|散弾|銃撃|ガンブレイク/.test(anim) || /발포|사격|저격|총격|건 ?브레이크|銃|\b(?:gun|rifle|pistol|musket)/i.test(name)) look = 'gun';
-    else if (/投げナイフ/.test(anim) || /나이프|메스 투척|ナイフ|メス|\bknife/i.test(name)) look = 'knife';
-    else if (/即死/.test(anim) || /^데스\d*$|멸혼|즉사|即死|\bdeath\b|\bdoom/i.test(name)) look = 'death';
-    else if (/吸収|ドレイン/.test(anim) || /흡수|드레인|강탈|吸収|ドレイン|\b(?:drain|absorb|leech)/i.test(name)) look = 'drain';
-    return (s._look = look);
-  }
+  // How an enemy's skill shows (skilljudge.js - by its number): 'lob' a bottle, a jar, a dumpling, mud or a stone thrown in
+  // an arc onto where the player stood; 'gun' a shot from a rifle, a shotgun or a pistol (fast, with a flash and a streak);
+  // 'knife' a knife or a hook thrown straight (fast, a streak); 'death' a death spell (a dark circle that keeps to the player
+  // and settles a moment before it strikes); 'drain' life or mana drawn out (it flows back into the one who drew it)
+  skillLook(s) { return J.skillLook(s); }
   // the colour of what a skill carries - its element, else the states it brings (none for a plain blow): motes of it
   // rise from its marked area while it winds up, and a death spell's dark
-  skillFlavor(s) {
-    if (!s) return null;
-    if (s._flavor !== undefined) return s._flavor;
-    const EL = { 2: 0xff5fd0, 3: 0xff7a28, 4: 0x9fe8ff, 5: 0xfff27a, 8: 0x7a9cff, 9: 0xffe9a8, 10: 0x9a4cff, 11: 0xd01830, 12: 0xff4a1a, 15: 0xfff27a, 18: 0x6fe05a };
-    let c = this.skillLook(s) === 'death' ? EL[10] : EL[s.damage?.element_id];
-    if (!c) {
-      const names = (s.effects || []).filter(f => f.code === 21 && f.data_id > 1).map(f => $data.states[f.data_id]?.name || '').join(' ');
-      if (/연소|화상|燃焼|火傷|\bburn/i.test(names)) c = EL[3];
-      else if (/동창|동결|빙결|凍傷|凍結|\bfrost|\bfreez/i.test(names)) c = EL[4];
-      else if (/독|毒|\bpoison|\bvenom/i.test(names)) c = EL[18];
-      else if (/출혈|열상|出血|裂傷|\bbleed/i.test(names)) c = EL[11];
-      else if (/수면|잠|睡眠|眠|\bsleep/i.test(names)) c = EL[8];
-      else if (/공포|발광|처형|恐怖|発狂|処刑|\bfear|\bmadness/i.test(names)) c = EL[10];
-      else if (/스턴|기절|スタン|気絶|\bstun/i.test(names)) c = EL[5];
-      else if (/기름|油|\boil/i.test(names)) c = 0x9a7a3a;
-    }
-    return (s._flavor = c || null);
-  }
-  skillStyle(skill) {
-    if (!skill || skill.id === 7 || /상황을 본다|웃|様子を見|笑|观察|\b(?:watch|laugh|grin)/i.test(skill.name)) return 'wait';
-    if (skill.id === 2) return 'guard';
-    const dmg = skill.damage?.type;
-    if (skill.scope >= 7 && skill.scope <= 11) return dmg === 3 ? 'heal' : 'buff';
-    if (dmg !== 1 && dmg !== 2 && dmg !== 5 && dmg !== 6) return skill.scope >= 1 && skill.scope <= 6 ? 'debuff' : 'wait';
-    if (skill.hit_type === 2 || ['gun', 'knife'].includes(this.skillLook(skill)) || /활|화살|총|쏘|발사|던|弓|矢|銃|射|撃|投|箭|枪|\bbow\b|\b(?:arrow|gun|shoot|shot|throw|bullet)/i.test(skill.name)) return 'projectile';
-    if (skill.scope === 2) return 'area';
-    return 'melee';
-  }
+  skillFlavor(s) { return J.skillFlavor(s); }
+  skillStyle(skill) { return J.skillStyle(skill); }
 
   enemyAI(e, dt, pc, attacking) {
     e.alertTime = Math.max(0, e.alertTime - dt);

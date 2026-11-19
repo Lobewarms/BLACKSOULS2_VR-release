@@ -2,6 +2,8 @@
 import { G, SCENE_REQUESTS } from './globals.js';
 import { BALLOON_TIME } from './balloons.js';
 import { tr } from './i18n.js';
+import * as J from './skilljudge.js';
+import { refOf } from './coopguard.js';
 import { $data } from './data.js';
 import { runRuby, evalRuby } from './rubyexpr.js';
 import { commonEventList } from './character.js';
@@ -128,11 +130,14 @@ export class Interpreter {
 
   // ---------------------------------------------------------------- messages
   // killMode (NPC cut down with the sword): messages before the kill choice are skipped and the
-  // "살해한다" option is chosen automatically; everything after it runs normally.
+  // "살해한다" option is chosen automatically; everything after it runs normally. Which option kills: by the event's
+  // number, its page and the command's place in it (BLACK SOULS II's - skilljudge.js), never by the option's words
   killChoice() {
     const msg = { lines: [] };
     this.setupChoices(msg);
-    const i = msg.choices.findIndex(c => /살해|殺害|殺す|殺し|杀害|杀死|\bkill/i.test(c.text));
+    const ev = this.event(), page = ev?.event?.pages ? ev.event.pages.findIndex(p => p.list === this.list) : -1;
+    const at = this.choiceGroup?.indices || [];
+    const i = page < 0 ? -1 : msg.choiceAt.findIndex(([b, k]) => J.killOptions(this.mapId, this.eventId, page, at[b])?.includes(k));
     if (i < 0) { this.killMode = false; return false; }
     msg.onChoice(i);
     this.killMode = false;
@@ -153,7 +158,7 @@ export class Interpreter {
     const [faceName, faceIndex, background, position] = this.params;
     const lines = [], at = this.index;          // (at: where it stands - co-op guests put it up from their own copy, coop.js onSay)
     while (this.nextCode() === 401) { this.index++; lines.push(this.list[this.index].parameters[0]); }
-    const msg = { face: faceName, faceIndex, background, position, lines, choices: null, number: null, at };
+    const msg = { face: faceName, faceIndex, background, position, lines, choices: null, number: null, at, ref: refOf(this, at) };
     switch (this.nextCode()) {
       case 102: this.index++; this.setupChoices(msg); break;
       case 103: this.index++; this.setupNumberInput(msg, this.list[this.index].parameters); break;

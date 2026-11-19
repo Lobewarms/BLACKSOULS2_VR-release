@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { commonEventList } from '../character.js';
 import { lineOfSight } from '../collision.js';
+import * as J from '../skilljudge.js';
 import { $data } from '../data.js';
 import { G } from '../globals.js';
 import { tr } from '../i18n.js';
@@ -20,11 +21,8 @@ const MIRROR_SPEED = 16, MIRROR_RANGE = 40;
 // (never made: its methods are CombatSystem's own - mixed into it in combat.js)
 export class SpellPart {
   // ---- spell / throwable in the right hand ----------------------------------------------------
-  // throwing knives (투척 나이프, 수술칼): the items thrown with the original's knife animation
-  isKnife(obj) {
-    const anim = $data.animations?.[obj?.animation_id]?.name || '';
-    return /ナイフ|knife/i.test(anim) || /나이프|수술칼|ナイフ|メス|knife|scalpel|飞刀|手术刀/i.test(obj?.name || '');
-  }
+  // throwing knives (BLACK SOULS II's 투척 나이프, 수술칼 - skilljudge.js, by number)
+  isKnife(obj) { return J.isKnife(obj); }
   // a thrown item made like the held weapons (every pixel of its icon a small block): a knife held like a dagger,
   // blade forward; anything else (a bottle, a pot, a dung ball) in the fist
   thrownModel(obj, knife) {

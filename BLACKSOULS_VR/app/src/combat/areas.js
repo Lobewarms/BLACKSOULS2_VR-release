@@ -1,6 +1,7 @@
 // What a blow covers on the floor: the hazards a boss's move leaves for a while (eruptions, pools) and the attack areas
 // (circles, rings, sectors, lines, multi-part marks) - telegraphed, then struck.
 import * as THREE from 'three';
+import * as J from '../skilljudge.js';
 import { $data } from '../data.js';
 import { G } from '../globals.js';
 import { T } from '../mapmesh.js';
@@ -468,8 +469,9 @@ export class AreaPart {
       case 'buff':
         if (e.puppet) break;
         this.applySkillToSelf(e, skill);
-        // a boss's quick step (회피, 절영, 롤링 회피...): gone, and there again beside or behind the player
-        if (e.boss && /회피|절영|재빠르|순간 ?이동|사라졌|回避|絶影|素早|瞬間移動|消え|\b(?:evade|evasion|dodge|blink|vanish|teleport)/i.test(`${skill.name} ${skill.message1 || ''}`)) this.blink(e);
+        // a boss's quick step (BLACK SOULS II's 회피, 절영, 롤링 회피... - skilljudge.js, by number): gone, and there again
+        // beside or behind the player
+        if (e.boss && J.bossBlinks(skill)) this.blink(e);
         break;
       case 'heal': {
         if (e.puppet) break;

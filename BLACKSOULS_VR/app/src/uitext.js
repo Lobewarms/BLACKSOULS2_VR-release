@@ -2,6 +2,7 @@
 // patch's particles) turned into text, a message that is a big banner (VICTORY ACHIEVED), the windowskin's text colours
 // and the icon set (loadUiAssets reads both). Kept apart from ui.js: weapons.js and quickslots.js need only these, and
 // importing ui.js for them closed an import cycle (ui.js -> minimap.js -> mapmesh.js -> mapgen -> weapons.js -> ui.js).
+import * as J from './skilljudge.js';
 import { G } from './globals.js';
 import { $data } from './data.js';
 import { loadCanvas } from './assets.js';
@@ -37,12 +38,13 @@ function koreanParticles(t) {
 export function stripEscapes(text) {
   return convertEscapes(text).replace(/\x1b[A-Z]+(\[\d+\])?/gi, '').replace(/\x1b./g, '');
 }
-// a message (its lines as the event has them) that is a big banner - VICTORY ACHIEVED: no face, no choices, big
-// letters, one short line of capitals: { text, color }, or null
-export function bannerOf(msg) {
+// a message (its lines as the event has them) that is a big banner - VICTORY ACHIEVED: no face, no choices, and its place
+// in the game's events (ref - coopguard.js refOf) one of BLACK SOULS II's banners (skilljudge.js - by place, never by its
+// words): { text, color }, or null
+export function bannerOf(msg, ref = msg.ref) {
+  if (msg.face || msg.choices || !J.bannerAt(ref)) return null;
   const plain = msg.lines.map(stripEscapes).join(' ').trim();
   const raw = msg.lines.join('');
-  if (msg.face || msg.choices || !/\\\{\\\{/.test(raw) || !/^[A-Z][A-Z !?.]{2,30}$/.test(plain)) return null;
   const cm = /\\C\[(\d+)\]/i.exec(raw);
   return { text: plain, color: cm ? textColor(+cm[1]) : '#ddd' };
 }

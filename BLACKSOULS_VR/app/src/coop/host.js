@@ -2,13 +2,14 @@
 // fights with them in it, their blows and falls, everything the host decides for the session.
 import { NO_H_SWITCH, refOf } from '../coopguard.js';
 import { cleanName, isTag } from '../coopnet.js';
+import * as J from '../skilljudge.js';
 import { $data } from '../data.js';
 import { G } from '../globals.js';
 import { tr } from '../i18n.js';
 import { T } from '../mapmesh.js';
 import { convertEscapes } from '../ui.js';
 import { BOSS_CALL_WAIT, BOSS_MOVES, BOSS_PER_PLAYER, EN_STATES, FX_PER_SEND, HITS_PER_SECOND, LOOT_PER_MINUTE,
-  PLAN_FLAGS, PLAN_NUMS, PLAN_SHAPES, PROTO, RemoteBody, SELF_KEY, YOU_DIED, eventLoot, fingerprint, inDeath, inScene,
+  PLAN_FLAGS, PLAN_NUMS, PLAN_SHAPES, PROTO, RemoteBody, SELF_KEY, eventLoot, fingerprint, inDeath, inScene,
   isInt, isList, isNum, isSenSwitch, isSenVar, isValue, now, okSwitch, r2, r3, shown, waitFor,
   worldOf } from './common.js';
 
@@ -349,7 +350,7 @@ export class HostPart {
   onSay(interp, msg) {
     if (!this.mirrorOk(interp) || !Number.isInteger(msg.at)) return;
     const ui = G.ui, src = refOf(interp, msg.at), shown = ui.msg === msg;
-    if (!src || (msg.lines || []).some(l => YOU_DIED.test(l)) || (!shown && !(ui.banner?.text && !YOU_DIED.test(ui.banner.text)))) return;
+    if (!src || J.youDiedAt(src) || (!shown && !ui.banner?.text)) return;
     this.sendFlags();                    // (the world's changes first: the numbers in it read the same there)
     const out = { t: 'say', src, nm: this.namesIn(msg), vis: msg.choiceAt || null, name: String(msg.name || '').slice(0, 40) };
     if (shown) this.saying = { msg, out };

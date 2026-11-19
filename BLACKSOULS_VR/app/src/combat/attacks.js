@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { commonEventList } from '../character.js';
 import { lineOfSight } from '../collision.js';
+import * as J from '../skilljudge.js';
 import { $data } from '../data.js';
 import { G } from '../globals.js';
 import { Interpreter } from '../interpreter.js';
@@ -212,7 +213,7 @@ export class AttackPart {
   // that cannot be broken (브레이크 불가)
   breakCue(e) {
     if (!e.battle || !e.alive || e.hidden || e.state === 'stagger') return null;
-    if (e.b.states.some(id => /브레이크 불가|ブレイク不可|无法破防|\bunbreakable|\bbreak ?immun/i.test($data.states[id]?.name || ''))) return 'locked';
+    if (e.b.states.some(id => J.unbreakableState(id))) return 'locked';
     return !e.b.stateResist(8) && this.breakRate(e, 8) >= 0.5 && this.baseBreakChance(e) < 0.5 ? 'open' : null;
   }
   updateBreakCue(e) {
@@ -416,7 +417,7 @@ export class AttackPart {
     if (!a) return null;
     for (const id of a.featuresSet(43)) {
       const s = $data.skills[id];
-      if (s && /건 ?브레이크|ガン ?ブレイク|枪械?破防|\bgun ?break/i.test(s.name) && this.isBreakSkill(s)) return s;
+      if (s && J.isGunBreak(s) && this.isBreakSkill(s)) return s;
     }
     return null;
   }
@@ -615,13 +616,10 @@ export class AttackPart {
   }
   weaponLength() { return this.weapon?.userData.length || 1; }
 
-  // ---- NPCs that offer "살해한다" can be cut down directly (two hits within 3 s, to avoid accidents)
+  // ---- NPCs that offer to be killed (BLACK SOULS II's "살해한다" - skilljudge.js, by the event's number and page) can be
+  // cut down directly (two hits within 3 s, to avoid accidents)
   hasKillChoice(ev) {
-    const page = ev.page;
-    if (!page) return false;
-    if (page._killChoice === undefined) {
-      page._killChoice = (page.list || []).some(c => c.code === 102 && c.parameters[0].some(o => /살해|殺害|殺す|殺し|杀害|杀死|\bkill/i.test(String(o))));
-    }
-    return page._killChoice;
+    const page = ev.page && ev.event?.pages ? ev.event.pages.indexOf(ev.page) : -1;
+    return page >= 0 && J.pageKills(G.map.mapId, ev.id, page);
   }
 }

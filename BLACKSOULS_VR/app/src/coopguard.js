@@ -3,10 +3,12 @@
 // sends. A message, a picture or a sound comes as a place in the game's events (src: ['c', common event], ['t', troop,
 // page] or ['e', map, event, page], then the command's index), never as a text or a file name: the guest puts up that
 // command's own text, picture or sound from its own copy of the game - and nothing where the place is one left out:
-// the adult scenes (the common events named シーン, and every common event one of them calls), the death ones
-// (全滅処理: a player's death is its own), and whatever stands in a branch that runs only with switch 20
-// (Hシーン表示しない) off. Music, which goes on from map to map, is taken only if the game's maps or events play it
-// (those same ones left out). The adult scenes are known here by their names alone: nothing in them is looked into.
+// the adult scenes (BLACK SOULS II's scene common events, and every common event one of them calls), the death ones
+// (a player's death is its own), and whatever stands in a branch that runs only with switch 20 (Hシーン表示しない) off.
+// Music, which goes on from map to map, is taken only if the game's maps or events play it (those same ones left out).
+// The adult scenes are known here by their numbers alone (skilljudge.js - the same in every translation): nothing in them
+// is looked into.
+import * as J from './skilljudge.js';
 import { $data, loadMap } from './data.js';
 import { G } from './globals.js';
 import { convertEscapes, bannerOf } from './ui.js';
@@ -24,9 +26,9 @@ export function shutEvents() {
   for (const ce of ces) if (ce?.list) calls.set(ce.id, ce.list.filter(c => c.code === 117).map(c => c.parameters?.[0]));
   const out = new Set(), todo = [];
   own = new Set();
-  for (const ce of ces) if (ce && /シーン/.test(ce.name || '')) { out.add(ce.id); own.add(ce.id); todo.push(ce.id); }
+  for (const id of J.commonEventIds('scene')) { out.add(id); own.add(id); todo.push(id); }
   while (todo.length) for (const id of calls.get(todo.pop()) || []) if (isI(id, 1, 99999) && !out.has(id)) { out.add(id); todo.push(id); }
-  for (const ce of ces) if (ce && /全滅処理/.test(ce.name || '')) { out.add(ce.id); own.add(ce.id); }
+  for (const id of J.commonEventIds('death')) { out.add(id); own.add(id); }
   return (shut = out);
 }
 const shared = new Map();        // `${common event}:${map}` -> called by the game's other events there
@@ -169,8 +171,8 @@ export async function sayAt(ref, { names = null, vis = null, name = '' } = {}) {
   const ci = cmd.code === 102 ? at.i : cmd.code === 101 && list[i + 1]?.code === 102 ? i + 1 : -1;
   if (ci >= 0) msg.choices = choicesAt(list, ci, vis).map(t => ({ text: conv(t), enabled: true }));
   msg.lines = raw.map(conv);
-  if (msg.lines.some(l => /YOU\s*DIED/i.test(l))) return null;
-  const banner = cmd.code === 101 ? bannerOf({ face: msg.face, choices: msg.choices, lines: raw }) : null;
+  if (J.youDiedAt(ref)) return null;
+  const banner = cmd.code === 101 ? bannerOf({ face: msg.face, choices: msg.choices, lines: raw }, ref) : null;
   if (banner) return { banner };
   if (typeof name === 'string' && name && name.length <= 40) {
     const ok = new Set(Object.values(nm));

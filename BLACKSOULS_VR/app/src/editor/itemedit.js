@@ -3,9 +3,13 @@
 // features: 마법 반사율, 속성·상태 유효도, 공격 시 상태 ...), its 능력치, its 메모 (the scripts' tags: <自動蘇生:500,42,80> ...)
 // and 설명; a skill's 사용 효과, 피해, 명중, 비용, 메모 and 설명. Each is shown as the game's database has it, or as the player's
 // rule changed it; a rule keeps only what differs from the game's own (all of it the same: no rule). Its icon and what it now
-// does, in words, drawn beside.
+// does, in words, drawn beside. A skill's VR 판정 too: what the port makes of it by its number (skilljudge.js - the boss move,
+// an enemy's use of it, what flies and how it looks, its colour, a boss's quick step after it, a star's lines), each 기본 (BLACK
+// SOULS II's table while its switch is on, else the skill's own fields) unless the player picks one.
 import { $data } from '../data.js';
 import { loadCanvas } from '../assets.js';
+import { judged, COLORS } from '../skilljudge.js';
+import { SKILL_VR } from '../userrules.js';
 
 const clone = o => (o === undefined ? undefined : JSON.parse(JSON.stringify(o)));
 const KIND_NAME = { weapons: '무기', armors: '방어구', skills: '스킬' };
@@ -56,6 +60,32 @@ const EFFECTS = {
   43: { name: '스킬 습득', data: 'skill' },
   44: { name: '공통 이벤트', data: 'ce' },
 };
+// a skill's VR 판정 (userrules.js SKILL_VR): its fields and their choices in words
+const VR_FIELDS = [['pattern', '보스 패턴'], ['style', '적이 쓸 때'], ['look', '날아가는 모양'], ['shot', '탄 모양'], ['color', '색'],
+  ['blink', '쓴 뒤 순간이동 (보스)'], ['points', '선 개수 (십자·별)']];
+const VR_LABELS = {
+  pattern: { none: '없음', charge: '돌진', leap: '뛰어올라 내려찍기', fissure: '땅 가르기', quake: '땅울림', roar: '포효', breath: '브레스',
+    spin: '회전', wave: '파도', cross: '선 여러 줄 (십자·별)', grab: '붙잡기', execute: '처형', rain: '쏟아지기', volley: '연사',
+    field: '독 장판', thrust: '찌르기', sweep: '휩쓸기', starSpin: '회전 광선', lattice: '격자', stripes: '바닥 띠',
+    farOrb: '멀리서 날아오는 구체', blinkChain: '순간이동 연속 베기', cloakLeap: '하늘로 뛰어올랐다 내려오기', flurry: '연속 베기',
+    orbs: '따라오는 탄', pursuit: '발밑 폭발 연속', nova: '주위 폭발' },
+  style: { wait: '대기', melee: '근접', projectile: '원거리', area: '범위', guard: '방어', heal: '회복', buff: '강화', debuff: '약화' },
+  look: { none: '없음', lob: '던지기 (포물선)', gun: '총', knife: '칼 던지기', death: '즉사', drain: '흡수' },
+  shot: { bullet: '총알', knife: '칼', fire: '불', ice: '얼음', thunder: '번개', dark: '어둠', holy: '빛', soul: '소울 화살', poison: '독',
+    water: '물', wind: '바람', blood: '피', earth: '바위', arcane: '마법진 구체' },
+  color: { none: '없음', fire: '불', ice: '얼음', thunder: '번개', poison: '독', bleed: '출혈', sleep: '수면', dark: '어둠', holy: '빛',
+    pink: '분홍', blaze: '화염', oil: '기름' },
+  blink: { true: '함', false: '안 함' },
+  points: { 4: '4줄 (십자)', 5: '5줄 (오망성)', 6: '6줄 (육망성)' },
+};
+function vrText(f, v) {
+  if (v === null || v === undefined) return '없음';
+  if (f === 'color' && typeof v === 'number') {
+    const k = Object.keys(COLORS).find(c => COLORS[c] === v);
+    return k ? VR_LABELS.color[k] : '#' + v.toString(16).padStart(6, '0');
+  }
+  return VR_LABELS[f]?.[String(v)] ?? String(v);
+}
 const DAMAGE = ['없음', 'HP 피해', 'MP 피해', 'HP 회복', 'MP 회복', 'HP 흡수', 'MP 흡수'];
 const HIT = ['확정 명중', '물리 공격', '마법 공격'];
 // the database's lists, as [id, name]
@@ -243,6 +273,15 @@ export function initItems({ S, changed, picked }) {
       $('hitRepeats').value = now('repeats') ?? 1;
       $('costMp').value = now('mp_cost') ?? 0;
       $('costTp').value = now('tp_cost') ?? 0;
+      // VR 판정: 기본 (what the port makes of it with no rule of the player's) or one picked
+      const vb = $('vrRows'), base = judged(data(), false), mine = now('vr') || {};
+      vb.innerHTML = '';
+      for (const [f, label] of VR_FIELDS) {
+        const s = select([['', `기본: ${vrText(f, base[f])}`], ...SKILL_VR[f].map(v => [String(v), vrText(f, v)])], mine[f] === undefined ? '' : String(mine[f]));
+        s.dataset.vr = f;
+        s.addEventListener('change', () => edited());
+        vb.append(el('div', { className: 'row' }, [el('label', {}, [label + ' ', s])]));
+      }
     }
     $('itemNote').value = now('note') || '';
     $('itemDesc').value = now('description') || '';
@@ -261,6 +300,12 @@ export function initItems({ S, changed, picked }) {
       out.repeats = Math.max(1, Math.min(9, Math.round(Number($('hitRepeats').value) || 1)));
       out.mp_cost = Math.max(0, Math.round(Number($('costMp').value) || 0));
       out.tp_cost = Math.max(0, Math.min(100, Math.round(Number($('costTp').value) || 0)));
+      out.vr = {};
+      for (const s of $('vrRows').querySelectorAll('select')) {
+        if (s.value === '') continue;
+        const f = s.dataset.vr;
+        out.vr[f] = f === 'blink' ? s.value === 'true' : f === 'points' ? +s.value : s.value;
+      }
     }
     return out;
   }
@@ -279,6 +324,7 @@ export function initItems({ S, changed, picked }) {
     if (!I.id || !data()) return;
     const next = readForm(), e = {};
     for (const [f, v] of Object.entries(next)) {
+      if (f === 'vr') { if (Object.keys(v).length) e.vr = v; continue; }
       if (f === 'damage') {
         const o = own('damage') || {}, dd = {};
         for (const k of ['type', 'element_id', 'formula', 'variance', 'critical']) if (JSON.stringify(v[k]) !== JSON.stringify(k === 'critical' ? !!o[k] : o[k])) dd[k] = v[k];
@@ -308,7 +354,7 @@ export function initItems({ S, changed, picked }) {
 
   // ------------------------------------------------------------ beside: its icon, what it now does
   // (the changed fields, by their names)
-  const FIELD_NAME = { features: '특징', params: '능력치', note: '메모', description: '설명', effects: '사용 효과', damage: '피해', hit_type: '명중 타입', success_rate: '성공률', repeats: '연속 횟수', mp_cost: 'MP 소비', tp_cost: 'TP 소비' };
+  const FIELD_NAME = { features: '특징', params: '능력치', note: '메모', description: '설명', effects: '사용 효과', damage: '피해', hit_type: '명중 타입', success_rate: '성공률', repeats: '연속 횟수', mp_cost: 'MP 소비', tp_cost: 'TP 소비', vr: 'VR 판정' };
   function source() {
     const r = rule();
     return r ? { user: true, text: '내 규칙: 바꾼 것 — ' + Object.keys(r).map(f => FIELD_NAME[f] || f).join(' · ') } : { user: false, text: '원작 데이터 그대로' };
@@ -338,6 +384,8 @@ export function initItems({ S, changed, picked }) {
       if (d.type) lines.push(`${DAMAGE[d.type]} · ${d.element_id === -1 ? '통상 공격의 속성' : d.element_id ? nameIn('element', d.element_id) : '속성 없음'} · ${d.formula} · 분산 ${d.variance}%${d.critical ? ' · 치명타' : ''}`);
       const es = now('effects') || [];
       lines.push('', es.length ? es.map(effectText).join('\n') : '사용 효과 없음');
+      const base = judged(o, false), vr = now('vr') || {};
+      lines.push('', 'VR 판정', ...VR_FIELDS.map(([f, label]) => `  ${label}: ${vrText(f, vr[f] ?? base[f])}${vr[f] !== undefined ? ' (내 규칙)' : ''}`));
     }
     const tags = (now('note') || '').match(/<[^<>\r\n]+>/g) || [];
     if (tags.length) lines.push('', '메모의 태그: ' + tags.join(' '));

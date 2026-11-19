@@ -17,6 +17,7 @@
 // Every message is small, checked field by field and only ever read as data; what steers a guest's world (welcome,
 // world changes, transfers) is taken only from the host.
 import { G } from './globals.js';
+import * as J from './skilljudge.js';
 import { $data } from './data.js';
 import { takeRules, SERVER_VERSION, WORLD_VERSION } from './coopnet.js';
 import { guard } from './coopguard.js';
@@ -119,11 +120,9 @@ export class Coop {
   get serverPin() { return this.role === 'host' ? this.link?.pin || null : null; }
   setPin(pin) { return this.role === 'host' && !!this.link?.setPin?.(String(pin)); }
   // (a guest running an event of the host's world - interpreter.js c117) the common events it leaves out: the adult scenes
-  // (シーン - as none are ever shown to a guest) and the death ones (全滅処理: its own fall goes by the server's rules)
-  skipsCommonEvent(id) {
-    const name = $data.commonEvents?.[id]?.name || '';
-    return /シーン|全滅処理/.test(name);
-  }
+  // (as none are ever shown to a guest) and the death ones (its own fall goes by the server's rules) - BLACK SOULS II's, by
+  // number (skilljudge.js)
+  skipsCommonEvent(id) { return J.commonEventIs('scene', id) || J.commonEventIs('death', id); }
   // a guest in the host's world: its own events do not run, nothing is saved
   get phantom() { return this.role === 'guest' && this.summoned; }
   guests() { return [...this.peers.values()].filter(p => !p.host); }

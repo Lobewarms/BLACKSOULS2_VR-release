@@ -1,6 +1,7 @@
 // Boss moves beyond combat.js's first set (bossFamily / planBossMove / releaseBossMove / updateBossAct), installed on
-// CombatSystem.prototype (combat.js, at its end). A boss's skill falls into one by its name, its battle message and its
-// animation, and is played out as a move of its own:
+// CombatSystem.prototype (combat.js, at its end). A boss's skill falls into one by its number (skilljudge.js bossFamily: the
+// player's rule for it, BLACK SOULS II's table - bs2ids.js -, else the skill's own fields), and is played out as a move of
+// its own:
 //  farOrb      it flies back off the player and up, a huge orb swelling before it, and hurls the orb onto the circle laid at
 //              the player's feet (the circle follows them until a moment before)
 //  blinkChain  gone, and there behind the player: a line laid through them, a dash along it - three times over
@@ -23,7 +24,7 @@ import { $data } from './data.js';
 import { T } from './mapmesh.js';
 import { FloorMarker, MARK } from './telegraph.js';
 import { lineOfSight } from './collision.js';
-import { builtinRules } from './maphints.js';
+import * as J from './skilljudge.js';
 
 export const NEW_MOVES = ['farOrb', 'blinkChain', 'starSpin', 'lattice', 'stripes', 'cloakLeap'];
 // the moves laid down in parts (combat.js updateMulti / landPart)
@@ -38,51 +39,11 @@ const SKY_RISE = 40;             // m/s: how fast it springs up there (out of si
 const CLOAK_RISE = 150;          // m/s: 뛰어넘기's spring (흑기사 린다메아, 잿빛 독수리 이디스) - out of sight in a few frames
 const SKY_DROP = 90;             // m/s: how fast one of them comes down out of the sky - a dive, or just down
 
-// (흑기사 린다메아's skills, by name - Korean, Japanese, Chinese, English)
-const LINDA = [
-  [/관통창|貫通槍|贯通枪|piercing lance/i, 'lance'],
-  [/허공창|虚空槍|虚空枪|void lance/i, 'void'],
-  [/^형벌|^刑罰|^刑罚|^punishment/i, 'punish'],
-  [/흑사광|黒死光|黑死光|black death light/i, 'blackLight'],
-  [/검은 제재|검은 극형|黒の制裁|黒の極刑|黑之制裁|黑之极刑|black sanction|black execution/i, 'sanction'],
-  [/노아의 묵시록|ノアの黙示録|诺亚的启示录|apocalypse of noah|noah'?s apocalypse/i, 'noah'],
-];
 const tmpV = new THREE.Vector3(), tmpW = new THREE.Vector3();
 
 export const bossMoves = {
-  // ---- which move a skill is ----------------------------------------------------------------------------------------
-  // (before combat.js's own rules: 린다메아's, and a leap over the player - a skill on itself, no harm. Both BLACK SOULS II's
-  // own, by its skills' names and words: none with the launcher's switch for that game's rules off - the general rules then)
-  specialFamily(s) {
-    if (!builtinRules()) return undefined;
-    const name = (s.name || '').trim(), text = `${name} ${s.message1 || ''}`;
-    if (s.scope === 11 && /흑의를 펼치고|날아올랐|飛び上が|舞い上が|飛翔|腾空|\b(?:soar|flew up|took to the air)/i.test(text)) return 'cloakLeap';
-    const linda = LINDA.find(([re]) => re.test(name))?.[1];
-    if (!linda || !(s.scope >= 1 && s.scope <= 6)) return undefined;
-    return { lance: 'blinkChain', void: 'lattice', punish: 'stripes', blackLight: 'starSpin', sanction: 'blinkChain', noah: 'farOrb' }[linda];
-  },
-  lindaKind(s) {
-    if (!builtinRules()) return null;
-    if (s._linda === undefined) s._linda = LINDA.find(([re]) => re.test((s.name || '').trim()))?.[1] || null;
-    return s._linda;
-  },
-  // (after combat.js's moves by name - a charge, a leap, a breath... - and before its catch-alls by kind)
-  newFamily(s, text, anim, style, hits, atk, magic) {
-    const many = s.scope >= 2 && s.scope <= 6;
-    // a beam at one: a beam through the boss sweeping round (a star of two arms)
-    if (s.scope === 1 && (/레이저|レーザー|激光|\blaser|광선|光線|光线|\bbeam\b/i.test(text) || /レーザー|ビーム/.test(anim))) return 'starSpin';
-    // a beam, a net, a cage, gravity: a lattice round the player
-    if (/격자|그물|網|ネット|\bnet\b|감옥|牢獄|監獄|\bprison|\bcage\b|철창|檻|그래비티|グラビティ|重力|\bgravity|레이저|レーザー|激光|\blaser|광선|光線|光线|\bbeam\b|거미줄|蜘蛛の巣|\bweb\b/i.test(text) || /グラビティ|レーザー|ビーム/.test(anim)) return 'lattice';
-    // a storm, rays out from it, a constellation, a maelstrom - over all: a turning star
-    if (many && (magic || s.hit_type === 0) && (/폭풍|스톰|ストーム|嵐|风暴|\bstorm|방사|放射|辐射|\bradia|별자리|星座|\bconstellation|대소용돌이|大渦|漩涡|\bmaelstrom|vortex/i.test(text) || /ストーム|大渦/.test(anim))) return 'starSpin';
-    // rows of blades, of gusts, a punishment - over all, more than one blow: bands across the floor, by turns
-    if (many && hits >= 2 && !magic && (/칼리버|カリバー|calibur|caliber|엣지|エッジ|\bedge\b|강풍|돌풍|질풍|突風|強風|疾風|狂风|\bgale|\bgust|앵화|桜花|樱花|혼 ?베기|魂刈|\breap/i.test(text) || /ゼクスカリバー|ブラッドエッジ/.test(anim))) return 'stripes';
-    // a moon, a sun, something huge flung from afar
-    if ((magic || (s.hit_type === 0 && !atk)) && (/다크 ?사이드 ?문|ダークサイドムーン|\bmoon\b|태양|太陽|太阳|\bsun\b|혜성|彗星|\bcomet|거대|대형|巨大|大型|\b(?:giant|huge|colossal)\b/i.test(text))) return 'farOrb';
-    // a blade drawn from nowhere, a shadow that cuts from behind, a hunt: gone and there behind the player, three times
-    if (style === 'melee' && !magic && (/거합|居合|居合斩|\biai|절영|絶影|绝影|순보|瞬歩|縮地|瞬步|잔상|残像|残影|암살|暗殺|暗杀|\bassassin|참극|惨劇|惨剧|헌트|ハント|\bhunt\b|난무|乱舞|\bmirage/i.test(text))) return 'blinkChain';
-    return null;
-  },
+  // ---- which move a skill is: skilljudge.js bossFamily (bossacts.js); 흑기사 린다메아's own six, by number -----------------
+  lindaKind(s) { return J.lindaKind(s); },
 
   // ---- does it fit now (combat.js bossMoveFits) ----------------------------------------------------------------------
   newMoveFits(e, fam, d, dx, dy) {
@@ -551,14 +512,11 @@ export const bossMoves = {
     e.landing = true;
   },
   skyHidden(e) { return !!e.sky && (e.lift || 0) > SKY_SEEN; },
-  // one that goes up with 뛰어넘기 - 흑기사 린다메아, 잿빛 독수리 이디스: its skills have one, or the form it looks as up in the
-  // sky (lookAs) does
+  // one that goes up with 뛰어넘기 - 흑기사 린다메아, 잿빛 독수리 이디스: one of its skills is that leap (skilljudge.js - by
+  // number), or one of the form it looks as up in the sky (lookAs) is
   cloakLeaper(e) {
     const id = e?.lookAs || e?.b?.enemyId;
-    if (!id) return false;
-    const memo = (this._cloakIds ||= new Map());
-    if (!memo.has(id)) memo.set(id, !!$data.enemies[id]?.actions?.some(a => $data.skills[a.skill_id] && this.specialFamily($data.skills[a.skill_id]) === 'cloakLeap'));
-    return memo.get(id);
+    return !!id && !!$data.enemies[id]?.actions?.some(a => J.bossFamily($data.skills[a.skill_id]) === 'cloakLeap');
   },
   // (combat.js) how fast one up in the sky comes down - a dive, or just down: 뛰어넘기's (CLOAK_RISE) as fast as it went up
   // (0: as any other)
@@ -695,7 +653,7 @@ export const bossMoves = {
       if (!later) continue;
       const adds = (s.effects || []).filter(ef => ef.code === 21 && ef.data_id > 1).map(ef => ef.data_id);
       const takes = (later.effects || []).filter(ef => ef.code === 22).map(ef => ef.data_id);
-      const big = +String(later.damage?.formula || '').trim() >= 1e6 || /落下/.test($data.animations?.[later.animation_id]?.name || '');
+      const big = +String(later.damage?.formula || '').trim() >= 1e6 || J.fallBlow(later);
       const st = adds.find(id => takes.includes(id));
       if (st && big) { states.add(st); falls.add(later.id); }
     }

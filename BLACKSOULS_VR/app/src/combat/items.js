@@ -1,5 +1,6 @@
 // Using things in a fight: items (their scope, their effects), the quick slots (hold X / Q) and skills from the menu.
 import * as THREE from 'three';
+import * as J from '../skilljudge.js';
 import { $data } from '../data.js';
 import { G } from '../globals.js';
 import { tr } from '../i18n.js';
@@ -192,9 +193,8 @@ export class ItemPart {
     if (root) this.skillCD[root] = Math.max(this.skillCD[root] || 0, G.time + TURN_SECONDS);
   }
   skillCooling(skill) { return Math.max(0, (this.skillCD[skill.id] || 0) - G.time); }
-  isBreakSkill(obj) {
-    return /브레이크|ブレイク|破防|\bbreak/i.test(obj.name || '') && (obj.effects || []).some(e => e.code === 21 && (e.data_id === 7 || e.data_id === 8));
-  }
+  // BLACK SOULS II's Break: a skill or item of it, by number (skilljudge.js)
+  isBreakSkill(obj) { return J.isBreak(obj); }
   useQuickEntry(entry) {
     if (entry?.kind === 'macro') return this.runMacro(entry.id);         // (its steps one after another - combat/macros.js)
     let obj = entryData(entry);
@@ -230,7 +230,7 @@ export class ItemPart {
       // a weapon's own move takes the weapons up again (무장해제 ends)
       if (this.disarmed && (this.isBreakSkill(obj) || this.isWeaponArt(obj))) this.toggleDisarm(false);
       if (this.isBreakSkill(obj)) {
-        if (/건 ?브레이크|ガン ?ブレイク|枪械?破防|\bgun ?break/i.test(obj.name || '')) { if ((this.breakCooldown || 0) <= G.time) this.fireGunBreak(obj); return true; }
+        if (J.isGunBreak(obj)) { if ((this.breakCooldown || 0) <= G.time) this.fireGunBreak(obj); return true; }
         this.breakArm = { skill: obj, until: G.time + 3 };          // the next swing that lands within 3 s
         G.input.haptic('right', 0.3, 40);
         return true;
